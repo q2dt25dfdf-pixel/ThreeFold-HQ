@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Task = {
   id: string;
@@ -24,16 +25,6 @@ const defaultTasks: Task[] = [
   { id: "task-9", title: "Reach out to dental offices in LumaDent territory", dueDate: "TBD", assignedTo: "Alliyah", priority: "Low", notes: "Use existing LumaDent relationships to pitch branded scrubs, polos, team gear.", completed: false },
 ];
 
-function useLocalStorage<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial;
-    try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : initial; }
-    catch { return initial; }
-  });
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
-  return [value, setValue];
-}
-
 const emptyForm = { title: "", dueDate: "", assignedTo: "Alliyah" as Task["assignedTo"], priority: "Medium" as Task["priority"], notes: "", completed: false };
 
 const priorityColors: Record<Task["priority"], string> = { High: "bg-rose-100 text-rose-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
@@ -45,30 +36,33 @@ const founderColumns: { name: Task["assignedTo"]; headerClass: string; accentCla
 ];
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useLocalStorage<Task[]>("tf_tasks", defaultTasks);
+  const { data: tasks, upsertItem, deleteItem, loading } = useSupabaseTable<Task>("tasks", defaultTasks);
   const [filterOwner, setFilterOwner] = useState<Task["assignedTo"] | "All">("All");
   const [showAdd, setShowAdd] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const toggle = (id: string) => setTasks((prev) => prev.map((t) => t.id === id ? { ...t, completed: !t.completed } : t));
+  const toggle = (id: string) => {
+    const task = tasks.find((current) => current.id === id);
+    if (task) upsertItem({ ...task, completed: !task.completed });
+  };
   const openAddForFounder = (founder: Task["assignedTo"]) => {
     setForm({ ...emptyForm, assignedTo: founder });
     setShowAdd(true);
   };
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.title.trim()) return;
-    setTasks((prev) => [{ id: `task-${Date.now()}`, ...form }, ...prev]);
+    await upsertItem({ id: `task-${Date.now()}`, ...form });
     setForm(emptyForm); setShowAdd(false);
   };
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editTask) return;
-    setTasks((prev) => prev.map((t) => t.id === editTask.id ? editTask : t));
+    await upsertItem(editTask);
     setEditTask(null);
   };
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this task?")) return;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await deleteItem(id);
     setEditTask(null);
   };
 
@@ -128,6 +122,8 @@ export default function TasksPage() {
       <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
     </button>
   );
+
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">

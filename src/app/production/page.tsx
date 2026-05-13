@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode, useState, useEffect } from "react";
+import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Search } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type JobFlag = "none" | "backordered" | "delayed" | "rush" | "attention";
 
@@ -118,26 +119,6 @@ const defaultJobs: Job[] = [
   }
 ];
 
-function useLocalStorage<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial;
-    try {
-      const item = localStorage.getItem(key);
-      if (!item) return initial;
-      const parsed = JSON.parse(item) as T;
-      if (key === "tf_production" && Array.isArray(parsed)) {
-        const storedJobs = parsed as Job[];
-        const legacySample = storedJobs.length === 1 && storedJobs[0]?.id === "job-1" && !storedJobs[0]?.flag;
-        return legacySample ? initial : parsed;
-      }
-      return parsed;
-    }
-    catch { return initial; }
-  });
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
-  return [value, setValue];
-}
-
 const emptyForm: Job = { id: "", client: "", orderName: "", vendor: "", dueDate: "", quantity: "", status: "Pending", flag: "none", flagNote: "", notes: "" };
 
 const statusColors: Record<Job["status"], string> = {
@@ -230,7 +211,7 @@ function Modal({ title, onSave, onClose, children }: { title: string; onSave: ()
 
 export default function ProductionPage() {
   const router = useRouter();
-  const [jobs, setJobs] = useLocalStorage<Job[]>("tf_production", defaultJobs);
+  const { data: jobs, upsertItem, loading } = useSupabaseTable<Job>("production", defaultJobs);
   const [filter, setFilter] = useState<Job["status"] | "All">("All");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [query, setQuery] = useState("");
@@ -249,17 +230,19 @@ export default function ProductionPage() {
       return a.dueDate.localeCompare(b.dueDate);
     });
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.client.trim()) return;
-    setJobs((prev) => [{ ...form, id: `job-${Date.now()}` }, ...prev]);
+    await upsertItem({ ...form, id: `job-${Date.now()}` });
     setForm(emptyForm); setShowAdd(false);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editJob) return;
-    setJobs((prev) => prev.map((job) => job.id === editJob.id ? editJob : job));
+    await upsertItem(editJob);
     setEditJob(null);
   };
+
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">

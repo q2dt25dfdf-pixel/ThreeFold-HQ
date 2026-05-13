@@ -27,8 +27,9 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
-type StorageRecord = Record<string, unknown>;
+type StorageRecord = Record<string, unknown> & { id: string };
 
 type SearchCategory = "Clients" | "Vendors" | "Production" | "Finances" | "Tasks";
 
@@ -129,17 +130,7 @@ const focusItems = [
 ];
 
 const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
-
-function readArray(key: string): StorageRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const item = localStorage.getItem(key);
-    const parsed = item ? JSON.parse(item) : [];
-    return Array.isArray(parsed) ? (parsed as StorageRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
+const defaultSearchRows: StorageRecord[] = [];
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -156,22 +147,27 @@ function stringField(record: StorageRecord, key: string, fallback = "") {
   return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
 }
 
-function loadSearchData(): Record<SearchCategory, StorageRecord[]> {
-  return {
-    Clients: readArray("tf_clients"),
-    Vendors: readArray("tf_vendors"),
-    Production: readArray("tf_production"),
-    Finances: readArray("tf_finances"),
-    Tasks: readArray("tf_tasks"),
-  };
-}
-
 export default function Home() {
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement | null>(null);
   const [globalQuery, setGlobalQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchData, setSearchData] = useState<Record<SearchCategory, StorageRecord[]>>(() => loadSearchData());
+  const { data: clients } = useSupabaseTable<StorageRecord>("clients", defaultSearchRows);
+  const { data: vendors } = useSupabaseTable<StorageRecord>("vendors", defaultSearchRows);
+  const { data: production } = useSupabaseTable<StorageRecord>("production", defaultSearchRows);
+  const { data: finances } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
+  const { data: tasks } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
+
+  const searchData = useMemo<Record<SearchCategory, StorageRecord[]>>(
+    () => ({
+      Clients: clients,
+      Vendors: vendors,
+      Production: production,
+      Finances: finances,
+      Tasks: tasks,
+    }),
+    [clients, finances, production, tasks, vendors],
+  );
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -329,12 +325,10 @@ export default function Home() {
             placeholder="Search clients, vendors, production, finances, and tasks..."
             value={globalQuery}
             onChange={(event) => {
-              setSearchData(loadSearchData());
               setGlobalQuery(event.target.value);
               setSearchOpen(event.target.value.trim().length >= 2);
             }}
             onFocus={() => {
-              setSearchData(loadSearchData());
               setSearchOpen(globalQuery.trim().length >= 2);
             }}
           />

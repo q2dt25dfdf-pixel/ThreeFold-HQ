@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Search, TrendingDown, TrendingUp } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import {
   Area,
   AreaChart,
@@ -35,18 +36,6 @@ const defaultInvoices: Invoice[] = [
     notes: "First test order. Amount TBD once print vendor is confirmed and pricing finalized. Station DSF7.",
   },
 ];
-
-function useLocalStorage<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial;
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initial;
-    } catch { return initial; }
-  });
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
-  return [value, setValue];
-}
 
 const emptyForm = { client: "", orderName: "", amount: "", dueDate: "", status: "Draft" as Invoice["status"], notes: "" };
 
@@ -87,7 +76,7 @@ function invoiceAmount(amount: string) {
 }
 
 export default function FinancesPage() {
-  const [invoices, setInvoices] = useLocalStorage<Invoice[]>("tf_finances", defaultInvoices);
+  const { data: invoices, upsertItem, deleteItem, loading } = useSupabaseTable<Invoice>("finances", defaultInvoices);
   const [filter, setFilter] = useState<Invoice["status"] | "All">("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -118,22 +107,22 @@ export default function FinancesPage() {
     value: invoices.filter((invoice) => invoice.status === status).length,
   }));
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.client.trim()) return;
-    setInvoices((prev) => [{ id: `invoice-${Date.now()}`, ...form }, ...prev]);
+    await upsertItem({ id: `invoice-${Date.now()}`, ...form });
     setForm(emptyForm);
     setShowModal(false);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editInvoice) return;
-    setInvoices((prev) => prev.map((invoice) => (invoice.id === editInvoice.id ? editInvoice : invoice)));
+    await upsertItem(editInvoice);
     setEditInvoice(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this invoice?")) return;
-    setInvoices((prev) => prev.filter((invoice) => invoice.id !== id));
+    await deleteItem(id);
     setEditInvoice(null);
   };
 
@@ -189,6 +178,8 @@ export default function FinancesPage() {
       </div>
     </div>
   );
+
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-7">

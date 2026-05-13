@@ -6,6 +6,7 @@ import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
 import { pipelineStages, type Lead, type PipelineStage } from "../../components/crm/types";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 const initialLeads: Lead[] = [
   {
@@ -96,7 +97,7 @@ const initialLeads: Lead[] = [
 ];
 
 export default function CRMPage() {
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const { data: leads, upsertItem, deleteItem, loading } = useSupabaseTable<Lead>("crm_leads", initialLeads);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewLead, setViewLead] = useState<Lead | null>(null);
   const [query, setQuery] = useState("");
@@ -126,28 +127,26 @@ export default function CRMPage() {
     return `lead-${Date.now()}`;
   };
 
-  const handleAddLead = (values: Omit<Lead, "id">) => {
-    setLeads((current) => [{ id: createId(), ...values }, ...current]);
+  const handleAddLead = async (values: Omit<Lead, "id">) => {
+    await upsertItem({ id: createId(), ...values });
     setIsAddOpen(false);
   };
 
-  const handleSaveDetailLead = (updated: Lead) => {
-    setLeads((current) =>
-      current.map((lead) => (lead.id === updated.id ? updated : lead)),
-    );
+  const handleSaveDetailLead = async (updated: Lead) => {
+    await upsertItem(updated);
     setViewLead(updated);
   };
 
   const handleMoveLead = (lead: Lead, targetStage: PipelineStage) => {
-    setLeads((current) =>
-      current.map((item) => (item.id === lead.id ? { ...item, stage: targetStage } : item)),
-    );
+    upsertItem({ ...lead, stage: targetStage });
   };
 
-  const handleDeleteLead = (lead: Lead) => {
-    setLeads((current) => current.filter((item) => item.id !== lead.id));
+  const handleDeleteLead = async (lead: Lead) => {
+    await deleteItem(lead.id);
     if (viewLead?.id === lead.id) setViewLead(null);
   };
+
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="min-h-screen min-w-full space-y-10 bg-zinc-100">

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type ClientStatus = "Active" | "At Risk" | "Dormant";
 
@@ -67,19 +68,7 @@ const defaultOrders: ClientOrder[] = [
 const owners = ["Alliyah", "Hannah", "Jordan"];
 const activityTypes: ActivityEntry["type"][] = ["Call", "Email", "Text", "Meeting", "In Person", "Other"];
 
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const item = localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage<T>(key: string, value: T) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
+const defaultActivity: ActivityEntry[] = [];
 
 function parseAmount(amount: string) {
   const numeric = Number(amount.replace(/[^0-9.]/g, ""));
@@ -155,9 +144,9 @@ export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
   const clientId = params.id;
 
-  const [clients, setClients] = useState<Client[]>(() => readStorage<Client[]>("tf_clients", defaultClients));
-  const [orders, setOrders] = useState<ClientOrder[]>(() => readStorage<ClientOrder[]>("tf_client_orders", defaultOrders));
-  const [activity, setActivity] = useState<ActivityEntry[]>(() => readStorage<ActivityEntry[]>("tf_client_activity", []));
+  const { data: clients, upsertItem: upsertClient, loading: clientsLoading } = useSupabaseTable<Client>("clients", defaultClients);
+  const { data: orders, upsertItem: upsertOrder, loading: ordersLoading } = useSupabaseTable<ClientOrder>("client_orders", defaultOrders);
+  const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
   const [editingHeader, setEditingHeader] = useState(false);
   const [orderForm, setOrderForm] = useState({ name: "", date: "", amount: "", status: "Draft" as ClientOrder["status"] });
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -166,18 +155,6 @@ export default function ClientDetailPage() {
     owner: "Alliyah",
     notes: "",
   });
-
-  useEffect(() => {
-    const storedClients = readStorage<Client[]>("tf_clients", defaultClients);
-    const storedOrders = readStorage<ClientOrder[]>("tf_client_orders", defaultOrders);
-    const storedActivity = readStorage<ActivityEntry[]>("tf_client_activity", []);
-    setClients(storedClients);
-    setOrders(storedOrders);
-    setActivity(storedActivity);
-    writeStorage("tf_clients", storedClients);
-    writeStorage("tf_client_orders", storedOrders);
-    writeStorage("tf_client_activity", storedActivity);
-  }, []);
 
   const client = clients.find((item) => item.id === clientId);
   const clientOrders = orders.filter((order) => order.clientId === clientId);
@@ -189,14 +166,11 @@ export default function ClientDetailPage() {
   );
 
   const saveClient = (fields: Partial<Client>) => {
-    setClients((current) => {
-      const updated = current.map((item) => (item.id === clientId ? { ...item, ...fields } : item));
-      writeStorage("tf_clients", updated);
-      return updated;
-    });
+    if (!client) return;
+    upsertClient({ ...client, ...fields });
   };
 
-  const addOrder = () => {
+  const addOrder = async () => {
     if (!orderForm.name.trim()) return;
     const nextOrder: ClientOrder = {
       id: `order-${Date.now()}`,
@@ -206,14 +180,12 @@ export default function ClientDetailPage() {
       amount: orderForm.amount || "TBD",
       status: orderForm.status,
     };
-    const updated = [nextOrder, ...orders];
-    setOrders(updated);
-    writeStorage("tf_client_orders", updated);
+    await upsertOrder(nextOrder);
     setOrderForm({ name: "", date: "", amount: "", status: "Draft" });
     setShowOrderForm(false);
   };
 
-  const addActivity = () => {
+  const addActivity = async () => {
     if (!activityForm.notes.trim()) return;
     const entry: ActivityEntry = {
       id: `activity-${Date.now()}`,
@@ -223,11 +195,11 @@ export default function ClientDetailPage() {
       notes: activityForm.notes.trim(),
       date: new Date().toISOString().split("T")[0],
     };
-    const updated = [entry, ...activity];
-    setActivity(updated);
-    writeStorage("tf_client_activity", updated);
+    await upsertActivity(entry);
     setActivityForm((current) => ({ ...current, notes: "" }));
   };
+
+  if (clientsLoading || ordersLoading || activityLoading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   if (!client) {
     return (
@@ -237,7 +209,7 @@ export default function ClientDetailPage() {
         </button>
         <div className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-8">
           <h1 className="text-2xl font-semibold text-slate-950">Client not found</h1>
-          <p className="mt-2 text-sm text-slate-500">This client may have been deleted or is not available in localStorage.</p>
+          <p className="mt-2 text-sm text-slate-500">This client may have been deleted or is not available in Supabase.</p>
         </div>
       </div>
     );

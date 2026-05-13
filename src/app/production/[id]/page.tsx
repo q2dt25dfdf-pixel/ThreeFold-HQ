@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Calendar, CheckCircle2, Circle, Clock, Package, Plus, Truck } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type JobStatus = "Pending" | "Approved" | "In Production" | "Fulfilled";
 type JobFlag = "none" | "backordered" | "delayed" | "rush" | "attention";
@@ -29,6 +30,8 @@ type DesignSpec = {
 };
 
 type VendorInfo = {
+  id: string;
+  jobId: string;
   name: string;
   contact: string;
   turnaround: string;
@@ -84,19 +87,7 @@ function normalizeJob(job: Job): Job {
   return { ...job, flag: job.flag ?? "none", flagNote: job.flagNote ?? "" };
 }
 
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const item = localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage<T>(key: string, value: T) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
+const defaultVendorInfo: VendorInfo[] = [];
 
 function getStation(notes: string) {
   const match = notes.match(/Station:\s*([A-Z0-9-]+)/i);
@@ -168,43 +159,37 @@ export default function ProductionDetailPage() {
   const params = useParams<{ id: string }>();
   const jobId = params.id;
 
-  const [jobs, setJobs] = useState<Job[]>(() => readStorage<Job[]>("tf_production", defaultJobs).map(normalizeJob));
-  const [designs, setDesigns] = useState<DesignSpec[]>(() => readStorage<DesignSpec[]>("tf_production_designs", defaultDesigns));
-  const [vendorInfo, setVendorInfo] = useState<VendorInfo>(() => {
-    const storedJobs = readStorage<Job[]>("tf_production", defaultJobs).map(normalizeJob);
-    const storedJob = storedJobs.find((item) => item.id === jobId);
-    return readStorage<VendorInfo>(`tf_production_vendor_${jobId}`, {
-      name: storedJob?.vendor ?? "",
-      contact: "TBD",
-      turnaround: "5-7 days",
-    });
-  });
+  const { data: jobs, upsertItem: upsertJob, loading: jobsLoading } = useSupabaseTable<Job>("production", defaultJobs.map(normalizeJob));
+  const { data: designs, upsertItem: upsertDesign, loading: designsLoading } = useSupabaseTable<DesignSpec>("production_designs", defaultDesigns);
+  const { data: vendorInfos, upsertItem: upsertVendorInfo, loading: vendorInfoLoading } = useSupabaseTable<VendorInfo>("production_vendor_info", defaultVendorInfo);
   const [designForm, setDesignForm] = useState({ name: "", description: "", placement: "" });
   const [showDesignForm, setShowDesignForm] = useState(false);
 
   const normalizedJobs = useMemo(() => jobs.map(normalizeJob), [jobs]);
   const job = normalizedJobs.find((item) => item.id === jobId);
   const jobDesigns = designs.filter((design) => design.jobId === jobId);
+  const vendorInfo = vendorInfos.find((item) => item.jobId === jobId) ?? {
+    id: `vendor-info-${jobId}`,
+    jobId,
+    name: job?.vendor ?? "",
+    contact: "TBD",
+    turnaround: "5-7 days",
+  };
 
   const currentStep = useMemo(() => (job ? statusIndex[job.status] : 0), [job]);
   const flag = job?.flag ?? "none";
   const flagBanner = flag === "none" ? null : flagBanners[flag];
 
   const saveJob = (fields: Partial<Job>) => {
-    setJobs((current) => {
-      const updated = current.map((item) => (item.id === jobId ? normalizeJob({ ...item, ...fields }) : normalizeJob(item)));
-      writeStorage("tf_production", updated);
-      return updated;
-    });
+    if (!job) return;
+    upsertJob(normalizeJob({ ...job, ...fields }));
   };
 
   const saveVendorInfo = (fields: Partial<VendorInfo>) => {
-    const updated = { ...vendorInfo, ...fields };
-    setVendorInfo(updated);
-    writeStorage(`tf_production_vendor_${jobId}`, updated);
+    upsertVendorInfo({ ...vendorInfo, ...fields });
   };
 
-  const addDesign = () => {
+  const addDesign = async () => {
     if (!designForm.name.trim()) return;
     const nextDesign: DesignSpec = {
       id: `design-${Date.now()}`,
@@ -213,12 +198,12 @@ export default function ProductionDetailPage() {
       description: designForm.description.trim(),
       placement: designForm.placement.trim(),
     };
-    const updated = [nextDesign, ...designs];
-    setDesigns(updated);
-    writeStorage("tf_production_designs", updated);
+    await upsertDesign(nextDesign);
     setDesignForm({ name: "", description: "", placement: "" });
     setShowDesignForm(false);
   };
+
+  if (jobsLoading || designsLoading || vendorInfoLoading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   if (!job) {
     return (
@@ -228,7 +213,7 @@ export default function ProductionDetailPage() {
         </button>
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-8">
           <h1 className="text-2xl font-semibold text-slate-950">Production job not found</h1>
-          <p className="mt-2 text-sm text-slate-500">This production job may have been deleted or is not available in localStorage.</p>
+          <p className="mt-2 text-sm text-slate-500">This production job may have been deleted or is not available in Supabase.</p>
         </div>
       </main>
     );

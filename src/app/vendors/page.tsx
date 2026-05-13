@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Package, Printer, Search } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Vendor = {
   id: string;
@@ -38,23 +39,11 @@ const defaultVendors: Vendor[] = [
   },
 ];
 
-function useLocalStorage<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial;
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initial;
-    } catch { return initial; }
-  });
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
-  return [value, setValue];
-}
-
 const emptyForm = { name: "", type: "", turnaround: "", contact: "", notes: "", status: "Review" as Vendor["status"], jobs: 0 };
 
 export default function VendorsPage() {
   const router = useRouter();
-  const [vendors, setVendors] = useLocalStorage<Vendor[]>("tf_vendors", defaultVendors);
+  const { data: vendors, upsertItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
   const [showModal, setShowModal] = useState(false);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyForm);
@@ -94,9 +83,9 @@ export default function VendorsPage() {
     },
   ].filter((section) => section.vendors.length > 0);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name.trim()) return;
-    setVendors((prev) => [{ id: `vendor-${Date.now()}`, ...form }, ...prev]);
+    await upsertItem({ id: `vendor-${Date.now()}`, ...form });
     setForm(emptyForm);
     setShowModal(false);
   };
@@ -147,6 +136,8 @@ export default function VendorsPage() {
       </div>
     </div>
   );
+
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">

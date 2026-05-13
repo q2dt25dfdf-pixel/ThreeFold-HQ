@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Home, Plus } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Founder = "Alliyah" | "Hannah" | "Jordan";
 
@@ -37,6 +38,8 @@ const emptyEvent = {
   assignedTo: "Alliyah" as Founder,
   type: "Task" as CalendarEvent["type"],
 };
+const defaultTasks: Task[] = [];
+const defaultEvents: CalendarEvent[] = [];
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hourSlots = Array.from({ length: 13 }, (_, index) => index + 8);
@@ -85,33 +88,13 @@ function EventPill({ event, prefix }: { event: CalendarEvent; prefix?: string })
   );
 }
 
-function readStoredArray<T>(key: string, initial: T[]): T[] {
-  if (typeof window === "undefined") return initial;
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : initial;
-  } catch {
-    return initial;
-  }
-}
-
-function useStoredEvents() {
-  const [events, setEvents] = useState<CalendarEvent[]>(() => readStoredArray<CalendarEvent>("tf_calendar_events", []));
-
-  useEffect(() => {
-    localStorage.setItem("tf_calendar_events", JSON.stringify(events));
-  }, [events]);
-
-  return [events, setEvents] as const;
-}
-
 export default function CalendarPage() {
   const [today] = useState(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarView>("month");
-  const [tasks] = useState<Task[]>(() => readStoredArray<Task>("tf_tasks", []));
-  const [events, setEvents] = useStoredEvents();
+  const { data: tasks, loading: tasksLoading } = useSupabaseTable<Task>("tasks", defaultTasks);
+  const { data: events, upsertItem: upsertEvent, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", defaultEvents);
   const [showAdd, setShowAdd] = useState(false);
   const [showTodayDetails, setShowTodayDetails] = useState(false);
   const [form, setForm] = useState(emptyEvent);
@@ -205,12 +188,14 @@ export default function CalendarPage() {
     setCurrentWeek(new Date(startOfWeek));
   };
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (!form.title.trim() || !form.date) return;
-    setEvents((current) => [{ id: `event-${Date.now()}`, ...form }, ...current]);
+    await upsertEvent({ id: `event-${Date.now()}`, ...form });
     setForm(emptyEvent);
     setShowAdd(false);
   };
+
+  if (tasksLoading || eventsLoading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">

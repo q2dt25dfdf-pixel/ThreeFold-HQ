@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Search } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Client = {
   id: string;
@@ -26,21 +27,11 @@ const defaultClients: Client[] = [
   },
 ];
 
-function useLocalStorage<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial;
-    try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : initial; }
-    catch { return initial; }
-  });
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
-  return [value, setValue];
-}
-
 const emptyForm = { name: "", industry: "", contact: "", orders: 0, notes: "", status: "Active" as Client["status"] };
 
 export default function ClientsPage() {
   const router = useRouter();
-  const [clients, setClients] = useLocalStorage<Client[]>("tf_clients", defaultClients);
+  const { data: clients, upsertItem, loading } = useSupabaseTable<Client>("clients", defaultClients);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "orders">("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -55,9 +46,9 @@ export default function ClientsPage() {
   const totalOrders = clients.reduce((sum, client) => sum + client.orders, 0);
   const activeClients = clients.filter((client) => client.status === "Active").length;
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name.trim()) return;
-    setClients((prev) => [{ id: `client-${Date.now()}`, ...form }, ...prev]);
+    await upsertItem({ id: `client-${Date.now()}`, ...form });
     setForm(emptyForm);
     setShowAdd(false);
   };
@@ -104,6 +95,8 @@ export default function ClientsPage() {
       </div>
     </div>
   );
+
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">

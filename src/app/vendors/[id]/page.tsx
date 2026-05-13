@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Briefcase, Building2, Clock, Edit2, Plus } from "lucide-react";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type VendorStatus = "Active" | "Review" | "Paused";
 
@@ -65,20 +66,6 @@ const statusStyles: Record<VendorStatus, string> = {
   Review: "bg-amber-100 text-amber-800",
   Paused: "bg-slate-100 text-slate-700",
 };
-
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const item = localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage<T>(key: string, value: T) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
 
 function InlineField({
   label,
@@ -149,8 +136,8 @@ export default function VendorDetailPage() {
   const params = useParams<{ id: string }>();
   const vendorId = params.id;
 
-  const [vendors, setVendors] = useState<Vendor[]>(() => readStorage<Vendor[]>("tf_vendors", defaultVendors));
-  const [jobs, setJobs] = useState<VendorJob[]>(() => readStorage<VendorJob[]>("tf_vendor_jobs", defaultVendorJobs));
+  const { data: vendors, upsertItem: upsertVendor, loading: vendorsLoading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: jobs, upsertItem: upsertJob, loading: jobsLoading } = useSupabaseTable<VendorJob>("vendor_jobs", defaultVendorJobs);
   const [showJobForm, setShowJobForm] = useState(false);
   const [jobForm, setJobForm] = useState({
     name: "",
@@ -159,25 +146,15 @@ export default function VendorDetailPage() {
     status: "Pending" as VendorJob["status"],
   });
 
-  useEffect(() => {
-    const storedVendors = readStorage<Vendor[]>("tf_vendors", defaultVendors);
-    const storedJobs = readStorage<VendorJob[]>("tf_vendor_jobs", defaultVendorJobs);
-    writeStorage("tf_vendors", storedVendors);
-    writeStorage("tf_vendor_jobs", storedJobs);
-  }, []);
-
   const vendor = vendors.find((item) => item.id === vendorId);
   const vendorJobs = jobs.filter((job) => job.vendorId === vendorId);
 
   const saveVendor = (fields: Partial<Vendor>) => {
-    setVendors((current) => {
-      const updated = current.map((item) => (item.id === vendorId ? { ...item, ...fields } : item));
-      writeStorage("tf_vendors", updated);
-      return updated;
-    });
+    if (!vendor) return;
+    upsertVendor({ ...vendor, ...fields });
   };
 
-  const addJob = () => {
+  const addJob = async () => {
     if (!jobForm.name.trim()) return;
     const nextJob: VendorJob = {
       id: `vendor-job-${Date.now()}`,
@@ -187,13 +164,13 @@ export default function VendorDetailPage() {
       date: jobForm.date || new Date().toISOString().split("T")[0],
       status: jobForm.status,
     };
-    const updated = [nextJob, ...jobs];
-    setJobs(updated);
-    writeStorage("tf_vendor_jobs", updated);
-    saveVendor({ jobs: vendorJobs.length + 1 });
+    await upsertJob(nextJob);
+    if (vendor) await upsertVendor({ ...vendor, jobs: vendorJobs.length + 1 });
     setJobForm({ name: "", client: "", date: "", status: "Pending" });
     setShowJobForm(false);
   };
+
+  if (vendorsLoading || jobsLoading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   if (!vendor) {
     return (
@@ -203,7 +180,7 @@ export default function VendorDetailPage() {
         </button>
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-8">
           <h1 className="text-2xl font-semibold text-slate-950">Vendor not found</h1>
-          <p className="mt-2 text-sm text-slate-500">This vendor may have been deleted or is not available in localStorage.</p>
+          <p className="mt-2 text-sm text-slate-500">This vendor may have been deleted or is not available in Supabase.</p>
         </div>
       </main>
     );
