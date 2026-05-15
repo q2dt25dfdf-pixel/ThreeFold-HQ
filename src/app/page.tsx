@@ -316,14 +316,14 @@ export default function Home() {
     <main className="min-h-screen bg-gray-100 text-[#0f172a]">
       <div className="space-y-6">
         <section className="overflow-hidden rounded-[8px] bg-[#0f172a] text-white">
-          <div className="grid min-h-[260px] gap-8 p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
+          <div className="grid min-h-[260px] gap-8 p-5 sm:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
             <div className="flex flex-col justify-between gap-10">
               <div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1]">
                   <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <p className="mt-8 text-sm font-medium text-[#e2e8f0]">Operations dashboard</p>
-                <h1 className="mt-3 text-4xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
+                <h1 className="mt-3 text-3xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
                 <p className="mt-4 max-w-xl text-sm leading-6 text-[#e2e8f0]">
                   A premium command center for revenue, client work, production progress, and founder execution.
                 </p>
@@ -416,7 +416,7 @@ export default function Home() {
                             setGlobalQuery("");
                             router.push(item.href);
                           }}
-                          className="block w-full cursor-pointer px-4 py-3 text-left hover:bg-gray-100"
+                          className="block min-h-11 w-full cursor-pointer px-4 py-3 text-left hover:bg-gray-100"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-slate-950">{item.title}</p>
@@ -441,7 +441,7 @@ export default function Home() {
                 key={card.label}
                 type="button"
                 onClick={() => router.push(card.href)}
-                className="group rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
+                className="group min-h-11 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#3b82f6]">
@@ -558,7 +558,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => router.push("/crm")}
-                className="inline-flex items-center gap-2 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] px-3 py-2 text-sm font-medium text-[#0f172a] transition hover:border-[#3b82f6]"
+                className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] px-3 py-2 text-sm font-medium text-[#0f172a] transition hover:border-[#3b82f6]"
               >
                 Open CRM
                 <ArrowUpRight className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -595,7 +595,7 @@ export default function Home() {
                 type="button"
                 aria-label="Open tasks"
                 onClick={() => router.push("/tasks")}
-                className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#0f172a] transition hover:border-[#3b82f6] hover:text-[#3b82f6]"
+                className="flex h-11 w-11 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#0f172a] transition hover:border-[#3b82f6] hover:text-[#3b82f6] md:h-9 md:w-9"
               >
                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -626,7 +626,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => router.push("/production")}
-              className="inline-flex items-center gap-2 rounded-[8px] bg-[#0f172a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0f172a]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-[8px] bg-[#0f172a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0f172a]"
             >
               Production queue
               <Factory className="h-4 w-4" aria-hidden="true" />

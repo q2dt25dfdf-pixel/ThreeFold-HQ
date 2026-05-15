@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -35,6 +35,54 @@ const founderColumns: { name: Task["assignedTo"]; headerClass: string; accentCla
   { name: "Hannah", headerClass: "bg-blue-50 border-blue-400", accentClass: "bg-blue-400" },
   { name: "Jordan", headerClass: "bg-emerald-50 border-emerald-400", accentClass: "bg-emerald-400" },
 ];
+type TaskFormData = Omit<Task, "id">;
+
+function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T; onChange: (f: T) => void }) {
+  return (
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Task</label>
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Due date</label>
+        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
+          <option>Alliyah</option><option>Hannah</option><option>Jordan</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
+          <option>High</option><option>Medium</option><option>Low</option>
+        </select>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+      </div>
+    </div>
+  );
+}
+
+function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-6 shadow-xl sm:px-10 sm:py-10">
+        <h2 className="text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
+        {children}
+        <div className="mt-6 flex gap-3">
+          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
+          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+        </div>
+        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
+      </div>
+    </div>
+  );
+}
 
 export default function TasksPage() {
   const { data: tasks, upsertItem, deleteItem, loading } = useSupabaseTable<Task>("tasks", defaultTasks);
@@ -68,49 +116,6 @@ export default function TasksPage() {
     setEditTask(null);
   };
 
-  const FormFields = ({ data, onChange }: { data: any; onChange: (f: any) => void }) => (
-    <div className="grid grid-cols-2 gap-6">
-      <div className="col-span-2">
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Task</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Due date</label>
-        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value })}>
-          <option>Alliyah</option><option>Hannah</option><option>Jordan</option>
-        </select>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value })}>
-          <option>High</option><option>Medium</option><option>Low</option>
-        </select>
-      </div>
-      <div className="col-span-2">
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
-      </div>
-    </div>
-  );
-
-  const Modal = ({ title, onSave, onClose, onDelete, children }: any) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-3xl rounded-[2rem] bg-white px-10 py-10 shadow-xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
-        {children}
-        <div className="mt-6 flex gap-3">
-          <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
-          <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
-        </div>
-        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
-      </div>
-    </div>
-  );
-
   const TaskCard = ({ task }: { task: Task }) => (
     <article
       role="button"
@@ -127,10 +132,10 @@ export default function TasksPage() {
       <div className="flex items-start justify-between gap-2">
         <p className={`text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
         <div className="flex shrink-0 items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`rounded-xl px-3 py-1 text-xs font-semibold text-white ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
+          <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
           <button
             type="button"
-            className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+            className="min-h-11 min-w-11 rounded-full p-1 text-rose-600 hover:bg-rose-50 md:min-h-0 md:min-w-0"
             aria-label={`Delete ${task.title}`}
             onClick={(event) => {
               event.stopPropagation();
@@ -159,8 +164,8 @@ export default function TasksPage() {
           <h1 className="mt-3 text-3xl font-semibold text-slate-950">Task board</h1>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add task</button>
-          <select className="rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as any)}>
+          <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add task</button>
+          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as Task["assignedTo"] | "All")}>
             <option>All</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
           </select>
         </div>

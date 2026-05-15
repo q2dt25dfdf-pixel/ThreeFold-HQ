@@ -221,7 +221,7 @@ export default function ProductionDetailPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 text-white">
+      <header className="bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white sm:p-8">
         {flagBanner && (
           <div className={`-mx-8 -mt-8 mb-8 px-8 py-2 text-xs font-semibold tracking-[0.2em] ${flagBanner.className}`}>
             {flagBanner.label}{job.flagNote ? ` - ${job.flagNote}` : ""}
@@ -240,8 +240,8 @@ export default function ProductionDetailPage() {
             <InlineEditable
               value={job.orderName}
               onSave={(value) => saveJob({ orderName: value })}
-              className="mt-5 block max-w-4xl text-left text-4xl font-semibold tracking-tight text-white transition hover:text-slate-200 md:text-5xl"
-              inputClassName="mt-5 block w-full max-w-4xl rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-4xl font-semibold tracking-tight text-white outline-none focus:border-white/50 md:text-5xl"
+              className="mt-5 block max-w-4xl text-left text-3xl font-semibold tracking-tight text-white transition hover:text-slate-200 md:text-5xl"
+              inputClassName="mt-5 block w-full max-w-4xl rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-3xl font-semibold tracking-tight text-white outline-none focus:border-white/50 md:text-5xl"
             />
             <p className="mt-4 text-base text-slate-300">{job.client}</p>
           </div>
@@ -249,7 +249,7 @@ export default function ProductionDetailPage() {
         </div>
       </header>
 
-      <div className="space-y-6 p-6 lg:p-8">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <section className="rounded-2xl border border-slate-200 bg-white">
           <div className="grid divide-y divide-slate-200 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
             {[
@@ -285,7 +285,7 @@ export default function ProductionDetailPage() {
                 <h2 className="text-lg font-semibold">Design specs</h2>
                 <p className="mt-1 text-sm text-slate-500">Collection artwork, description, and placement notes.</p>
               </div>
-              <button type="button" onClick={() => setShowDesignForm(true)} className="inline-flex items-center gap-2 rounded-2xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
+              <button type="button" onClick={() => setShowDesignForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add design
               </button>
@@ -293,10 +293,10 @@ export default function ProductionDetailPage() {
 
             {showDesignForm && (
               <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Design name" value={designForm.name} onChange={(event) => setDesignForm((current) => ({ ...current, name: event.target.value }))} />
-                <textarea className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" rows={2} placeholder="Description" value={designForm.description} onChange={(event) => setDesignForm((current) => ({ ...current, description: event.target.value }))} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Placement notes" value={designForm.placement} onChange={(event) => setDesignForm((current) => ({ ...current, placement: event.target.value }))} />
-                <button type="button" onClick={addDesign} className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white">Save design</button>
+                <input className="rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Design name" value={designForm.name} onChange={(event) => setDesignForm((current) => ({ ...current, name: event.target.value }))} />
+                <textarea className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" rows={2} placeholder="Description" value={designForm.description} onChange={(event) => setDesignForm((current) => ({ ...current, description: event.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Placement notes" value={designForm.placement} onChange={(event) => setDesignForm((current) => ({ ...current, placement: event.target.value }))} />
+                <button type="button" onClick={addDesign} className="min-h-11 rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white">Save design</button>
               </div>
             )}
 
@@ -350,7 +350,7 @@ export default function ProductionDetailPage() {
             value={job.notes}
             onChange={(event) => saveJob({ notes: event.target.value })}
             rows={7}
-            className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700 outline-none focus:border-blue-300"
+            className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-base leading-6 text-slate-700 outline-none focus:border-blue-300 md:text-sm"
           />
         </section>
 
@@ -367,7 +367,7 @@ export default function ProductionDetailPage() {
                 <input
                   value={field.value}
                   onChange={(event) => saveVendorInfo({ [field.key]: event.target.value } as Partial<VendorInfo>)}
-                  className="mt-2 w-full bg-transparent text-sm font-semibold text-slate-950 outline-none"
+                  className="mt-2 w-full bg-transparent text-base font-semibold text-slate-950 outline-none md:text-sm"
                 />
               </label>
             ))}

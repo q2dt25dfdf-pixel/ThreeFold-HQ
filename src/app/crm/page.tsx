@@ -198,20 +198,20 @@ export default function CRMPage() {
   if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="min-h-screen min-w-full space-y-10 bg-zinc-100">
-      <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen min-w-0 space-y-10 bg-zinc-100">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
-          <h1 className="text-4xl font-bold text-slate-950">Manage leads across every stage</h1>
+          <h1 className="text-3xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
           <p className="text-slate-600 text-sm mt-2">
             Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
           </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="relative">
+        <div className="flex w-full shrink-0 flex-col gap-3 sm:flex-row sm:items-center md:w-auto">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
-              className="pl-9 pr-4 py-2.5 rounded-2xl border border-slate-300 bg-white text-sm w-56 focus:outline-none focus:border-slate-500"
+              className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-base focus:border-slate-500 focus:outline-none sm:w-56 md:py-2.5 md:text-sm"
               placeholder="Search CRM..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -220,7 +220,7 @@ export default function CRMPage() {
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="flex items-center gap-2 bg-slate-950 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold hover:bg-slate-800"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:py-2.5"
           >
             <Plus size={16} />
             Add lead
@@ -259,7 +259,7 @@ export default function CRMPage() {
                   </div>
                   <button
                     type="button"
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300"
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 md:h-7 md:w-7"
                     aria-label={`Add lead to ${stage}`}
                     onClick={() => openAddLeadModal(stage)}
                   >

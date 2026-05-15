@@ -34,11 +34,11 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
     <div className="space-y-4">
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Company name</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. POPS – Piranha Ops" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. POPS – Piranha Ops" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Industry</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})}>
           <option value="">Select industry</option>
           <option>Amazon DSP</option>
           <option>Dental Office</option>
@@ -56,21 +56,21 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Primary contact</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. Ricky" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. Ricky" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Orders</label>
-        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={form.orders} onChange={(e) => setForm({ ...form, orders: Number(e.target.value) })} />
+        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" value={form.orders} onChange={(e) => setForm({ ...form, orders: Number(e.target.value) })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Client["status"] })}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Client["status"] })}>
           <option>Active</option><option>At Risk</option><option>Dormant</option><option>Lead</option>
         </select>
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       </div>
     </div>
   );
@@ -79,12 +79,12 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
 function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-xl sm:p-8">
         <h2 className="text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
         {children}
         <div className="mt-6 flex gap-3">
-          <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
-          <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
+          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
         {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
       </div>
@@ -129,15 +129,15 @@ export default function ClientsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">Client accounts</p>
-          <h1 className="mt-3 text-4xl font-bold text-slate-950">Client accounts</h1>
+          <h1 className="mt-3 text-3xl font-bold text-slate-950 md:text-4xl">Client accounts</h1>
           <p className="mt-3 text-base text-slate-600">Manage your client relationships and order history</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+          <label className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64" placeholder="Search clients..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <button className="rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add client</button>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add client</button>
         </div>
       </div>
 
@@ -161,8 +161,8 @@ export default function ClientsPage() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
-        <div className="grid grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem] bg-zinc-100 px-6 py-3 text-xs uppercase tracking-widest text-slate-400">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-md">
+        <div className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem] bg-zinc-100 px-6 py-3 text-xs uppercase tracking-widest text-slate-400">
           <div>Company</div>
           <div>Industry</div>
           <div>Contact</div>
@@ -183,7 +183,7 @@ export default function ClientsPage() {
                   router.push(`/clients/${client.id}`);
                 }
               }}
-              className={`grid w-full grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem] items-center px-6 py-4 text-left transition hover:bg-blue-50 ${
+              className={`grid min-w-[760px] w-full grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem] items-center px-6 py-4 text-left transition hover:bg-blue-50 ${
                 index % 2 === 0 ? "bg-zinc-50" : "bg-white"
               } cursor-pointer`}
             >

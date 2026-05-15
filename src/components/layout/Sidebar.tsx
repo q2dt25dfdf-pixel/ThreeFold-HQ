@@ -14,11 +14,11 @@ const sections = [
   { label: "Calendar", href: "/calendar" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ className = "hidden lg:flex", onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-[280px] shrink-0 flex-col bg-slate-950 text-slate-100 lg:flex">
+    <aside className={`${className} w-[280px] shrink-0 flex-col bg-slate-950 text-slate-100`}>
       <div className="flex h-full flex-col justify-between px-6 py-8">
         <div>
           <div className="pb-6">
@@ -34,6 +34,7 @@ export default function Sidebar() {
                 <Link
                   key={section.href}
                   href={section.href}
+                  onClick={onNavigate}
                   className={`block rounded-3xl px-4 py-3 text-sm font-semibold transition ${
                     active
                       ? "bg-slate-100 text-slate-950 shadow-md"

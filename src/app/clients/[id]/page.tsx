@@ -217,7 +217,7 @@ export default function ClientDetailPage() {
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="bg-slate-950 p-8 text-white">
+      <header className="bg-slate-950 p-5 text-white sm:p-8">
         <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Clients
@@ -228,7 +228,7 @@ export default function ClientDetailPage() {
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
               <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
             </div>
-            <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
             <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-300">
               <span className="flex items-center gap-2"><Building2 className="h-4 w-4" aria-hidden="true" />{client.contact || "No contact"}</span>
               <span className="flex items-center gap-2"><Mail className="h-4 w-4" aria-hidden="true" />{client.email || "No email"}</span>
@@ -238,7 +238,7 @@ export default function ClientDetailPage() {
           <button
             type="button"
             onClick={() => setEditingHeader((value) => !value)}
-            className="inline-flex items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
           >
             <Edit2 className="h-4 w-4" aria-hidden="true" />
             Edit contact
@@ -255,7 +255,7 @@ export default function ClientDetailPage() {
               <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 {field.label}
                 <input
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none focus:border-white/30"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-base normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
                   value={field.value}
                   onChange={(event) => saveClient({ [field.key]: event.target.value } as Partial<Client>)}
                 />
@@ -265,7 +265,7 @@ export default function ClientDetailPage() {
         )}
       </header>
 
-      <div className="space-y-6 p-6 lg:p-8">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders", value: String(clientOrders.length || client.orders) },
@@ -306,7 +306,7 @@ export default function ClientDetailPage() {
                 <h2 className="text-lg font-semibold text-slate-950">Order history</h2>
                 <p className="mt-1 text-sm text-slate-500">Past work and invoice context.</p>
               </div>
-              <button type="button" onClick={() => setShowOrderForm(true)} className="inline-flex items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
+              <button type="button" onClick={() => setShowOrderForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add order
               </button>
@@ -314,16 +314,16 @@ export default function ClientDetailPage() {
 
             {showOrderForm && (
               <div className="mt-5 grid gap-3 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
-                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
-                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
+                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
+                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
+                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
+                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
                   <option>Draft</option>
                   <option>Due</option>
                   <option>Paid</option>
                   <option>Fulfilled</option>
                 </select>
-                <button type="button" onClick={addOrder} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white md:col-span-2">Save order</button>
+                <button type="button" onClick={addOrder} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white md:col-span-2">Save order</button>
               </div>
             )}
 
@@ -344,14 +344,14 @@ export default function ClientDetailPage() {
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-semibold text-slate-950">Activity log</h2>
           <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-4 lg:grid-cols-[160px_160px_1fr_auto]">
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-base md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
               {activityTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-base md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
-            <button type="button" onClick={addActivity} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Log</button>
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-base md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
+            <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Log</button>
           </div>
 
           <div className="mt-5 space-y-3">

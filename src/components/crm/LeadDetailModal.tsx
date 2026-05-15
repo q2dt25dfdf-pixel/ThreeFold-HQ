@@ -40,13 +40,13 @@ function InlineField({
   };
 
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 border border-slate-300/50">
+    <div className="flex flex-col gap-2 rounded-2xl border border-slate-300/50 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="text-sm text-slate-600">{label}</span>
       {editing ? (
         type === "select" && options ? (
           <select
             autoFocus
-            className="border-0 bg-transparent text-right text-sm font-semibold text-slate-950 outline-none"
+            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:text-right md:text-sm"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
@@ -57,7 +57,7 @@ function InlineField({
           <input
             autoFocus
             type={type}
-            className="border-0 bg-transparent text-right text-sm font-semibold text-slate-950 outline-none w-40"
+            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-40 sm:text-right md:text-sm"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
@@ -68,7 +68,7 @@ function InlineField({
         <button
           type="button"
           onClick={() => { setDraft(value); setEditing(true); }}
-          className="group flex items-center gap-1.5 text-right text-sm font-semibold text-slate-950 hover:text-slate-600"
+          className="group flex min-h-11 items-center gap-1.5 text-left text-sm font-semibold text-slate-950 hover:text-slate-600 sm:min-h-0 sm:text-right"
         >
           {value}
           <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity" aria-hidden="true">
@@ -133,26 +133,26 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 px-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         className="h-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2.5rem] border border-slate-300 bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-col gap-8 px-10 py-10">
+        <div className="flex flex-col gap-8 px-5 py-6 sm:px-10 sm:py-10">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <p className="text-xs uppercase tracking-[0.28em] text-slate-600">Lead details</p>
-              <h2 className="text-3xl font-semibold tracking-tight text-slate-950">{current.company}</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{current.company}</h2>
               <p className="text-sm text-slate-600">{current.contact} · {current.email} · {current.phone}</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-300 hover:bg-gray-100"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-300 hover:bg-gray-100 md:h-10 md:w-10"
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
                 <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -194,14 +194,14 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
               <div className="rounded-2xl bg-white border border-slate-300/50 p-4 mb-4 space-y-3">
                 <div className="flex gap-2">
                   <select
-                    className="flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                    className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
                     value={logType}
                     onChange={(e) => setLogType(e.target.value as CommunicationEntry["type"])}
                   >
                     {CONTACT_TYPES.map((t) => <option key={t}>{t}</option>)}
                   </select>
                   <select
-                    className="flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                    className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
                     value={logOwner}
                     onChange={(e) => setLogOwner(e.target.value)}
                   >
@@ -210,7 +210,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
                 </div>
                 <textarea
                   rows={2}
-                  className="w-full rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400 resize-none"
+                  className="w-full resize-none rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
                   placeholder="What happened? Add notes..."
                   value={logNote}
                   onChange={(e) => setLogNote(e.target.value)}
@@ -219,7 +219,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
                   type="button"
                   onClick={addActivityEntry}
                   disabled={!logNote.trim()}
-                  className="w-full rounded-xl bg-slate-950 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                  className="min-h-11 w-full rounded-xl bg-slate-950 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                 >
                   Log activity · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </button>
@@ -249,7 +249,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
               <label className="block font-semibold text-slate-950 mb-4">Notes</label>
               <textarea
                 rows={8}
-                className="w-full rounded-2xl border border-slate-300/50 bg-white p-4 text-sm text-slate-700 outline-none focus:border-slate-400 resize-none"
+                className="w-full resize-none rounded-2xl border border-slate-300/50 bg-white p-4 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
                 value={current.notes}
                 placeholder="Add notes about this lead..."
                 onChange={(e) => patch({ notes: e.target.value })}
@@ -258,18 +258,18 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
           </div>
 
           {/* Footer */}
-          <div className="border-t border-slate-300/60 pt-6 flex items-center justify-between">
+          <div className="flex items-center justify-between border-t border-slate-300/60 pt-6">
             <button
               type="button"
               onClick={handleDelete}
-              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+              className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 md:min-h-0"
             >
               Delete
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100"
+              className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100 md:min-h-0"
             >
               Close
             </button>

@@ -147,7 +147,7 @@ export default function FinancesPage() {
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
           <input
             type={key === "dueDate" ? "date" : "text"}
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder={key === "dueDate" ? undefined : placeholder}
             value={String(data[key as keyof typeof data] ?? "")}
             onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined}
@@ -158,7 +158,7 @@ export default function FinancesPage() {
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
         <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm"
           value={data.status}
           onChange={(e) => onChange({ ...data, status: e.target.value as Invoice["status"] })}
         >
@@ -172,7 +172,7 @@ export default function FinancesPage() {
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
         <textarea
           rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Payment details, notes, reminders..."
           value={data.notes}
           onChange={(e) => onChange({ ...data, notes: e.target.value })}
@@ -190,8 +190,8 @@ export default function FinancesPage() {
           <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Finances</p>
           <h1 className="mt-3 text-3xl font-semibold text-slate-950">Revenue & invoices</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+          <label className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
               className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
@@ -200,7 +200,7 @@ export default function FinancesPage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <button className="rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto" onClick={openAddModal}>
             Add invoice
           </button>
         </div>
@@ -299,7 +299,7 @@ export default function FinancesPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <select
-              className="rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900"
+              className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900"
               value={filter}
               onChange={(e) => setFilter(e.target.value as Invoice["status"] | "All")}
             >
@@ -309,7 +309,7 @@ export default function FinancesPage() {
               <option>Paid</option>
               <option>Overdue</option>
             </select>
-            <button className="rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
+            <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
               Add invoice
             </button>
           </div>
@@ -383,14 +383,14 @@ export default function FinancesPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-xl sm:p-8">
             <h2 className="text-2xl font-semibold text-slate-950">Add invoice</h2>
             {renderFields(form, (next) => setForm(next as typeof emptyForm))}
             <div className="mt-6 flex gap-3">
-              <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
+              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
                 Add invoice
               </button>
-              <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
                 Cancel
               </button>
             </div>
@@ -404,14 +404,14 @@ export default function FinancesPage() {
             <h2 className="text-2xl font-semibold text-slate-950">Edit invoice</h2>
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
             <div className="mt-6 flex gap-3">
-              <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleSaveEdit}>
+              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleSaveEdit}>
                 Save
               </button>
-              <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditInvoice(null)}>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditInvoice(null)}>
                 Cancel
               </button>
             </div>
-            <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={() => handleDelete(editInvoice.id)}>
+            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={() => handleDelete(editInvoice.id)}>
               Delete invoice
             </button>
           </div>

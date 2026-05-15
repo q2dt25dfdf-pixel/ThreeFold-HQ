@@ -92,7 +92,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
@@ -100,7 +100,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
           </div>
           <button
             type="button"
-            className="rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
+              className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
             onClick={onClose}
           >
             Close
@@ -112,7 +112,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Company name
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={company}
                 onChange={(event) => setCompany(event.target.value)}
                 required
@@ -121,7 +121,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Contact name
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={contact}
                 onChange={(event) => setContact(event.target.value)}
                 required
@@ -134,7 +134,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
               Email address
               <input
                 type="email"
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
@@ -143,7 +143,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Phone number
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 required
@@ -155,7 +155,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Industry
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={industry}
                 onChange={(event) => setIndustry(event.target.value)}
               />
@@ -163,7 +163,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Location
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={location}
                 onChange={(event) => setLocation(event.target.value)}
               />
@@ -171,7 +171,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Website
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={website}
                 onChange={(event) => setWebsite(event.target.value)}
               />
@@ -182,7 +182,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Estimated value
               <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
               />
@@ -190,7 +190,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Owner
               <select
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={owner}
                 onChange={(event) => setOwner(event.target.value)}
               >
@@ -204,7 +204,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Stage
               <select
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={stage}
                 onChange={(event) => setStage(event.target.value as Lead["stage"])}
               >
@@ -221,7 +221,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Status
               <select
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={status}
                 onChange={(event) => setStatus(event.target.value as Lead["status"])}
               >
@@ -249,7 +249,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             Notes
             <textarea
               rows={5}
-              className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
+              className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
             />
@@ -258,14 +258,14 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
           <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:justify-end">
             <button
               type="button"
-              className="rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               onClick={onClose}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+              className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
             >
               {submitLabel}
             </button>
