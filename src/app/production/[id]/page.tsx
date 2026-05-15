@@ -189,7 +189,7 @@ export default function ProductionDetailPage() {
     upsertVendorInfo({ ...vendorInfo, ...fields });
   };
 
-  const addDesign = async () => {
+  const addDesign = () => {
     if (!designForm.name.trim()) return;
     const nextDesign: DesignSpec = {
       id: `design-${Date.now()}`,
@@ -198,7 +198,7 @@ export default function ProductionDetailPage() {
       description: designForm.description.trim(),
       placement: designForm.placement.trim(),
     };
-    await upsertDesign(nextDesign);
+    upsertDesign(nextDesign);
     setDesignForm({ name: "", description: "", placement: "" });
     setShowDesignForm(false);
   };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, TrendingDown, TrendingUp } from "lucide-react";
+import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import {
   Area,
@@ -107,9 +107,10 @@ export default function FinancesPage() {
     value: invoices.filter((invoice) => invoice.status === status).length,
   }));
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!form.client.trim()) return;
-    await upsertItem({ id: `invoice-${Date.now()}`, ...form });
+    const newInvoice = { id: `invoice-${Date.now()}`, ...form };
+    upsertItem(newInvoice);
     setForm(emptyForm);
     setShowModal(false);
   };
@@ -121,7 +122,7 @@ export default function FinancesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this invoice?")) return;
+    if (!window.confirm("Delete this item?")) return;
     await deleteItem(id);
     setEditInvoice(null);
   };
@@ -145,9 +146,9 @@ export default function FinancesPage() {
         <div key={key}>
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
           <input
-            type="text"
+            type={key === "dueDate" ? "date" : "text"}
             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-            placeholder={placeholder}
+            placeholder={key === "dueDate" ? undefined : placeholder}
             value={String(data[key as keyof typeof data] ?? "")}
             onChange={(e) => onChange({ ...data, [key]: e.target.value })}
           />
@@ -340,7 +341,22 @@ export default function FinancesPage() {
                       {invoice.status}
                     </span>
                   </td>
-                  <td className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-600">Edit</td>
+                  <td className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-600">
+                    <div className="flex items-center justify-end gap-2">
+                      <span>Edit</span>
+                      <button
+                        type="button"
+                        className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                        aria-label={`Delete ${invoice.orderName}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDelete(invoice.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

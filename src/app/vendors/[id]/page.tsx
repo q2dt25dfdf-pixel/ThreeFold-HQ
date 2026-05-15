@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Briefcase, Building2, Clock, Edit2, Plus } from "lucide-react";
+import { ArrowLeft, Briefcase, Building2, Clock, Edit2, Plus, Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type VendorStatus = "Active" | "Review" | "Paused";
@@ -136,7 +136,7 @@ export default function VendorDetailPage() {
   const params = useParams<{ id: string }>();
   const vendorId = params.id;
 
-  const { data: vendors, upsertItem: upsertVendor, loading: vendorsLoading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: vendors, upsertItem: upsertVendor, deleteItem: deleteVendor, loading: vendorsLoading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
   const { data: jobs, upsertItem: upsertJob, loading: jobsLoading } = useSupabaseTable<VendorJob>("vendor_jobs", defaultVendorJobs);
   const [showJobForm, setShowJobForm] = useState(false);
   const [jobForm, setJobForm] = useState({
@@ -154,7 +154,13 @@ export default function VendorDetailPage() {
     upsertVendor({ ...vendor, ...fields });
   };
 
-  const addJob = async () => {
+  const handleDeleteVendor = () => {
+    if (!vendor || !window.confirm("Delete this vendor?")) return;
+    deleteVendor(vendor.id);
+    router.push("/vendors");
+  };
+
+  const addJob = () => {
     if (!jobForm.name.trim()) return;
     const nextJob: VendorJob = {
       id: `vendor-job-${Date.now()}`,
@@ -164,8 +170,8 @@ export default function VendorDetailPage() {
       date: jobForm.date || new Date().toISOString().split("T")[0],
       status: jobForm.status,
     };
-    await upsertJob(nextJob);
-    if (vendor) await upsertVendor({ ...vendor, jobs: vendorJobs.length + 1 });
+    upsertJob(nextJob);
+    if (vendor) upsertVendor({ ...vendor, jobs: vendorJobs.length + 1 });
     setJobForm({ name: "", client: "", date: "", status: "Pending" });
     setShowJobForm(false);
   };
@@ -205,7 +211,17 @@ export default function VendorDetailPage() {
               {vendor.contact || "No contact listed"}
             </p>
           </div>
-          <Briefcase className="h-12 w-12 text-blue-300" aria-hidden="true" />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDeleteVendor}
+              className="inline-flex items-center gap-2 rounded-2xl border border-rose-300/60 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-500/20"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Delete
+            </button>
+            <Briefcase className="h-12 w-12 text-blue-300" aria-hidden="true" />
+          </div>
         </div>
       </header>
 
@@ -236,6 +252,7 @@ export default function VendorDetailPage() {
             <h2 className="text-lg font-semibold">Vendor details</h2>
             <p className="mt-1 text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
             <div className="mt-5 space-y-3">
+              <InlineField label="Name" value={vendor.name} onSave={(value) => saveVendor({ name: value })} />
               <InlineField label="Type" value={vendor.type} onSave={(value) => saveVendor({ type: value })} />
               <InlineField label="Turnaround" value={vendor.turnaround} onSave={(value) => saveVendor({ turnaround: value })} />
               <InlineField label="Contact" value={vendor.contact} onSave={(value) => saveVendor({ contact: value })} />
@@ -260,7 +277,7 @@ export default function VendorDetailPage() {
               <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:grid-cols-2">
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Job name" value={jobForm.name} onChange={(event) => setJobForm((current) => ({ ...current, name: event.target.value }))} />
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Client" value={jobForm.client} onChange={(event) => setJobForm((current) => ({ ...current, client: event.target.value }))} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Date" value={jobForm.date} onChange={(event) => setJobForm((current) => ({ ...current, date: event.target.value }))} />
+                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" value={jobForm.date} onChange={(event) => setJobForm((current) => ({ ...current, date: event.target.value }))} />
                 <select className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" value={jobForm.status} onChange={(event) => setJobForm((current) => ({ ...current, status: event.target.value as VendorJob["status"] }))}>
                   <option>Pending</option>
                   <option>Approved</option>

@@ -1,4 +1,5 @@
 import type { Lead, PipelineStage } from "./types";
+import { Trash2 } from "lucide-react";
 
 interface LeadCardProps {
   lead: Lead;
@@ -39,9 +40,16 @@ export default function LeadCard({
   const canMoveForward = stageIndex < totalStages - 1;
 
   return (
-    <button
-      type="button"
+    <article
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen(lead)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(lead);
+        }
+      }}
       className="group w-full text-left rounded-[1.5rem] border border-slate-200/60 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400"
     >
       <div className="flex items-start justify-between gap-2">
@@ -54,9 +62,23 @@ export default function LeadCard({
           </div>
           <div className="text-xs text-slate-600">{lead.contact}</div>
         </div>
-        <div className="flex-shrink-0 text-right">
-          <div className="text-base font-semibold text-slate-950">{lead.value}</div>
-          <div className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Value</div>
+        <div className="flex flex-shrink-0 items-start gap-2 text-right">
+          <div>
+            <div className="text-base font-semibold text-slate-950">{lead.value}</div>
+            <div className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Value</div>
+          </div>
+          <button
+            type="button"
+            className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+            aria-label={`Delete ${lead.company}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!window.confirm("Delete this item?")) return;
+              onDelete(lead);
+            }}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
       </div>
 
@@ -74,7 +96,7 @@ export default function LeadCard({
           </div>
         </div>
       </div>
-    </button>
+    </article>
   );
 }
 

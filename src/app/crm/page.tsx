@@ -1,12 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Search } from "lucide-react";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
 import { pipelineStages, type Lead, type PipelineStage } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+
+type Client = {
+  id: string;
+  name: string;
+  industry: string;
+  contact: string;
+  email: string;
+  phone: string;
+  orders: number;
+  notes: string;
+  status: "Active" | "At Risk" | "Dormant" | "Lead";
+};
 
 const initialLeads: Lead[] = [
   {
@@ -98,16 +110,19 @@ const initialLeads: Lead[] = [
 
 export default function CRMPage() {
   const { data: leads, upsertItem, deleteItem, loading } = useSupabaseTable<Lead>("crm_leads", initialLeads);
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const { upsertItem: upsertClient } = useSupabaseTable<Client>("clients", []);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
   const [viewLead, setViewLead] = useState<Lead | null>(null);
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
 
   const visibleLeads = useMemo(
     () =>
       leads.filter((lead) =>
-        JSON.stringify(lead).toLowerCase().includes(query.toLowerCase()),
+        JSON.stringify(lead).toLowerCase().includes(search.toLowerCase()),
       ),
-    [leads, query],
+    [leads, search],
   );
 
   const leadsByStage = useMemo(
@@ -127,9 +142,38 @@ export default function CRMPage() {
     return `lead-${Date.now()}`;
   };
 
-  const handleAddLead = async (values: Omit<Lead, "id">) => {
-    await upsertItem({ id: createId(), ...values });
-    setIsAddOpen(false);
+  useEffect(() => {
+    if (!toastMessage) return;
+
+    const timeout = window.setTimeout(() => setToastMessage(""), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
+
+  const openAddLeadModal = (stage: PipelineStage = "New Lead") => {
+    setAddLeadStage(stage);
+    setShowAddModal(true);
+  };
+
+  const handleAddLead = (values: Omit<Lead, "id">) => {
+    if (!values.company.trim()) return;
+    const lead = { id: createId(), ...values };
+    const client: Client = {
+      id: `client-${lead.id}`,
+      name: lead.company,
+      industry: lead.companyProfile.industry,
+      contact: lead.contact,
+      email: lead.email,
+      phone: lead.phone,
+      orders: 0,
+      notes: `Added from CRM. Initial inquiry: ${lead.notes}`,
+      status: "Lead",
+    };
+
+    upsertItem(lead);
+    upsertClient(client);
+
+    setShowAddModal(false);
+    setToastMessage("Lead added to pipeline and client account created.");
   };
 
   const handleSaveDetailLead = async (updated: Lead) => {
@@ -150,30 +194,31 @@ export default function CRMPage() {
 
   return (
     <div className="min-h-screen min-w-full space-y-10 bg-zinc-100">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-500">CRM Pipeline</p>
-          <h1 className="mt-3 text-4xl font-semibold text-slate-950">Manage leads across every stage</h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
+          <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
+          <h1 className="text-4xl font-bold text-slate-950">Manage leads across every stage</h1>
+          <p className="text-slate-600 text-sm mt-2">
             Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
-              className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              className="pl-9 pr-4 py-2.5 rounded-2xl border border-slate-300 bg-white text-sm w-56 focus:outline-none focus:border-slate-500"
               placeholder="Search CRM..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          </label>
+          </div>
           <button
             type="button"
-            className="rounded-3xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-            onClick={() => setIsAddOpen(true)}
+            onClick={() => openAddLeadModal()}
+            className="flex items-center gap-2 bg-slate-950 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold hover:bg-slate-800"
           >
-            + Add lead
+            <Plus size={16} />
+            Add lead
           </button>
         </div>
       </div>
@@ -195,15 +240,28 @@ export default function CRMPage() {
 
       <div className="-mx-6 overflow-x-auto bg-zinc-100 px-6 pb-6 lg:-mx-8 lg:px-8">
         <div className="flex min-w-max gap-6 bg-zinc-100">
-          {leadsByStage.map((stageLeads, stageIndex) => (
-            <div key={pipelineStages[stageIndex]} className="w-[340px] flex-shrink-0 rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-5 shadow-sm">
+          {leadsByStage.map((stageLeads, stageIndex) => {
+            const stage = pipelineStages[stageIndex];
+
+            return (
+            <div key={stage} className="w-[340px] flex-shrink-0 rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
-                  <h2 className="text-sm font-semibold tracking-tight text-slate-950">{pipelineStages[stageIndex]}</h2>
+                  <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
                   <p className="mt-1 text-xs text-slate-500">{stageLeads.length} lead{stageLeads.length === 1 ? "" : "s"}</p>
                 </div>
-                <div className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">
-                  {stageLeads.length}
+                <div className="flex items-center gap-2">
+                  <div className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">
+                    {stageLeads.length}
+                  </div>
+                  <button
+                    type="button"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300"
+                    aria-label={`Add lead to ${stage}`}
+                    onClick={() => openAddLeadModal(stage)}
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
               <div className="mt-4 space-y-3">
@@ -221,25 +279,31 @@ export default function CRMPage() {
                     />
                   ))
                 ) : (
-                  <div className="rounded-[1.5rem] border border-dashed border-slate-200/60 bg-white px-4 py-6 text-center text-xs text-slate-500">
+                  <button
+                    type="button"
+                    className="w-full rounded-[1.5rem] border border-dashed border-slate-200/60 bg-white px-4 py-6 text-center text-xs text-slate-500 hover:bg-slate-50"
+                    onClick={() => openAddLeadModal(stage)}
+                  >
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
                         <path d="M12 7v10m5-5H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </div>
                     <p className="mt-3">Ready for your next lead</p>
-                  </div>
+                  </button>
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       <LeadFormModal
-        open={isAddOpen}
+        open={showAddModal}
         mode="add"
-        onClose={() => setIsAddOpen(false)}
+        initialStage={addLeadStage}
+        onClose={() => setShowAddModal(false)}
         onSubmit={handleAddLead}
       />
 
@@ -250,6 +314,12 @@ export default function CRMPage() {
         onSave={handleSaveDetailLead}
         onDelete={handleDeleteLead}
       />
+
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-xl">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }

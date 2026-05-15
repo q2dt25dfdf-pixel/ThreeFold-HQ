@@ -2,7 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Search } from "lucide-react";
+import { Clock, Search, Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type JobFlag = "none" | "backordered" | "delayed" | "rush" | "attention";
@@ -161,7 +161,7 @@ function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void 
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
-          <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder={placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
+          <input type={key === "dueDate" ? "date" : "text"} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder={key === "dueDate" ? undefined : placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
         </div>
       ))}
       <div>
@@ -211,7 +211,7 @@ function Modal({ title, onSave, onClose, children }: { title: string; onSave: ()
 
 export default function ProductionPage() {
   const router = useRouter();
-  const { data: jobs, upsertItem, loading } = useSupabaseTable<Job>("production", defaultJobs);
+  const { data: jobs, upsertItem, deleteItem, loading } = useSupabaseTable<Job>("production", defaultJobs);
   const [filter, setFilter] = useState<Job["status"] | "All">("All");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [query, setQuery] = useState("");
@@ -230,15 +230,22 @@ export default function ProductionPage() {
       return a.dueDate.localeCompare(b.dueDate);
     });
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!form.client.trim()) return;
-    await upsertItem({ ...form, id: `job-${Date.now()}` });
+    const newJob = { ...form, id: `job-${Date.now()}` };
+    upsertItem(newJob);
     setForm(emptyForm); setShowAdd(false);
   };
 
   const handleSaveEdit = async () => {
     if (!editJob) return;
     await upsertItem(editJob);
+    setEditJob(null);
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Delete this item?")) return;
+    deleteItem(id);
     setEditJob(null);
   };
 
@@ -306,9 +313,17 @@ export default function ProductionPage() {
                 </div>
                 <p className="mt-3 text-xs text-slate-600">Click to view production detail →</p>
               </button>
-              <div className="border-t border-slate-100 px-6 pb-5 pt-4">
-                <button type="button" className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditJob({ ...job })}>
+              <div className="flex gap-3 border-t border-slate-100 px-6 pb-5 pt-4">
+                <button type="button" className="flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditJob({ ...job })}>
                   Edit job
+                </button>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                  aria-label={`Delete ${job.orderName}`}
+                  onClick={() => handleDelete(job.id)}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </article>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Task = {
@@ -50,9 +51,10 @@ export default function TasksPage() {
     setForm({ ...emptyForm, assignedTo: founder });
     setShowAdd(true);
   };
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!form.title.trim()) return;
-    await upsertItem({ id: `task-${Date.now()}`, ...form });
+    const newTask = { id: `task-${Date.now()}`, ...form };
+    upsertItem(newTask);
     setForm(emptyForm); setShowAdd(false);
   };
   const handleSaveEdit = async () => {
@@ -61,7 +63,7 @@ export default function TasksPage() {
     setEditTask(null);
   };
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this task?")) return;
+    if (!window.confirm("Delete this item?")) return;
     await deleteItem(id);
     setEditTask(null);
   };
@@ -74,7 +76,7 @@ export default function TasksPage() {
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Due date</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder="e.g. 2026-05-20 or TBD" value={data.dueDate} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
+        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.dueDate} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
@@ -110,17 +112,41 @@ export default function TasksPage() {
   );
 
   const TaskCard = ({ task }: { task: Task }) => (
-    <button onClick={() => setEditTask({ ...task })} className={`rounded-[2rem] border bg-white p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}>
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={() => setEditTask({ ...task })}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setEditTask({ ...task });
+        }
+      }}
+      className={`rounded-[2rem] border bg-white p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <p className={`text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
-        <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`shrink-0 rounded-xl px-3 py-1 text-xs font-semibold text-white ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`rounded-xl px-3 py-1 text-xs font-semibold text-white ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
+          <button
+            type="button"
+            className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+            aria-label={`Delete ${task.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDelete(task.id);
+            }}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[task.assignedTo]}`}>{task.assignedTo}</span>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>{task.priority}</span>
       </div>
       <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
-    </button>
+    </article>
   );
 
   if (loading) return <div className="p-8 text-slate-500">Loading...</div>;

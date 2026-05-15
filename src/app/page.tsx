@@ -28,6 +28,7 @@ import {
   Users,
 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { pipelineStages } from "@/components/crm/types";
 
 type StorageRecord = Record<string, unknown> & { id: string };
 
@@ -41,75 +42,6 @@ type SearchResult = {
   href: string;
   searchText: string;
 };
-
-const heroTrend = [
-  { month: "Jan", value: 0 },
-  { month: "Feb", value: 800 },
-  { month: "Mar", value: 1200 },
-  { month: "Apr", value: 2400 },
-  { month: "May", value: 3200 },
-  { month: "Jun", value: 4200 },
-  { month: "Jul", value: 5600 },
-];
-
-const revenueData = [
-  { month: "Jan", collected: 0, pipeline: 1200 },
-  { month: "Feb", collected: 0, pipeline: 1800 },
-  { month: "Mar", collected: 0, pipeline: 2200 },
-  { month: "Apr", collected: 0, pipeline: 2800 },
-  { month: "May", collected: 0, pipeline: 3600 },
-  { month: "Jun", collected: 0, pipeline: 4200 },
-];
-
-const pipelineData = [
-  { stage: "New", count: 1 },
-  { stage: "Contacted", count: 1 },
-  { stage: "Quoted", count: 0 },
-  { stage: "Approved", count: 0 },
-  { stage: "Production", count: 1 },
-];
-
-const taskData = [
-  { name: "Alliyah", open: 3, complete: 0 },
-  { name: "Hannah", open: 2, complete: 0 },
-  { name: "Jordan", open: 2, complete: 0 },
-];
-
-const workloadData = [
-  { name: "Open", value: 7, color: "#3b82f6" },
-  { name: "Done", value: 0, color: "#10b981" },
-];
-
-const metricCards = [
-  {
-    label: "Clients",
-    value: "1",
-    detail: "POPS active account",
-    href: "/clients",
-    icon: Users,
-  },
-  {
-    label: "CRM",
-    value: "3",
-    detail: "Leads across pipeline",
-    href: "/crm",
-    icon: Building2,
-  },
-  {
-    label: "Production",
-    value: "1",
-    detail: "Job in progress",
-    href: "/production",
-    icon: Factory,
-  },
-  {
-    label: "Tasks",
-    value: "7",
-    detail: "Open founder actions",
-    href: "/tasks",
-    icon: ListChecks,
-  },
-];
 
 const focusItems = [
   {
@@ -131,6 +63,9 @@ const focusItems = [
 
 const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 const defaultSearchRows: StorageRecord[] = [];
+const founders = ["Alliyah", "Hannah", "Jordan"] as const;
+const completedStatuses = new Set(["done", "complete", "completed", "fulfilled"]);
+const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -147,6 +82,35 @@ function stringField(record: StorageRecord, key: string, fallback = "") {
   return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
 }
 
+function statusText(record: StorageRecord) {
+  return stringField(record, "status").trim().toLowerCase();
+}
+
+function isTaskDone(task: StorageRecord) {
+  return task.completed === true || completedStatuses.has(statusText(task));
+}
+
+function taskOwner(task: StorageRecord) {
+  return stringField(task, "owner", stringField(task, "assignedTo")).trim();
+}
+
+function isProductionActive(job: StorageRecord) {
+  return !completedStatuses.has(statusText(job));
+}
+
+function numericAmount(value: unknown) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return 0;
+  const amount = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function monthIndex(record: StorageRecord) {
+  const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "dueDate", stringField(record, "followUpDate"))));
+  const date = new Date(`${rawDate}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? -1 : date.getMonth();
+}
+
 export default function Home() {
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement | null>(null);
@@ -157,6 +121,105 @@ export default function Home() {
   const { data: production } = useSupabaseTable<StorageRecord>("production", defaultSearchRows);
   const { data: finances } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
   const { data: tasks } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
+  const { data: crmLeads } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
+
+  const openTasks = useMemo(() => tasks.filter((task) => !isTaskDone(task)), [tasks]);
+  const doneTasks = useMemo(() => tasks.filter(isTaskDone), [tasks]);
+  const activeProduction = useMemo(() => production.filter(isProductionActive), [production]);
+  const collectedRevenue = useMemo(
+    () => finances.filter((invoice) => statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
+    [finances],
+  );
+  const pipelineValue = useMemo(
+    () => crmLeads.reduce((sum, lead) => sum + numericAmount(lead.value), 0),
+    [crmLeads],
+  );
+
+  const heroTrend = useMemo(
+    () =>
+      monthLabels.map((month, index) => ({
+        month,
+        value:
+          finances.filter((invoice) => monthIndex(invoice) <= index && statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0) +
+          crmLeads.filter((lead) => monthIndex(lead) <= index).reduce((sum, lead) => sum + numericAmount(lead.value), 0),
+      })),
+    [crmLeads, finances],
+  );
+
+  const revenueData = useMemo(
+    () =>
+      monthLabels.slice(0, 6).map((month, index) => ({
+        month,
+        collected: finances.filter((invoice) => monthIndex(invoice) === index && statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
+        pipeline: crmLeads.filter((lead) => monthIndex(lead) === index).reduce((sum, lead) => sum + numericAmount(lead.value), 0),
+      })),
+    [crmLeads, finances],
+  );
+
+  const pipelineData = useMemo(() => {
+    const counts = crmLeads.reduce<Record<string, number>>((acc, lead) => {
+      const stage = stringField(lead, "stage", "Unknown");
+      acc[stage] = (acc[stage] ?? 0) + 1;
+      return acc;
+    }, {});
+    const knownStages = pipelineStages.map((stage) => ({ stage, count: counts[stage] ?? 0 }));
+    const extraStages = Object.entries(counts)
+      .filter(([stage]) => !(pipelineStages as readonly string[]).includes(stage))
+      .map(([stage, count]) => ({ stage, count }));
+    return [...knownStages, ...extraStages];
+  }, [crmLeads]);
+
+  const taskData = useMemo(
+    () =>
+      founders.map((name) => ({
+        name,
+        open: openTasks.filter((task) => taskOwner(task) === name).length,
+        complete: doneTasks.filter((task) => taskOwner(task) === name).length,
+      })),
+    [doneTasks, openTasks],
+  );
+
+  const workloadData = useMemo(
+    () => [
+      { name: "Open", value: openTasks.length, color: "#3b82f6" },
+      { name: "Done", value: doneTasks.length, color: "#10b981" },
+    ],
+    [doneTasks.length, openTasks.length],
+  );
+
+  const metricCards = useMemo(
+    () => [
+      {
+        label: "Clients",
+        value: String(clients.length),
+        detail: "Active accounts",
+        href: "/clients",
+        icon: Users,
+      },
+      {
+        label: "CRM",
+        value: String(crmLeads.length),
+        detail: "Leads across pipeline",
+        href: "/crm",
+        icon: Building2,
+      },
+      {
+        label: "Production",
+        value: String(activeProduction.length),
+        detail: "Active jobs",
+        href: "/production",
+        icon: Factory,
+      },
+      {
+        label: "Tasks",
+        value: String(openTasks.length),
+        detail: "Open founder actions",
+        href: "/tasks",
+        icon: ListChecks,
+      },
+    ],
+    [activeProduction.length, clients.length, crmLeads.length, openTasks.length],
+  );
 
   const searchData = useMemo<Record<SearchCategory, StorageRecord[]>>(
     () => ({
@@ -268,9 +331,9 @@ export default function Home() {
 
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  { label: "Revenue collected", value: "$0" },
-                  { label: "Pipeline value", value: "TBD" },
-                  { label: "Active clients", value: "1" },
+                  { label: "Revenue collected", value: formatCurrency(collectedRevenue) },
+                  { label: "Pipeline value", value: formatCurrency(pipelineValue) },
+                  { label: "Active clients", value: String(clients.length) },
                 ].map((item) => (
                   <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-4 shadow-md">
                     <p className="text-xs font-medium text-[#e2e8f0]">{item.label}</p>

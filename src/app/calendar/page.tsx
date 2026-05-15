@@ -1,18 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Home, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Founder = "Alliyah" | "Hannah" | "Jordan";
+type Priority = "High" | "Medium" | "Low";
 
 type Task = {
   id: string;
   title: string;
   dueDate: string;
   assignedTo: Founder;
-  priority: "High" | "Medium" | "Low";
+  priority: Priority;
   time?: string;
+  notes?: string;
+  completed?: boolean;
 };
 
 type CalendarEvent = {
@@ -22,6 +25,8 @@ type CalendarEvent = {
   time?: string;
   assignedTo: Founder;
   type: "Task" | "Meeting" | "Deadline";
+  priority?: Priority;
+  notes?: string;
 };
 
 type CalendarView = "today" | "week" | "month";
@@ -37,8 +42,20 @@ const emptyEvent = {
   time: "",
   assignedTo: "Alliyah" as Founder,
   type: "Task" as CalendarEvent["type"],
+  priority: "Medium" as Priority,
+  notes: "",
 };
-const defaultTasks: Task[] = [];
+const defaultTasks: Task[] = [
+  { id: "task-1", title: "Confirm print vendor for POPS order", dueDate: "2026-05-16", assignedTo: "Hannah", priority: "High", notes: "", completed: false },
+  { id: "task-2", title: "Finalize all 4 POPS 2026 shirt designs", dueDate: "2026-05-16", assignedTo: "Jordan", priority: "High", notes: "Highway Badge, Dotted Circle, Golden Gate, Classic White on Black.", completed: false },
+  { id: "task-3", title: "Reach out to neighboring DSPs at Bay Area hub", dueDate: "2026-05-18", assignedTo: "Alliyah", priority: "High", notes: "", completed: false },
+  { id: "task-4", title: "Get pricing quote from print vendor", dueDate: "2026-05-20", assignedTo: "Hannah", priority: "High", notes: "", completed: false },
+  { id: "task-5", title: "File California LLC after POPS test order", dueDate: "TBD", assignedTo: "Alliyah", priority: "Medium", notes: "$70 filing + $800 annual franchise tax.", completed: false },
+  { id: "task-6", title: "Open Bluevine business bank account", dueDate: "TBD", assignedTo: "Hannah", priority: "Medium", notes: "Equal contributions from all three founders.", completed: false },
+  { id: "task-7", title: "Draft operating agreement", dueDate: "TBD", assignedTo: "Alliyah", priority: "Medium", notes: "Must address unanimous vote on major decisions and Hannah/Jordan couple dynamic.", completed: false },
+  { id: "task-8", title: "Build Threefold website for client pitches", dueDate: "TBD", assignedTo: "Jordan", priority: "Medium", notes: "", completed: false },
+  { id: "task-9", title: "Reach out to dental offices in LumaDent territory", dueDate: "TBD", assignedTo: "Alliyah", priority: "Low", notes: "Use existing LumaDent relationships to pitch branded scrubs, polos, team gear.", completed: false },
+];
 const defaultEvents: CalendarEvent[] = [];
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -61,29 +78,74 @@ function startOfWeek(date: Date) {
   return start;
 }
 
-function PriorityDot({ priority }: { priority: Task["priority"] }) {
-  if (priority === "Low") return null;
+function PriorityDot({ priority }: { priority: Priority }) {
   return (
     <span
-      className={`ml-1 inline-block h-2 w-2 shrink-0 rounded-full ${priority === "High" ? "bg-rose-500" : "bg-amber-500"}`}
+      className={`ml-1 inline-block h-2 w-2 shrink-0 rounded-full ${priority === "High" ? "bg-rose-500" : priority === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`}
       aria-label={`${priority} priority`}
     />
   );
 }
 
-function TaskPill({ task, prefix }: { task: Task; prefix?: string }) {
+function eventPriority(event: CalendarEvent): Priority {
+  return event.priority ?? "Low";
+}
+
+function TaskPill({ task, prefix, onDelete }: { task: Task; prefix?: string; onDelete?: (id: string) => void }) {
   return (
     <div className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${eventTypeColors.Task}`}>
       <span className="min-w-0 truncate">{prefix}{task.title}</span>
       <PriorityDot priority={task.priority} />
+      {onDelete && (
+        <button
+          type="button"
+          className="ml-auto shrink-0 rounded-full p-0.5 text-rose-600 hover:bg-rose-50"
+          aria-label={`Delete ${task.title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(task.id);
+          }}
+        >
+          <Trash2 className="h-3 w-3" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
 
-function EventPill({ event, prefix }: { event: CalendarEvent; prefix?: string }) {
+function EventPill({ event, prefix, onDelete, onOpen }: { event: CalendarEvent; prefix?: string; onDelete?: (id: string) => void; onOpen?: (event: CalendarEvent) => void }) {
   return (
-    <div className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${eventTypeColors[event.type]}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-left text-xs font-semibold ${eventTypeColors[event.type]}`}
+      onClick={(clickEvent) => {
+        clickEvent.stopPropagation();
+        onOpen?.(event);
+      }}
+      onKeyDown={(keyEvent) => {
+        if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+          keyEvent.preventDefault();
+          keyEvent.stopPropagation();
+          onOpen?.(event);
+        }
+      }}
+    >
       <span className="min-w-0 truncate">{prefix}{event.title}</span>
+      <PriorityDot priority={eventPriority(event)} />
+      {onDelete && (
+        <button
+          type="button"
+          className="ml-auto shrink-0 rounded-full p-0.5 text-rose-600 hover:bg-rose-50"
+          aria-label={`Delete ${event.title}`}
+          onClick={(clickEvent) => {
+            clickEvent.stopPropagation();
+            onDelete(event.id);
+          }}
+        >
+          <Trash2 className="h-3 w-3" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
@@ -93,11 +155,14 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarView>("month");
-  const { data: tasks, loading: tasksLoading } = useSupabaseTable<Task>("tasks", defaultTasks);
-  const { data: events, upsertItem: upsertEvent, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", defaultEvents);
+  const { data: tasks, deleteItem: deleteTask, loading: tasksLoading } = useSupabaseTable<Task>("tasks", defaultTasks);
+  const { data: events, upsertItem: upsertEvent, deleteItem: deleteEvent, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", defaultEvents);
   const [showAdd, setShowAdd] = useState(false);
   const [showTodayDetails, setShowTodayDetails] = useState(false);
   const [form, setForm] = useState(emptyEvent);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [eventDraft, setEventDraft] = useState<CalendarEvent | null>(null);
+  const [editingEvent, setEditingEvent] = useState(false);
 
   const monthLabel = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const todayKey = formatDate(today);
@@ -143,12 +208,15 @@ export default function CalendarPage() {
     }, {});
   }, [events]);
 
-  const upcomingTasks = useMemo(() => {
-    return tasks
-      .filter((task) => isValidDate(task.dueDate) && task.dueDate >= todayKey)
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-      .slice(0, 5);
-  }, [tasks, todayKey]);
+  const upcomingEvents = useMemo(() => {
+    return [...events]
+      .filter((event) => isValidDate(event.date))
+      .sort((a, b) => {
+        const dateSort = a.date.localeCompare(b.date);
+        if (dateSort !== 0) return dateSort;
+        return (a.time ?? "").localeCompare(b.time ?? "");
+      });
+  }, [events]);
 
   const changeMonth = (offset: number) => {
     setCurrentDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
@@ -188,11 +256,45 @@ export default function CalendarPage() {
     setCurrentWeek(new Date(startOfWeek));
   };
 
-  const handleAddEvent = async () => {
+  const handleAddEvent = () => {
     if (!form.title.trim() || !form.date) return;
-    await upsertEvent({ id: `event-${Date.now()}`, ...form });
+    const newEvent = { id: `event-${Date.now()}`, ...form };
+    upsertEvent(newEvent);
     setForm(emptyEvent);
     setShowAdd(false);
+  };
+
+  const handleDeleteTask = (id: string) => {
+    if (!window.confirm("Delete this item?")) return;
+    deleteTask(id);
+  };
+
+  const handleDeleteEvent = (id: string) => {
+    if (!window.confirm("Delete this item?")) return;
+    deleteEvent(id);
+    setSelectedEvent(null);
+    setEventDraft(null);
+    setEditingEvent(false);
+  };
+
+  const openEvent = (event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setEventDraft({ ...event, priority: eventPriority(event), notes: event.notes ?? "" });
+    setEditingEvent(false);
+    setShowTodayDetails(false);
+  };
+
+  const closeEvent = () => {
+    setSelectedEvent(null);
+    setEventDraft(null);
+    setEditingEvent(false);
+  };
+
+  const handleSaveEvent = () => {
+    if (!eventDraft || !eventDraft.title.trim() || !eventDraft.date) return;
+    upsertEvent(eventDraft);
+    setSelectedEvent(eventDraft);
+    setEditingEvent(false);
   };
 
   if (tasksLoading || eventsLoading) return <div className="p-8 text-slate-500">Loading...</div>;
@@ -257,7 +359,10 @@ export default function CalendarPage() {
             <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
             Medium priority
           </span>
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Low priority</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            Low priority
+          </span>
         </div>
       </div>
 
@@ -288,7 +393,7 @@ export default function CalendarPage() {
                   </div>
                   <div className="mt-2 space-y-1">
                     {visibleTasks.map((task) => (
-                      <TaskPill key={task.id} task={task} />
+                      <TaskPill key={task.id} task={task} onDelete={handleDeleteTask} />
                     ))}
                     {overflow > 0 && (
                       <div className="overflow-hidden truncate rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
@@ -296,7 +401,7 @@ export default function CalendarPage() {
                       </div>
                     )}
                     {dayEvents.map((event) => (
-                      <EventPill key={event.id} event={event} />
+                      <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                     ))}
                   </div>
                 </div>
@@ -329,10 +434,10 @@ export default function CalendarPage() {
                   <div key={day.key} className={`min-h-16 min-w-0 overflow-hidden border-b border-r border-slate-200 p-2 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
                     <div className="space-y-1">
                       {allDayTasks.map((task) => (
-                        <TaskPill key={task.id} task={task} />
+                        <TaskPill key={task.id} task={task} onDelete={handleDeleteTask} />
                       ))}
                       {allDayEvents.map((event) => (
-                        <EventPill key={event.id} event={event} />
+                        <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                       ))}
                     </div>
                   </div>
@@ -351,10 +456,10 @@ export default function CalendarPage() {
                     <div key={`${day.key}-${hour}`} className={`h-14 min-w-0 overflow-hidden border-b border-r border-slate-200 p-1.5 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
                       <div className="space-y-1">
                         {timedTasks.map((task) => (
-                          <TaskPill key={task.id} task={task} prefix={`${task.time} `} />
+                          <TaskPill key={task.id} task={task} prefix={`${task.time} `} onDelete={handleDeleteTask} />
                         ))}
                         {timedEvents.map((event) => (
-                          <EventPill key={event.id} event={event} prefix={`${event.time} `} />
+                          <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
                         ))}
                       </div>
                     </div>
@@ -391,10 +496,10 @@ export default function CalendarPage() {
               <div className="min-h-16 min-w-0 overflow-hidden border-b border-slate-200 p-3">
                 <div className="space-y-1">
                   {(tasksByDate[todayKey] ?? []).map((task) => (
-                    <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} />
+                    <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} onDelete={handleDeleteTask} />
                   ))}
                   {(eventsByDate[todayKey] ?? []).filter((event) => !event.time).map((event) => (
-                    <EventPill key={event.id} event={event} />
+                    <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                   ))}
                   {(tasksByDate[todayKey] ?? []).length === 0 && (eventsByDate[todayKey] ?? []).filter((event) => !event.time).length === 0 && (
                     <p className="text-sm text-slate-500">No all-day tasks or events.</p>
@@ -413,7 +518,7 @@ export default function CalendarPage() {
                   <div className={`h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 ${timedEvents.length === 0 ? "border-dashed bg-slate-50/40" : "bg-white"}`}>
                     <div className="space-y-1">
                       {timedEvents.map((event) => (
-                        <EventPill key={event.id} event={event} prefix={`${event.time} `} />
+                        <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
                       ))}
                     </div>
                   </div>
@@ -425,21 +530,29 @@ export default function CalendarPage() {
       )}
 
       <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-md">
-        <h2 className="text-xl font-bold text-slate-950">Upcoming tasks</h2>
+        <h2 className="text-xl font-bold text-slate-950">Upcoming events</h2>
         <div className="mt-4 divide-y divide-slate-200">
-          {upcomingTasks.map((task) => (
-            <div key={task.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-3">
-              <p className="text-sm font-semibold text-slate-950">{task.title}</p>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{task.assignedTo}</span>
-              <span className="text-sm text-slate-600">{task.dueDate}</span>
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase ${eventTypeColors.Task}`}>
-                {task.priority}
-                <PriorityDot priority={task.priority} />
+          {upcomingEvents.map((event) => (
+            <div key={event.id} className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-3 py-3">
+              <p className="text-sm font-semibold text-slate-950">{event.title}</p>
+              <span className="text-sm text-slate-600">{event.date}</span>
+              <span className="text-sm text-slate-600">{event.time || "All-day"}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{event.assignedTo}</span>
+              <span className="inline-flex items-center justify-center rounded-full bg-white px-2 py-1">
+                <PriorityDot priority={eventPriority(event)} />
               </span>
+              <button
+                type="button"
+                className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                aria-label={`Delete ${event.title}`}
+                onClick={() => handleDeleteEvent(event.id)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           ))}
-          {upcomingTasks.length === 0 && (
-            <div className="py-6 text-sm text-slate-600">No upcoming dated tasks yet.</div>
+          {upcomingEvents.length === 0 && (
+            <div className="py-6 text-sm text-slate-600">No upcoming dated events yet.</div>
           )}
         </div>
       </section>
@@ -477,11 +590,131 @@ export default function CalendarPage() {
                   <option>Task</option>
                 </select>
               </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as Priority })}>
+                  <option>High</option>
+                  <option>Medium</option>
+                  <option>Low</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+                  value={form.notes}
+                  onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                />
+              </div>
             </div>
             <div className="mt-6 flex gap-3">
               <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleAddEvent}>Save</button>
               <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={() => setShowAdd(false)}>Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedEvent && eventDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-8 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-950">{editingEvent ? "Edit event" : selectedEvent.title}</h2>
+                {!editingEvent && (
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedEvent.date}{selectedEvent.time ? ` at ${selectedEvent.time}` : ""} · {selectedEvent.assignedTo}
+                  </p>
+                )}
+              </div>
+              <button className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" onClick={closeEvent}>
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {editingEvent ? (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Title</label>
+                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={eventDraft.title} onChange={(event) => setEventDraft({ ...eventDraft, title: event.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Date</label>
+                    <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={eventDraft.date} onChange={(event) => setEventDraft({ ...eventDraft, date: event.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Time</label>
+                    <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={eventDraft.time ?? ""} onChange={(event) => setEventDraft({ ...eventDraft, time: event.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
+                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={eventDraft.assignedTo} onChange={(event) => setEventDraft({ ...eventDraft, assignedTo: event.target.value as Founder })}>
+                      <option>Alliyah</option>
+                      <option>Hannah</option>
+                      <option>Jordan</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Type</label>
+                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={eventDraft.type} onChange={(event) => setEventDraft({ ...eventDraft, type: event.target.value as CalendarEvent["type"] })}>
+                      <option>Meeting</option>
+                      <option>Deadline</option>
+                      <option>Task</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
+                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={eventPriority(eventDraft)} onChange={(event) => setEventDraft({ ...eventDraft, priority: event.target.value as Priority })}>
+                      <option>High</option>
+                      <option>Medium</option>
+                      <option>Low</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Type</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-950">{selectedEvent.type}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Assigned to</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-950">{selectedEvent.assignedTo}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Priority</p>
+                    <p className="mt-2 inline-flex items-center text-sm font-semibold text-slate-950">
+                      {eventPriority(selectedEvent)}
+                      <PriorityDot priority={eventPriority(selectedEvent)} />
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+                <textarea
+                  rows={4}
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+                  value={eventDraft.notes ?? ""}
+                  onChange={(event) => setEventDraft({ ...eventDraft, notes: event.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              {editingEvent ? (
+                <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleSaveEvent}>Save</button>
+              ) : (
+                <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={() => setEditingEvent(true)}>Edit</button>
+              )}
+              <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={handleSaveEvent}>Save notes</button>
+            </div>
+            <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" type="button" onClick={() => handleDeleteEvent(selectedEvent.id)}>
+              Delete event
+            </button>
           </div>
         </div>
       )}
@@ -503,7 +736,7 @@ export default function CalendarPage() {
                 <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tasks due today</h3>
                 <div className="mt-3 space-y-2">
                   {(tasksByDate[todayKey] ?? []).map((task) => (
-                    <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} />
+                    <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} onDelete={handleDeleteTask} />
                   ))}
                   {(tasksByDate[todayKey] ?? []).length === 0 && <p className="text-sm text-slate-500">No tasks due today.</p>}
                 </div>
@@ -512,7 +745,7 @@ export default function CalendarPage() {
                 <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Events today</h3>
                 <div className="mt-3 space-y-2">
                   {(eventsByDate[todayKey] ?? []).map((event) => (
-                    <EventPill key={event.id} event={event} prefix={event.time ? `${event.time} ` : undefined} />
+                    <EventPill key={event.id} event={event} prefix={event.time ? `${event.time} ` : undefined} onDelete={handleDeleteEvent} onOpen={openEvent} />
                   ))}
                   {(eventsByDate[todayKey] ?? []).length === 0 && <p className="text-sm text-slate-500">No events today.</p>}
                 </div>

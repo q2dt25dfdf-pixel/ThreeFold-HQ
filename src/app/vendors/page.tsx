@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Package, Printer, Search } from "lucide-react";
+import { Box, Package, Printer, Search, Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Vendor = {
@@ -40,10 +40,22 @@ const defaultVendors: Vendor[] = [
 ];
 
 const emptyForm = { name: "", type: "", turnaround: "", contact: "", notes: "", status: "Review" as Vendor["status"], jobs: 0 };
+const vendorTypeOptions = [
+  "Blank Supplier",
+  "Screen Print Shop",
+  "DTF Print Shop",
+  "DTG Print Shop",
+  "Embroidery Shop",
+  "Heat Press / Transfer",
+  "Fulfillment & Shipping",
+  "Packaging Supplier",
+  "Photography / Mockups",
+  "Other",
+];
 
 export default function VendorsPage() {
   const router = useRouter();
-  const { data: vendors, upsertItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: vendors, upsertItem, deleteItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
   const [showModal, setShowModal] = useState(false);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyForm);
@@ -83,11 +95,17 @@ export default function VendorsPage() {
     },
   ].filter((section) => section.vendors.length > 0);
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!form.name.trim()) return;
-    await upsertItem({ id: `vendor-${Date.now()}`, ...form });
+    const newVendor = { id: `vendor-${Date.now()}`, ...form };
+    upsertItem(newVendor);
     setForm(emptyForm);
     setShowModal(false);
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Delete this item?")) return;
+    deleteItem(id);
   };
 
   const renderFields = (
@@ -103,13 +121,26 @@ export default function VendorsPage() {
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
-          <input
-            type="text"
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-            placeholder={placeholder}
-            value={String(data[key as keyof typeof data] ?? "")}
-            onChange={(e) => onChange({ ...data, [key]: e.target.value })}
-          />
+          {key === "type" ? (
+            <select
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+              value={String(data[key as keyof typeof data] ?? "")}
+              onChange={(e) => onChange({ ...data, [key]: e.target.value })}
+            >
+              <option value="" disabled>Select type</option>
+              {vendorTypeOptions.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+              placeholder={placeholder}
+              value={String(data[key as keyof typeof data] ?? "")}
+              onChange={(e) => onChange({ ...data, [key]: e.target.value })}
+            />
+          )}
         </div>
       ))}
       <div>
@@ -177,10 +208,17 @@ export default function VendorsPage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {section.vendors.map((vendor) => (
-                  <button
+                  <article
                     key={vendor.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => router.push(`/vendors/${vendor.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`/vendors/${vendor.id}`);
+                      }
+                    }}
                     className={`rounded-[2rem] border border-slate-300 bg-white p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
                       vendor.status === "Active" ? "border-t-2 border-t-emerald-400" :
                       vendor.status === "Review" ? "border-t-2 border-t-amber-400" : "border-t-2 border-t-slate-300"
@@ -193,12 +231,25 @@ export default function VendorsPage() {
                           {vendor.type}
                         </span>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${
-                        vendor.status === "Active" ? "bg-emerald-100 text-emerald-800" :
-                        vendor.status === "Review" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"
-                      }`}>
-                        {vendor.status}
-                      </span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${
+                          vendor.status === "Active" ? "bg-emerald-100 text-emerald-800" :
+                          vendor.status === "Review" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"
+                        }`}>
+                          {vendor.status}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                          aria-label={`Delete ${vendor.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDelete(vendor.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-5 grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200 bg-white text-sm">
                       <div className="px-3 py-3">
@@ -219,7 +270,7 @@ export default function VendorsPage() {
                         <p className="text-xs text-slate-600">{vendor.notes}</p>
                       </div>
                     )}
-                  </button>
+                  </article>
                 ))}
               </div>
             </section>

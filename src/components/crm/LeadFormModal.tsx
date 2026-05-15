@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import type { CompanyProfile, Lead } from "./types";
-import { pipelineStages, type LeadStatus } from "./types";
+import { pipelineStages, type LeadStatus, type PipelineStage } from "./types";
 
 interface LeadFormModalProps {
   open: boolean;
   mode: "add" | "edit";
   lead?: Lead | null;
+  initialStage?: PipelineStage;
   onClose: () => void;
-  onSubmit: (values: Omit<Lead, "id">) => void;
+  onSubmit: (values: Omit<Lead, "id">) => void | Promise<void>;
 }
 
 const defaultProfile: CompanyProfile = {
@@ -17,8 +18,9 @@ const defaultProfile: CompanyProfile = {
 };
 
 const leadStatuses: LeadStatus[] = ["Open", "Pending", "At Risk", "Won"];
+const leadOwners = ["Alliyah", "Hannah", "Jordan"] as const;
 
-export default function LeadFormModal({ open, mode, lead, onClose, onSubmit }: LeadFormModalProps) {
+export default function LeadFormModal({ open, mode, lead, initialStage = "New Lead", onClose, onSubmit }: LeadFormModalProps) {
   const [company, setCompany] = useState(lead?.company ?? "");
   const [industry, setIndustry] = useState(lead?.companyProfile.industry ?? defaultProfile.industry);
   const [location, setLocation] = useState(lead?.companyProfile.location ?? defaultProfile.location);
@@ -27,8 +29,8 @@ export default function LeadFormModal({ open, mode, lead, onClose, onSubmit }: L
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [value, setValue] = useState(lead?.value ?? "");
-  const [owner, setOwner] = useState(lead?.owner ?? "Jordan Reyes");
-  const [stage, setStage] = useState<Lead["stage"]>(lead?.stage ?? "New Lead");
+  const [owner, setOwner] = useState(lead?.owner ?? "Jordan");
+  const [stage, setStage] = useState<Lead["stage"]>(lead?.stage ?? initialStage);
   const [status, setStatus] = useState<Lead["status"]>(lead?.status ?? "Open");
   const [followUpDate, setFollowUpDate] = useState(lead?.followUpDate ?? "");
   const [notes, setNotes] = useState(lead?.notes ?? "");
@@ -57,13 +59,13 @@ export default function LeadFormModal({ open, mode, lead, onClose, onSubmit }: L
       setEmail("");
       setPhone("");
       setValue("");
-      setOwner("Jordan Reyes");
-      setStage("New Lead");
+      setOwner("Jordan");
+      setStage(initialStage);
       setStatus("Open");
       setFollowUpDate("");
       setNotes("");
     }
-  }, [lead, mode, open]);
+  }, [lead, mode, open, initialStage]);
 
   if (!open) return null;
 
@@ -187,11 +189,17 @@ export default function LeadFormModal({ open, mode, lead, onClose, onSubmit }: L
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               Owner
-              <input
+              <select
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
                 value={owner}
                 onChange={(event) => setOwner(event.target.value)}
-              />
+              >
+                {leadOwners.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               Stage

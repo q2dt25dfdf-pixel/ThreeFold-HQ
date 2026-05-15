@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Client = {
@@ -12,8 +12,9 @@ type Client = {
   contact: string;
   orders: number;
   notes: string;
-  status: "Active" | "At Risk" | "Dormant";
+  status: "Active" | "At Risk" | "Dormant" | "Lead";
 };
+type ClientForm = Omit<Client, "id">;
 
 const defaultClients: Client[] = [
   {
@@ -27,11 +28,79 @@ const defaultClients: Client[] = [
   },
 ];
 
-const emptyForm = { name: "", industry: "", contact: "", orders: 0, notes: "", status: "Active" as Client["status"] };
+const emptyForm: ClientForm = { name: "", industry: "", contact: "", orders: 0, notes: "", status: "Active" };
+const industryOptions = [
+  "Amazon DSP",
+  "Dental Office",
+  "Medical Practice",
+  "Gym / Fitness Studio",
+  "Restaurant / Food & Beverage",
+  "Retail Store",
+  "Contractor / Trades",
+  "Corporate / Enterprise",
+  "Sports Team",
+  "Real Estate",
+  "Nonprofit",
+  "Other",
+];
+
+function FormFields({ data, onChange }: { data: ClientForm; onChange: (next: ClientForm) => void }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Company name</label>
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. POPS – Piranha Ops" value={data.name} onChange={(e) => onChange({ ...data, name: e.target.value })} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Industry</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={data.industry} onChange={(e) => onChange({ ...data, industry: e.target.value })}>
+          <option value="" disabled>Select industry</option>
+          {industryOptions.map((option) => (
+            <option key={option}>{option}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Primary contact</label>
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. Ricky" value={data.contact} onChange={(e) => onChange({ ...data, contact: e.target.value })} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Orders</label>
+        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.orders} onChange={(e) => onChange({ ...data, orders: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={data.status} onChange={(e) => onChange({ ...data, status: e.target.value as Client["status"] })}>
+          <option>Active</option><option>At Risk</option><option>Dormant</option><option>Lead</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+      </div>
+    </div>
+  );
+}
+
+function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
+        {children}
+        <div className="mt-6 flex gap-3">
+          <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
+          <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+        </div>
+        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
+      </div>
+    </div>
+  );
+}
 
 export default function ClientsPage() {
   const router = useRouter();
-  const { data: clients, upsertItem, loading } = useSupabaseTable<Client>("clients", defaultClients);
+  const { data: clients, upsertItem, deleteItem, loading } = useSupabaseTable<Client>("clients", defaultClients);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "orders">("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -46,55 +115,18 @@ export default function ClientsPage() {
   const totalOrders = clients.reduce((sum, client) => sum + client.orders, 0);
   const activeClients = clients.filter((client) => client.status === "Active").length;
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!form.name.trim()) return;
-    await upsertItem({ id: `client-${Date.now()}`, ...form });
+    const newClient = { id: `client-${Date.now()}`, ...form };
+    upsertItem(newClient);
     setForm(emptyForm);
     setShowAdd(false);
   };
 
-  const FormFields = ({ data, onChange }: { data: typeof emptyForm | Client; onChange: (f: any) => void }) => (
-    <div className="space-y-4">
-      {[
-        { label: "Company name", key: "name", placeholder: "e.g. POPS – Piranha Ops" },
-        { label: "Industry", key: "industry", placeholder: "e.g. Amazon DSP" },
-        { label: "Primary contact", key: "contact", placeholder: "e.g. Ricky" },
-      ].map(({ label, key, placeholder }) => (
-        <div key={key}>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
-          <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder={placeholder} value={(data as any)[key]} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
-        </div>
-      ))}
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Orders</label>
-        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={(data as any).orders} onChange={(e) => onChange({ ...data, orders: Number(e.target.value) })} />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={(data as any).status} onChange={(e) => onChange({ ...data, status: e.target.value })}>
-          <option>Active</option><option>At Risk</option><option>Dormant</option>
-        </select>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={(data as any).notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
-      </div>
-    </div>
-  );
-
-  const Modal = ({ title, onSave, onClose, onDelete, children }: any) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
-        {children}
-        <div className="mt-6 flex gap-3">
-          <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
-          <button className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
-        </div>
-        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
-      </div>
-    </div>
-  );
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Delete this item?")) return;
+    deleteItem(id);
+  };
 
   if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
 
@@ -146,10 +178,17 @@ export default function ClientsPage() {
         </div>
         <div className="divide-y divide-slate-200">
           {visible.map((client, index) => (
-            <button
+            <div
               key={client.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => router.push(`/clients/${client.id}`)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  router.push(`/clients/${client.id}`);
+                }
+              }}
               className={`grid w-full grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem] items-center px-6 py-4 text-left transition hover:bg-blue-50 ${
                 index % 2 === 0 ? "bg-zinc-50" : "bg-white"
               } cursor-pointer`}
@@ -163,8 +202,18 @@ export default function ClientsPage() {
                   {client.status}
                 </span>
               </div>
-              <ChevronRight className="h-4 w-4 justify-self-end text-slate-400" aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                className="justify-self-end rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                aria-label={`Delete ${client.name}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDelete(client.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           ))}
           {visible.length === 0 && (
             <div className="bg-white px-6 py-10 text-center text-sm text-slate-600">
