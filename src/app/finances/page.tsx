@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import {
@@ -25,17 +25,6 @@ type Invoice = {
   notes: string;
 };
 
-const defaultInvoices: Invoice[] = [
-  {
-    id: "invoice-1",
-    client: "POPS – Piranha Ops",
-    orderName: "POPS 2026 Collection",
-    amount: "TBD",
-    dueDate: "TBD",
-    status: "Draft",
-    notes: "First test order. Amount TBD once print vendor is confirmed and pricing finalized. Station DSF7.",
-  },
-];
 
 const emptyForm = { client: "", orderName: "", amount: "", dueDate: "", status: "Draft" as Invoice["status"], notes: "" };
 
@@ -53,20 +42,7 @@ const statusPalette: Record<Invoice["status"], string> = {
   Draft: "#64748b",
 };
 
-const monthlyRevenue = [
-  { month: "Jan", collected: 1200, outstanding: 900 },
-  { month: "Feb", collected: 2200, outstanding: 1300 },
-  { month: "Mar", collected: 3200, outstanding: 1600 },
-  { month: "Apr", collected: 4500, outstanding: 1800 },
-  { month: "May", collected: 6800, outstanding: 2200 },
-  { month: "Jun", collected: 8600, outstanding: 2600 },
-  { month: "Jul", collected: 10400, outstanding: 3000 },
-  { month: "Aug", collected: 12800, outstanding: 3200 },
-  { month: "Sep", collected: 15400, outstanding: 3600 },
-  { month: "Oct", collected: 18200, outstanding: 3900 },
-  { month: "Nov", collected: 21400, outstanding: 4200 },
-  { month: "Dec", collected: 25000, outstanding: 4800 },
-];
+const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
@@ -75,13 +51,19 @@ function invoiceAmount(amount: string) {
   return isNaN(n) ? 0 : n;
 }
 
+function invoiceMonthIndex(invoice: Invoice) {
+  const date = new Date(`${invoice.dueDate}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? -1 : date.getMonth();
+}
+
 export default function FinancesPage() {
-  const { data: invoices, upsertItem, deleteItem, loading } = useSupabaseTable<Invoice>("finances", defaultInvoices);
+  const { data: invoices, upsertItem, deleteItem, loading } = useSupabaseTable<Invoice>("finances", []);
   const [filter, setFilter] = useState<Invoice["status"] | "All">("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [projectionStart] = useState(() => Date.now());
 
   const visible = (filter === "All" ? invoices : invoices.filter((i) => i.status === filter)).filter((invoice) =>
     Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()),
@@ -95,11 +77,30 @@ export default function FinancesPage() {
     .filter((i) => i.status === "Due" || i.status === "Overdue")
     .reduce((sum, i) => sum + invoiceAmount(i.amount), 0);
 
+  const monthlyRevenue = useMemo(() => {
+    const monthlyTotals = monthLabels.map((month) => ({ month, collected: 0, outstanding: 0 }));
+
+    invoices.forEach((invoice) => {
+      const month = invoiceMonthIndex(invoice);
+      if (month < 0) return;
+
+      const amount = invoiceAmount(invoice.amount);
+      if (invoice.status === "Paid") {
+        monthlyTotals[month].collected += amount;
+        return;
+      }
+
+      monthlyTotals[month].outstanding += amount;
+    });
+
+    return monthlyTotals;
+  }, [invoices]);
+
   const overdueCount = invoices.filter((i) => i.status === "Overdue").length;
   const goal = 50000;
   const goalPercent = Math.min(100, Math.round((totalPaid / goal) * 100));
   const projectedCompletion = totalPaid > 0
-    ? new Date(Date.now() + Math.ceil((goal - totalPaid) / Math.max(totalPaid / 30, 1)) * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    ? new Date(projectionStart + Math.ceil((goal - totalPaid) / Math.max(totalPaid / 30, 1)) * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "Awaiting first paid invoice";
 
   const statusData = (["Paid", "Due", "Overdue", "Draft"] as Invoice["status"][]).map((status) => ({
@@ -221,7 +222,7 @@ export default function FinancesPage() {
                   <p className="text-base md:text-3xl font-bold tracking-tight text-slate-950">{card.value}</p>
                   <p className="mt-2 text-xs md:text-sm text-slate-600">{card.label}</p>
                 </div>
-                <span className={`rounded-2xl p-2 ${card.trend === "up" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
+                <span className={`rounded-2xl p-2 ${card.label === "Overdue count" || card.trend === "down" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
                   <TrendIcon className="h-5 w-5" aria-hidden="true" />
                 </span>
               </div>

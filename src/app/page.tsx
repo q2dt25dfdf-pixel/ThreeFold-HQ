@@ -45,7 +45,7 @@ type SearchResult = {
 
 const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 const defaultSearchRows: StorageRecord[] = [];
-const founders = ["Alliyah", "Hannah", "Jordan"] as const;
+const founderNames = ["Alliyah", "Hannah", "Jordan"] as const;
 const taskDoneStatuses = new Set(["done", "complete"]);
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
 const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "followUpDate"];
@@ -74,7 +74,7 @@ function isTaskDone(task: StorageRecord) {
 }
 
 function taskOwner(task: StorageRecord) {
-  return stringField(task, "owner", stringField(task, "assignedTo")).trim();
+  return stringField(task, "owner").trim();
 }
 
 function isProductionActive(job: StorageRecord) {
@@ -219,7 +219,7 @@ export default function Home() {
 
   const taskData = useMemo(
     () =>
-      founders.map((name) => ({
+      founderNames.map((name) => ({
         name,
         open: openTasks.filter((task) => taskOwner(task) === name).length,
         complete: doneTasks.filter((task) => taskOwner(task) === name).length,
@@ -373,7 +373,7 @@ export default function Home() {
                 <p className="mt-8 text-xs md:text-sm font-medium text-[#e2e8f0]">Operations dashboard</p>
                 <h1 className="mt-3 text-2xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
                 <p className="mt-4 max-w-xl text-xs md:text-sm leading-6 text-[#e2e8f0]">
-                  A premium command center for revenue, client work, production progress, and founder execution.
+                  Born from real friendship, built for real money, and rooted in a story worth wearing.
                 </p>
               </div>
 
@@ -657,7 +657,9 @@ export default function Home() {
                     <span className="text-[#64748b]">{person.open} open</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-[8px] bg-[#e2e8f0]">
-                    <div className="h-full rounded-[8px] bg-[#3b82f6]" style={{ width: `${Math.max(12, person.open * 18)}%` }} />
+                    {person.open > 0 && (
+                      <div className="h-full rounded-[8px] bg-[#3b82f6]" style={{ width: String(Math.min(100, person.open * 18)) + "%" }} />
+                    )}
                   </div>
                 </div>
               ))}
