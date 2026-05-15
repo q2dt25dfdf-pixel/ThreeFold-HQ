@@ -1,10 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import Sidebar from "./Sidebar";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const pathname = usePathname();
+  const router = useRouter();
+  const isLoginPage = pathname === "/login";
+
+  useEffect(() => {
+    if (isLoginPage) {
+      return;
+    }
+
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      if (!data.session) {
+        router.replace("/login");
+        return;
+      }
+      setCheckingSession(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+      setCheckingSession(false);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [isLoginPage, router]);
+
+  if (isLoginPage) {
+    return <div className="min-h-dvh bg-zinc-100">{children}</div>;
+  }
+
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-zinc-100 text-sm font-semibold text-slate-600">
+        Loading Threefold HQ...
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh bg-zinc-100">

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const sections = [
   { label: "Dashboard", href: "/" },
@@ -16,6 +17,13 @@ const sections = [
 
 export default function Sidebar({ className = "hidden lg:flex", onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    onNavigate?.();
+    router.replace("/login");
+  };
 
   return (
     <aside className={`${className} max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 lg:static lg:max-h-none lg:overflow-visible`}>
@@ -48,25 +56,34 @@ export default function Sidebar({ className = "hidden lg:flex", onNavigate }: { 
           </nav>
         </div>
 
-        <div className="rounded-[2rem] bg-slate-900/95 p-5 ring-1 ring-white/10">
-          <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Threefold founders</div>
-          <div className="mt-4 space-y-3">
-            {[
-              { initials: "AP", name: "Alliyah", role: "Sales & BD" },
-              { initials: "H", name: "Hannah", role: "Ops & Fulfillment" },
-              { initials: "J", name: "Jordan", role: "Fulfillment & Bookkeeping" },
-            ].map((member) => (
-              <div key={member.name} className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-xs font-semibold text-white">
-                  {member.initials}
+        <div className="space-y-3">
+          <div className="rounded-[2rem] bg-slate-900/95 p-5 ring-1 ring-white/10">
+            <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Threefold founders</div>
+            <div className="mt-4 space-y-3">
+              {[
+                { initials: "AP", name: "Alliyah", role: "Sales & BD" },
+                { initials: "H", name: "Hannah", role: "Ops & Fulfillment" },
+                { initials: "J", name: "Jordan", role: "Fulfillment & Bookkeeping" },
+              ].map((member) => (
+                <div key={member.name} className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-xs font-semibold text-white">
+                    {member.initials}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white">{member.name}</div>
+                    <div className="text-xs text-slate-400">{member.role}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-sm font-semibold text-white">{member.name}</div>
-                  <div className="text-xs text-slate-400">{member.role}</div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full rounded-3xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/5 hover:text-white"
+          >
+            Sign Out
+          </button>
         </div>
       </div>
     </aside>
