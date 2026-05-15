@@ -43,29 +43,12 @@ type SearchResult = {
   searchText: string;
 };
 
-const focusItems = [
-  {
-    label: "POPS 2026 Collection",
-    meta: "Production",
-    status: "In production",
-  },
-  {
-    label: "Bay Area DSP outreach",
-    meta: "CRM",
-    status: "Contact next leads",
-  },
-  {
-    label: "Vendor confirmation",
-    meta: "Operations",
-    status: "Awaiting decision",
-  },
-];
-
 const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 const defaultSearchRows: StorageRecord[] = [];
 const founders = ["Alliyah", "Hannah", "Jordan"] as const;
-const completedStatuses = new Set(["done", "complete", "completed", "fulfilled"]);
+const taskDoneStatuses = new Set(["done", "complete"]);
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
+const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "followUpDate"];
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -87,7 +70,7 @@ function statusText(record: StorageRecord) {
 }
 
 function isTaskDone(task: StorageRecord) {
-  return task.completed === true || completedStatuses.has(statusText(task));
+  return task.completed === true || taskDoneStatuses.has(statusText(task));
 }
 
 function taskOwner(task: StorageRecord) {
@@ -95,7 +78,7 @@ function taskOwner(task: StorageRecord) {
 }
 
 function isProductionActive(job: StorageRecord) {
-  return !completedStatuses.has(statusText(job));
+  return statusText(job) !== "completed";
 }
 
 function numericAmount(value: unknown) {
@@ -105,10 +88,52 @@ function numericAmount(value: unknown) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function parseRecordDate(rawDate: string) {
+  if (!rawDate) return null;
+  const date = new Date(rawDate);
+  if (!Number.isNaN(date.getTime())) return date;
+  const dateOnly = new Date(`${rawDate}T00:00:00`);
+  return Number.isNaN(dateOnly.getTime()) ? null : dateOnly;
+}
+
 function monthIndex(record: StorageRecord) {
   const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "dueDate", stringField(record, "followUpDate"))));
-  const date = new Date(`${rawDate}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? -1 : date.getMonth();
+  return parseRecordDate(rawDate)?.getMonth() ?? -1;
+}
+
+function recordTime(record: StorageRecord) {
+  for (const key of recentDateKeys) {
+    const rawDate = stringField(record, key);
+    if (!rawDate) continue;
+    const date = parseRecordDate(rawDate);
+    if (date) return date.getTime();
+  }
+
+  const idTimestamp = Number(stringField(record, "id").split("-").pop());
+  return Number.isFinite(idTimestamp) ? idTimestamp : 0;
+}
+
+function mostRecentRecord(records: StorageRecord[]) {
+  return records.reduce<StorageRecord | null>((latest, record) => {
+    if (!latest) return record;
+    return recordTime(record) > recordTime(latest) ? record : latest;
+  }, null);
+}
+
+function recordTitle(record: StorageRecord | null, keys: string[], fallback: string) {
+  if (!record) return fallback;
+  for (const key of keys) {
+    const value = stringField(record, key).trim();
+    if (value) return value;
+  }
+  return fallback;
+}
+
+function displayStatus(record: StorageRecord | null, fallback = "No status") {
+  if (!record) return fallback;
+  const status = stringField(record, "status").trim();
+  if (status) return status;
+  return record.completed === true ? "Done" : fallback;
 }
 
 export default function Home() {
@@ -134,6 +159,29 @@ export default function Home() {
     () => crmLeads.reduce((sum, lead) => sum + numericAmount(lead.value), 0),
     [crmLeads],
   );
+  const focusItems = useMemo(() => {
+    const latestProduction = mostRecentRecord(production);
+    const latestLead = mostRecentRecord(crmLeads);
+    const latestTask = mostRecentRecord(tasks);
+
+    return [
+      {
+        label: recordTitle(latestProduction, ["orderName", "name", "title", "client"], "No production jobs"),
+        meta: "Production",
+        status: displayStatus(latestProduction),
+      },
+      {
+        label: recordTitle(latestLead, ["name", "company", "title", "contact"], "No CRM leads"),
+        meta: "CRM",
+        status: displayStatus(latestLead),
+      },
+      {
+        label: recordTitle(latestTask, ["title", "task", "name"], "No tasks"),
+        meta: "Operations",
+        status: displayStatus(latestTask, "Open"),
+      },
+    ];
+  }, [crmLeads, production, tasks]);
 
   const heroTrend = useMemo(
     () =>
@@ -151,9 +199,9 @@ export default function Home() {
       monthLabels.slice(0, 6).map((month, index) => ({
         month,
         collected: finances.filter((invoice) => monthIndex(invoice) === index && statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
-        pipeline: crmLeads.filter((lead) => monthIndex(lead) === index).reduce((sum, lead) => sum + numericAmount(lead.value), 0),
+        pipeline: finances.filter((invoice) => monthIndex(invoice) === index && statusText(invoice) !== "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
       })),
-    [crmLeads, finances],
+    [finances],
   );
 
   const pipelineData = useMemo(() => {
@@ -192,7 +240,7 @@ export default function Home() {
       {
         label: "Clients",
         value: String(clients.length),
-        detail: "Active accounts",
+        detail: "Active clients",
         href: "/clients",
         icon: Users,
       },
@@ -206,7 +254,7 @@ export default function Home() {
       {
         label: "Production",
         value: String(activeProduction.length),
-        detail: "Active jobs",
+        detail: "Jobs in progress",
         href: "/production",
         icon: Factory,
       },

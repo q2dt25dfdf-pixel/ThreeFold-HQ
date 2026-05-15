@@ -11,7 +11,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <button
         type="button"
-        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-2xl leading-none text-white shadow-lg lg:hidden"
+        className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-2xl leading-none text-white shadow-lg lg:hidden"
         aria-label="Open navigation"
         onClick={() => setSidebarOpen(true)}
       >
@@ -19,7 +19,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </button>
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 lg:hidden" onClick={() => setSidebarOpen(false)}>
-          <div className="h-full w-[min(20rem,85vw)]" onClick={(event) => event.stopPropagation()}>
+          <div className="h-full max-h-screen w-[min(20rem,85vw)] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
             <Sidebar className="flex h-full w-full" onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
