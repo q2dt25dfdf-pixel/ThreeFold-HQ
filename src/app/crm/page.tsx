@@ -11,6 +11,7 @@ import { useSupabaseTable } from "@/lib/useSupabaseTable";
 type Client = {
   id: string;
   name: string;
+  company?: string;
   industry: string;
   contact: string;
   email: string;
@@ -160,6 +161,7 @@ export default function CRMPage() {
     const client: Client = {
       id: `client-${lead.id}`,
       name: lead.company,
+      company: lead.company,
       industry: lead.companyProfile.industry,
       contact: lead.contact,
       email: lead.email,

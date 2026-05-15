@@ -145,6 +145,8 @@ export default function VendorDetailPage() {
     date: "",
     status: "Pending" as VendorJob["status"],
   });
+  const [editingVendor, setEditingVendor] = useState(false);
+  const [vendorDraft, setVendorDraft] = useState<Vendor | null>(null);
 
   const vendor = vendors.find((item) => item.id === vendorId);
   const vendorJobs = jobs.filter((job) => job.vendorId === vendorId);
@@ -152,6 +154,18 @@ export default function VendorDetailPage() {
   const saveVendor = (fields: Partial<Vendor>) => {
     if (!vendor) return;
     upsertVendor({ ...vendor, ...fields });
+  };
+
+  const openVendorEditor = () => {
+    if (!vendor) return;
+    setVendorDraft({ ...vendor });
+    setEditingVendor(true);
+  };
+
+  const saveVendorDraft = () => {
+    if (!vendorDraft) return;
+    upsertVendor(vendorDraft);
+    setEditingVendor(false);
   };
 
   const handleDeleteVendor = () => {
@@ -249,16 +263,52 @@ export default function VendorDetailPage() {
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
-            <h2 className="text-lg font-semibold">Vendor details</h2>
-            <p className="mt-1 text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
-            <div className="mt-5 space-y-3">
-              <InlineField label="Name" value={vendor.name} onSave={(value) => saveVendor({ name: value })} />
-              <InlineField label="Type" value={vendor.type} onSave={(value) => saveVendor({ type: value })} />
-              <InlineField label="Turnaround" value={vendor.turnaround} onSave={(value) => saveVendor({ turnaround: value })} />
-              <InlineField label="Contact" value={vendor.contact} onSave={(value) => saveVendor({ contact: value })} />
-              <InlineField label="Status" value={vendor.status} onSave={(value) => saveVendor({ status: value as VendorStatus })} type="select" options={["Active", "Review", "Paused"]} />
-              <InlineField label="Notes" value={vendor.notes} onSave={(value) => saveVendor({ notes: value })} />
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Vendor details</h2>
+                <p className="mt-1 text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
+              </div>
+              {editingVendor ? (
+                <div className="flex gap-2">
+                  <button type="button" onClick={saveVendorDraft} className="rounded-2xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setEditingVendor(false)} className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={openVendorEditor} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  <Edit2 className="h-4 w-4" aria-hidden="true" />
+                  Edit
+                </button>
+              )}
             </div>
+            {editingVendor && vendorDraft ? (
+              <div className="mt-5 space-y-3">
+                <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.name} onChange={(event) => setVendorDraft({ ...vendorDraft, name: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.type} onChange={(event) => setVendorDraft({ ...vendorDraft, type: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.turnaround} onChange={(event) => setVendorDraft({ ...vendorDraft, turnaround: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.contact} onChange={(event) => setVendorDraft({ ...vendorDraft, contact: event.target.value })} />
+                <select className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.status} onChange={(event) => setVendorDraft({ ...vendorDraft, status: event.target.value as VendorStatus })}>
+                  <option>Active</option>
+                  <option>Review</option>
+                  <option>Paused</option>
+                </select>
+                <input type="number" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
+                <textarea rows={4} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.notes} onChange={(event) => setVendorDraft({ ...vendorDraft, notes: event.target.value })} />
+              </div>
+            ) : (
+              <div className="mt-5 space-y-3">
+                <InlineField label="Name" value={vendor.name} onSave={(value) => saveVendor({ name: value })} />
+                <InlineField label="Type" value={vendor.type} onSave={(value) => saveVendor({ type: value })} />
+                <InlineField label="Turnaround" value={vendor.turnaround} onSave={(value) => saveVendor({ turnaround: value })} />
+                <InlineField label="Contact" value={vendor.contact} onSave={(value) => saveVendor({ contact: value })} />
+                <InlineField label="Status" value={vendor.status} onSave={(value) => saveVendor({ status: value as VendorStatus })} type="select" options={["Active", "Review", "Paused"]} />
+                <InlineField label="Jobs" value={String(vendor.jobs)} onSave={(value) => saveVendor({ jobs: Number(value) })} />
+                <InlineField label="Notes" value={vendor.notes} onSave={(value) => saveVendor({ notes: value })} />
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
