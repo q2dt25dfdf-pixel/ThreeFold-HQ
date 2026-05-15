@@ -37,16 +37,16 @@ export default function Sidebar({
   };
 
   return (
-    <aside className={`${className} max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 lg:relative lg:max-h-none lg:overflow-visible`}>
+    <aside className={`${className} fixed left-0 top-0 h-screen max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100`}>
       <button
         type="button"
         aria-label="Collapse sidebar"
         onClick={onToggleCollapse}
-        className={`${showCollapseToggle ? "lg:flex" : "lg:hidden"} absolute -right-4 top-6 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-md transition hover:bg-slate-100`}
+        className={`${showCollapseToggle ? "lg:flex" : "lg:hidden"} absolute right-3 top-4 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-md transition hover:bg-slate-100`}
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
       </button>
-      <div className="flex min-h-full flex-col justify-between px-6 py-8">
+      <div className="flex min-h-full flex-col justify-between gap-8 px-6 py-8">
         <div>
           <div className="pb-6">
             <img src="/Logo.png" alt="Threefold Supply Co." className="block w-full max-w-[210px]" />

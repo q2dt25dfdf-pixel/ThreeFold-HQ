@@ -60,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className={`hidden shrink-0 transition-[width] duration-300 ease-in-out lg:block ${desktopSidebarCollapsed ? "w-0" : "w-[280px]"}`}>
         <Sidebar
           className={`flex h-screen transition-transform duration-300 ease-in-out ${desktopSidebarCollapsed ? "-translate-x-full" : "translate-x-0"}`}
-          showCollapseToggle
+          showCollapseToggle={!desktopSidebarCollapsed}
           onToggleCollapse={() => setDesktopSidebarCollapsed(true)}
         />
       </div>
