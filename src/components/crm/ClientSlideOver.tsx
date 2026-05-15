@@ -63,8 +63,8 @@ export default function ClientSlideOver({ open, lead, onClose }: ClientSlideOver
                     <div className="mt-1 text-slate-600">{lead.companyProfile.industry}</div>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3 border border-slate-200/50">
-                    <div className="font-semibold text-slate-950">Location</div>
-                    <div className="mt-1 text-slate-600">{lead.companyProfile.location}</div>
+                    <div className="font-semibold text-slate-950">Address</div>
+                    <div className="mt-1 text-slate-600">{lead.companyProfile.address}</div>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3 border border-slate-200/50">
                     <div className="font-semibold text-slate-950">Website</div>

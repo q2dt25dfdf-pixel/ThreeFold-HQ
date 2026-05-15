@@ -19,7 +19,7 @@ export type CommunicationEntry = {
 
 export type CompanyProfile = {
   industry: string;
-  location: string;
+  address: string;
   website: string;
 };
 

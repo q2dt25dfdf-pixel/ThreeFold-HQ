@@ -21,11 +21,30 @@ type Client = {
   status: "Active" | "At Risk" | "Dormant" | "Lead";
 };
 
+type FollowUpTask = {
+  id: string;
+  title: string;
+  dueDate: string;
+  assignedTo: "";
+  owner: "";
+  status: "Open" | "Done" | "Complete";
+  priority: "High" | "Medium" | "Low";
+  notes: string;
+  completed: boolean;
+  source: "CRM";
+  crmLeadId: string;
+  leadId: string;
+};
+
+const autoFollowUpTaskId = (leadId: string) => "crm-followup-" + leadId;
+const hasFollowUpDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
+const defaultFollowUpTaskNotes = "Auto-generated from CRM lead. Log interaction notes here after follow-up.";
+
 const initialLeads: Lead[] = [
   {
     id: "lead-1",
     company: "Aurora Logistics",
-    companyProfile: { industry: "Logistics", location: "San Francisco, CA", website: "auroralogistics.co" },
+    companyProfile: { industry: "Logistics", address: "San Francisco, CA", website: "auroralogistics.co" },
     contact: "Sam Carter",
     email: "sam.carter@auroralogistics.com",
     phone: "(415) 555-0199",
@@ -42,7 +61,7 @@ const initialLeads: Lead[] = [
   {
     id: "lead-2",
     company: "HarborPoint Dental",
-    companyProfile: { industry: "Healthcare", location: "San Jose, CA", website: "harborpointdental.com" },
+    companyProfile: { industry: "Healthcare", address: "San Jose, CA", website: "harborpointdental.com" },
     contact: "Dr. Kim",
     email: "dr.kim@harborpointdental.com",
     phone: "(650) 555-0132",
@@ -59,7 +78,7 @@ const initialLeads: Lead[] = [
   {
     id: "lead-3",
     company: "Nexa Corporate",
-    companyProfile: { industry: "E-commerce", location: "Seattle, WA", website: "nexa.com" },
+    companyProfile: { industry: "E-commerce", address: "Seattle, WA", website: "nexa.com" },
     contact: "Avery Johnson",
     email: "avery.johnson@nexa.com",
     phone: "(212) 555-0174",
@@ -76,7 +95,7 @@ const initialLeads: Lead[] = [
   {
     id: "lead-4",
     company: "Atlas Manufacturing",
-    companyProfile: { industry: "Manufacturing", location: "Chicago, IL", website: "atlasmfg.com" },
+    companyProfile: { industry: "Manufacturing", address: "Chicago, IL", website: "atlasmfg.com" },
     contact: "Ruben Torres",
     email: "ruben.torres@atlasmfg.com",
     phone: "(312) 555-0115",
@@ -93,7 +112,7 @@ const initialLeads: Lead[] = [
   {
     id: "lead-5",
     company: "Stonebridge Ventures",
-    companyProfile: { industry: "Private equity", location: "Denver, CO", website: "stonebridge.vc" },
+    companyProfile: { industry: "Private equity", address: "Denver, CO", website: "stonebridge.vc" },
     contact: "Claire Nguyen",
     email: "claire@stonebridge.vc",
     phone: "(303) 555-0182",
@@ -112,6 +131,7 @@ const initialLeads: Lead[] = [
 export default function CRMPage() {
   const { data: leads, upsertItem, deleteItem, loading } = useSupabaseTable<Lead>("crm_leads", initialLeads);
   const { upsertItem: upsertClient } = useSupabaseTable<Client>("clients", []);
+  const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
   const [viewLead, setViewLead] = useState<Lead | null>(null);
@@ -162,6 +182,33 @@ export default function CRMPage() {
     setShowAddModal(true);
   };
 
+  const syncFollowUpTask = (lead: Lead) => {
+    const taskId = autoFollowUpTaskId(lead.id);
+
+    if (!hasFollowUpDate(lead.followUpDate)) {
+      deleteTask(taskId);
+      return;
+    }
+
+    const existingTask = tasks.find((task) => task.id === taskId || task.crmLeadId === lead.id || task.leadId === lead.id);
+
+    upsertTask({
+      ...existingTask,
+      id: taskId,
+      title: `Follow up with ${lead.contact || "lead"} — ${lead.company}`,
+      dueDate: lead.followUpDate,
+      assignedTo: "",
+      owner: "",
+      status: existingTask?.status ?? "Open",
+      notes: existingTask?.notes || defaultFollowUpTaskNotes,
+      priority: existingTask?.priority ?? "Medium",
+      completed: existingTask?.completed ?? false,
+      source: "CRM",
+      crmLeadId: lead.id,
+      leadId: lead.id,
+    });
+  };
+
   const handleAddLead = (values: Omit<Lead, "id">) => {
     if (!values.company.trim()) return;
     const lead = { id: createId(), ...values };
@@ -179,6 +226,7 @@ export default function CRMPage() {
       notes: `Added from CRM. Initial inquiry: ${lead.notes}`,
       status: "Lead",
     });
+    syncFollowUpTask(lead);
 
     setShowAddModal(false);
     setToastMessage("Lead added to pipeline and client account created.");
@@ -186,6 +234,7 @@ export default function CRMPage() {
 
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
+    syncFollowUpTask(updated);
     setViewLead(updated);
   };
 
@@ -195,6 +244,7 @@ export default function CRMPage() {
 
   const handleDeleteLead = async (lead: Lead) => {
     await deleteItem(lead.id);
+    deleteTask(autoFollowUpTaskId(lead.id));
     if (viewLead?.id === lead.id) setViewLead(null);
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import type { Lead, PipelineStage, CommunicationEntry } from "./types";
 import { pipelineStages } from "./types";
 
@@ -46,7 +47,7 @@ function InlineField({
   label: string;
   value: string;
   onSave: (v: string) => void;
-  type?: "text" | "select" | "date";
+  type?: "text" | "select" | "date" | "address";
   options?: string[];
 }) {
   const [editing, setEditing] = useState(false);
@@ -71,6 +72,14 @@ function InlineField({
           >
             {options.map((o) => <option key={o}>{o}</option>)}
           </select>
+        ) : type === "address" ? (
+          <AddressAutocomplete
+            autoFocus
+            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-64 sm:text-right md:text-sm"
+            value={draft}
+            onChange={setDraft}
+            onBlur={commit}
+          />
         ) : (
           <input
             autoFocus
@@ -195,7 +204,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Company profile</p>
               <div className="space-y-3">
                 <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} />
-                <InlineField label="Location" value={current.companyProfile.location} onSave={(v) => patchProfile({ location: v })} />
+                <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
                 <InlineField label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
               </div>
             </div>

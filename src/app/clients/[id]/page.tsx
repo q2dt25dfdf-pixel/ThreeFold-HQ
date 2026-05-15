@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -15,7 +16,7 @@ type Client = {
   contact: string;
   email?: string;
   phone?: string;
-  location?: string;
+  address?: string;
   orders: number;
   notes: string;
   status: ClientStatus;
@@ -51,7 +52,7 @@ const defaultClients: Client[] = [
     contact: "Ricky",
     email: "ricky@piranhaops.com",
     phone: "TBD",
-    location: "Bay Area, CA",
+    address: "Bay Area, CA",
     orders: 1,
     notes:
       "First client. Station DSF7, Bay Area warehouse hub. Test order: POPS 2026 Collection — 4 designs, black oversized heavyweight tees. Hannah manages this DSP directly.",
@@ -225,7 +226,7 @@ export default function ClientDetailPage() {
             <div className="mt-5 space-y-3">
               {[
                 { label: "Industry", value: client.industry },
-                { label: "Location", value: client.location ?? "Not set" },
+                { label: "Address", value: client.address ?? "Not set" },
                 { label: "Contact", value: client.contact || "Not set" },
                 { label: "Status", value: client.status },
                 { label: "Notes", value: client.notes || "No notes added yet." },
@@ -305,14 +306,18 @@ export default function ClientDetailPage() {
               {[
                 { label: "Name", key: "name" },
                 { label: "Industry", key: "industry" },
-                { label: "Location", key: "location" },
+                { label: "Address", key: "address" },
                 { label: "Contact", key: "contact" },
                 { label: "Email", key: "email" },
                 { label: "Phone", key: "phone" },
               ].map((field) => (
                 <label key={field.key} className="block">
                   <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{field.label}</span>
-                  <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => setClientDraft({ ...clientDraft, [field.key]: event.target.value })} />
+                  {field.key === "address" ? (
+                    <AddressAutocomplete className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft.address ?? "")} onChange={(value) => setClientDraft({ ...clientDraft, address: value })} />
+                  ) : (
+                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => setClientDraft({ ...clientDraft, [field.key]: event.target.value })} />
+                  )}
                 </label>
               ))}
               <label className="block">

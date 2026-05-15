@@ -5,16 +5,22 @@ import { Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
+type TaskAssignee = TaskOwner | "";
+type TaskColumn = TaskOwner | "Unassigned";
 
 type Task = {
   id: string;
   title: string;
   dueDate: string;
-  assignedTo: TaskOwner;
-  owner?: TaskOwner;
+  assignedTo: TaskAssignee;
+  owner?: TaskAssignee;
+  status?: "Open" | "Done" | "Complete";
   priority: "High" | "Medium" | "Low";
   notes: string;
   completed: boolean;
+  source?: "CRM" | string;
+  crmLeadId?: string;
+  leadId?: string;
 };
 
 const defaultTasks: Task[] = [
@@ -33,16 +39,25 @@ const emptyForm = { title: "", dueDate: "", assignedTo: "Alliyah" as Task["assig
 
 const priorityColors: Record<Task["priority"], string> = { High: "bg-rose-100 text-rose-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
 const priorityDotColors: Record<Task["priority"], string> = { High: "bg-rose-500", Medium: "bg-amber-500", Low: "bg-emerald-500" };
-const ownerColors: Record<TaskOwner, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800" };
-const founderColumns: { name: TaskOwner; headerClass: string; accentClass: string }[] = [
+const ownerColors: Record<TaskColumn, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800", Unassigned: "bg-slate-100 text-slate-700" };
+const founderColumns: { name: TaskColumn; headerClass: string; accentClass: string }[] = [
   { name: "Alliyah", headerClass: "bg-violet-50 border-violet-400", accentClass: "bg-violet-400" },
   { name: "Hannah", headerClass: "bg-blue-50 border-blue-400", accentClass: "bg-blue-400" },
   { name: "Jordan", headerClass: "bg-emerald-50 border-emerald-400", accentClass: "bg-emerald-400" },
+  { name: "Unassigned", headerClass: "bg-slate-50 border-slate-400", accentClass: "bg-slate-400" },
 ];
 type TaskFormData = Omit<Task, "id">;
 
-function taskOwner(task: Task) {
-  return task.owner ?? task.assignedTo;
+function taskAssignee(task: Task): TaskAssignee {
+  return task.owner ?? task.assignedTo ?? "";
+}
+
+function taskColumn(task: Task): TaskColumn {
+  return taskAssignee(task) || "Unassigned";
+}
+
+function isCrmTask(task: Task) {
+  return task.source === "CRM" || Boolean(task.crmLeadId || task.leadId);
 }
 
 function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T; onChange: (f: T) => void }) {
@@ -59,7 +74,7 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
         <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
-          <option>Alliyah</option><option>Hannah</option><option>Jordan</option>
+          <option value="">Unassigned</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
         </select>
       </div>
       <div>
@@ -101,10 +116,13 @@ export default function TasksPage() {
 
   const toggle = (id: string) => {
     const task = tasks.find((current) => current.id === id);
-    if (task) upsertItem({ ...task, completed: !task.completed });
+    if (task) {
+      const completed = !task.completed;
+      upsertItem({ ...task, completed, status: completed ? "Done" : "Open" });
+    }
   };
-  const openAddForFounder = (founder: TaskOwner) => {
-    setForm({ ...emptyForm, assignedTo: founder });
+  const openAddForFounder = (founder: TaskColumn) => {
+    setForm({ ...emptyForm, assignedTo: founder === "Unassigned" ? "" : founder });
     setShowAdd(true);
   };
   const handleAdd = () => {
@@ -125,7 +143,7 @@ export default function TasksPage() {
   };
 
   const TaskCard = ({ task }: { task: Task }) => {
-    const owner = taskOwner(task);
+    const owner = taskColumn(task);
 
     return (
     <article
@@ -143,7 +161,12 @@ export default function TasksPage() {
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
           <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${priorityDotColors[task.priority]}`} aria-label={`${task.priority} priority`} />
-          <p className={`min-w-0 text-xs md:text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className={`min-w-0 text-xs md:text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
+              {isCrmTask(task) && <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">CRM</span>}
+            </div>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
@@ -187,8 +210,11 @@ export default function TasksPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        {founderColumns.filter((founder) => filterOwner === "All" || founder.name === filterOwner).map((founder) => {
-          const founderTasks = tasks.filter((task) => taskOwner(task) === founder.name);
+        {founderColumns
+          .filter((founder) => filterOwner === "All" || founder.name === filterOwner)
+          .filter((founder) => founder.name !== "Unassigned" || tasks.some((task) => taskColumn(task) === "Unassigned"))
+          .map((founder) => {
+          const founderTasks = tasks.filter((task) => taskColumn(task) === founder.name);
           const founderOpen = founderTasks.filter((task) => !task.completed);
           const founderDone = founderTasks.filter((task) => task.completed);
 

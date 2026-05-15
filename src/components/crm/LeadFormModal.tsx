@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import type { CompanyProfile, Lead } from "./types";
 import { pipelineStages, type LeadStatus, type PipelineStage } from "./types";
 
@@ -28,7 +29,7 @@ const industryOptions = [
 
 const defaultProfile: CompanyProfile = {
   industry: industryOptions[0],
-  location: "San Francisco, CA",
+  address: "San Francisco, CA",
   website: "",
 };
 
@@ -64,7 +65,7 @@ function allowCurrencyKey(event: React.KeyboardEvent<HTMLInputElement>) {
 export default function LeadFormModal({ open, mode, lead, initialStage = "New Lead", onClose, onSubmit }: LeadFormModalProps) {
   const [company, setCompany] = useState(lead?.company ?? "");
   const [industry, setIndustry] = useState(lead?.companyProfile.industry ?? defaultProfile.industry);
-  const [location, setLocation] = useState(lead?.companyProfile.location ?? defaultProfile.location);
+  const [address, setAddress] = useState(lead?.companyProfile.address ?? defaultProfile.address);
   const [website, setWebsite] = useState(lead?.companyProfile.website ?? defaultProfile.website);
   const [contact, setContact] = useState(lead?.contact ?? "");
   const [email, setEmail] = useState(lead?.email ?? "");
@@ -81,7 +82,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
     if (lead) {
       setCompany(lead.company);
       setIndustry(lead.companyProfile.industry);
-      setLocation(lead.companyProfile.location);
+      setAddress(lead.companyProfile.address);
       setWebsite(lead.companyProfile.website);
       setContact(lead.contact);
       setEmail(lead.email);
@@ -95,7 +96,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
     } else if (mode === "add") {
       setCompany("");
       setIndustry(defaultProfile.industry);
-      setLocation(defaultProfile.location);
+      setAddress(defaultProfile.address);
       setWebsite(defaultProfile.website);
       setContact("");
       setEmail("");
@@ -119,7 +120,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
     event.preventDefault();
     onSubmit({
       company: company.trim(),
-      companyProfile: { industry, location: location.trim(), website: website.trim() },
+      companyProfile: { industry, address: address.trim(), website: website.trim() },
       contact: contact.trim(),
       email: email.trim(),
       phone: phone.trim(),
@@ -210,11 +211,12 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
               </select>
             </label>
             <label className="space-y-2 text-sm text-slate-700">
-              Location
-              <input
+              Address
+              <AddressAutocomplete
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
+                value={address}
+                onChange={setAddress}
+                placeholder="Start typing an address..."
               />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
@@ -283,7 +285,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
               </select>
             </label>
             <label className="space-y-2 text-sm text-slate-700">
-              Follow-up date
+              Next Follow-Up Date
               <input
                 type="date"
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"

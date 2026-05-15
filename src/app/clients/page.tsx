@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Client = {
@@ -10,6 +11,9 @@ type Client = {
   name: string;
   industry: string;
   contact: string;
+  contactInformation: string;
+  active: boolean;
+  address: string;
   orders: number;
   notes: string;
   status: "Active" | "At Risk" | "Dormant" | "Lead";
@@ -27,19 +31,22 @@ const defaultClients: Client[] = [
     name: "POPS – Piranha Ops",
     industry: "Amazon DSP",
     contact: "Ricky",
+    contactInformation: "",
+    active: true,
+    address: "",
     orders: 1,
     notes: "First client. Station DSF7, Bay Area warehouse hub. Test order: POPS 2026 Collection — 4 designs, black oversized heavyweight tees. Hannah manages this DSP directly.",
     status: "Active",
   },
 ];
 
-const emptyForm: ClientForm = { name: "", industry: "", contact: "", orders: 0, notes: "", status: "Active" };
+const emptyForm: ClientForm = { name: "", industry: "", contact: "", contactInformation: "", active: true, address: "", orders: 0, notes: "", status: "Active" };
 function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: ClientForm) => void }) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Company name</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. POPS – Piranha Ops" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Company Name</label>
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. POPS - Piranha Ops" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Industry</label>
@@ -60,18 +67,26 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
         </select>
       </div>
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Primary contact</label>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Primary Contact</label>
         <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. Ricky" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Orders</label>
-        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={form.orders} onChange={(e) => setForm({ ...form, orders: Number(e.target.value.replace(/^0+(?=\d)/, "")) })} />
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Contact Information</label>
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="Email, phone, or preferred contact details" value={form.contactInformation} onChange={(e) => setForm({ ...form, contactInformation: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
         <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Client["status"] })}>
           <option>Active</option><option>At Risk</option><option>Dormant</option><option>Lead</option>
         </select>
+      </div>
+      <label className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm font-semibold text-slate-700">
+        Active toggle
+        <input className="h-4 w-4 accent-slate-950" type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+      </label>
+      <div>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Address</label>
+        <AddressAutocomplete className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="Start typing an address..." value={form.address} onChange={(value) => setForm({ ...form, address: value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
