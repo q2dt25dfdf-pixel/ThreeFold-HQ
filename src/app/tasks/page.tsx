@@ -5,8 +5,8 @@ import { Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
-type TaskAssignee = TaskOwner | "";
-type TaskColumn = TaskOwner | "Unassigned";
+type TaskAssignee = TaskOwner | "All" | "";
+type TaskColumn = TaskOwner;
 
 type Task = {
   id: string;
@@ -39,12 +39,11 @@ const emptyForm = { title: "", dueDate: "", assignedTo: "Alliyah" as Task["assig
 
 const priorityColors: Record<Task["priority"], string> = { High: "bg-rose-100 text-rose-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
 const priorityDotColors: Record<Task["priority"], string> = { High: "bg-rose-500", Medium: "bg-amber-500", Low: "bg-emerald-500" };
-const ownerColors: Record<TaskColumn, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800", Unassigned: "bg-slate-100 text-slate-700" };
+const ownerColors: Record<TaskOwner, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800" };
 const founderColumns: { name: TaskColumn; headerClass: string; accentClass: string }[] = [
   { name: "Alliyah", headerClass: "bg-violet-50 border-violet-400", accentClass: "bg-violet-400" },
   { name: "Hannah", headerClass: "bg-blue-50 border-blue-400", accentClass: "bg-blue-400" },
   { name: "Jordan", headerClass: "bg-emerald-50 border-emerald-400", accentClass: "bg-emerald-400" },
-  { name: "Unassigned", headerClass: "bg-slate-50 border-slate-400", accentClass: "bg-slate-400" },
 ];
 type TaskFormData = Omit<Task, "id">;
 
@@ -52,12 +51,80 @@ function taskAssignee(task: Task): TaskAssignee {
   return task.owner ?? task.assignedTo ?? "";
 }
 
-function taskColumn(task: Task): TaskColumn {
-  return taskAssignee(task) || "Unassigned";
-}
-
 function isCrmTask(task: Task) {
   return task.source === "CRM" || Boolean(task.crmLeadId || task.leadId);
+}
+
+function crmFollowUpDetails(task: Task) {
+  const fallback = task.title.replace(/^Follow up with\s+/i, "");
+  const [leadName = fallback, company = "Lead"] = fallback.split(/\s+—\s+/);
+
+  return { leadName, company };
+}
+
+function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onComplete: (id: string) => void; onOpen: (task: Task) => void }) {
+  const sortedTasks = [...tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  return (
+    <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-2 shadow-md md:p-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">CRM</p>
+          <h2 className="text-base font-bold text-slate-950 md:text-lg">Pipeline Follow-Ups</h2>
+        </div>
+        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800 shadow-md">
+          {sortedTasks.filter((task) => !task.completed).length} open
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {sortedTasks.map((task) => {
+          const { leadName, company } = crmFollowUpDetails(task);
+
+          return (
+            <article
+              key={task.id}
+              role="button"
+              tabIndex={0}
+              className={"rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md " + (task.completed ? "border-slate-200 opacity-60" : "border-amber-200")}
+              onClick={() => onOpen(task)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpen(task);
+                }
+              }}
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-950">{leadName}</p>
+                  <p className="mt-1 truncate text-xs text-slate-600">{company}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Due {task.dueDate}</span>
+                  <button
+                    type="button"
+                    className={"min-h-11 rounded-2xl px-4 py-2 text-xs font-semibold text-white " + (task.completed ? "bg-slate-400" : "bg-slate-950 hover:bg-slate-800")}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!task.completed) onComplete(task.id);
+                    }}
+                  >
+                    Mark complete
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+        {sortedTasks.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-amber-200 bg-white/70 px-4 py-6 text-center text-xs text-slate-600 md:text-sm">
+            No pipeline follow-ups yet.
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T; onChange: (f: T) => void }) {
@@ -74,7 +141,7 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
         <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
-          <option value="">Unassigned</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
+<option>Alliyah</option><option>Hannah</option><option>Jordan</option><option>All</option>
         </select>
       </div>
       <div>
@@ -122,7 +189,7 @@ export default function TasksPage() {
     }
   };
   const openAddForFounder = (founder: TaskColumn) => {
-    setForm({ ...emptyForm, assignedTo: founder === "Unassigned" ? "" : founder });
+    setForm({ ...emptyForm, assignedTo: founder });
     setShowAdd(true);
   };
   const handleAdd = () => {
@@ -143,7 +210,7 @@ export default function TasksPage() {
   };
 
   const TaskCard = ({ task }: { task: Task }) => {
-    const owner = taskColumn(task);
+    const owner = taskAssignee(task);
 
     return (
     <article
@@ -184,7 +251,8 @@ export default function TasksPage() {
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[owner]}`}>{owner}</span>
+        {owner !== "All" && owner !== "" && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[owner]}`}>{owner}</span>}
+        {owner === "All" && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">All</span>}
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>{task.priority}</span>
       </div>
       <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
@@ -209,12 +277,13 @@ export default function TasksPage() {
         </div>
       </div>
 
+      <PipelineFollowUps tasks={tasks.filter(isCrmTask)} onComplete={toggle} onOpen={(task) => setEditTask({ ...task })} />
+
       <div className="grid gap-5 xl:grid-cols-3">
         {founderColumns
           .filter((founder) => filterOwner === "All" || founder.name === filterOwner)
-          .filter((founder) => founder.name !== "Unassigned" || tasks.some((task) => taskColumn(task) === "Unassigned"))
           .map((founder) => {
-          const founderTasks = tasks.filter((task) => taskColumn(task) === founder.name);
+          const founderTasks = tasks.filter((task) => !isCrmTask(task) && (taskAssignee(task) === founder.name || taskAssignee(task) === "All"));
           const founderOpen = founderTasks.filter((task) => !task.completed);
           const founderDone = founderTasks.filter((task) => task.completed);
 

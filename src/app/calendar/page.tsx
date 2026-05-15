@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
-type Founder = "Alliyah" | "Hannah" | "Jordan";
+type Founder = "All" | "Alliyah" | "Hannah" | "Jordan";
 type Priority = "High" | "Medium" | "Low";
 type EventType = "Client Meeting" | "Demo" | "Video Call" | "Delivery" | "Deadline" | "Internal Meeting" | "Other";
 
@@ -48,7 +48,7 @@ const emptyEvent = {
   title: "",
   date: "2026-05-13",
   time: "",
-  assignedTo: "Alliyah" as Founder,
+  assignedTo: "All" as Founder,
   type: "Client Meeting" as EventType,
   notes: "",
 };
@@ -595,6 +595,7 @@ export default function CalendarPage() {
               <div>
                 <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
                 <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.assignedTo} onChange={(event) => setForm({ ...form, assignedTo: event.target.value as Founder })}>
+                  <option>All</option>
                   <option>Alliyah</option>
                   <option>Hannah</option>
                   <option>Jordan</option>
@@ -661,6 +662,7 @@ export default function CalendarPage() {
                   <div>
                     <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
                     <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={eventDraft.assignedTo} onChange={(event) => setEventDraft({ ...eventDraft, assignedTo: event.target.value as Founder })}>
+                      <option>All</option>
                       <option>Alliyah</option>
                       <option>Hannah</option>
                       <option>Jordan</option>

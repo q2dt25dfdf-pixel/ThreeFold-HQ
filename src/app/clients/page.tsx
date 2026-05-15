@@ -11,12 +11,13 @@ type Client = {
   name: string;
   industry: string;
   contact: string;
-  contactInformation: string;
-  active: boolean;
+  email: string;
+  phone: string;
   address: string;
+  website: string;
   orders: number;
   notes: string;
-  status: "Active" | "At Risk" | "Dormant" | "Lead";
+  status: "Active" | "Lead" | "At Risk" | "Dormant" | "Inactive";
 };
 type ClientForm = Omit<Client, "id">;
 
@@ -31,82 +32,173 @@ const defaultClients: Client[] = [
     name: "POPS – Piranha Ops",
     industry: "Amazon DSP",
     contact: "Ricky",
-    contactInformation: "",
-    active: true,
+    email: "",
+    phone: "",
     address: "",
+    website: "",
     orders: 1,
     notes: "First client. Station DSF7, Bay Area warehouse hub. Test order: POPS 2026 Collection — 4 designs, black oversized heavyweight tees. Hannah manages this DSP directly.",
     status: "Active",
   },
 ];
 
-const emptyForm: ClientForm = { name: "", industry: "", contact: "", contactInformation: "", active: true, address: "", orders: 0, notes: "", status: "Active" };
+const emptyForm: ClientForm = { name: "", industry: "", contact: "", email: "", phone: "", address: "", website: "", orders: 0, notes: "", status: "Active" };
 function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: ClientForm) => void }) {
   return (
-    <div className="space-y-4">
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Company Name</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. POPS - Piranha Ops" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+    <div className="space-y-6 px-6 py-6">
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Company Name
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="e.g. POPS - Piranha Ops"
+            value={form.name}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
+          />
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Contact Name
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="e.g. Ricky"
+            value={form.contact}
+            onChange={(event) => setForm({ ...form, contact: event.target.value })}
+          />
+        </label>
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Industry</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})}>
-          <option value="">Select industry</option>
-          <option>Amazon DSP</option>
-          <option>Dental Office</option>
-          <option>Medical Practice</option>
-          <option>Gym / Fitness Studio</option>
-          <option>Restaurant / Food & Beverage</option>
-          <option>Retail Store</option>
-          <option>Contractor / Trades</option>
-          <option>Corporate / Enterprise</option>
-          <option>Sports Team</option>
-          <option>Real Estate</option>
-          <option>Nonprofit</option>
-          <option>Other</option>
-        </select>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Email Address
+          <input
+            type="email"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.email}
+            onChange={(event) => setForm({ ...form, email: event.target.value })}
+          />
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Phone Number
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.phone}
+            onChange={(event) => setForm({ ...form, phone: event.target.value })}
+          />
+        </label>
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Primary Contact</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="e.g. Ricky" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Industry
+          <select
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.industry}
+            onChange={(event) => setForm({ ...form, industry: event.target.value })}
+          >
+            <option value="">Select industry</option>
+            <option>Amazon DSP</option>
+            <option>Dental Office</option>
+            <option>Medical Practice</option>
+            <option>Gym / Fitness Studio</option>
+            <option>Restaurant / Food & Beverage</option>
+            <option>Retail Store</option>
+            <option>Contractor / Trades</option>
+            <option>Corporate / Enterprise</option>
+            <option>Sports Team</option>
+            <option>Real Estate</option>
+            <option>Nonprofit</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Address
+          <AddressAutocomplete
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="Start typing an address..."
+            value={form.address}
+            onChange={(value) => setForm({ ...form, address: value })}
+          />
+        </label>
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Contact Information</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="Email, phone, or preferred contact details" value={form.contactInformation} onChange={(e) => setForm({ ...form, contactInformation: e.target.value })} />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Website
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="https://yourwebsite.com"
+            value={form.website}
+            onChange={(event) => setForm({ ...form, website: event.target.value })}
+          />
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Status
+          <select
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.status}
+            onChange={(event) => setForm({ ...form, status: event.target.value as Client["status"] })}
+          >
+            <option>Active</option>
+            <option>Lead</option>
+            <option>At Risk</option>
+            <option>Dormant</option>
+            <option>Inactive</option>
+          </select>
+        </label>
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Client["status"] })}>
-          <option>Active</option><option>At Risk</option><option>Dormant</option><option>Lead</option>
-        </select>
-      </div>
-      <label className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm font-semibold text-slate-700">
-        Active toggle
-        <input className="h-4 w-4 accent-slate-950" type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+
+      <label className="block space-y-2 text-sm text-slate-700">
+        Notes
+        <textarea
+          rows={5}
+          className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+          value={form.notes}
+          onChange={(event) => setForm({ ...form, notes: event.target.value })}
+        />
       </label>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Address</label>
-        <AddressAutocomplete className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="Start typing an address..." value={form.address} onChange={(value) => setForm({ ...form, address: value })} />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-      </div>
     </div>
   );
 }
 
 function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
-        <h2 className="text-base md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
-        {children}
-        <div className="mt-6 flex gap-3">
-          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
-          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+            <p className="text-sm text-slate-500">Keep client account details ready for orders, follow-ups, and reporting.</p>
+          </div>
+          <button
+            type="button"
+            className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
-        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
+        {children}
+        <div className="flex flex-col gap-3 px-6 pb-6 pt-4 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+            onClick={onSave}
+          >
+            Save
+          </button>
+        </div>
+        {onDelete && <button className="mx-6 mb-6 w-[calc(100%-3rem)] rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
       </div>
     </div>
   );
