@@ -533,7 +533,19 @@ export default function CalendarPage() {
         <h2 className="text-xl font-bold text-slate-950">Upcoming events</h2>
         <div className="mt-4 divide-y divide-slate-200">
           {upcomingEvents.map((event) => (
-            <div key={event.id} className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-3 py-3">
+            <div
+              key={event.id}
+              role="button"
+              tabIndex={0}
+              className="grid w-full cursor-pointer grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-3 py-3 text-left hover:bg-slate-50"
+              onClick={() => openEvent(event)}
+              onKeyDown={(keyEvent) => {
+                if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+                  keyEvent.preventDefault();
+                  openEvent(event);
+                }
+              }}
+            >
               <p className="text-sm font-semibold text-slate-950">{event.title}</p>
               <span className="text-sm text-slate-600">{event.date}</span>
               <span className="text-sm text-slate-600">{event.time || "All-day"}</span>
@@ -545,7 +557,11 @@ export default function CalendarPage() {
                 type="button"
                 className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
                 aria-label={`Delete ${event.title}`}
-                onClick={() => handleDeleteEvent(event.id)}
+                onClick={(clickEvent) => {
+                  clickEvent.stopPropagation();
+                  handleDeleteEvent(event.id);
+                }}
+                onKeyDown={(keyEvent) => keyEvent.stopPropagation()}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
