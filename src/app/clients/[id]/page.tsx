@@ -199,16 +199,16 @@ export default function ClientDetailPage() {
     setActivityForm((current) => ({ ...current, notes: "" }));
   };
 
-  if (clientsLoading || ordersLoading || activityLoading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (clientsLoading || ordersLoading || activityLoading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
 
   if (!client) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="min-h-screen p-3 md:p-8">
         <button type="button" onClick={() => router.push("/clients")} className="text-sm font-semibold text-slate-600 hover:text-slate-950">
           ← Clients
         </button>
-        <div className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-8">
-          <h1 className="text-2xl font-semibold text-slate-950">Client not found</h1>
+        <div className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-3 md:p-8">
+          <h1 className="text-xl md:text-2xl font-semibold text-slate-950">Client not found</h1>
           <p className="mt-2 text-sm text-slate-500">This client may have been deleted or is not available in Supabase.</p>
         </div>
       </div>
@@ -216,8 +216,8 @@ export default function ClientDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="bg-slate-950 p-5 text-white sm:p-8">
+    <main className="min-h-screen">
+      <header className="bg-slate-950 p-3 text-white md:p-8">
         <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Clients
@@ -228,7 +228,7 @@ export default function ClientDetailPage() {
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
               <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
             </div>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
             <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-300">
               <span className="flex items-center gap-2"><Building2 className="h-4 w-4" aria-hidden="true" />{client.contact || "No contact"}</span>
               <span className="flex items-center gap-2"><Mail className="h-4 w-4" aria-hidden="true" />{client.email || "No email"}</span>
@@ -255,7 +255,7 @@ export default function ClientDetailPage() {
               <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 {field.label}
                 <input
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-base normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
                   value={field.value}
                   onChange={(event) => saveClient({ [field.key]: event.target.value } as Partial<Client>)}
                 />
@@ -265,22 +265,22 @@ export default function ClientDetailPage() {
         )}
       </header>
 
-      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="space-y-6 p-3 md:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders", value: String(clientOrders.length || client.orders) },
             { label: "Total spend", value: totalSpend > 0 ? `$${totalSpend.toLocaleString()}` : "$0" },
             { label: "Account status", value: client.status },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-6">
+            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
               <p className="text-sm text-slate-500">{stat.label}</p>
-              <p className="mt-3 text-3xl font-semibold text-slate-950">{stat.value}</p>
+              <p className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">{stat.value}</p>
             </div>
           ))}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
             <h2 className="text-lg font-semibold text-slate-950">Account details</h2>
             <p className="mt-1 text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
             <div className="mt-5 space-y-3">
@@ -300,7 +300,7 @@ export default function ClientDetailPage() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">Order history</h2>
@@ -314,10 +314,10 @@ export default function ClientDetailPage() {
 
             {showOrderForm && (
               <div className="mt-5 grid gap-3 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
-                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
-                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
+                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
+                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
+                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
+                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
                   <option>Draft</option>
                   <option>Due</option>
                   <option>Paid</option>
@@ -329,7 +329,7 @@ export default function ClientDetailPage() {
 
             <div className="mt-5 space-y-3">
               {clientOrders.map((order) => (
-                <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-semibold text-slate-950">{order.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{order.date} · {order.amount}</p>
@@ -341,16 +341,16 @@ export default function ClientDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
           <h2 className="text-lg font-semibold text-slate-950">Activity log</h2>
           <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-4 lg:grid-cols-[160px_160px_1fr_auto]">
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-base md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
               {activityTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-base md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-base md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
             <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Log</button>
           </div>
 

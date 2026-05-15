@@ -106,7 +106,7 @@ export default function VendorsPage() {
         <div key={key}>
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
           {key === "type" ? (
-            <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
+            <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
               <option value="">Select type</option>
               <option>Blank Supplier</option>
               <option>Screen Print Shop</option>
@@ -122,7 +122,7 @@ export default function VendorsPage() {
           ) : (
             <input
               type="text"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
               placeholder={placeholder}
               value={String(form[key as keyof typeof form] ?? "")}
               onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -133,7 +133,7 @@ export default function VendorsPage() {
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
         <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm"
           value={form.status}
           onChange={(e) => setForm({ ...form, status: e.target.value as Vendor["status"] })}
         >
@@ -146,7 +146,7 @@ export default function VendorsPage() {
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
         <textarea
           rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Pricing notes, minimums, quality feedback..."
           value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -155,17 +155,17 @@ export default function VendorsPage() {
     </div>
   );
 
-  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Vendors</p>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-950">Vendor network</h1>
+          <h1 className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">Vendor network</h1>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-          <label className="relative w-full sm:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
+          <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
               className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
@@ -175,7 +175,7 @@ export default function VendorsPage() {
             />
           </label>
           <button
-            className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
+            className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
             onClick={() => setShowModal(true)}
           >
             Add vendor
@@ -206,7 +206,7 @@ export default function VendorsPage() {
                         router.push(`/vendors/${vendor.id}`);
                       }
                     }}
-                    className={`rounded-[2rem] border border-slate-300 bg-white p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
+                    className={`rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
                       vendor.status === "Active" ? "border-t-2 border-t-emerald-400" :
                       vendor.status === "Review" ? "border-t-2 border-t-amber-400" : "border-t-2 border-t-slate-300"
                     }`}
@@ -238,7 +238,7 @@ export default function VendorsPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="mt-5 grid grid-cols-1 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                    <div className="mt-5 grid grid-cols-1 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white text-sm md:grid-cols-3 md:divide-x sm:divide-y-0">
                       <div className="px-3 py-3">
                         <p className="text-xs text-slate-400">Turnaround</p>
                         <p className="mt-1 text-sm font-semibold text-slate-950">{vendor.turnaround}</p>
@@ -272,8 +272,8 @@ export default function VendorsPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-xl sm:p-8">
-            <h2 className="text-2xl font-semibold text-slate-950">Add vendor</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
+            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Add vendor</h2>
             {renderFields()}
             <div className="mt-6 flex gap-3">
               <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>

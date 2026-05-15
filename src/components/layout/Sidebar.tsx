@@ -18,8 +18,8 @@ export default function Sidebar({ className = "hidden lg:flex", onNavigate }: { 
   const pathname = usePathname();
 
   return (
-    <aside className={`${className} max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 lg:max-h-none lg:overflow-visible`}>
-      <div className="flex h-full flex-col justify-between px-6 py-8">
+    <aside className={`${className} max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 lg:static lg:max-h-none lg:overflow-visible`}>
+      <div className="flex min-h-full flex-col justify-between px-6 py-8">
         <div>
           <div className="pb-6">
             <p className="text-xs uppercase tracking-[0.35em] text-slate-300">Threefold Supply Co.</p>

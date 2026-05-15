@@ -18,7 +18,6 @@ const defaultProfile: CompanyProfile = {
 };
 
 const leadStatuses: LeadStatus[] = ["Open", "Pending", "At Risk", "Won"];
-const leadOwners = ["Alliyah", "Hannah", "Jordan"] as const;
 
 export default function LeadFormModal({ open, mode, lead, initialStage = "New Lead", onClose, onSubmit }: LeadFormModalProps) {
   const [company, setCompany] = useState(lead?.company ?? "");
@@ -29,7 +28,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [value, setValue] = useState(lead?.value ?? "");
-  const [owner, setOwner] = useState(lead?.owner ?? "Jordan");
+  const [owner, setOwner] = useState(lead?.owner ?? "");
   const [stage, setStage] = useState<Lead["stage"]>(lead?.stage ?? initialStage);
   const [status, setStatus] = useState<Lead["status"]>(lead?.status ?? "Open");
   const [followUpDate, setFollowUpDate] = useState(lead?.followUpDate ?? "");
@@ -59,7 +58,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       setEmail("");
       setPhone("");
       setValue("");
-      setOwner("Jordan");
+      setOwner("");
       setStage(initialStage);
       setStatus("Open");
       setFollowUpDate("");
@@ -189,17 +188,12 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               Owner
-              <select
+              <input
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={owner}
                 onChange={(event) => setOwner(event.target.value)}
-              >
-                {leadOwners.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+                placeholder="Owner name"
+              />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               Stage

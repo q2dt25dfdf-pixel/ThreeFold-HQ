@@ -23,7 +23,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=1" />
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable} bg-zinc-100 antialiased`}>
         <AppShell>{children}</AppShell>
       </body>
     </html>

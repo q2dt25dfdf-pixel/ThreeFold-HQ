@@ -4,11 +4,14 @@ import { type ReactNode, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
+type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
+
 type Task = {
   id: string;
   title: string;
   dueDate: string;
-  assignedTo: "Alliyah" | "Hannah" | "Jordan";
+  assignedTo: TaskOwner;
+  owner?: TaskOwner;
   priority: "High" | "Medium" | "Low";
   notes: string;
   completed: boolean;
@@ -29,40 +32,44 @@ const defaultTasks: Task[] = [
 const emptyForm = { title: "", dueDate: "", assignedTo: "Alliyah" as Task["assignedTo"], priority: "Medium" as Task["priority"], notes: "", completed: false };
 
 const priorityColors: Record<Task["priority"], string> = { High: "bg-rose-100 text-rose-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
-const ownerColors: Record<Task["assignedTo"], string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800" };
-const founderColumns: { name: Task["assignedTo"]; headerClass: string; accentClass: string }[] = [
+const ownerColors: Record<TaskOwner, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800" };
+const founderColumns: { name: TaskOwner; headerClass: string; accentClass: string }[] = [
   { name: "Alliyah", headerClass: "bg-violet-50 border-violet-400", accentClass: "bg-violet-400" },
   { name: "Hannah", headerClass: "bg-blue-50 border-blue-400", accentClass: "bg-blue-400" },
   { name: "Jordan", headerClass: "bg-emerald-50 border-emerald-400", accentClass: "bg-emerald-400" },
 ];
 type TaskFormData = Omit<Task, "id">;
 
+function taskOwner(task: Task) {
+  return task.owner ?? task.assignedTo;
+}
+
 function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T; onChange: (f: T) => void }) {
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
       <div className="sm:col-span-2">
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Task</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Due date</label>
-        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
+        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
           <option>Alliyah</option><option>Hannah</option><option>Jordan</option>
         </select>
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
           <option>High</option><option>Medium</option><option>Low</option>
         </select>
       </div>
       <div className="sm:col-span-2">
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:outline-none md:text-sm" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
       </div>
     </div>
   );
@@ -71,8 +78,8 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
 function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-6 shadow-xl sm:px-10 sm:py-10">
-        <h2 className="text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-3 md:py-6 shadow-xl md:px-10 md:py-10">
+        <h2 className="text-xl md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
         {children}
         <div className="mt-6 flex gap-3">
           <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
@@ -86,7 +93,7 @@ function Modal({ title, onSave, onClose, onDelete, children }: { title: string; 
 
 export default function TasksPage() {
   const { data: tasks, upsertItem, deleteItem, loading } = useSupabaseTable<Task>("tasks", defaultTasks);
-  const [filterOwner, setFilterOwner] = useState<Task["assignedTo"] | "All">("All");
+  const [filterOwner, setFilterOwner] = useState<TaskOwner | "All">("All");
   const [showAdd, setShowAdd] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -95,7 +102,7 @@ export default function TasksPage() {
     const task = tasks.find((current) => current.id === id);
     if (task) upsertItem({ ...task, completed: !task.completed });
   };
-  const openAddForFounder = (founder: Task["assignedTo"]) => {
+  const openAddForFounder = (founder: TaskOwner) => {
     setForm({ ...emptyForm, assignedTo: founder });
     setShowAdd(true);
   };
@@ -116,7 +123,10 @@ export default function TasksPage() {
     setEditTask(null);
   };
 
-  const TaskCard = ({ task }: { task: Task }) => (
+  const TaskCard = ({ task }: { task: Task }) => {
+    const owner = taskOwner(task);
+
+    return (
     <article
       role="button"
       tabIndex={0}
@@ -127,10 +137,10 @@ export default function TasksPage() {
           setEditTask({ ...task });
         }
       }}
-      className={`rounded-[2rem] border bg-white p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}
+      className={`rounded-[2rem] border bg-white p-3 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className={`text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
+        <p className={`text-sm md:text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
         <div className="flex shrink-0 items-center gap-2">
           <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
           <button
@@ -147,39 +157,40 @@ export default function TasksPage() {
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[task.assignedTo]}`}>{task.assignedTo}</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[owner]}`}>{owner}</span>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>{task.priority}</span>
       </div>
       <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
     </article>
-  );
+    );
+  };
 
-  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Team tasks</p>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-950">Task board</h1>
+          <h1 className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">Task board</h1>
         </div>
         <div className="flex flex-wrap gap-3">
           <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add task</button>
-          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as Task["assignedTo"] | "All")}>
+          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}>
             <option>All</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
           </select>
         </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        {founderColumns.map((founder) => {
-          const founderTasks = tasks.filter((task) => task.assignedTo === founder.name && (filterOwner === "All" || task.assignedTo === filterOwner));
+        {founderColumns.filter((founder) => filterOwner === "All" || founder.name === filterOwner).map((founder) => {
+          const founderTasks = tasks.filter((task) => taskOwner(task) === founder.name);
           const founderOpen = founderTasks.filter((task) => !task.completed);
           const founderDone = founderTasks.filter((task) => task.completed);
 
           return (
             <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-300 bg-white shadow-md">
-              <div className={`rounded-t-[2rem] border-t-2 p-5 ${founder.headerClass}`}>
+              <div className={`rounded-t-[2rem] border-t-2 p-3 md:p-5 ${founder.headerClass}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />

@@ -134,16 +134,16 @@ export default function VendorDetailPage() {
     setShowJobForm(false);
   };
 
-  if (vendorsLoading || jobsLoading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (vendorsLoading || jobsLoading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
 
   if (!vendor) {
     return (
-      <main className="min-h-screen bg-slate-50 p-8">
+      <main className="min-h-screen p-3 md:p-8">
         <button type="button" onClick={() => router.push("/vendors")} className="text-sm font-semibold text-slate-600 hover:text-slate-950">
           ← Vendors
         </button>
-        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-8">
-          <h1 className="text-2xl font-semibold text-slate-950">Vendor not found</h1>
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-3 md:p-8">
+          <h1 className="text-xl md:text-2xl font-semibold text-slate-950">Vendor not found</h1>
           <p className="mt-2 text-sm text-slate-500">This vendor may have been deleted or is not available in Supabase.</p>
         </div>
       </main>
@@ -151,8 +151,8 @@ export default function VendorDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="bg-slate-950 p-5 text-white sm:p-8">
+    <main className="min-h-screen text-slate-950">
+      <header className="bg-slate-950 p-3 text-white md:p-8">
         <button type="button" onClick={() => router.push("/vendors")} className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Vendors
@@ -163,7 +163,7 @@ export default function VendorDetailPage() {
               <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type}</span>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
             </div>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-5xl">{vendor.name}</h1>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight md:text-5xl">{vendor.name}</h1>
             <p className="mt-4 flex items-center gap-2 text-sm text-slate-300">
               <Building2 className="h-4 w-4" aria-hidden="true" />
               {vendor.contact || "No contact listed"}
@@ -183,7 +183,7 @@ export default function VendorDetailPage() {
         </div>
       </header>
 
-      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="space-y-6 p-3 md:p-6 lg:p-8">
         <section className="rounded-2xl border border-slate-200 bg-white">
           <div className="grid divide-y divide-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
             {[
@@ -193,7 +193,7 @@ export default function VendorDetailPage() {
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="flex items-start gap-3 p-5">
+                <div key={item.label} className="flex items-start gap-3 p-3 md:p-5">
                   <Icon className="mt-0.5 h-5 w-5 text-blue-500" aria-hidden="true" />
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
@@ -206,7 +206,7 @@ export default function VendorDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Vendor details</h2>
@@ -235,7 +235,7 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Job history</h2>
@@ -249,10 +249,10 @@ export default function VendorDetailPage() {
 
             {showJobForm && (
               <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:grid-cols-2">
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Job name" value={jobForm.name} onChange={(event) => setJobForm((current) => ({ ...current, name: event.target.value }))} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" placeholder="Client" value={jobForm.client} onChange={(event) => setJobForm((current) => ({ ...current, client: event.target.value }))} />
-                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" value={jobForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setJobForm((current) => ({ ...current, date: event.target.value }))} />
-                <select className="rounded-xl border border-slate-200 px-4 py-3 text-base outline-none md:text-sm" value={jobForm.status} onChange={(event) => setJobForm((current) => ({ ...current, status: event.target.value as VendorJob["status"] }))}>
+                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Job name" value={jobForm.name} onChange={(event) => setJobForm((current) => ({ ...current, name: event.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Client" value={jobForm.client} onChange={(event) => setJobForm((current) => ({ ...current, client: event.target.value }))} />
+                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" value={jobForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setJobForm((current) => ({ ...current, date: event.target.value }))} />
+                <select className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" value={jobForm.status} onChange={(event) => setJobForm((current) => ({ ...current, status: event.target.value as VendorJob["status"] }))}>
                   <option>Pending</option>
                   <option>Approved</option>
                   <option>In Production</option>
@@ -263,9 +263,9 @@ export default function VendorDetailPage() {
             )}
 
             <div className="mt-5 space-y-3">
-              {vendorJobs.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">No jobs assigned yet.</p>}
+              {vendorJobs.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-3 md:p-5 text-sm text-slate-500">No jobs assigned yet.</p>}
               {vendorJobs.map((job) => (
-                <div key={job.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div key={job.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-semibold text-slate-950">{job.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{job.client} · {job.date}</p>
@@ -277,7 +277,7 @@ export default function VendorDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
           <h2 className="text-lg font-semibold">Notes</h2>
           <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
             {vendor.notes || "No notes added yet."}
@@ -287,10 +287,10 @@ export default function VendorDetailPage() {
 
       {editingVendor && vendorDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-5 shadow-xl sm:p-8">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-slate-950">Edit vendor</h2>
+                <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Edit vendor</h2>
                 <p className="mt-1 text-sm text-slate-500">Update the vendor profile and save changes.</p>
               </div>
               <button
@@ -308,11 +308,11 @@ export default function VendorDetailPage() {
             <div className="mt-6 space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Name</span>
-                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.name} onChange={(event) => setVendorDraft({ ...vendorDraft, name: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.name} onChange={(event) => setVendorDraft({ ...vendorDraft, name: event.target.value })} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Type</span>
-                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.type} onChange={(event) => setVendorDraft({ ...vendorDraft, type: event.target.value })}>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.type} onChange={(event) => setVendorDraft({ ...vendorDraft, type: event.target.value })}>
                   {!vendorTypeOptions.includes(vendorDraft.type) && (
                     <option>{vendorDraft.type}</option>
                   )}
@@ -323,15 +323,15 @@ export default function VendorDetailPage() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Turnaround</span>
-                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.turnaround} onChange={(event) => setVendorDraft({ ...vendorDraft, turnaround: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.turnaround} onChange={(event) => setVendorDraft({ ...vendorDraft, turnaround: event.target.value })} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Contact</span>
-                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.contact} onChange={(event) => setVendorDraft({ ...vendorDraft, contact: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.contact} onChange={(event) => setVendorDraft({ ...vendorDraft, contact: event.target.value })} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Status</span>
-                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.status} onChange={(event) => setVendorDraft({ ...vendorDraft, status: event.target.value as VendorStatus })}>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.status} onChange={(event) => setVendorDraft({ ...vendorDraft, status: event.target.value as VendorStatus })}>
                   <option>Active</option>
                   <option>Review</option>
                   <option>Paused</option>
@@ -339,11 +339,11 @@ export default function VendorDetailPage() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Jobs</span>
-                <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
+                <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</span>
-                <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.notes} onChange={(event) => setVendorDraft({ ...vendorDraft, notes: event.target.value })} />
+                <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.notes} onChange={(event) => setVendorDraft({ ...vendorDraft, notes: event.target.value })} />
               </label>
             </div>
 

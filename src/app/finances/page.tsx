@@ -147,7 +147,7 @@ export default function FinancesPage() {
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
           <input
             type={key === "dueDate" ? "date" : "text"}
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder={key === "dueDate" ? undefined : placeholder}
             value={String(data[key as keyof typeof data] ?? "")}
             onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined}
@@ -158,7 +158,7 @@ export default function FinancesPage() {
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
         <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm"
           value={data.status}
           onChange={(e) => onChange({ ...data, status: e.target.value as Invoice["status"] })}
         >
@@ -172,7 +172,7 @@ export default function FinancesPage() {
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
         <textarea
           rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Payment details, notes, reminders..."
           value={data.notes}
           onChange={(e) => onChange({ ...data, notes: e.target.value })}
@@ -181,17 +181,17 @@ export default function FinancesPage() {
     </div>
   );
 
-  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-7">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Finances</p>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-950">Revenue & invoices</h1>
+          <h1 className="mt-3 text-xl font-semibold text-slate-950 md:text-3xl">Revenue & invoices</h1>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-          <label className="relative w-full sm:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
+          <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
               className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
@@ -200,7 +200,7 @@ export default function FinancesPage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto" onClick={openAddModal}>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={openAddModal}>
             Add invoice
           </button>
         </div>
@@ -215,10 +215,10 @@ export default function FinancesPage() {
         ].map((card) => {
           const TrendIcon = card.trend === "up" ? TrendingUp : TrendingDown;
           return (
-            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-5 shadow-md">
+            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-3 md:p-5 shadow-md">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-3xl font-bold tracking-tight text-slate-950">{card.value}</p>
+                  <p className="text-xl md:text-3xl font-bold tracking-tight text-slate-950">{card.value}</p>
                   <p className="mt-2 text-sm text-slate-600">{card.label}</p>
                 </div>
                 <span className={`rounded-2xl p-2 ${card.trend === "up" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
@@ -231,7 +231,7 @@ export default function FinancesPage() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 shadow-md">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-950">Revenue over time</h2>
@@ -261,7 +261,7 @@ export default function FinancesPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 shadow-md">
           <h2 className="text-lg font-semibold text-slate-950">Invoice status breakdown</h2>
           <div className="relative mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -275,11 +275,11 @@ export default function FinancesPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <p className="text-3xl font-bold text-slate-950">{invoices.length}</p>
+              <p className="text-xl md:text-3xl font-bold text-slate-950">{invoices.length}</p>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Invoices</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             {statusData.map((item) => (
               <div key={item.name} className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusPalette[item.name as Invoice["status"]] }} aria-hidden="true" />
@@ -291,8 +291,8 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-5 shadow-md">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-5 shadow-md">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Invoices</h2>
             <p className="mt-1 text-sm text-slate-600">Click any row to edit invoice details.</p>
@@ -314,9 +314,9 @@ export default function FinancesPage() {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-separate border-spacing-0">
-            <thead>
+        <div className="overflow-hidden">
+          <table className="w-full border-separate border-spacing-0">
+            <thead className="hidden md:table-header-group">
               <tr className="text-left text-xs font-semibold uppercase tracking-widest text-slate-700">
                 <th className="px-4 py-3 font-semibold">Client</th>
                 <th className="px-4 py-3 font-semibold">Order</th>
@@ -330,20 +330,20 @@ export default function FinancesPage() {
               {visible.map((invoice, index) => (
                 <tr
                   key={invoice.id}
-                  className={`cursor-pointer text-sm transition hover:bg-gray-100 ${index % 2 === 0 ? "bg-white" : "bg-gray-100/50"}`}
+                  className={`grid cursor-pointer grid-cols-1 gap-2 p-3 text-sm transition hover:bg-gray-100 md:table-row md:p-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-100/50"}`}
                   onClick={() => setEditInvoice({ ...invoice })}
                 >
-                  <td className="border-t border-slate-100 px-4 py-4 font-semibold text-slate-950">{invoice.client}</td>
-                  <td className="border-t border-slate-100 px-4 py-4 text-slate-600">{invoice.orderName}</td>
-                  <td className="border-t border-slate-100 px-4 py-4 font-semibold text-slate-950">{invoice.amount}</td>
-                  <td className="border-t border-slate-100 px-4 py-4 text-slate-600">{invoice.dueDate}</td>
-                  <td className="border-t border-slate-100 px-4 py-4">
+                  <td className="block border-t border-slate-100 font-semibold text-slate-950 md:table-cell md:px-4 md:py-4">{invoice.client}</td>
+                  <td className="block text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{invoice.orderName}</td>
+                  <td className="block font-semibold text-slate-950 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{invoice.amount}</td>
+                  <td className="block text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{invoice.dueDate}</td>
+                  <td className="block md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusColors[invoice.status]}`}>
                       {invoice.status}
                     </span>
                   </td>
-                  <td className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-600">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="block text-sm font-semibold text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4 md:text-right">
+                    <div className="flex items-center justify-start gap-2 md:justify-end">
                       <span>Edit</span>
                       <button
                         type="button"
@@ -365,14 +365,14 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-md">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <section className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 shadow-md">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Revenue goal</h2>
             <p className="mt-1 text-sm text-slate-600">{currency.format(totalPaid)} of {currency.format(goal)} goal</p>
           </div>
           <div className="text-left sm:text-right">
-            <p className="text-2xl font-bold text-slate-950">{goalPercent}%</p>
+            <p className="text-xl md:text-2xl font-bold text-slate-950">{goalPercent}%</p>
             <p className="text-sm text-slate-600">Projected completion: {projectedCompletion}</p>
           </div>
         </div>
@@ -383,8 +383,8 @@ export default function FinancesPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-xl sm:p-8">
-            <h2 className="text-2xl font-semibold text-slate-950">Add invoice</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
+            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Add invoice</h2>
             {renderFields(form, (next) => setForm(next as typeof emptyForm))}
             <div className="mt-6 flex gap-3">
               <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
@@ -400,8 +400,8 @@ export default function FinancesPage() {
 
       {editInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-8 shadow-xl">
-            <h2 className="text-2xl font-semibold text-slate-950">Edit invoice</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 md:p-8 shadow-xl">
+            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Edit invoice</h2>
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
             <div className="mt-6 flex gap-3">
               <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleSaveEdit}>

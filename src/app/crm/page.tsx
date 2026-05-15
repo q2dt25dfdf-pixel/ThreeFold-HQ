@@ -195,23 +195,23 @@ export default function CRMPage() {
     if (viewLead?.id === lead.id) setViewLead(null);
   };
 
-  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="min-h-screen min-w-0 space-y-10 bg-zinc-100">
+    <div className="min-h-screen min-w-0 space-y-10">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
-          <h1 className="text-3xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
+          <h1 className="text-xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
           <p className="text-slate-600 text-sm mt-2">
             Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
           </p>
         </div>
-        <div className="flex w-full shrink-0 flex-col gap-3 sm:flex-row sm:items-center md:w-auto">
-          <div className="relative w-full sm:w-auto">
+        <div className="flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-center md:w-auto">
+          <div className="relative w-full md:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
-              className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-base focus:border-slate-500 focus:outline-none sm:w-56 md:py-2.5 md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-sm focus:border-slate-500 focus:outline-none sm:w-56 md:py-2.5 md:text-sm"
               placeholder="Search CRM..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -229,25 +229,25 @@ export default function CRMPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6 shadow-sm">
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Total leads</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-950">{leads.length}</p>
+          <p className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">{leads.length}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6 shadow-sm">
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Pipeline value</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-950">${totalValue.toLocaleString()}</p>
+          <p className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">${totalValue.toLocaleString()}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6 shadow-sm">
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Open approvals</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-950">{leads.filter((lead) => lead.stage === "Approved").length}</p>
+          <p className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">{leads.filter((lead) => lead.stage === "Approved").length}</p>
         </div>
       </div>
 
-      <div className="-mx-6 overflow-x-auto bg-zinc-100 px-6 pb-6 lg:-mx-8 lg:px-8">
-        <div className="flex min-w-max gap-6 bg-zinc-100">
+      <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8">
+        <div className="flex flex-col gap-4 bg-zinc-100 lg:min-w-max lg:flex-row lg:gap-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
-            <div key={stage} className="w-[340px] flex-shrink-0 rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-5 shadow-sm">
+            <div key={stage} className="w-full rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-3 shadow-sm md:p-5 lg:w-[340px] lg:flex-shrink-0">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
@@ -284,7 +284,7 @@ export default function CRMPage() {
                 ) : (
                   <button
                     type="button"
-                    className="w-full rounded-[1.5rem] border border-dashed border-slate-200/60 bg-white px-4 py-6 text-center text-xs text-slate-500 hover:bg-slate-50"
+                    className="w-full rounded-[1.5rem] border border-dashed border-slate-200/60 bg-white px-4 py-3 md:py-6 text-center text-xs text-slate-500 hover:bg-slate-50"
                     onClick={() => openAddLeadModal(stage)}
                   >
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
