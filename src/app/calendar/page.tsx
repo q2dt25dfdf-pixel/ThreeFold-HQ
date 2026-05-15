@@ -6,6 +6,7 @@ import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Founder = "Alliyah" | "Hannah" | "Jordan";
 type Priority = "High" | "Medium" | "Low";
+type EventType = "Client Meeting" | "Demo" | "Video Call" | "Delivery" | "Deadline" | "Internal Meeting" | "Other";
 
 type Task = {
   id: string;
@@ -24,25 +25,31 @@ type CalendarEvent = {
   date: string;
   time?: string;
   assignedTo: Founder;
-  type: "Task" | "Meeting" | "Deadline";
+  type: EventType;
   priority?: Priority;
   notes?: string;
 };
 
 type CalendarView = "today" | "week" | "month";
 
-const eventTypeColors: Record<CalendarEvent["type"], string> = {
-  Meeting: "border-l-2 border-blue-400 bg-blue-100 text-blue-700",
-  Deadline: "border-l-2 border-purple-400 bg-purple-100 text-purple-700",
-  Task: "border-l-2 border-emerald-400 bg-emerald-100 text-emerald-700",
+const eventTypes: EventType[] = ["Client Meeting", "Demo", "Video Call", "Delivery", "Deadline", "Internal Meeting", "Other"];
+
+const taskPillColor = "border-l-2 border-emerald-400 bg-emerald-100 text-emerald-700";
+const eventTypeColors: Record<EventType, string> = {
+  "Client Meeting": "border-l-2 border-blue-400 bg-blue-100 text-blue-700",
+  Demo: "border-l-2 border-indigo-400 bg-indigo-100 text-indigo-700",
+  "Video Call": "border-l-2 border-cyan-400 bg-cyan-100 text-cyan-700",
+  Delivery: "border-l-2 border-emerald-400 bg-emerald-100 text-emerald-700",
+  Deadline: "border-l-2 border-rose-500 bg-rose-100 text-rose-700",
+  "Internal Meeting": "border-l-2 border-violet-400 bg-violet-100 text-violet-700",
+  Other: "border-l-2 border-slate-400 bg-slate-100 text-slate-700",
 };
 const emptyEvent = {
   title: "",
   date: "2026-05-13",
   time: "",
   assignedTo: "Alliyah" as Founder,
-  type: "Task" as CalendarEvent["type"],
-  priority: "Medium" as Priority,
+  type: "Client Meeting" as EventType,
   notes: "",
 };
 const defaultTasks: Task[] = [
@@ -91,7 +98,7 @@ function eventPriority(event: CalendarEvent): Priority {
 
 function TaskPill({ task, prefix, onDelete }: { task: Task; prefix?: string; onDelete?: (id: string) => void }) {
   return (
-    <div className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${eventTypeColors.Task}`}>
+    <div className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${taskPillColor}`}>
       <span className="min-w-0 truncate">{prefix}{task.title}</span>
       <PriorityDot priority={task.priority} />
       {onDelete && (
@@ -116,7 +123,7 @@ function EventPill({ event, prefix, onDelete, onOpen }: { event: CalendarEvent; 
     <div
       role="button"
       tabIndex={0}
-      className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-left text-xs font-semibold ${eventTypeColors[event.type]}`}
+      className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-left text-xs font-semibold ${eventTypeColors[event.type] ?? eventTypeColors.Other}`}
       onClick={(clickEvent) => {
         clickEvent.stopPropagation();
         onOpen?.(event);
@@ -338,29 +345,19 @@ export default function CalendarPage() {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
           {[
-            { label: "Meeting", className: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
-            { label: "Deadline", className: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
-            { label: "Task", className: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+            { label: "Client Meeting", className: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
+            { label: "Demo", className: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-500" },
+            { label: "Video Call", className: "bg-cyan-100 text-cyan-700", dot: "bg-cyan-500" },
+            { label: "Delivery", className: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+            { label: "Deadline", className: "bg-rose-100 text-rose-700", dot: "bg-rose-500" },
+            { label: "Internal Meeting", className: "bg-violet-100 text-violet-700", dot: "bg-violet-500" },
+            { label: "Other", className: "bg-slate-100 text-slate-700", dot: "bg-slate-500" },
           ].map((item) => (
             <span key={item.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${item.className}`}>
               <span className={`inline-block h-2 w-2 rounded-full ${item.dot}`} />
               {item.label}
             </span>
           ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-            <span className="inline-block h-2 w-2 rounded-full bg-rose-500" />
-            High priority
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-            Medium priority
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-            Low priority
-          </span>
         </div>
       </div>
 
@@ -606,17 +603,9 @@ export default function CalendarPage() {
               <div>
                 <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Type</label>
                 <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as CalendarEvent["type"] })}>
-                  <option>Meeting</option>
-                  <option>Deadline</option>
-                  <option>Task</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Priority</label>
-                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as Priority })}>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
+                  {eventTypes.map((type) => (
+                    <option key={type}>{type}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -680,9 +669,9 @@ export default function CalendarPage() {
                   <div>
                     <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Type</label>
                     <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={eventDraft.type} onChange={(event) => setEventDraft({ ...eventDraft, type: event.target.value as CalendarEvent["type"] })}>
-                      <option>Meeting</option>
-                      <option>Deadline</option>
-                      <option>Task</option>
+                      {eventTypes.map((type) => (
+                        <option key={type}>{type}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
