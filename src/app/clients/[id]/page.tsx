@@ -106,7 +106,7 @@ function InlineField({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={commit}
-            className="mt-2 w-full bg-transparent text-sm font-semibold text-slate-950 outline-none"
+            className="mt-2 w-full bg-transparent text-xs md:text-sm font-semibold text-slate-950 outline-none"
           >
             {options.map((option) => (
               <option key={option}>{option}</option>
@@ -119,7 +119,7 @@ function InlineField({
             onChange={(event) => setDraft(event.target.value)}
             onBlur={commit}
             onKeyDown={(event) => event.key === "Enter" && commit()}
-            className="mt-2 w-full bg-transparent text-sm font-semibold text-slate-950 outline-none"
+            className="mt-2 w-full bg-transparent text-xs md:text-sm font-semibold text-slate-950 outline-none"
           />
         )
       ) : (
@@ -129,7 +129,7 @@ function InlineField({
             setDraft(value);
             setEditing(true);
           }}
-          className="mt-2 flex w-full items-center justify-between gap-3 text-left text-sm font-semibold text-slate-950 hover:text-slate-600"
+          className="mt-2 flex w-full items-center justify-between gap-3 text-left text-xs md:text-sm font-semibold text-slate-950 hover:text-slate-600"
         >
           <span>{value || "Add value"}</span>
           <Edit2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
@@ -199,26 +199,26 @@ export default function ClientDetailPage() {
     setActivityForm((current) => ({ ...current, notes: "" }));
   };
 
-  if (clientsLoading || ordersLoading || activityLoading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (clientsLoading || ordersLoading || activityLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   if (!client) {
     return (
-      <div className="min-h-screen p-3 md:p-8">
-        <button type="button" onClick={() => router.push("/clients")} className="text-sm font-semibold text-slate-600 hover:text-slate-950">
+      <div className="min-h-screen p-2 md:p-8">
+        <button type="button" onClick={() => router.push("/clients")} className="text-xs md:text-sm font-semibold text-slate-600 hover:text-slate-950">
           ← Clients
         </button>
-        <div className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-3 md:p-8">
-          <h1 className="text-xl md:text-2xl font-semibold text-slate-950">Client not found</h1>
-          <p className="mt-2 text-sm text-slate-500">This client may have been deleted or is not available in Supabase.</p>
+        <div className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-2 md:p-8">
+          <h1 className="text-base md:text-2xl font-semibold text-slate-950">Client not found</h1>
+          <p className="mt-2 text-xs md:text-sm text-slate-500">This client may have been deleted or is not available in Supabase.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen">
-      <header className="bg-slate-950 p-3 text-white md:p-8">
-        <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-white">
+    <main className="min-h-screen text-xs md:text-sm">
+      <header className="bg-slate-950 p-2 md:p-3 text-white md:p-8">
+        <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Clients
         </button>
@@ -228,8 +228,8 @@ export default function ClientDetailPage() {
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
               <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
             </div>
-            <h1 className="mt-5 text-xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
-            <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-300">
+            <h1 className="mt-5 text-base md:text-xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
+            <div className="mt-6 flex flex-wrap gap-4 text-xs md:text-sm text-slate-300">
               <span className="flex items-center gap-2"><Building2 className="h-4 w-4" aria-hidden="true" />{client.contact || "No contact"}</span>
               <span className="flex items-center gap-2"><Mail className="h-4 w-4" aria-hidden="true" />{client.email || "No email"}</span>
               <span className="flex items-center gap-2"><Phone className="h-4 w-4" aria-hidden="true" />{client.phone || "No phone"}</span>
@@ -238,7 +238,7 @@ export default function ClientDetailPage() {
           <button
             type="button"
             onClick={() => setEditingHeader((value) => !value)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-white/10"
           >
             <Edit2 className="h-4 w-4" aria-hidden="true" />
             Edit contact
@@ -246,7 +246,7 @@ export default function ClientDetailPage() {
         </div>
 
         {editingHeader && (
-          <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-2 md:p-4 md:grid-cols-3">
             {[
               { label: "Contact", key: "contact", value: client.contact },
               { label: "Email", key: "email", value: client.email ?? "" },
@@ -255,7 +255,7 @@ export default function ClientDetailPage() {
               <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 {field.label}
                 <input
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs md:text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
                   value={field.value}
                   onChange={(event) => saveClient({ [field.key]: event.target.value } as Partial<Client>)}
                 />
@@ -265,24 +265,24 @@ export default function ClientDetailPage() {
         )}
       </header>
 
-      <div className="space-y-6 p-3 md:p-6 lg:p-8">
+      <div className="space-y-6 p-2 md:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders", value: String(clientOrders.length || client.orders) },
             { label: "Total spend", value: totalSpend > 0 ? `$${totalSpend.toLocaleString()}` : "$0" },
             { label: "Account status", value: client.status },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
-              <p className="text-sm text-slate-500">{stat.label}</p>
-              <p className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">{stat.value}</p>
+            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+              <p className="text-xs md:text-sm text-slate-500">{stat.label}</p>
+              <p className="mt-3 text-base md:text-3xl font-semibold text-slate-950">{stat.value}</p>
             </div>
           ))}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
-            <h2 className="text-lg font-semibold text-slate-950">Account details</h2>
-            <p className="mt-1 text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+            <h2 className="text-base md:text-lg font-semibold text-slate-950">Account details</h2>
+            <p className="mt-1 text-xs md:text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
             <div className="mt-5 space-y-3">
               <InlineField label="Industry" value={client.industry} onSave={(value) => saveClient({ industry: value })} />
               <InlineField label="Location" value={client.location ?? ""} onSave={(value) => saveClient({ location: value })} />
@@ -294,36 +294,36 @@ export default function ClientDetailPage() {
                   rows={6}
                   value={client.notes}
                   onChange={(event) => saveClient({ notes: event.target.value })}
-                  className="mt-2 w-full resize-none bg-transparent text-sm leading-6 text-slate-700 outline-none"
+                  className="mt-2 w-full resize-none bg-transparent text-xs md:text-sm leading-6 text-slate-700 outline-none"
                 />
               </label>
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-950">Order history</h2>
-                <p className="mt-1 text-sm text-slate-500">Past work and invoice context.</p>
+                <h2 className="text-base md:text-lg font-semibold text-slate-950">Order history</h2>
+                <p className="mt-1 text-xs md:text-sm text-slate-500">Past work and invoice context.</p>
               </div>
-              <button type="button" onClick={() => setShowOrderForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
+              <button type="button" onClick={() => setShowOrderForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-xs md:text-sm font-semibold text-white">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add order
               </button>
             </div>
 
             {showOrderForm && (
-              <div className="mt-5 grid gap-3 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
-                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
-                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
+              <div className="mt-5 grid gap-3 rounded-[2rem] border border-slate-200 bg-slate-50 p-2 md:p-4 md:grid-cols-2">
+                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
+                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
+                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
+                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
                   <option>Draft</option>
                   <option>Due</option>
                   <option>Paid</option>
                   <option>Fulfilled</option>
                 </select>
-                <button type="button" onClick={addOrder} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white md:col-span-2">Save order</button>
+                <button type="button" onClick={addOrder} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-xs md:text-sm font-semibold text-white md:col-span-2">Save order</button>
               </div>
             )}
 
@@ -332,7 +332,7 @@ export default function ClientDetailPage() {
                 <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-semibold text-slate-950">{order.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{order.date} · {order.amount}</p>
+                    <p className="mt-1 text-xs md:text-sm text-slate-500">{order.date} · {order.amount}</p>
                   </div>
                   <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">{order.status}</span>
                 </div>
@@ -341,28 +341,28 @@ export default function ClientDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6">
-          <h2 className="text-lg font-semibold text-slate-950">Activity log</h2>
-          <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-4 lg:grid-cols-[160px_160px_1fr_auto]">
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+          <h2 className="text-base md:text-lg font-semibold text-slate-950">Activity log</h2>
+          <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-2 md:p-4 lg:grid-cols-[160px_160px_1fr_auto]">
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
               {activityTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
-            <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Log</button>
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
+            <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-xs md:text-sm font-semibold text-white">Log</button>
           </div>
 
           <div className="mt-5 space-y-3">
-            {clientActivity.length === 0 && <p className="text-sm text-slate-500">No activity logged yet.</p>}
+            {clientActivity.length === 0 && <p className="text-xs md:text-sm text-slate-500">No activity logged yet.</p>}
             {clientActivity.map((entry) => (
-              <div key={entry.id} className="rounded-2xl border border-slate-200 p-4">
+              <div key={entry.id} className="rounded-2xl border border-slate-200 p-2 md:p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">{entry.type}</span>
                   <span className="text-xs text-slate-400">{entry.date} · {entry.owner}</span>
                 </div>
-                <p className="mt-2 text-sm text-slate-700">{entry.notes}</p>
+                <p className="mt-2 text-xs md:text-sm text-slate-700">{entry.notes}</p>
               </div>
             ))}
           </div>

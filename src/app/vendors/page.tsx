@@ -104,9 +104,9 @@ export default function VendorsPage() {
         { label: "Contact", key: "contact", placeholder: "Name, email, or website" },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
+          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{label}</label>
           {key === "type" ? (
-            <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
+            <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
               <option value="">Select type</option>
               <option>Blank Supplier</option>
               <option>Screen Print Shop</option>
@@ -122,7 +122,7 @@ export default function VendorsPage() {
           ) : (
             <input
               type="text"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
               placeholder={placeholder}
               value={String(form[key as keyof typeof form] ?? "")}
               onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -131,9 +131,9 @@ export default function VendorsPage() {
         </div>
       ))}
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
         <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm"
           value={form.status}
           onChange={(e) => setForm({ ...form, status: e.target.value as Vendor["status"] })}
         >
@@ -143,10 +143,10 @@ export default function VendorsPage() {
         </select>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
         <textarea
           rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Pricing notes, minimums, quality feedback..."
           value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -155,27 +155,27 @@ export default function VendorsPage() {
     </div>
   );
 
-  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-xs md:text-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Vendors</p>
-          <h1 className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">Vendor network</h1>
+          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Vendors</p>
+          <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Vendor network</h1>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
           <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
               placeholder="Search vendors..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
           <button
-            className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
+            className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
             onClick={() => setShowModal(true)}
           >
             Add vendor
@@ -189,7 +189,7 @@ export default function VendorsPage() {
 
           return (
             <section key={section.label} className={sectionIndex > 0 ? "border-t border-slate-300 pt-8" : ""}>
-              <div className={`mb-4 flex items-center gap-2 border-l-4 pl-3 text-lg font-bold text-slate-950 ${section.headerClass}`}>
+              <div className={`mb-4 flex items-center gap-2 border-l-4 pl-3 text-base md:text-lg font-bold text-slate-950 ${section.headerClass}`}>
                 <Icon className="h-5 w-5" aria-hidden="true" />
                 <h2>{section.label}</h2>
               </div>
@@ -206,14 +206,14 @@ export default function VendorsPage() {
                         router.push(`/vendors/${vendor.id}`);
                       }
                     }}
-                    className={`rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
+                    className={`rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
                       vendor.status === "Active" ? "border-t-2 border-t-emerald-400" :
                       vendor.status === "Review" ? "border-t-2 border-t-amber-400" : "border-t-2 border-t-slate-300"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-xl font-bold text-slate-950">{vendor.name}</h3>
+                        <h3 className="text-base md:text-xl font-bold text-slate-950">{vendor.name}</h3>
                         <span className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                           {vendor.type}
                         </span>
@@ -238,22 +238,22 @@ export default function VendorsPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="mt-5 grid grid-cols-1 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white text-sm md:grid-cols-3 md:divide-x sm:divide-y-0">
+                    <div className="mt-5 grid grid-cols-1 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white text-xs md:text-sm md:grid-cols-3 md:divide-x sm:divide-y-0">
                       <div className="px-3 py-3">
                         <p className="text-xs text-slate-400">Turnaround</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">{vendor.turnaround}</p>
+                        <p className="mt-1 text-xs md:text-sm font-semibold text-slate-950">{vendor.turnaround}</p>
                       </div>
                       <div className="px-3 py-3">
                         <p className="text-xs text-slate-400">Contact</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-slate-950">{vendor.contact}</p>
+                        <p className="mt-1 truncate text-xs md:text-sm font-semibold text-slate-950">{vendor.contact}</p>
                       </div>
                       <div className="px-3 py-3">
                         <p className="text-xs text-slate-400">Jobs assigned</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">{vendor.jobs}</p>
+                        <p className="mt-1 text-xs md:text-sm font-semibold text-slate-950">{vendor.jobs}</p>
                       </div>
                     </div>
                     {vendor.notes && (
-                      <div className="mt-3 rounded-xl bg-zinc-50 p-3">
+                      <div className="mt-3 rounded-xl bg-zinc-50 p-2 md:p-3">
                         <p className="text-xs text-slate-600">{vendor.notes}</p>
                       </div>
                     )}
@@ -264,7 +264,7 @@ export default function VendorsPage() {
           );
         })}
         {groupedVendors.length === 0 && (
-          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-600">
+          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-xs md:text-sm text-slate-600">
             No vendors match your search.
           </div>
         )}
@@ -272,14 +272,14 @@ export default function VendorsPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
-            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Add vendor</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
+            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add vendor</h2>
             {renderFields()}
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
+              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
                 Add vendor
               </button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
                 Cancel
               </button>
             </div>

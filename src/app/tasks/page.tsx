@@ -48,28 +48,28 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
       <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Task</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Task</label>
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Due date</label>
-        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Due date</label>
+        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
           <option>Alliyah</option><option>Hannah</option><option>Jordan</option>
         </select>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Priority</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
           <option>High</option><option>Medium</option><option>Low</option>
         </select>
       </div>
       <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
       </div>
     </div>
   );
@@ -79,13 +79,13 @@ function Modal({ title, onSave, onClose, onDelete, children }: { title: string; 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-3 md:py-6 shadow-xl md:px-10 md:py-10">
-        <h2 className="text-xl md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
+        <h2 className="text-base md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
         {children}
         <div className="mt-6 flex gap-3">
-          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
-          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
+          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
-        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
+        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
       </div>
     </div>
   );
@@ -137,10 +137,10 @@ export default function TasksPage() {
           setEditTask({ ...task });
         }
       }}
-      className={`rounded-[2rem] border bg-white p-3 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}
+      className={`rounded-[2rem] border bg-white p-2 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className={`text-sm md:text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
+        <p className={`text-xs md:text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
         <div className="flex shrink-0 items-center gap-2">
           <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
           <button
@@ -165,18 +165,18 @@ export default function TasksPage() {
     );
   };
 
-  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-xs md:text-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Team tasks</p>
-          <h1 className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">Task board</h1>
+          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Team tasks</p>
+          <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Task board</h1>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add task</button>
-          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}>
+          <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add task</button>
+          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}>
             <option>All</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
           </select>
         </div>
@@ -190,18 +190,18 @@ export default function TasksPage() {
 
           return (
             <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-300 bg-white shadow-md">
-              <div className={`rounded-t-[2rem] border-t-2 p-3 md:p-5 ${founder.headerClass}`}>
+              <div className={`rounded-t-[2rem] border-t-2 p-2 md:p-5 ${founder.headerClass}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />
-                    <h2 className="text-lg font-bold text-slate-950">{founder.name}</h2>
+                    <h2 className="text-base md:text-lg font-bold text-slate-950">{founder.name}</h2>
                   </div>
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-md">
                     {founderOpen.length} open
                   </span>
                 </div>
               </div>
-              <div className="flex flex-1 flex-col gap-3 p-4">
+              <div className="flex flex-1 flex-col gap-3 p-2 md:p-4">
                 {founderOpen.map((task) => <TaskCard key={task.id} task={task} />)}
                 {founderDone.length > 0 && (
                   <div className="mt-auto space-y-3 border-t border-slate-100 pt-3">
@@ -209,15 +209,15 @@ export default function TasksPage() {
                   </div>
                 )}
                 {founderTasks.length === 0 && (
-                  <div className="flex flex-1 items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-gray-100 px-4 py-10 text-center text-sm text-slate-600">
+                  <div className="flex flex-1 items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-gray-100 px-4 py-10 text-center text-xs md:text-sm text-slate-600">
                     No tasks assigned yet.
                   </div>
                 )}
               </div>
-              <div className="border-t border-slate-100 p-4">
+              <div className="border-t border-slate-100 p-2 md:p-4">
                 <button
                   type="button"
-                  className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-gray-100"
+                  className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 transition hover:bg-gray-100"
                   onClick={() => openAddForFounder(founder.name)}
                 >
                   Add task

@@ -295,20 +295,20 @@ export default function CalendarPage() {
     setEditingEvent(false);
   };
 
-  if (tasksLoading || eventsLoading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (tasksLoading || eventsLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-xs md:text-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handlePrevious} aria-label={view === "week" ? "Previous week" : "Previous month"}>
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
-          <div className="min-w-fit text-sm md:text-base font-semibold text-slate-950">{view === "week" ? weekLabel : view === "today" ? todayLabel : monthLabel}</div>
+          <div className="min-w-fit text-xs md:text-base font-semibold text-slate-950">{view === "week" ? weekLabel : view === "today" ? todayLabel : monthLabel}</div>
           <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handleNext} aria-label={view === "week" ? "Next week" : "Next month"}>
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
-          <button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50" type="button" onClick={goToToday}>
+          <button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-600 hover:bg-slate-50" type="button" onClick={goToToday}>
             <Home className="h-3.5 w-3.5" aria-hidden="true" />
             Now
           </button>
@@ -317,7 +317,7 @@ export default function CalendarPage() {
           {(["today", "week", "month"] as const).map((option) => (
             <button
               key={option}
-              className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold capitalize md:min-h-0 ${
+              className={`min-h-11 rounded-xl px-4 py-2 text-xs md:text-sm font-semibold capitalize md:min-h-0 ${
                 view === option
                   ? "bg-slate-950 text-white"
                   : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -328,7 +328,7 @@ export default function CalendarPage() {
               {option}
             </button>
           ))}
-          <button className="ml-3 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 md:min-h-0" type="button" onClick={() => setShowAdd(true)}>
+          <button className="ml-3 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-emerald-700 md:min-h-0" type="button" onClick={() => setShowAdd(true)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add event
           </button>
@@ -365,42 +365,47 @@ export default function CalendarPage() {
       </div>
 
       {view === "month" && (
-        <div className="overflow-hidden">
-          <div className="grid grid-cols-1 border-l border-t border-slate-200 bg-white md:grid-cols-7">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+          <div className="grid grid-cols-7">
             {weekDays.map((day) => (
-              <div key={day} className="border-b border-r border-slate-200 px-2 py-2 text-xs uppercase text-slate-400">
+              <div key={day} className="border-b border-r border-slate-200 px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-400 last:border-r-0 md:px-2 md:text-xs">
                 {day}
               </div>
             ))}
             {calendarDays.map((day) => {
               const dayTasks = tasksByDate[day.key] ?? [];
               const dayEvents = eventsByDate[day.key] ?? [];
-              const visibleTasks = dayTasks.slice(0, 2);
-              const overflow = dayTasks.length - visibleTasks.length;
+              const dayItems = [
+                ...dayEvents.map((event) => ({ id: event.id, type: "event" as const, item: event })),
+                ...dayTasks.map((task) => ({ id: task.id, type: "task" as const, item: task })),
+              ];
+              const visibleItems = dayItems.slice(0, 3);
+              const overflow = dayItems.length - visibleItems.length;
 
               return (
                 <div
                   key={day.key}
-                  className={`min-h-28 border-b border-r border-slate-200 bg-white p-2 ${day.inMonth ? "" : "text-slate-300"} ${day.key === todayKey ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                  className={`min-h-20 min-w-0 border-b border-r border-slate-200 bg-white p-1 last:border-r-0 md:min-h-28 md:p-2 ${day.inMonth ? "" : "bg-slate-50 text-slate-300"} ${day.key === todayKey ? "cursor-pointer bg-blue-50/40 hover:bg-blue-50" : ""}`}
                   onClick={() => {
                     if (day.key === todayKey) setShowTodayDetails(true);
                   }}
                 >
-                  <div className={`text-sm text-slate-600 ${day.key === todayKey ? "flex h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-white" : ""}`}>
+                  <div className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold text-slate-600 md:h-7 md:w-7 md:text-xs ${day.key === todayKey ? "bg-slate-950 text-white" : ""}`}>
                     {day.date.getDate()}
                   </div>
-                  <div className="mt-2 space-y-1">
-                    {visibleTasks.map((task) => (
-                      <TaskPill key={task.id} task={task} onDelete={handleDeleteTask} />
-                    ))}
+                  <div className="mt-1 min-w-0 space-y-1 md:mt-2">
+                    {visibleItems.map((item) =>
+                      item.type === "event" ? (
+                        <EventPill key={item.id} event={item.item} onDelete={handleDeleteEvent} onOpen={openEvent} />
+                      ) : (
+                        <TaskPill key={item.id} task={item.item} onDelete={handleDeleteTask} />
+                      ),
+                    )}
                     {overflow > 0 && (
                       <div className="overflow-hidden truncate rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                         +{overflow} more
                       </div>
                     )}
-                    {dayEvents.map((event) => (
-                      <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
-                    ))}
                   </div>
                 </div>
               );
@@ -417,7 +422,7 @@ export default function CalendarPage() {
               {weekDates.map((day, index) => (
                 <div key={day.key} className={`min-w-0 overflow-hidden border-b border-r border-slate-200 px-3 py-3 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
                   <p className="text-xs uppercase text-slate-400">{weekDays[index]}</p>
-                  <p className={`mt-1 inline-flex text-sm font-semibold text-slate-600 ${day.key === todayKey ? "h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-white" : ""}`}>
+                  <p className={`mt-1 inline-flex text-xs md:text-sm font-semibold text-slate-600 ${day.key === todayKey ? "h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-white" : ""}`}>
                     {day.date.getDate()}
                   </p>
                 </div>
@@ -470,14 +475,14 @@ export default function CalendarPage() {
       )}
 
       {view === "today" && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6 shadow-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Today</p>
-              <h2 className="mt-2 text-xl md:text-3xl font-bold text-slate-950">{todayLabel}</h2>
+              <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-400">Today</p>
+              <h2 className="mt-2 text-base md:text-3xl font-bold text-slate-950">{todayLabel}</h2>
             </div>
             <button
-              className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+              className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
               type="button"
               onClick={() => {
                 setForm({ ...emptyEvent, date: todayKey });
@@ -491,7 +496,7 @@ export default function CalendarPage() {
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
             <div className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)]">
               <div className="border-b border-r border-slate-200 py-3 pr-2 text-right text-xs text-slate-400">All-day</div>
-              <div className="min-h-16 min-w-0 overflow-hidden border-b border-slate-200 p-3">
+              <div className="min-h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 md:p-3">
                 <div className="space-y-1">
                   {(tasksByDate[todayKey] ?? []).map((task) => (
                     <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} onDelete={handleDeleteTask} />
@@ -500,7 +505,7 @@ export default function CalendarPage() {
                     <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                   ))}
                   {(tasksByDate[todayKey] ?? []).length === 0 && (eventsByDate[todayKey] ?? []).filter((event) => !event.time).length === 0 && (
-                    <p className="text-sm text-slate-500">No all-day tasks or events.</p>
+                    <p className="text-xs md:text-sm text-slate-500">No all-day tasks or events.</p>
                   )}
                 </div>
               </div>
@@ -527,8 +532,8 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-3 md:p-6 shadow-md">
-        <h2 className="text-xl font-bold text-slate-950">Upcoming events</h2>
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6 shadow-md">
+        <h2 className="text-base md:text-xl font-bold text-slate-950">Upcoming events</h2>
         <div className="mt-4 overflow-hidden">
           <div className="min-w-0 divide-y divide-slate-200">
           {upcomingEvents.map((event) => (
@@ -545,9 +550,9 @@ export default function CalendarPage() {
                 }
               }}
             >
-              <p className="text-sm font-semibold text-slate-950">{event.title}</p>
-              <span className="text-sm text-slate-600">{event.date}</span>
-              <span className="text-sm text-slate-600">{event.time || "All-day"}</span>
+              <p className="text-xs md:text-sm font-semibold text-slate-950">{event.title}</p>
+              <span className="text-xs md:text-sm text-slate-600">{event.date}</span>
+              <span className="text-xs md:text-sm text-slate-600">{event.time || "All-day"}</span>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{event.assignedTo}</span>
               <span className="inline-flex items-center justify-center rounded-full bg-white px-2 py-1">
                 <PriorityDot priority={eventPriority(event)} />
@@ -567,7 +572,7 @@ export default function CalendarPage() {
             </div>
           ))}
           {upcomingEvents.length === 0 && (
-            <div className="py-3 md:py-6 text-sm text-slate-600">No upcoming dated events yet.</div>
+            <div className="py-3 md:py-6 text-xs md:text-sm text-slate-600">No upcoming dated events yet.</div>
           )}
           </div>
         </div>
@@ -575,58 +580,58 @@ export default function CalendarPage() {
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
-            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Add event</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
+            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add event</h2>
             <div className="mt-6 space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Title</label>
-                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Title</label>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Date</label>
-                <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setForm({ ...form, date: event.target.value })} />
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Date</label>
+                <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setForm({ ...form, date: event.target.value })} />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Time</label>
-                <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.time} onChange={(event) => setForm({ ...form, time: event.target.value })} />
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Time</label>
+                <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.time} onChange={(event) => setForm({ ...form, time: event.target.value })} />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
-                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={form.assignedTo} onChange={(event) => setForm({ ...form, assignedTo: event.target.value as Founder })}>
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.assignedTo} onChange={(event) => setForm({ ...form, assignedTo: event.target.value as Founder })}>
                   <option>Alliyah</option>
                   <option>Hannah</option>
                   <option>Jordan</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Type</label>
-                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as CalendarEvent["type"] })}>
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Type</label>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as CalendarEvent["type"] })}>
                   <option>Meeting</option>
                   <option>Deadline</option>
                   <option>Task</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
-                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as Priority })}>
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Priority</label>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as Priority })}>
                   <option>High</option>
                   <option>Medium</option>
                   <option>Low</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
                 <textarea
                   rows={3}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
                   value={form.notes}
                   onChange={(event) => setForm({ ...form, notes: event.target.value })}
                 />
               </div>
             </div>
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleAddEvent}>Save</button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleAddEvent}>Save</button>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={() => setShowAdd(false)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -634,17 +639,17 @@ export default function CalendarPage() {
 
       {selectedEvent && eventDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl md:text-2xl font-semibold text-slate-950">{editingEvent ? "Edit event" : selectedEvent.title}</h2>
+                <h2 className="text-base md:text-2xl font-semibold text-slate-950">{editingEvent ? "Edit event" : selectedEvent.title}</h2>
                 {!editingEvent && (
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-xs md:text-sm text-slate-500">
                     {selectedEvent.date}{selectedEvent.time ? ` at ${selectedEvent.time}` : ""} · {selectedEvent.assignedTo}
                   </p>
                 )}
               </div>
-              <button className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" onClick={closeEvent}>
+              <button className="rounded-full border border-slate-300 px-3 py-1 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" onClick={closeEvent}>
                 Close
               </button>
             </div>
@@ -653,36 +658,36 @@ export default function CalendarPage() {
               {editingEvent ? (
                 <>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Title</label>
-                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.title} onChange={(event) => setEventDraft({ ...eventDraft, title: event.target.value })} />
+                    <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Title</label>
+                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.title} onChange={(event) => setEventDraft({ ...eventDraft, title: event.target.value })} />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Date</label>
-                    <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setEventDraft({ ...eventDraft, date: event.target.value })} />
+                    <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Date</label>
+                    <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setEventDraft({ ...eventDraft, date: event.target.value })} />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Time</label>
-                    <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.time ?? ""} onChange={(event) => setEventDraft({ ...eventDraft, time: event.target.value })} />
+                    <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Time</label>
+                    <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.time ?? ""} onChange={(event) => setEventDraft({ ...eventDraft, time: event.target.value })} />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>
-                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={eventDraft.assignedTo} onChange={(event) => setEventDraft({ ...eventDraft, assignedTo: event.target.value as Founder })}>
+                    <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
+                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={eventDraft.assignedTo} onChange={(event) => setEventDraft({ ...eventDraft, assignedTo: event.target.value as Founder })}>
                       <option>Alliyah</option>
                       <option>Hannah</option>
                       <option>Jordan</option>
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Type</label>
-                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={eventDraft.type} onChange={(event) => setEventDraft({ ...eventDraft, type: event.target.value as CalendarEvent["type"] })}>
+                    <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Type</label>
+                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={eventDraft.type} onChange={(event) => setEventDraft({ ...eventDraft, type: event.target.value as CalendarEvent["type"] })}>
                       <option>Meeting</option>
                       <option>Deadline</option>
                       <option>Task</option>
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">Priority</label>
-                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={eventPriority(eventDraft)} onChange={(event) => setEventDraft({ ...eventDraft, priority: event.target.value as Priority })}>
+                    <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Priority</label>
+                    <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={eventPriority(eventDraft)} onChange={(event) => setEventDraft({ ...eventDraft, priority: event.target.value as Priority })}>
                       <option>High</option>
                       <option>Medium</option>
                       <option>Low</option>
@@ -691,17 +696,17 @@ export default function CalendarPage() {
                 </>
               ) : (
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="rounded-2xl border border-slate-200 p-2 md:p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Type</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-950">{selectedEvent.type}</p>
+                    <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{selectedEvent.type}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="rounded-2xl border border-slate-200 p-2 md:p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Assigned to</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-950">{selectedEvent.assignedTo}</p>
+                    <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{selectedEvent.assignedTo}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="rounded-2xl border border-slate-200 p-2 md:p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Priority</p>
-                    <p className="mt-2 inline-flex items-center text-sm font-semibold text-slate-950">
+                    <p className="mt-2 inline-flex items-center text-xs md:text-sm font-semibold text-slate-950">
                       {eventPriority(selectedEvent)}
                       <PriorityDot priority={eventPriority(selectedEvent)} />
                     </p>
@@ -710,10 +715,10 @@ export default function CalendarPage() {
               )}
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+                <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
                 <textarea
                   rows={4}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
                   value={eventDraft.notes ?? ""}
                   onChange={(event) => setEventDraft({ ...eventDraft, notes: event.target.value })}
                 />
@@ -722,13 +727,13 @@ export default function CalendarPage() {
 
             <div className="mt-6 flex gap-3">
               {editingEvent ? (
-                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleSaveEvent}>Save</button>
+                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleSaveEvent}>Save</button>
               ) : (
-                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={() => setEditingEvent(true)}>Edit</button>
+                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={() => setEditingEvent(true)}>Edit</button>
               )}
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={handleSaveEvent}>Save notes</button>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={handleSaveEvent}>Save notes</button>
             </div>
-            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" type="button" onClick={() => handleDeleteEvent(selectedEvent.id)}>
+            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" type="button" onClick={() => handleDeleteEvent(selectedEvent.id)}>
               Delete event
             </button>
           </div>
@@ -737,38 +742,38 @@ export default function CalendarPage() {
 
       {showTodayDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Today</h2>
-                <p className="mt-1 text-sm text-slate-500">{today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                <h2 className="text-base md:text-2xl font-semibold text-slate-950">Today</h2>
+                <p className="mt-1 text-xs md:text-sm text-slate-500">{today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
               </div>
-              <button className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" onClick={() => setShowTodayDetails(false)}>
+              <button className="rounded-full border border-slate-300 px-3 py-1 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" onClick={() => setShowTodayDetails(false)}>
                 Close
               </button>
             </div>
             <div className="mt-6 space-y-5">
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tasks due today</h3>
+                <h3 className="text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tasks due today</h3>
                 <div className="mt-3 space-y-2">
                   {(tasksByDate[todayKey] ?? []).map((task) => (
                     <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} onDelete={handleDeleteTask} />
                   ))}
-                  {(tasksByDate[todayKey] ?? []).length === 0 && <p className="text-sm text-slate-500">No tasks due today.</p>}
+                  {(tasksByDate[todayKey] ?? []).length === 0 && <p className="text-xs md:text-sm text-slate-500">No tasks due today.</p>}
                 </div>
               </div>
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Events today</h3>
+                <h3 className="text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Events today</h3>
                 <div className="mt-3 space-y-2">
                   {(eventsByDate[todayKey] ?? []).map((event) => (
                     <EventPill key={event.id} event={event} prefix={event.time ? `${event.time} ` : undefined} onDelete={handleDeleteEvent} onOpen={openEvent} />
                   ))}
-                  {(eventsByDate[todayKey] ?? []).length === 0 && <p className="text-sm text-slate-500">No events today.</p>}
+                  {(eventsByDate[todayKey] ?? []).length === 0 && <p className="text-xs md:text-sm text-slate-500">No events today.</p>}
                 </div>
               </div>
             </div>
             <button
-              className="mt-6 min-h-11 w-full rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+              className="mt-6 min-h-11 w-full rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
               type="button"
               onClick={() => {
                 setForm({ ...emptyEvent, date: todayKey });

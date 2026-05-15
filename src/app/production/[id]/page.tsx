@@ -203,31 +203,31 @@ export default function ProductionDetailPage() {
     setShowDesignForm(false);
   };
 
-  if (jobsLoading || designsLoading || vendorInfoLoading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (jobsLoading || designsLoading || vendorInfoLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   if (!job) {
     return (
-      <main className="min-h-screen p-3 md:p-8">
-        <button type="button" onClick={() => router.push("/production")} className="text-sm font-semibold text-slate-600 hover:text-slate-950">
+      <main className="min-h-screen p-2 md:p-8">
+        <button type="button" onClick={() => router.push("/production")} className="text-xs md:text-sm font-semibold text-slate-600 hover:text-slate-950">
           ← Production
         </button>
-        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-3 md:p-8">
-          <h1 className="text-xl md:text-2xl font-semibold text-slate-950">Production job not found</h1>
-          <p className="mt-2 text-sm text-slate-500">This production job may have been deleted or is not available in Supabase.</p>
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-2 md:p-8">
+          <h1 className="text-base md:text-2xl font-semibold text-slate-950">Production job not found</h1>
+          <p className="mt-2 text-xs md:text-sm text-slate-500">This production job may have been deleted or is not available in Supabase.</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen text-slate-950">
-      <header className="bg-gradient-to-br from-slate-900 to-slate-800 p-3 text-white md:p-8">
+    <main className="min-h-screen text-xs text-slate-950 md:text-sm">
+      <header className="bg-gradient-to-br from-slate-900 to-slate-800 p-2 md:p-3 text-white md:p-8">
         {flagBanner && (
           <div className={`-mx-8 -mt-8 mb-8 px-3 md:px-8 py-2 text-xs font-semibold tracking-[0.2em] ${flagBanner.className}`}>
             {flagBanner.label}{job.flagNote ? ` - ${job.flagNote}` : ""}
           </div>
         )}
-        <button type="button" onClick={() => router.push("/production")} className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-white">
+        <button type="button" onClick={() => router.push("/production")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Production
         </button>
@@ -240,16 +240,16 @@ export default function ProductionDetailPage() {
             <InlineEditable
               value={job.orderName}
               onSave={(value) => saveJob({ orderName: value })}
-              className="mt-5 block max-w-4xl text-left text-xl font-semibold tracking-tight text-white transition hover:text-slate-200 md:text-5xl"
-              inputClassName="mt-5 block w-full max-w-4xl rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-xl font-semibold tracking-tight text-white outline-none focus:border-white/50 md:text-5xl"
+              className="mt-5 block max-w-4xl text-left text-base md:text-xl font-semibold tracking-tight text-white transition hover:text-slate-200 md:text-5xl"
+              inputClassName="mt-5 block w-full max-w-4xl rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-base md:text-xl font-semibold tracking-tight text-white outline-none focus:border-white/50 md:text-5xl"
             />
-            <p className="mt-4 text-sm md:text-base text-slate-300">{job.client}</p>
+            <p className="mt-4 text-xs md:text-base text-slate-300">{job.client}</p>
           </div>
           <Package className="h-12 w-12 text-blue-300" aria-hidden="true" />
         </div>
       </header>
 
-      <div className="space-y-6 p-3 md:p-6 lg:p-8">
+      <div className="space-y-6 p-2 md:p-6 lg:p-8">
         <section className="rounded-2xl border border-slate-200 bg-white">
           <div className="grid divide-y divide-slate-200 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
             {[
@@ -260,7 +260,7 @@ export default function ProductionDetailPage() {
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="flex items-start gap-3 p-3 md:p-5">
+                <div key={item.label} className="flex items-start gap-3 p-2 md:p-5">
                   <Icon className="mt-0.5 h-5 w-5 text-blue-500" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
@@ -268,8 +268,8 @@ export default function ProductionDetailPage() {
                       value={item.value}
                       onSave={(value) => saveJob({ [item.field]: value } as Partial<Job>)}
                       options={item.options}
-                      className="mt-2 block max-w-full text-left text-sm font-semibold text-slate-950 transition hover:text-blue-600"
-                      inputClassName="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-950 outline-none focus:border-blue-300"
+                      className="mt-2 block max-w-full text-left text-xs md:text-sm font-semibold text-slate-950 transition hover:text-blue-600"
+                      inputClassName="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs md:text-sm font-semibold text-slate-950 outline-none focus:border-blue-300"
                     />
                   </div>
                 </div>
@@ -279,40 +279,40 @@ export default function ProductionDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold">Design specs</h2>
-                <p className="mt-1 text-sm text-slate-500">Collection artwork, description, and placement notes.</p>
+                <h2 className="text-base md:text-lg font-semibold">Design specs</h2>
+                <p className="mt-1 text-xs md:text-sm text-slate-500">Collection artwork, description, and placement notes.</p>
               </div>
-              <button type="button" onClick={() => setShowDesignForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
+              <button type="button" onClick={() => setShowDesignForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-blue-500 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-blue-600">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add design
               </button>
             </div>
 
             {showDesignForm && (
-              <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Design name" value={designForm.name} onChange={(event) => setDesignForm((current) => ({ ...current, name: event.target.value }))} />
-                <textarea className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" rows={2} placeholder="Description" value={designForm.description} onChange={(event) => setDesignForm((current) => ({ ...current, description: event.target.value }))} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none md:text-sm" placeholder="Placement notes" value={designForm.placement} onChange={(event) => setDesignForm((current) => ({ ...current, placement: event.target.value }))} />
-                <button type="button" onClick={addDesign} className="min-h-11 rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white">Save design</button>
+              <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-2 md:p-4">
+                <input className="rounded-xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" placeholder="Design name" value={designForm.name} onChange={(event) => setDesignForm((current) => ({ ...current, name: event.target.value }))} />
+                <textarea className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" rows={2} placeholder="Description" value={designForm.description} onChange={(event) => setDesignForm((current) => ({ ...current, description: event.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" placeholder="Placement notes" value={designForm.placement} onChange={(event) => setDesignForm((current) => ({ ...current, placement: event.target.value }))} />
+                <button type="button" onClick={addDesign} className="min-h-11 rounded-xl bg-blue-500 px-4 py-3 text-xs md:text-sm font-semibold text-white">Save design</button>
               </div>
             )}
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               {jobDesigns.map((design) => (
-                <div key={design.id} className="rounded-2xl border border-slate-200 p-3 md:p-5">
-                  <p className="text-sm md:text-base font-semibold text-slate-950">{design.name}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{design.description || "No description yet."}</p>
+                <div key={design.id} className="rounded-2xl border border-slate-200 p-2 md:p-5">
+                  <p className="text-xs md:text-base font-semibold text-slate-950">{design.name}</p>
+                  <p className="mt-3 text-xs md:text-sm leading-6 text-slate-600">{design.description || "No description yet."}</p>
                   <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">{design.placement || "Placement TBD"}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
-            <h2 className="text-lg font-semibold">Production timeline</h2>
+          <div className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
+            <h2 className="text-base md:text-lg font-semibold">Production timeline</h2>
             <div className="mt-6 space-y-0">
               {timelineSteps.map((step, index) => {
                 const complete = index < currentStep;
@@ -329,13 +329,13 @@ export default function ProductionDetailPage() {
                         <Circle className="h-5 w-5 text-slate-300" aria-hidden="true" />
                       )}
                     </div>
-                    <div className={current ? "rounded-2xl border border-blue-100 bg-blue-50 p-4" : "p-1"}>
+                    <div className={current ? "rounded-2xl border border-blue-100 bg-blue-50 p-2 md:p-4" : "p-1"}>
                       <p className="font-semibold text-slate-950">{step}</p>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className="mt-1 text-xs md:text-sm text-slate-500">
                         {complete ? "Complete" : current ? "Current step" : "Upcoming"}
                         {complete || current ? ` · ${new Date().toISOString().split("T")[0]}` : ""}
                       </p>
-                      {current && <p className="mt-2 text-sm text-blue-700">Active production focus for this collection.</p>}
+                      {current && <p className="mt-2 text-xs md:text-sm text-blue-700">Active production focus for this collection.</p>}
                     </div>
                   </div>
                 );
@@ -344,30 +344,30 @@ export default function ProductionDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
-          <h2 className="text-lg font-semibold">Notes</h2>
+        <section className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
+          <h2 className="text-base md:text-lg font-semibold">Notes</h2>
           <textarea
             value={job.notes}
             onChange={(event) => saveJob({ notes: event.target.value })}
             rows={7}
-            className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700 outline-none focus:border-blue-300 md:text-sm"
+            className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-2 md:p-4 text-xs md:text-sm leading-6 text-slate-700 outline-none focus:border-blue-300 md:text-sm"
           />
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 md:p-6">
-          <h2 className="text-lg font-semibold">Vendor info</h2>
+        <section className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
+          <h2 className="text-base md:text-lg font-semibold">Vendor info</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             {[
               { label: "Vendor name", key: "name", value: vendorInfo.name },
               { label: "Contact", key: "contact", value: vendorInfo.contact },
               { label: "Turnaround", key: "turnaround", value: vendorInfo.turnaround },
             ].map((field) => (
-              <label key={field.key} className="rounded-2xl border border-slate-200 p-4">
+              <label key={field.key} className="rounded-2xl border border-slate-200 p-2 md:p-4">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{field.label}</span>
                 <input
                   value={field.value}
                   onChange={(event) => saveVendorInfo({ [field.key]: event.target.value } as Partial<VendorInfo>)}
-                  className="mt-2 w-full bg-transparent text-sm font-semibold text-slate-950 outline-none md:text-sm"
+                  className="mt-2 w-full bg-transparent text-xs md:text-sm font-semibold text-slate-950 outline-none md:text-sm"
                 />
               </label>
             ))}

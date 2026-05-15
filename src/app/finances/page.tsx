@@ -144,10 +144,10 @@ export default function FinancesPage() {
         { label: "Due date", key: "dueDate", placeholder: "e.g. 2026-06-01" },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
+          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{label}</label>
           <input
             type={key === "dueDate" ? "date" : "text"}
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder={key === "dueDate" ? undefined : placeholder}
             value={String(data[key as keyof typeof data] ?? "")}
             onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined}
@@ -156,9 +156,9 @@ export default function FinancesPage() {
         </div>
       ))}
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
         <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm"
           value={data.status}
           onChange={(e) => onChange({ ...data, status: e.target.value as Invoice["status"] })}
         >
@@ -169,10 +169,10 @@ export default function FinancesPage() {
         </select>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
         <textarea
           rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Payment details, notes, reminders..."
           value={data.notes}
           onChange={(e) => onChange({ ...data, notes: e.target.value })}
@@ -181,26 +181,26 @@ export default function FinancesPage() {
     </div>
   );
 
-  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-7 text-xs md:text-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Finances</p>
-          <h1 className="mt-3 text-xl font-semibold text-slate-950 md:text-3xl">Revenue & invoices</h1>
+          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Finances</p>
+          <h1 className="mt-3 text-base md:text-xl font-semibold text-slate-950 md:text-3xl">Revenue & invoices</h1>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
           <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
               placeholder="Search invoices..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={openAddModal}>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={openAddModal}>
             Add invoice
           </button>
         </div>
@@ -215,11 +215,11 @@ export default function FinancesPage() {
         ].map((card) => {
           const TrendIcon = card.trend === "up" ? TrendingUp : TrendingDown;
           return (
-            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-3 md:p-5 shadow-md">
+            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-2 md:p-5 shadow-md">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xl md:text-3xl font-bold tracking-tight text-slate-950">{card.value}</p>
-                  <p className="mt-2 text-sm text-slate-600">{card.label}</p>
+                  <p className="text-base md:text-3xl font-bold tracking-tight text-slate-950">{card.value}</p>
+                  <p className="mt-2 text-xs md:text-sm text-slate-600">{card.label}</p>
                 </div>
                 <span className={`rounded-2xl p-2 ${card.trend === "up" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
                   <TrendIcon className="h-5 w-5" aria-hidden="true" />
@@ -231,11 +231,11 @@ export default function FinancesPage() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 shadow-md">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">Revenue over time</h2>
-              <p className="mt-1 text-sm text-slate-600">Monthly collected revenue and projected outstanding balance.</p>
+              <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue over time</h2>
+              <p className="mt-1 text-xs md:text-sm text-slate-600">Monthly collected revenue and projected outstanding balance.</p>
             </div>
           </div>
           <div className="h-80">
@@ -261,8 +261,8 @@ export default function FinancesPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 shadow-md">
-          <h2 className="text-lg font-semibold text-slate-950">Invoice status breakdown</h2>
+        <div className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 shadow-md">
+          <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoice status breakdown</h2>
           <div className="relative mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -275,13 +275,13 @@ export default function FinancesPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <p className="text-xl md:text-3xl font-bold text-slate-950">{invoices.length}</p>
+              <p className="text-base md:text-3xl font-bold text-slate-950">{invoices.length}</p>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Invoices</p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {statusData.map((item) => (
-              <div key={item.name} className="flex items-center gap-2 text-sm text-slate-600">
+              <div key={item.name} className="flex items-center gap-2 text-xs md:text-sm text-slate-600">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusPalette[item.name as Invoice["status"]] }} aria-hidden="true" />
                 <span>{item.name}</span>
                 <span className="ml-auto font-semibold text-slate-950">{item.value}</span>
@@ -291,15 +291,15 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-5 shadow-md">
+      <section className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-5 shadow-md">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Invoices</h2>
-            <p className="mt-1 text-sm text-slate-600">Click any row to edit invoice details.</p>
+            <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoices</h2>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">Click any row to edit invoice details.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <select
-              className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900"
+              className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
               value={filter}
               onChange={(e) => setFilter(e.target.value as Invoice["status"] | "All")}
             >
@@ -309,7 +309,7 @@ export default function FinancesPage() {
               <option>Paid</option>
               <option>Overdue</option>
             </select>
-            <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
+            <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
               Add invoice
             </button>
           </div>
@@ -330,7 +330,7 @@ export default function FinancesPage() {
               {visible.map((invoice, index) => (
                 <tr
                   key={invoice.id}
-                  className={`grid cursor-pointer grid-cols-1 gap-2 p-3 text-sm transition hover:bg-gray-100 md:table-row md:p-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-100/50"}`}
+                  className={`grid cursor-pointer grid-cols-1 gap-2 p-2 md:p-3 text-xs md:text-sm transition hover:bg-gray-100 md:table-row md:p-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-100/50"}`}
                   onClick={() => setEditInvoice({ ...invoice })}
                 >
                   <td className="block border-t border-slate-100 font-semibold text-slate-950 md:table-cell md:px-4 md:py-4">{invoice.client}</td>
@@ -342,7 +342,7 @@ export default function FinancesPage() {
                       {invoice.status}
                     </span>
                   </td>
-                  <td className="block text-sm font-semibold text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4 md:text-right">
+                  <td className="block text-xs md:text-sm font-semibold text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4 md:text-right">
                     <div className="flex items-center justify-start gap-2 md:justify-end">
                       <span>Edit</span>
                       <button
@@ -365,15 +365,15 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-6 shadow-md">
+      <section className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 shadow-md">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Revenue goal</h2>
-            <p className="mt-1 text-sm text-slate-600">{currency.format(totalPaid)} of {currency.format(goal)} goal</p>
+            <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue goal</h2>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">{currency.format(totalPaid)} of {currency.format(goal)} goal</p>
           </div>
           <div className="text-left sm:text-right">
-            <p className="text-xl md:text-2xl font-bold text-slate-950">{goalPercent}%</p>
-            <p className="text-sm text-slate-600">Projected completion: {projectedCompletion}</p>
+            <p className="text-base md:text-2xl font-bold text-slate-950">{goalPercent}%</p>
+            <p className="text-xs md:text-sm text-slate-600">Projected completion: {projectedCompletion}</p>
           </div>
         </div>
         <div className="mt-5 h-4 overflow-hidden rounded-full bg-slate-100">
@@ -383,14 +383,14 @@ export default function FinancesPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
-            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Add invoice</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
+            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add invoice</h2>
             {renderFields(form, (next) => setForm(next as typeof emptyForm))}
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
+              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
                 Add invoice
               </button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
                 Cancel
               </button>
             </div>
@@ -400,18 +400,18 @@ export default function FinancesPage() {
 
       {editInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 md:p-8 shadow-xl">
-            <h2 className="text-xl md:text-2xl font-semibold text-slate-950">Edit invoice</h2>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-8 shadow-xl">
+            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Edit invoice</h2>
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleSaveEdit}>
+              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={handleSaveEdit}>
                 Save
               </button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditInvoice(null)}>
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditInvoice(null)}>
                 Cancel
               </button>
             </div>
-            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={() => handleDelete(editInvoice.id)}>
+            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={() => handleDelete(editInvoice.id)}>
               Delete invoice
             </button>
           </div>

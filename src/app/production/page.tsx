@@ -160,19 +160,19 @@ function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void 
         { label: "Quantity / items", key: "quantity", placeholder: "e.g. 48 tees · 4 designs" },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
-          <input type={key === "dueDate" ? "date" : "text"} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" placeholder={key === "dueDate" ? undefined : placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
+          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{label}</label>
+          <input type={key === "dueDate" ? "date" : "text"} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder={key === "dueDate" ? undefined : placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
         </div>
       ))}
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={data.status} onChange={(e) => onChange({ ...data, status: e.target.value as Job["status"] })}>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.status} onChange={(e) => onChange({ ...data, status: e.target.value as Job["status"] })}>
           <option>Pending</option><option>Approved</option><option>In Production</option><option>Fulfilled</option>
         </select>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Flag</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 md:text-sm" value={data.flag} onChange={(e) => onChange({ ...data, flag: e.target.value as JobFlag, flagNote: e.target.value === "none" ? "" : data.flagNote })}>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Flag</label>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.flag} onChange={(e) => onChange({ ...data, flag: e.target.value as JobFlag, flagNote: e.target.value === "none" ? "" : data.flagNote })}>
           <option value="none">None</option>
           <option value="rush">Rush</option>
           <option value="attention">Attention</option>
@@ -182,13 +182,13 @@ function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void 
       </div>
       {data.flag !== "none" && (
         <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">Flag note</label>
-          <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="Reason for flag..." value={data.flagNote} onChange={(e) => onChange({ ...data, flagNote: e.target.value })} />
+          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Flag note</label>
+          <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="Reason for flag..." value={data.flagNote} onChange={(e) => onChange({ ...data, flagNote: e.target.value })} />
         </div>
       )}
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none md:text-sm" value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
       </div>
     </div>
   );
@@ -197,12 +197,12 @@ function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void 
 function Modal({ title, onSave, onClose, children }: { title: string; onSave: () => void; onClose: () => void; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-3 shadow-xl md:p-8">
-        <h2 className="mb-6 text-xl md:text-2xl font-semibold text-slate-950">{title}</h2>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
+        <h2 className="mb-6 text-base md:text-2xl font-semibold text-slate-950">{title}</h2>
         {children}
         <div className="mt-6 flex gap-3">
-          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
-          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
+          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>
@@ -249,30 +249,30 @@ export default function ProductionPage() {
     setEditJob(null);
   };
 
-  if (loading) return <div className="p-3 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-xs md:text-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-600">Production system</p>
-          <h1 className="mt-3 text-xl md:text-3xl font-semibold text-slate-950">Production queue</h1>
+          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Production system</p>
+          <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Production queue</h1>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
           <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
               placeholder="Search production..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add job</button>
-          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900" value={filter} onChange={(e) => setFilter(e.target.value as Job["status"] | "All")}>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add job</button>
+          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900" value={filter} onChange={(e) => setFilter(e.target.value as Job["status"] | "All")}>
             <option>All</option><option>Pending</option><option>Approved</option><option>In Production</option><option>Fulfilled</option>
           </select>
-          <label className="flex min-h-11 items-center gap-2 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+          <label className="flex min-h-11 items-center gap-2 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm font-semibold text-slate-700">
             <input className="h-4 w-4 accent-slate-950" type="checkbox" checked={flaggedOnly} onChange={(event) => setFlaggedOnly(event.target.checked)} />
             Flagged only
           </label>
@@ -292,15 +292,15 @@ export default function ProductionPage() {
                   {banner.label} — {job.flagNote}
                 </div>
               )}
-              <button type="button" onClick={() => router.push(`/production/${job.id}`)} className="w-full p-3 md:p-6 text-left">
+              <button type="button" onClick={() => router.push(`/production/${job.id}`)} className="w-full p-2 md:p-6 text-left">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-semibold text-slate-950">{job.orderName}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{job.client}</p>
+                    <h2 className="text-base md:text-xl font-semibold text-slate-950">{job.orderName}</h2>
+                    <p className="mt-1 text-xs md:text-sm text-slate-600">{job.client}</p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${statusColors[job.status]}`}>{job.status}</span>
                 </div>
-                <div className="mt-4 space-y-2 text-sm text-slate-600">
+                <div className="mt-4 space-y-2 text-xs md:text-sm text-slate-600">
                   <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2"><span>Vendor</span><span className="max-w-[150px] truncate text-right font-medium text-slate-900">{job.vendor}</span></div>
                   <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2">
                     <span>Due</span>
@@ -314,7 +314,7 @@ export default function ProductionPage() {
                 <p className="mt-3 text-xs text-slate-600">Click to view production detail →</p>
               </button>
               <div className="flex gap-3 border-t border-slate-100 px-3 md:px-6 pb-5 pt-4">
-                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditJob({ ...job })}>
+                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => setEditJob({ ...job })}>
                   Edit job
                 </button>
                 <button

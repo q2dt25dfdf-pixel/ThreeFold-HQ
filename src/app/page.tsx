@@ -361,18 +361,18 @@ export default function Home() {
   const totalResults = Object.values(groupedResults).reduce((sum, items) => sum + items.length, 0);
 
   return (
-    <main className="min-h-screen text-[#0f172a]">
-      <div className="space-y-6">
+    <main className="min-h-screen text-xs text-[#0f172a] md:text-sm">
+      <div className="space-y-6 text-xs md:text-sm">
         <section className="overflow-hidden rounded-[8px] bg-[#0f172a] text-white">
-          <div className="grid min-h-[260px] gap-6 p-3 md:gap-8 md:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
+          <div className="grid min-h-[260px] gap-6 p-2 md:p-3 md:gap-8 md:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
             <div className="flex flex-col justify-between gap-10">
               <div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1]">
                   <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
                 </div>
-                <p className="mt-8 text-sm font-medium text-[#e2e8f0]">Operations dashboard</p>
-                <h1 className="mt-3 text-xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
-                <p className="mt-4 max-w-xl text-sm leading-6 text-[#e2e8f0]">
+                <p className="mt-8 text-xs md:text-sm font-medium text-[#e2e8f0]">Operations dashboard</p>
+                <h1 className="mt-3 text-base md:text-xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
+                <p className="mt-4 max-w-xl text-xs md:text-sm leading-6 text-[#e2e8f0]">
                   A premium command center for revenue, client work, production progress, and founder execution.
                 </p>
               </div>
@@ -383,9 +383,9 @@ export default function Home() {
                   { label: "Pipeline value", value: formatCurrency(pipelineValue) },
                   { label: "Active clients", value: String(clients.length) },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-4 shadow-md">
+                  <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
                     <p className="text-xs font-medium text-[#e2e8f0]">{item.label}</p>
-                    <p className="mt-2 text-xl md:text-2xl font-semibold text-white">{item.value}</p>
+                    <p className="mt-2 text-base md:text-2xl font-semibold text-white">{item.value}</p>
                   </div>
                 ))}
               </div>
@@ -432,7 +432,7 @@ export default function Home() {
         <section ref={searchRef} className="relative">
           <Search className="pointer-events-none absolute left-4 top-5 h-5 w-5 text-[#64748b]" aria-hidden="true" />
           <input
-            className="w-full rounded-2xl border border-slate-300 bg-white py-4 pl-12 pr-4 text-sm text-slate-950 outline-none transition focus:border-[#3b82f6] focus:ring-4 focus:ring-blue-500/10"
+            className="w-full rounded-2xl border border-slate-300 bg-white py-4 pl-12 pr-4 text-xs md:text-sm text-slate-950 outline-none transition focus:border-[#3b82f6] focus:ring-4 focus:ring-blue-500/10"
             placeholder="Search clients, vendors, production, finances, and tasks..."
             value={globalQuery}
             onChange={(event) => {
@@ -447,7 +447,7 @@ export default function Home() {
           {searchOpen && globalQuery.trim().length >= 2 && (
             <div className="absolute left-0 right-0 z-30 mt-2 max-h-96 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
               {totalResults === 0 ? (
-                <div className="px-4 py-3 md:py-6 text-sm text-slate-600">No results found</div>
+                <div className="px-4 py-3 md:py-6 text-xs md:text-sm text-slate-600">No results found</div>
               ) : (
                 (Object.keys(groupedResults) as SearchCategory[]).map((category) => {
                   const items = groupedResults[category];
@@ -467,7 +467,7 @@ export default function Home() {
                           className="block min-h-11 w-full cursor-pointer px-4 py-3 text-left hover:bg-gray-100"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                            <p className="text-xs md:text-sm font-semibold text-slate-950">{item.title}</p>
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{item.category}</span>
                           </div>
                           <p className="mt-1 text-xs text-slate-600">{item.context || "No additional context"}</p>
@@ -489,7 +489,7 @@ export default function Home() {
                 key={card.label}
                 type="button"
                 onClick={() => router.push(card.href)}
-                className="group min-h-11 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-3 md:p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
+                className="group min-h-11 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#3b82f6]">
@@ -497,22 +497,22 @@ export default function Home() {
                   </div>
                   <ChevronRight className="h-5 w-5 text-[#64748b] transition group-hover:translate-x-0.5 group-hover:text-[#3b82f6]" aria-hidden="true" />
                 </div>
-                <p className="mt-6 text-sm font-medium text-[#64748b]">{card.label}</p>
-                <p className="mt-2 text-xl md:text-3xl font-semibold tracking-normal text-[#0f172a]">{card.value}</p>
-                <p className="mt-2 text-sm text-[#64748b]">{card.detail}</p>
+                <p className="mt-6 text-xs md:text-sm font-medium text-[#64748b]">{card.label}</p>
+                <p className="mt-2 text-base md:text-3xl font-semibold tracking-normal text-[#0f172a]">{card.value}</p>
+                <p className="mt-2 text-xs md:text-sm text-[#64748b]">{card.detail}</p>
               </button>
             );
           })}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-3 md:p-6 shadow-md">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-[#0f172a]">Revenue and pipeline</h2>
-                <p className="mt-1 text-sm text-[#64748b]">Collected revenue against expected sales motion.</p>
+                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Revenue and pipeline</h2>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Collected revenue against expected sales motion.</p>
               </div>
-              <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-4 text-xs md:text-sm">
                 <span className="flex items-center gap-2 text-[#64748b]">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />
                   Collected
@@ -556,11 +556,11 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-3 md:p-6 shadow-md">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-[#0f172a]">Workload</h2>
-                <p className="mt-1 text-sm text-[#64748b]">Open versus complete.</p>
+                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Workload</h2>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Open versus complete.</p>
               </div>
               <CheckCircle2 className="h-5 w-5 text-[#10b981]" aria-hidden="true" />
             </div>
@@ -587,9 +587,9 @@ export default function Home() {
 
             <div className="grid gap-3 md:grid-cols-2">
               {workloadData.map((item) => (
-                <div key={item.name} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
-                  <p className="text-sm text-[#64748b]">{item.name}</p>
-                  <p className="mt-2 text-xl md:text-2xl font-semibold text-[#0f172a]">{item.value}</p>
+                <div key={item.name} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
+                  <p className="text-xs md:text-sm text-[#64748b]">{item.name}</p>
+                  <p className="mt-2 text-base md:text-2xl font-semibold text-[#0f172a]">{item.value}</p>
                 </div>
               ))}
             </div>
@@ -597,16 +597,16 @@ export default function Home() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-3">
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-3 md:p-6 shadow-md xl:col-span-2">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md xl:col-span-2">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-[#0f172a]">Pipeline stages</h2>
-                <p className="mt-1 text-sm text-[#64748b]">Lead flow from first contact through production.</p>
+                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Pipeline stages</h2>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Lead flow from first contact through production.</p>
               </div>
               <button
                 type="button"
                 onClick={() => router.push("/crm")}
-                className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] px-3 py-2 text-sm font-medium text-[#0f172a] transition hover:border-[#3b82f6]"
+                className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] px-3 py-2 text-xs md:text-sm font-medium text-[#0f172a] transition hover:border-[#3b82f6]"
               >
                 Open CRM
                 <ArrowUpRight className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -633,11 +633,11 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-3 md:p-6 shadow-md">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-[#0f172a]">Founder tasks</h2>
-                <p className="mt-1 text-sm text-[#64748b]">Open work by owner.</p>
+                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Founder tasks</h2>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Open work by owner.</p>
               </div>
               <button
                 type="button"
@@ -652,7 +652,7 @@ export default function Home() {
             <div className="mt-6 space-y-4">
               {taskData.map((person) => (
                 <div key={person.name}>
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-xs md:text-sm">
                     <span className="font-medium text-[#0f172a]">{person.name}</span>
                     <span className="text-[#64748b]">{person.open} open</span>
                   </div>
@@ -665,16 +665,16 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-3 md:p-6 shadow-md">
+        <section className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-[#0f172a]">Operational focus</h2>
-              <p className="mt-1 text-sm text-[#64748b]">The highest-signal work for this week.</p>
+              <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Operational focus</h2>
+              <p className="mt-1 text-xs md:text-sm text-[#64748b]">The highest-signal work for this week.</p>
             </div>
             <button
               type="button"
               onClick={() => router.push("/production")}
-              className="inline-flex min-h-11 items-center gap-2 rounded-[8px] bg-[#0f172a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0f172a]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-[8px] bg-[#0f172a] px-4 py-2 text-xs md:text-sm font-medium text-white transition hover:bg-[#0f172a]"
             >
               Production queue
               <Factory className="h-4 w-4" aria-hidden="true" />
@@ -683,14 +683,14 @@ export default function Home() {
 
           <div className="mt-6 grid gap-3 lg:grid-cols-3">
             {focusItems.map((item) => (
-              <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
+              <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-[#64748b]">{item.meta}</p>
+                  <p className="text-xs md:text-sm font-medium text-[#64748b]">{item.meta}</p>
                   <span className="rounded-[8px] border border-[#cbd5e1] px-2.5 py-1 text-xs font-medium text-[#0f172a]">
                     {item.status}
                   </span>
                 </div>
-                <p className="mt-4 text-sm font-semibold text-[#0f172a] md:text-base">{item.label}</p>
+                <p className="mt-4 text-xs md:text-sm font-semibold text-[#0f172a] md:text-base">{item.label}</p>
               </div>
             ))}
           </div>
