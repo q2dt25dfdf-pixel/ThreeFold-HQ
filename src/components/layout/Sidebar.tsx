@@ -37,7 +37,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className={`${className} fixed left-0 top-0 h-screen max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100`}>
+    <aside className={`${className} fixed left-0 top-0 h-screen max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 will-change-transform`}>
       <button
         type="button"
         aria-label="Collapse sidebar"

@@ -32,7 +32,7 @@ export type Lead = {
   contact: string;
   email: string;
   phone: string;
-  value: string;
+  value: string | number;
   notes: string;
   owner: string;
   stage: PipelineStage;

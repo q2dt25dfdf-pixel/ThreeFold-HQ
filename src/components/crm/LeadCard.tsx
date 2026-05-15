@@ -27,6 +27,14 @@ const statusBadgeStyles: Record<Lead["status"], string> = {
   Won: "bg-emerald-100 text-emerald-700",
 };
 
+function formatLeadValue(value: Lead["value"]) {
+  if (typeof value === "number") {
+    return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  }
+
+  return value;
+}
+
 export default function LeadCard({
   lead,
   stageIndex,
@@ -64,7 +72,7 @@ export default function LeadCard({
         </div>
         <div className="flex flex-shrink-0 items-start gap-2 text-right">
           <div>
-            <div className="text-base font-semibold text-slate-950">{lead.value}</div>
+            <div className="text-base font-semibold text-slate-950">{formatLeadValue(lead.value)}</div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Value</div>
           </div>
           <button

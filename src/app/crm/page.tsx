@@ -29,7 +29,7 @@ const initialLeads: Lead[] = [
     contact: "Sam Carter",
     email: "sam.carter@auroralogistics.com",
     phone: "(415) 555-0199",
-    value: "$18,400",
+    value: 18400,
     notes: "Explore a custom CRM integration for logistics planning, shipment monitoring, and compliance workflows.",
     owner: "Hannah",
     stage: "New Lead",
@@ -46,7 +46,7 @@ const initialLeads: Lead[] = [
     contact: "Dr. Kim",
     email: "dr.kim@harborpointdental.com",
     phone: "(650) 555-0132",
-    value: "$8,200",
+    value: 8200,
     notes: "Review current appointment scheduling and billing automation requirements before sending the proposal.",
     owner: "Jordan",
     stage: "Contacted",
@@ -63,7 +63,7 @@ const initialLeads: Lead[] = [
     contact: "Avery Johnson",
     email: "avery.johnson@nexa.com",
     phone: "(212) 555-0174",
-    value: "$26,750",
+    value: 26750,
     notes: "Quote sent for enterprise onboarding, includes advanced reporting and team permissions.",
     owner: "Alliyah",
     stage: "Quote Sent",
@@ -80,7 +80,7 @@ const initialLeads: Lead[] = [
     contact: "Ruben Torres",
     email: "ruben.torres@atlasmfg.com",
     phone: "(312) 555-0115",
-    value: "$41,000",
+    value: 41000,
     notes: "Production kickoff completed. Monitoring launch deliverables and weekly status reviews.",
     owner: "Hannah",
     stage: "Approved",
@@ -97,7 +97,7 @@ const initialLeads: Lead[] = [
     contact: "Claire Nguyen",
     email: "claire@stonebridge.vc",
     phone: "(303) 555-0182",
-    value: "$12,500",
+    value: 12500,
     notes: "Project completed successfully. Preparing client handoff, documentation, and follow-up items.",
     owner: "Jordan",
     stage: "In Production",
@@ -135,10 +135,13 @@ export default function CRMPage() {
     [visibleLeads],
   );
 
-  const totalValue = leads.reduce(
-    (sum, lead) => sum + Number(lead.value.replace(/[^0-9.-]/g, "")),
-    0,
-  );
+  const leadValueNumber = (value: Lead["value"]) => {
+    if (typeof value === "number") return value;
+    const amount = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(amount) ? amount : 0;
+  };
+
+  const totalValue = leads.reduce((sum, lead) => sum + leadValueNumber(lead.value), 0);
 
   const createId = () => {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

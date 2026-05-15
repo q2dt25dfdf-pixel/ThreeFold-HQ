@@ -17,6 +17,24 @@ const CONTACT_TYPES: CommunicationEntry["type"][] = [
   "Call", "Email", "Text", "Meeting", "In Person", "Other",
 ];
 
+function formatLeadValue(value: Lead["value"]) {
+  if (typeof value === "number") {
+    return value.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  return value;
+}
+
+function parseLeadValue(value: string) {
+  const amount = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 // Inline editable field — click value to edit, blur to save
 function InlineField({
   label,
@@ -165,7 +183,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
             <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Snapshot — click any field to edit</p>
               <div className="space-y-3">
-                <InlineField label="Estimated value" value={current.value} onSave={(v) => patch({ value: v })} />
+                <InlineField label="Estimated value" value={formatLeadValue(current.value)} onSave={(v) => patch({ value: parseLeadValue(v) })} />
                 <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
                 <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
                 <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />

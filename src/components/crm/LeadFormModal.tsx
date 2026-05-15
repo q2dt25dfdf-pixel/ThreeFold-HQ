@@ -11,13 +11,55 @@ interface LeadFormModalProps {
   onSubmit: (values: Omit<Lead, "id">) => void | Promise<void>;
 }
 
+const industryOptions = [
+  "Amazon DSP",
+  "Dental Office",
+  "Medical Practice",
+  "Gym / Fitness Studio",
+  "Restaurant / Food & Beverage",
+  "Retail Store",
+  "Contractor / Trades",
+  "Corporate / Enterprise",
+  "Sports Team",
+  "Real Estate",
+  "Nonprofit",
+  "Other",
+];
+
 const defaultProfile: CompanyProfile = {
-  industry: "Apparel",
+  industry: industryOptions[0],
   location: "San Francisco, CA",
   website: "",
 };
 
 const leadStatuses: LeadStatus[] = ["Open", "Pending", "At Risk", "Won"];
+
+function leadValueNumber(value: string | number | undefined) {
+  if (typeof value === "number") return value;
+  if (!value) return 0;
+  const amount = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function currencyInputValue(value: string | number | undefined) {
+  return leadValueNumber(value).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function currencyInputNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? Number(digits) / 100 : 0;
+}
+
+function allowCurrencyKey(event: React.KeyboardEvent<HTMLInputElement>) {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  if (["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  if (!/^\d$/.test(event.key)) event.preventDefault();
+}
 
 export default function LeadFormModal({ open, mode, lead, initialStage = "New Lead", onClose, onSubmit }: LeadFormModalProps) {
   const [company, setCompany] = useState(lead?.company ?? "");
@@ -27,13 +69,14 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
   const [contact, setContact] = useState(lead?.contact ?? "");
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
-  const [value, setValue] = useState(lead?.value ?? "");
+  const [value, setValue] = useState(leadValueNumber(lead?.value));
   const [owner, setOwner] = useState(lead?.owner ?? "");
   const [stage, setStage] = useState<Lead["stage"]>(lead?.stage ?? initialStage);
   const [status, setStatus] = useState<Lead["status"]>(lead?.status ?? "Open");
   const [followUpDate, setFollowUpDate] = useState(lead?.followUpDate ?? "");
   const [notes, setNotes] = useState(lead?.notes ?? "");
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (lead) {
       setCompany(lead.company);
@@ -43,7 +86,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       setContact(lead.contact);
       setEmail(lead.email);
       setPhone(lead.phone);
-      setValue(lead.value);
+      setValue(leadValueNumber(lead.value));
       setOwner(lead.owner);
       setStage(lead.stage);
       setStatus(lead.status);
@@ -57,7 +100,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       setContact("");
       setEmail("");
       setPhone("");
-      setValue("");
+      setValue(0);
       setOwner("");
       setStage(initialStage);
       setStatus("Open");
@@ -65,6 +108,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       setNotes("");
     }
   }, [lead, mode, open, initialStage]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!open) return null;
 
@@ -75,11 +119,11 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
     event.preventDefault();
     onSubmit({
       company: company.trim(),
-      companyProfile: { industry: industry.trim(), location: location.trim(), website: website.trim() },
+      companyProfile: { industry, location: location.trim(), website: website.trim() },
       contact: contact.trim(),
       email: email.trim(),
       phone: phone.trim(),
-      value: value.trim() || "$0",
+      value,
       owner: owner.trim() || "Unassigned",
       stage,
       status,
@@ -153,11 +197,17 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
           <div className="grid gap-6 md:grid-cols-3">
             <label className="space-y-2 text-sm text-slate-700">
               Industry
-              <input
+              <select
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={industry}
                 onChange={(event) => setIndustry(event.target.value)}
-              />
+              >
+                {industryOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               Location
@@ -181,9 +231,15 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             <label className="space-y-2 text-sm text-slate-700">
               Estimated value
               <input
+                type="text"
+                inputMode="numeric"
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
+                value={currencyInputValue(value)}
+                onKeyDown={allowCurrencyKey}
+                onPaste={(event) => {
+                  if (/\D/.test(event.clipboardData.getData("text"))) event.preventDefault();
+                }}
+                onChange={(event) => setValue(currencyInputNumber(event.target.value))}
               />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
