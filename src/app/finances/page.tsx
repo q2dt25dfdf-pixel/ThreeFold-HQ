@@ -19,14 +19,14 @@ type Invoice = {
   id: string;
   client: string;
   orderName: string;
-  amount: string;
+  amount: string | number;
   dueDate: string;
   status: "Paid" | "Due" | "Overdue" | "Draft";
   notes: string;
 };
 
 
-const emptyForm = { client: "", orderName: "", amount: "", dueDate: "", status: "Draft" as Invoice["status"], notes: "" };
+const emptyForm = { client: "", orderName: "", amount: 0, dueDate: "", status: "Draft" as Invoice["status"], notes: "" };
 
 const statusColors: Record<Invoice["status"], string> = {
   Paid: "bg-emerald-100 text-emerald-800",
@@ -46,9 +46,24 @@ const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-function invoiceAmount(amount: string) {
+function invoiceAmount(amount: string | number) {
+  if (typeof amount === "number") return amount;
   const n = parseFloat(amount.replace(/[^0-9.]/g, ""));
   return isNaN(n) ? 0 : n;
+}
+
+function currencyInputValue(amount: string | number) {
+  return invoiceAmount(amount).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function currencyInputNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? Number(digits) / 100 : 0;
 }
 
 function invoiceMonthIndex(invoice: Invoice) {
@@ -110,7 +125,7 @@ export default function FinancesPage() {
 
   const handleAdd = () => {
     if (!form.client.trim()) return;
-    const newInvoice = { id: `invoice-${Date.now()}`, ...form };
+    const newInvoice = { id: "invoice-" + Date.now(), ...form, amount: invoiceAmount(form.amount) };
     upsertItem(newInvoice);
     setForm(emptyForm);
     setShowModal(false);
@@ -118,7 +133,7 @@ export default function FinancesPage() {
 
   const handleSaveEdit = async () => {
     if (!editInvoice) return;
-    await upsertItem(editInvoice);
+    await upsertItem({ ...editInvoice, amount: invoiceAmount(editInvoice.amount) });
     setEditInvoice(null);
   };
 
@@ -141,7 +156,6 @@ export default function FinancesPage() {
       {[
         { label: "Client", key: "client", placeholder: "e.g. POPS – Piranha Ops" },
         { label: "Order name", key: "orderName", placeholder: "e.g. POPS 2026 Collection" },
-        { label: "Amount", key: "amount", placeholder: "e.g. $1,200" },
         { label: "Due date", key: "dueDate", placeholder: "e.g. 2026-06-01" },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
@@ -156,6 +170,16 @@ export default function FinancesPage() {
           />
         </div>
       ))}
+      <div>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Amount</label>
+        <input
+          type="text"
+          inputMode="numeric"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          value={currencyInputValue(data.amount)}
+          onChange={(e) => onChange({ ...data, amount: currencyInputNumber(e.target.value) })}
+        />
+      </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
         <select
@@ -336,7 +360,7 @@ export default function FinancesPage() {
                 >
                   <td className="block border-t border-slate-100 font-semibold text-slate-950 md:table-cell md:px-4 md:py-4">{invoice.client}</td>
                   <td className="block text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{invoice.orderName}</td>
-                  <td className="block font-semibold text-slate-950 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{invoice.amount}</td>
+                  <td className="block font-semibold text-slate-950 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{currencyInputValue(invoice.amount)}</td>
                   <td className="block text-slate-600 md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">{invoice.dueDate}</td>
                   <td className="block md:table-cell md:border-t md:border-slate-100 md:px-4 md:py-4">
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusColors[invoice.status]}`}>

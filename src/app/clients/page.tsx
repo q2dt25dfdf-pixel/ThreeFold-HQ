@@ -60,7 +60,7 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Orders</label>
-        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={form.orders} onChange={(e) => setForm({ ...form, orders: Number(e.target.value) })} />
+        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={form.orders} onChange={(e) => setForm({ ...form, orders: Number(e.target.value.replace(/^0+(?=\d)/, "")) })} />
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>

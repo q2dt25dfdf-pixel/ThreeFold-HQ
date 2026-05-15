@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
@@ -56,7 +57,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-dvh bg-zinc-100">
-      <Sidebar />
+      <div className={`hidden shrink-0 transition-[width] duration-300 ease-in-out lg:block ${desktopSidebarCollapsed ? "w-0" : "w-[280px]"}`}>
+        <Sidebar
+          className={`flex h-screen transition-transform duration-300 ease-in-out ${desktopSidebarCollapsed ? "-translate-x-full" : "translate-x-0"}`}
+          showCollapseToggle
+          onToggleCollapse={() => setDesktopSidebarCollapsed(true)}
+        />
+      </div>
+      {desktopSidebarCollapsed && (
+        <button
+          type="button"
+          className="fixed left-3 top-4 z-40 hidden h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-xl leading-none text-white shadow-lg transition hover:bg-slate-800 lg:flex"
+          aria-label="Expand sidebar"
+          onClick={() => setDesktopSidebarCollapsed(false)}
+        >
+          ☰
+        </button>
+      )}
       {!sidebarOpen && (
         <button
           type="button"

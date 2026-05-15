@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { ChevronLeft } from "lucide-react";
 
 const sections = [
   { label: "Dashboard", href: "/" },
@@ -15,7 +16,17 @@ const sections = [
   { label: "Calendar", href: "/calendar" },
 ];
 
-export default function Sidebar({ className = "hidden lg:flex", onNavigate }: { className?: string; onNavigate?: () => void }) {
+export default function Sidebar({
+  className = "hidden lg:flex",
+  onNavigate,
+  onToggleCollapse,
+  showCollapseToggle = false,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+  onToggleCollapse?: () => void;
+  showCollapseToggle?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -26,11 +37,19 @@ export default function Sidebar({ className = "hidden lg:flex", onNavigate }: { 
   };
 
   return (
-    <aside className={`${className} max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 lg:static lg:max-h-none lg:overflow-visible`}>
+    <aside className={`${className} max-h-screen w-[280px] shrink-0 flex-col overflow-y-auto bg-slate-950 text-slate-100 lg:relative lg:max-h-none lg:overflow-visible`}>
+      <button
+        type="button"
+        aria-label="Collapse sidebar"
+        onClick={onToggleCollapse}
+        className={`${showCollapseToggle ? "lg:flex" : "lg:hidden"} absolute -right-4 top-6 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-md transition hover:bg-slate-100`}
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+      </button>
       <div className="flex min-h-full flex-col justify-between px-6 py-8">
         <div>
           <div className="pb-6">
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-300">Threefold Supply Co.</p>
+            <img src="/Logo.png" alt="Threefold Supply Co." className="block w-full max-w-[210px]" />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white">Threefold HQ</h1>
             <p className="mt-3 text-sm text-slate-300">Made by three, worn by all.</p>
           </div>

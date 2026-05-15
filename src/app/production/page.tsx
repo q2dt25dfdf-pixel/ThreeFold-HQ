@@ -14,6 +14,7 @@ type Job = {
   vendor: string;
   dueDate: string;
   quantity: string;
+  items?: string[];
   status: "Pending" | "Approved" | "In Production" | "Fulfilled";
   flag: JobFlag;
   flagNote: string;
@@ -119,7 +120,8 @@ const defaultJobs: Job[] = [
   }
 ];
 
-const emptyForm: Job = { id: "", client: "", orderName: "", vendor: "", dueDate: "", quantity: "", status: "Pending", flag: "none", flagNote: "", notes: "" };
+const emptyForm: Job = { id: "", client: "", orderName: "", vendor: "", dueDate: "", quantity: "", items: [], status: "Pending", flag: "none", flagNote: "", notes: "" };
+const itemOptions = ["T-Shirts", "Hoodies", "Long Sleeves", "Hats", "Jackets", "Tumblers", "Mugs", "Accessories", "Other"];
 
 const statusColors: Record<Job["status"], string> = {
   Pending: "bg-slate-100 text-slate-700",
@@ -139,7 +141,7 @@ const flagBanners: Record<Exclude<JobFlag, "none">, { className: string; label: 
 };
 
 function normalizeJob(job: Job): Job {
-  return { ...job, flag: job.flag ?? "none", flagNote: job.flagNote ?? "" };
+  return { ...job, flag: job.flag ?? "none", flagNote: job.flagNote ?? "", items: Array.isArray(job.items) ? job.items : [] };
 }
 
 function isDueSoon(dueDate: string) {
@@ -150,6 +152,16 @@ function isDueSoon(dueDate: string) {
 }
 
 function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void }) {
+  const selectedItems = Array.isArray(data.items) ? data.items : [];
+  const toggleItem = (item: string) => {
+    onChange({
+      ...data,
+      items: selectedItems.includes(item)
+        ? selectedItems.filter((selectedItem) => selectedItem !== item)
+        : [...selectedItems, item],
+    });
+  };
+
   return (
     <div className="space-y-4">
       {[
@@ -157,13 +169,48 @@ function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void 
         { label: "Order name", key: "orderName", placeholder: "e.g. POPS 2026 Collection" },
         { label: "Vendor", key: "vendor", placeholder: "e.g. Bay Area print shop" },
         { label: "Due date", key: "dueDate", placeholder: "e.g. 2026-06-15 or TBD" },
-        { label: "Quantity / items", key: "quantity", placeholder: "e.g. 48 tees · 4 designs" },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
           <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{label}</label>
           <input type={key === "dueDate" ? "date" : "text"} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder={key === "dueDate" ? undefined : placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
         </div>
       ))}
+      <div>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Quantity</label>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm"
+          placeholder="e.g. 48"
+          value={data.quantity}
+          onChange={(e) => onChange({ ...data, quantity: e.target.value.replace(/^0+(?=\d)/, "") })}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Items</label>
+        <div className="flex flex-wrap gap-2">
+          {itemOptions.map((item) => {
+            const selected = selectedItems.includes(item);
+
+            return (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={selected}
+                className={`rounded-2xl border px-3 py-2 text-xs md:text-sm font-semibold transition ${
+                  selected
+                    ? "border-slate-400 bg-gray-100 text-slate-900"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-gray-100"
+                }`}
+                onClick={() => toggleItem(item)}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
         <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.status} onChange={(e) => onChange({ ...data, status: e.target.value as Job["status"] })}>
