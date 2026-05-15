@@ -16,6 +16,11 @@ type Vendor = {
   jobs: number;
 };
 
+type Order = {
+  id: string;
+  vendor: string;
+};
+
 const defaultVendors: Vendor[] = [
   {
     id: "vendor-1",
@@ -43,9 +48,13 @@ const emptyForm = { name: "", type: "", turnaround: "", contact: "", notes: "", 
 export default function VendorsPage() {
   const router = useRouter();
   const { data: vendors, upsertItem, deleteItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: orders } = useSupabaseTable<Order>("orders", []);
   const [showModal, setShowModal] = useState(false);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyForm);
+
+  const orderCountForVendor = (vendorName: string) =>
+    orders.filter((order) => order.vendor.trim().toLowerCase() === vendorName.trim().toLowerCase()).length;
 
   const visible = vendors.filter((vendor) =>
     Object.values(vendor).join(" ").toLowerCase().includes(query.toLowerCase()),
@@ -249,7 +258,7 @@ export default function VendorsPage() {
                       </div>
                       <div className="px-3 py-3">
                         <p className="text-xs text-slate-400">Jobs assigned</p>
-                        <p className="mt-1 text-xs md:text-sm font-semibold text-slate-950">{vendor.jobs}</p>
+                        <p className="mt-1 text-xs md:text-sm font-semibold text-slate-950">{orderCountForVendor(vendor.name)}</p>
                       </div>
                     </div>
                     {vendor.notes && (

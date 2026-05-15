@@ -32,7 +32,7 @@ import { pipelineStages } from "@/components/crm/types";
 
 type StorageRecord = Record<string, unknown> & { id: string };
 
-type SearchCategory = "Clients" | "Vendors" | "Production" | "Finances" | "Tasks";
+type SearchCategory = "Clients" | "Vendors" | "Orders" | "Finances" | "Tasks";
 
 type SearchResult = {
   id: string;
@@ -48,7 +48,7 @@ const defaultSearchRows: StorageRecord[] = [];
 const founderNames = ["Alliyah", "Hannah", "Jordan"] as const;
 const taskDoneStatuses = new Set(["done", "complete"]);
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
-const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "followUpDate"];
+const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "estimatedDeliveryDate", "followUpDate"];
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -77,8 +77,8 @@ function taskOwner(task: StorageRecord) {
   return stringField(task, "owner").trim();
 }
 
-function isProductionActive(job: StorageRecord) {
-  return statusText(job) !== "completed";
+function isOrderActive(order: StorageRecord) {
+  return statusText(order) !== "fulfilled";
 }
 
 function numericAmount(value: unknown) {
@@ -97,7 +97,7 @@ function parseRecordDate(rawDate: string) {
 }
 
 function monthIndex(record: StorageRecord) {
-  const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "dueDate", stringField(record, "followUpDate"))));
+  const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "dueDate", stringField(record, "estimatedDeliveryDate", stringField(record, "followUpDate")))));
   return parseRecordDate(rawDate)?.getMonth() ?? -1;
 }
 
@@ -143,32 +143,32 @@ export default function Home() {
   const [searchOpen, setSearchOpen] = useState(false);
   const { data: clients } = useSupabaseTable<StorageRecord>("clients", defaultSearchRows);
   const { data: vendors } = useSupabaseTable<StorageRecord>("vendors", defaultSearchRows);
-  const { data: production } = useSupabaseTable<StorageRecord>("production", defaultSearchRows);
+  const { data: orders } = useSupabaseTable<StorageRecord>("orders", defaultSearchRows);
   const { data: finances } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
   const { data: tasks } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
   const { data: crmLeads } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
 
   const openTasks = useMemo(() => tasks.filter((task) => !isTaskDone(task)), [tasks]);
   const doneTasks = useMemo(() => tasks.filter(isTaskDone), [tasks]);
-  const activeProduction = useMemo(() => production.filter(isProductionActive), [production]);
+  const activeOrders = useMemo(() => orders.filter(isOrderActive), [orders]);
   const collectedRevenue = useMemo(
-    () => finances.filter((invoice) => statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
-    [finances],
+    () => orders.filter((order) => statusText(order) === "fulfilled").reduce((sum, order) => sum + numericAmount(order.amount), 0),
+    [orders],
   );
   const pipelineValue = useMemo(
-    () => crmLeads.reduce((sum, lead) => sum + numericAmount(lead.value), 0),
-    [crmLeads],
+    () => orders.reduce((sum, order) => sum + numericAmount(order.amount), 0),
+    [orders],
   );
   const focusItems = useMemo(() => {
-    const latestProduction = mostRecentRecord(production);
+    const latestOrders = mostRecentRecord(orders);
     const latestLead = mostRecentRecord(crmLeads);
     const latestTask = mostRecentRecord(tasks);
 
     return [
       {
-        label: recordTitle(latestProduction, ["orderName", "name", "title", "client"], "No production jobs"),
-        meta: "Production",
-        status: displayStatus(latestProduction),
+        label: recordTitle(latestOrders, ["orderName", "name", "title", "client"], "No orders"),
+        meta: "Orders",
+        status: displayStatus(latestOrders),
       },
       {
         label: recordTitle(latestLead, ["name", "company", "title", "contact"], "No CRM leads"),
@@ -181,27 +181,27 @@ export default function Home() {
         status: displayStatus(latestTask, "Open"),
       },
     ];
-  }, [crmLeads, production, tasks]);
+  }, [crmLeads, orders, tasks]);
 
   const heroTrend = useMemo(
     () =>
       monthLabels.map((month, index) => ({
         month,
         value:
-          finances.filter((invoice) => monthIndex(invoice) <= index && statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0) +
-          crmLeads.filter((lead) => monthIndex(lead) <= index).reduce((sum, lead) => sum + numericAmount(lead.value), 0),
+          orders.filter((order) => monthIndex(order) <= index && statusText(order) === "fulfilled").reduce((sum, order) => sum + numericAmount(order.amount), 0) +
+          orders.filter((order) => monthIndex(order) <= index).reduce((sum, order) => sum + numericAmount(order.amount), 0),
       })),
-    [crmLeads, finances],
+    [orders],
   );
 
   const revenueData = useMemo(
     () =>
       monthLabels.slice(0, 6).map((month, index) => ({
         month,
-        collected: finances.filter((invoice) => monthIndex(invoice) === index && statusText(invoice) === "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
-        pipeline: finances.filter((invoice) => monthIndex(invoice) === index && statusText(invoice) !== "paid").reduce((sum, invoice) => sum + numericAmount(invoice.amount), 0),
+        collected: orders.filter((order) => monthIndex(order) === index && statusText(order) === "fulfilled").reduce((sum, order) => sum + numericAmount(order.amount), 0),
+        pipeline: orders.filter((order) => monthIndex(order) === index).reduce((sum, order) => sum + numericAmount(order.amount), 0),
       })),
-    [finances],
+    [orders],
   );
 
   const pipelineData = useMemo(() => {
@@ -252,10 +252,10 @@ export default function Home() {
         icon: Building2,
       },
       {
-        label: "Production",
-        value: String(activeProduction.length),
-        detail: "Jobs in progress",
-        href: "/production",
+        label: "Orders",
+        value: String(activeOrders.length),
+        detail: "Orders in progress",
+        href: "/orders",
         icon: Factory,
       },
       {
@@ -266,18 +266,18 @@ export default function Home() {
         icon: ListChecks,
       },
     ],
-    [activeProduction.length, clients.length, crmLeads.length, openTasks.length],
+    [activeOrders.length, clients.length, crmLeads.length, openTasks.length],
   );
 
   const searchData = useMemo<Record<SearchCategory, StorageRecord[]>>(
     () => ({
       Clients: clients,
       Vendors: vendors,
-      Production: production,
+      Orders: orders,
       Finances: finances,
       Tasks: tasks,
     }),
-    [clients, finances, production, tasks, vendors],
+    [clients, finances, orders, tasks, vendors],
   );
 
   useEffect(() => {
@@ -301,7 +301,7 @@ export default function Home() {
     const empty: Record<SearchCategory, SearchResult[]> = {
       Clients: [],
       Vendors: [],
-      Production: [],
+      Orders: [],
       Finances: [],
       Tasks: [],
     };
@@ -324,12 +324,12 @@ export default function Home() {
         href: `/vendors/${stringField(vendor, "id")}`,
         searchText: recordText(vendor),
       })),
-      Production: searchData.Production.map((job) => ({
+      Orders: searchData.Orders.map((job) => ({
         id: stringField(job, "id", `job-${stringField(job, "orderName", "unknown")}`),
-        category: "Production",
-        title: stringField(job, "orderName", "Untitled production job"),
+        category: "Orders",
+        title: stringField(job, "orderName", "Untitled order"),
         context: [stringField(job, "client"), stringField(job, "vendor"), stringField(job, "status")].filter(Boolean).join(" · "),
-        href: `/production/${stringField(job, "id")}`,
+        href: `/orders/${stringField(job, "id")}`,
         searchText: recordText(job),
       })),
       Finances: searchData.Finances.map((invoice) => ({
@@ -433,7 +433,7 @@ export default function Home() {
           <Search className="pointer-events-none absolute left-4 top-5 h-5 w-5 text-[#64748b]" aria-hidden="true" />
           <input
             className="w-full rounded-2xl border border-slate-300 bg-white py-4 pl-12 pr-4 text-xs md:text-sm text-slate-950 outline-none transition focus:border-[#3b82f6] focus:ring-4 focus:ring-blue-500/10"
-            placeholder="Search clients, vendors, production, finances, and tasks..."
+            placeholder="Search clients, vendors, orders, finances, and tasks..."
             value={globalQuery}
             onChange={(event) => {
               setGlobalQuery(event.target.value);
@@ -601,7 +601,7 @@ export default function Home() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Pipeline stages</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Lead flow from first contact through production.</p>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Lead flow from first contact through orders.</p>
               </div>
               <button
                 type="button"
@@ -675,10 +675,10 @@ export default function Home() {
             </div>
             <button
               type="button"
-              onClick={() => router.push("/production")}
+              onClick={() => router.push("/orders")}
               className="inline-flex min-h-11 items-center gap-2 rounded-[8px] bg-[#0f172a] px-4 py-2 text-xs md:text-sm font-medium text-white transition hover:bg-[#0f172a]"
             >
-              Production queue
+              Orders queue
               <Factory className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>

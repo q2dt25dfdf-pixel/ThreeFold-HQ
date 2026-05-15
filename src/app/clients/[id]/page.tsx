@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
+import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
-type ClientStatus = "Active" | "At Risk" | "Dormant";
+type ClientStatus = "Active" | "At Risk" | "Dormant" | "Lead";
 
 type Client = {
   id: string;
@@ -20,13 +21,17 @@ type Client = {
   status: ClientStatus;
 };
 
-type ClientOrder = {
+type Order = {
   id: string;
-  clientId: string;
-  date: string;
-  name: string;
-  amount: string;
-  status: "Draft" | "Due" | "Paid" | "Fulfilled";
+  orderName: string;
+  client: string;
+  vendor: string;
+  items: string[];
+  quantity: number;
+  amount: number;
+  status: "Draft" | "In Production" | "Quality Control" | "Fulfilled";
+  estimatedDeliveryDate: string;
+  notes: string;
 };
 
 type ActivityEntry = {
@@ -54,89 +59,19 @@ const defaultClients: Client[] = [
   },
 ];
 
-const defaultOrders: ClientOrder[] = [
-  {
-    id: "order-1",
-    clientId: "client-1",
-    date: "2026-05-13",
-    name: "POPS 2026 Collection",
-    amount: "TBD",
-    status: "Draft",
-  },
-];
-
 const owners = ["Alliyah", "Hannah", "Jordan"];
 const activityTypes: ActivityEntry["type"][] = ["Call", "Email", "Text", "Meeting", "In Person", "Other"];
-
 const defaultActivity: ActivityEntry[] = [];
+const clientStatusOptions: ClientStatus[] = ["Active", "At Risk", "Dormant", "Lead"];
 
-function parseAmount(amount: string) {
+function orderAmount(amount: number | string) {
+  if (typeof amount === "number") return amount;
   const numeric = Number(amount.replace(/[^0-9.]/g, ""));
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
-function InlineField({
-  label,
-  value,
-  onSave,
-  type = "text",
-  options,
-}: {
-  label: string;
-  value: string;
-  onSave: (value: string) => void;
-  type?: "text" | "select";
-  options?: string[];
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  const commit = () => {
-    onSave(draft);
-    setEditing(false);
-  };
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      {editing ? (
-        type === "select" && options ? (
-          <select
-            autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            className="mt-2 w-full bg-transparent text-xs md:text-sm font-semibold text-slate-950 outline-none"
-          >
-            {options.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-        ) : (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            onKeyDown={(event) => event.key === "Enter" && commit()}
-            className="mt-2 w-full bg-transparent text-xs md:text-sm font-semibold text-slate-950 outline-none"
-          />
-        )
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setDraft(value);
-            setEditing(true);
-          }}
-          className="mt-2 flex w-full items-center justify-between gap-3 text-left text-xs md:text-sm font-semibold text-slate-950 hover:text-slate-600"
-        >
-          <span>{value || "Add value"}</span>
-          <Edit2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
+function formatCurrency(amount: number | string) {
+  return orderAmount(amount).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 }
 
 export default function ClientDetailPage() {
@@ -145,11 +80,11 @@ export default function ClientDetailPage() {
   const clientId = params.id;
 
   const { data: clients, upsertItem: upsertClient, loading: clientsLoading } = useSupabaseTable<Client>("clients", defaultClients);
-  const { data: orders, upsertItem: upsertOrder, loading: ordersLoading } = useSupabaseTable<ClientOrder>("client_orders", defaultOrders);
+  const { data: orders, loading: ordersLoading } = useSupabaseTable<Order>("orders", []);
   const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
   const [editingHeader, setEditingHeader] = useState(false);
-  const [orderForm, setOrderForm] = useState({ name: "", date: "", amount: "", status: "Draft" as ClientOrder["status"] });
-  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [clientDraft, setClientDraft] = useState<Client | null>(null);
   const [activityForm, setActivityForm] = useState({
     type: "Call" as ActivityEntry["type"],
     owner: "Alliyah",
@@ -157,11 +92,11 @@ export default function ClientDetailPage() {
   });
 
   const client = clients.find((item) => item.id === clientId);
-  const clientOrders = orders.filter((order) => order.clientId === clientId);
+  const clientOrders = orders.filter((order) => client && order.client.trim().toLowerCase() === client.name.trim().toLowerCase());
   const clientActivity = activity.filter((entry) => entry.clientId === clientId);
 
   const totalSpend = useMemo(
-    () => clientOrders.reduce((sum, order) => sum + parseAmount(order.amount), 0),
+    () => clientOrders.reduce((sum, order) => sum + orderAmount(order.amount), 0),
     [clientOrders],
   );
 
@@ -170,19 +105,15 @@ export default function ClientDetailPage() {
     upsertClient({ ...client, ...fields });
   };
 
-  const addOrder = () => {
-    if (!orderForm.name.trim()) return;
-    const nextOrder: ClientOrder = {
-      id: `order-${Date.now()}`,
-      clientId,
-      name: orderForm.name.trim(),
-      date: orderForm.date || new Date().toISOString().split("T")[0],
-      amount: orderForm.amount || "TBD",
-      status: orderForm.status,
-    };
-    upsertOrder(nextOrder);
-    setOrderForm({ name: "", date: "", amount: "", status: "Draft" });
-    setShowOrderForm(false);
+  const openClientEditor = () => {
+    if (!client) return;
+    setClientDraft({ ...client });
+  };
+
+  const saveClientDraft = () => {
+    if (!clientDraft) return;
+    upsertClient(clientDraft);
+    setClientDraft(null);
   };
 
   const addActivity = () => {
@@ -268,7 +199,7 @@ export default function ClientDetailPage() {
       <div className="space-y-6 p-2 md:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
-            { label: "Total orders", value: String(clientOrders.length || client.orders) },
+            { label: "Total orders", value: String(clientOrders.length) },
             { label: "Total spend", value: totalSpend > 0 ? `$${totalSpend.toLocaleString()}` : "$0" },
             { label: "Account status", value: client.status },
           ].map((stat) => (
@@ -281,22 +212,29 @@ export default function ClientDetailPage() {
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
-            <h2 className="text-base md:text-lg font-semibold text-slate-950">Account details</h2>
-            <p className="mt-1 text-xs md:text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base md:text-lg font-semibold text-slate-950">Account details</h2>
+                <p className="mt-1 text-xs md:text-sm text-slate-500">Review client profile and account notes.</p>
+              </div>
+              <button type="button" onClick={openClientEditor} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <Edit2 className="h-4 w-4" aria-hidden="true" />
+                Edit
+              </button>
+            </div>
             <div className="mt-5 space-y-3">
-              <InlineField label="Industry" value={client.industry} onSave={(value) => saveClient({ industry: value })} />
-              <InlineField label="Location" value={client.location ?? ""} onSave={(value) => saveClient({ location: value })} />
-              <InlineField label="Contact" value={client.contact} onSave={(value) => saveClient({ contact: value })} />
-              <InlineField label="Status" value={client.status} onSave={(value) => saveClient({ status: value as ClientStatus })} type="select" options={["Active", "At Risk", "Dormant"]} />
-              <label className="block rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Notes</span>
-                <textarea
-                  rows={6}
-                  value={client.notes}
-                  onChange={(event) => saveClient({ notes: event.target.value })}
-                  className="mt-2 w-full resize-none bg-transparent text-xs md:text-sm leading-6 text-slate-700 outline-none"
-                />
-              </label>
+              {[
+                { label: "Industry", value: client.industry },
+                { label: "Location", value: client.location ?? "Not set" },
+                { label: "Contact", value: client.contact || "Not set" },
+                { label: "Status", value: client.status },
+                { label: "Notes", value: client.notes || "No notes added yet." },
+              ].map((field) => (
+                <div key={field.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{field.label}</p>
+                  <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{field.value}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -304,35 +242,23 @@ export default function ClientDetailPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Order history</h2>
-                <p className="mt-1 text-xs md:text-sm text-slate-500">Past work and invoice context.</p>
+                <p className="mt-1 text-xs md:text-sm text-slate-500">Orders connected to this client.</p>
               </div>
-              <button type="button" onClick={() => setShowOrderForm(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-xs md:text-sm font-semibold text-white">
+              <button type="button" onClick={() => setShowOrderModal(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-xs md:text-sm font-semibold text-white">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add order
               </button>
             </div>
 
-            {showOrderForm && (
-              <div className="mt-5 grid gap-3 rounded-[2rem] border border-slate-200 bg-slate-50 p-2 md:p-4 md:grid-cols-2">
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
-                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
-                <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
-                <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm outline-none md:text-sm" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
-                  <option>Draft</option>
-                  <option>Due</option>
-                  <option>Paid</option>
-                  <option>Fulfilled</option>
-                </select>
-                <button type="button" onClick={addOrder} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-xs md:text-sm font-semibold text-white md:col-span-2">Save order</button>
-              </div>
-            )}
-
             <div className="mt-5 space-y-3">
+              {clientOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-2 md:p-5 text-xs md:text-sm text-slate-500">No orders added yet.</p>}
               {clientOrders.map((order) => (
                 <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="font-semibold text-slate-950">{order.name}</p>
-                    <p className="mt-1 text-xs md:text-sm text-slate-500">{order.date} · {order.amount}</p>
+                    <p className="font-semibold text-slate-950">{order.orderName}</p>
+                    <p className="mt-1 text-xs md:text-sm text-slate-500">
+                      {order.estimatedDeliveryDate || "TBD"} · {order.vendor || "No vendor"} · {formatCurrency(order.amount)}
+                    </p>
                   </div>
                   <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">{order.status}</span>
                 </div>
@@ -368,6 +294,49 @@ export default function ClientDetailPage() {
           </div>
         </section>
       </div>
+
+      <AddOrderModal open={showOrderModal} onClose={() => setShowOrderModal(false)} prefilledClient={client.name} />
+
+      {clientDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
+            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Edit client</h2>
+            <div className="mt-6 space-y-4">
+              {[
+                { label: "Name", key: "name" },
+                { label: "Industry", key: "industry" },
+                { label: "Location", key: "location" },
+                { label: "Contact", key: "contact" },
+                { label: "Email", key: "email" },
+                { label: "Phone", key: "phone" },
+              ].map((field) => (
+                <label key={field.key} className="block">
+                  <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{field.label}</span>
+                  <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => setClientDraft({ ...clientDraft, [field.key]: event.target.value })} />
+                </label>
+              ))}
+              <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</span>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.status} onChange={(event) => setClientDraft({ ...clientDraft, status: event.target.value as ClientStatus })}>
+                  {clientStatusOptions.map((option) => <option key={option}>{option}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Orders</span>
+                <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.orders} onChange={(event) => setClientDraft({ ...clientDraft, orders: Number(event.target.value) })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</span>
+                <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.notes} onChange={(event) => setClientDraft({ ...clientDraft, notes: event.target.value })} />
+              </label>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={saveClientDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">Save</button>
+              <button type="button" onClick={() => setClientDraft(null)} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

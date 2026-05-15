@@ -8,7 +8,7 @@ import { ChevronLeft } from "lucide-react";
 const sections = [
   { label: "Dashboard", href: "/" },
   { label: "CRM", href: "/crm" },
-  { label: "Production", href: "/production" },
+  { label: "Orders", href: "/orders" },
   { label: "Clients", href: "/clients" },
   { label: "Vendors", href: "/vendors" },
   { label: "Finances", href: "/finances" },

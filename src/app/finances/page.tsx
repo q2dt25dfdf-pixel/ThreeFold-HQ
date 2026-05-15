@@ -25,6 +25,19 @@ type Invoice = {
   notes: string;
 };
 
+type Order = {
+  id: string;
+  orderName: string;
+  client: string;
+  vendor: string;
+  items: string[];
+  quantity: number;
+  amount: string | number;
+  status: "Draft" | "In Production" | "Quality Control" | "Fulfilled";
+  estimatedDeliveryDate: string;
+  notes: string;
+};
+
 
 const emptyForm = { client: "", orderName: "", amount: 0, dueDate: "", status: "Draft" as Invoice["status"], notes: "" };
 
@@ -35,10 +48,10 @@ const statusColors: Record<Invoice["status"], string> = {
   Draft: "bg-slate-100 text-slate-700",
 };
 
-const statusPalette: Record<Invoice["status"], string> = {
-  Paid: "#10b981",
-  Due: "#f59e0b",
-  Overdue: "#f43f5e",
+const statusPalette: Record<Order["status"], string> = {
+  Fulfilled: "#10b981",
+  "In Production": "#3b82f6",
+  "Quality Control": "#f59e0b",
   Draft: "#64748b",
 };
 
@@ -66,13 +79,21 @@ function currencyInputNumber(value: string) {
   return digits ? Number(digits) / 100 : 0;
 }
 
-function invoiceMonthIndex(invoice: Invoice) {
-  const date = new Date(`${invoice.dueDate}T00:00:00`);
+function orderMonthIndex(order: Order) {
+  const date = new Date(`${order.estimatedDeliveryDate}T00:00:00`);
   return Number.isNaN(date.getTime()) ? -1 : date.getMonth();
+}
+
+function orderIsOverdue(order: Order) {
+  if (order.status === "Fulfilled" || !order.estimatedDeliveryDate) return false;
+  const deliveryDate = new Date(`${order.estimatedDeliveryDate}T00:00:00`);
+  if (Number.isNaN(deliveryDate.getTime())) return false;
+  return deliveryDate.getTime() < new Date().setHours(0, 0, 0, 0);
 }
 
 export default function FinancesPage() {
   const { data: invoices, upsertItem, deleteItem, loading } = useSupabaseTable<Invoice>("finances", []);
+  const { data: orders } = useSupabaseTable<Order>("orders", []);
   const [filter, setFilter] = useState<Invoice["status"] | "All">("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -84,43 +105,45 @@ export default function FinancesPage() {
     Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()),
   );
 
-  const totalPaid = invoices
-    .filter((i) => i.status === "Paid")
-    .reduce((sum, i) => sum + invoiceAmount(i.amount), 0);
+  const totalPaid = orders
+    .filter((order) => order.status === "Fulfilled")
+    .reduce((sum, order) => sum + invoiceAmount(order.amount), 0);
 
-  const totalDue = invoices
-    .filter((i) => i.status === "Due" || i.status === "Overdue")
-    .reduce((sum, i) => sum + invoiceAmount(i.amount), 0);
+  const totalDue = orders
+    .filter((order) => order.status === "In Production" || order.status === "Draft")
+    .reduce((sum, order) => sum + invoiceAmount(order.amount), 0);
 
   const monthlyRevenue = useMemo(() => {
     const monthlyTotals = monthLabels.map((month) => ({ month, collected: 0, outstanding: 0 }));
 
-    invoices.forEach((invoice) => {
-      const month = invoiceMonthIndex(invoice);
+    orders.forEach((order) => {
+      const month = orderMonthIndex(order);
       if (month < 0) return;
 
-      const amount = invoiceAmount(invoice.amount);
-      if (invoice.status === "Paid") {
+      const amount = invoiceAmount(order.amount);
+      if (order.status === "Fulfilled") {
         monthlyTotals[month].collected += amount;
         return;
       }
 
-      monthlyTotals[month].outstanding += amount;
+      if (order.status === "In Production" || order.status === "Draft") {
+        monthlyTotals[month].outstanding += amount;
+      }
     });
 
     return monthlyTotals;
-  }, [invoices]);
+  }, [orders]);
 
-  const overdueCount = invoices.filter((i) => i.status === "Overdue").length;
+  const overdueCount = orders.filter(orderIsOverdue).length;
   const goal = 50000;
   const goalPercent = Math.min(100, Math.round((totalPaid / goal) * 100));
   const projectedCompletion = totalPaid > 0
     ? new Date(projectionStart + Math.ceil((goal - totalPaid) / Math.max(totalPaid / 30, 1)) * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "Awaiting first paid invoice";
 
-  const statusData = (["Paid", "Due", "Overdue", "Draft"] as Invoice["status"][]).map((status) => ({
+  const statusData = (["Fulfilled", "In Production", "Quality Control", "Draft"] as Order["status"][]).map((status) => ({
     name: status,
-    value: invoices.filter((invoice) => invoice.status === status).length,
+    value: orders.filter((order) => order.status === status).length,
   }));
 
   const handleAdd = () => {
@@ -235,7 +258,7 @@ export default function FinancesPage() {
         {[
           { label: "Total revenue collected", value: currency.format(totalPaid), trend: "up" },
           { label: "Outstanding balance", value: currency.format(totalDue), trend: totalDue > 0 ? "down" : "up" },
-          { label: "Total invoices", value: invoices.length.toString(), trend: "up" },
+          { label: "Total invoices", value: orders.length.toString(), trend: "up" },
           { label: "Overdue count", value: overdueCount.toString(), trend: overdueCount > 0 ? "down" : "up" },
         ].map((card) => {
           const TrendIcon = card.trend === "up" ? TrendingUp : TrendingDown;
@@ -293,21 +316,21 @@ export default function FinancesPage() {
               <PieChart>
                 <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={74} outerRadius={104} paddingAngle={4} strokeWidth={0}>
                   {statusData.map((entry) => (
-                    <Cell key={entry.name} fill={statusPalette[entry.name as Invoice["status"]]} />
+                    <Cell key={entry.name} fill={statusPalette[entry.name as Order["status"]]} />
                   ))}
                 </Pie>
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <p className="text-base md:text-3xl font-bold text-slate-950">{invoices.length}</p>
+              <p className="text-base md:text-3xl font-bold text-slate-950">{orders.length}</p>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Invoices</p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {statusData.map((item) => (
               <div key={item.name} className="flex items-center gap-2 text-xs md:text-sm text-slate-600">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusPalette[item.name as Invoice["status"]] }} aria-hidden="true" />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusPalette[item.name as Order["status"]] }} aria-hidden="true" />
                 <span>{item.name}</span>
                 <span className="ml-auto font-semibold text-slate-950">{item.value}</span>
               </div>

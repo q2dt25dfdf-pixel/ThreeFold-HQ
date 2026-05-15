@@ -16,6 +16,11 @@ type Client = {
 };
 type ClientForm = Omit<Client, "id">;
 
+type Order = {
+  id: string;
+  client: string;
+};
+
 const defaultClients: Client[] = [
   {
     id: "client-1",
@@ -95,18 +100,22 @@ function Modal({ title, onSave, onClose, onDelete, children }: { title: string; 
 export default function ClientsPage() {
   const router = useRouter();
   const { data: clients, upsertItem, deleteItem, loading } = useSupabaseTable<Client>("clients", defaultClients);
+  const { data: orders } = useSupabaseTable<Order>("orders", []);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "orders">("all");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyForm);
+
+  const orderCountForClient = (clientName: string) =>
+    orders.filter((order) => order.client.trim().toLowerCase() === clientName.trim().toLowerCase()).length;
 
   const visible = clients
     .filter((client) =>
       Object.values(client).join(" ").toLowerCase().includes(query.toLowerCase()),
     )
     .filter((client) => activeFilter !== "active" || client.status === "Active")
-    .sort((a, b) => activeFilter === "orders" ? b.orders - a.orders : 0);
-  const totalOrders = clients.reduce((sum, client) => sum + client.orders, 0);
+    .sort((a, b) => activeFilter === "orders" ? orderCountForClient(b.name) - orderCountForClient(a.name) : 0);
+  const totalOrders = orders.length;
   const activeClients = clients.filter((client) => client.status === "Active").length;
 
   const handleAdd = () => {
@@ -190,7 +199,7 @@ export default function ClientsPage() {
               <div className="text-xs md:text-sm font-semibold text-slate-950">{client.name}</div>
               <div className="text-xs md:text-sm text-slate-600">{client.industry}</div>
               <div className="text-xs md:text-sm text-slate-600">{client.contact}</div>
-              <div className="text-xs md:text-sm text-slate-600">{client.orders}</div>
+              <div className="text-xs md:text-sm text-slate-600">{orderCountForClient(client.name)}</div>
               <div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${client.status === "Active" ? "bg-emerald-100 text-emerald-800" : client.status === "At Risk" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
                   {client.status}
