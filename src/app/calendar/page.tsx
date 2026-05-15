@@ -8,17 +8,6 @@ type Founder = "All" | "Alliyah" | "Hannah" | "Jordan";
 type Priority = "High" | "Medium" | "Low";
 type EventType = "Client Meeting" | "Demo" | "Video Call" | "Delivery" | "Deadline" | "Internal Meeting" | "Other";
 
-type Task = {
-  id: string;
-  title: string;
-  dueDate: string;
-  assignedTo: Founder;
-  priority: Priority;
-  time?: string;
-  notes?: string;
-  completed?: boolean;
-};
-
 type CalendarEvent = {
   id: string;
   title: string;
@@ -34,7 +23,6 @@ type CalendarView = "today" | "week" | "month";
 
 const eventTypes: EventType[] = ["Client Meeting", "Demo", "Video Call", "Delivery", "Deadline", "Internal Meeting", "Other"];
 
-const taskPillColor = "border-l-2 border-emerald-400 bg-emerald-100 text-emerald-700";
 const eventTypeColors: Record<EventType, string> = {
   "Client Meeting": "border-l-2 border-blue-400 bg-blue-100 text-blue-700",
   Demo: "border-l-2 border-indigo-400 bg-indigo-100 text-indigo-700",
@@ -52,17 +40,6 @@ const emptyEvent = {
   type: "Client Meeting" as EventType,
   notes: "",
 };
-const defaultTasks: Task[] = [
-  { id: "task-1", title: "Confirm print vendor for POPS order", dueDate: "2026-05-16", assignedTo: "Hannah", priority: "High", notes: "", completed: false },
-  { id: "task-2", title: "Finalize all 4 POPS 2026 shirt designs", dueDate: "2026-05-16", assignedTo: "Jordan", priority: "High", notes: "Highway Badge, Dotted Circle, Golden Gate, Classic White on Black.", completed: false },
-  { id: "task-3", title: "Reach out to neighboring DSPs at Bay Area hub", dueDate: "2026-05-18", assignedTo: "Alliyah", priority: "High", notes: "", completed: false },
-  { id: "task-4", title: "Get pricing quote from print vendor", dueDate: "2026-05-20", assignedTo: "Hannah", priority: "High", notes: "", completed: false },
-  { id: "task-5", title: "File California LLC after POPS test order", dueDate: "TBD", assignedTo: "Alliyah", priority: "Medium", notes: "$70 filing + $800 annual franchise tax.", completed: false },
-  { id: "task-6", title: "Open Bluevine business bank account", dueDate: "TBD", assignedTo: "Hannah", priority: "Medium", notes: "Equal contributions from all three founders.", completed: false },
-  { id: "task-7", title: "Draft operating agreement", dueDate: "TBD", assignedTo: "Alliyah", priority: "Medium", notes: "Must address unanimous vote on major decisions and Hannah/Jordan couple dynamic.", completed: false },
-  { id: "task-8", title: "Build Threefold website for client pitches", dueDate: "TBD", assignedTo: "Jordan", priority: "Medium", notes: "", completed: false },
-  { id: "task-9", title: "Reach out to dental offices in LumaDent territory", dueDate: "TBD", assignedTo: "Alliyah", priority: "Low", notes: "Use existing LumaDent relationships to pitch branded scrubs, polos, team gear.", completed: false },
-];
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hourSlots = Array.from({ length: 13 }, (_, index) => index + 8);
 
@@ -94,28 +71,6 @@ function PriorityDot({ priority }: { priority: Priority }) {
 
 function eventPriority(event: CalendarEvent): Priority {
   return event.priority ?? "Low";
-}
-
-function TaskPill({ task, prefix, onDelete }: { task: Task; prefix?: string; onDelete?: (id: string) => void }) {
-  return (
-    <div className={`flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${taskPillColor}`}>
-      <span className="min-w-0 truncate">{prefix}{task.title}</span>
-      <PriorityDot priority={task.priority} />
-      {onDelete && (
-        <button
-          type="button"
-          className="ml-auto shrink-0 rounded-full p-0.5 text-rose-600 hover:bg-rose-50"
-          aria-label={`Delete ${task.title}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete(task.id);
-          }}
-        >
-          <Trash2 className="h-3 w-3" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
 }
 
 function EventPill({ event, prefix, onDelete, onOpen }: { event: CalendarEvent; prefix?: string; onDelete?: (id: string) => void; onOpen?: (event: CalendarEvent) => void }) {
@@ -160,7 +115,6 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarView>("month");
-  const { data: tasks, deleteItem: deleteTask, loading: tasksLoading } = useSupabaseTable<Task>("tasks", defaultTasks);
   const { data: events, upsertItem, deleteItem, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", []);
   const [showAdd, setShowAdd] = useState(false);
   const [showTodayDetails, setShowTodayDetails] = useState(false);
@@ -199,12 +153,6 @@ export default function CalendarPage() {
     });
   }, [currentWeek]);
 
-  const tasksByDate = useMemo(() => {
-    return tasks.filter((task) => isValidDate(task.dueDate)).reduce<Record<string, Task[]>>((acc, task) => {
-      acc[task.dueDate] = [...(acc[task.dueDate] ?? []), task];
-      return acc;
-    }, {});
-  }, [tasks]);
 
   const eventsByDate = useMemo(() => {
     return events.filter((event) => isValidDate(event.date)).reduce<Record<string, CalendarEvent[]>>((acc, event) => {
@@ -269,10 +217,6 @@ export default function CalendarPage() {
     setShowAdd(false);
   };
 
-  const handleDeleteTask = (id: string) => {
-    if (!window.confirm("Delete this item?")) return;
-    deleteTask(id);
-  };
 
   const handleDeleteEvent = (id: string) => {
     if (!window.confirm("Delete this item?")) return;
@@ -302,7 +246,7 @@ export default function CalendarPage() {
     setEditingEvent(false);
   };
 
-  if (tasksLoading || eventsLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (eventsLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
@@ -370,14 +314,9 @@ export default function CalendarPage() {
               </div>
             ))}
             {calendarDays.map((day) => {
-              const dayTasks = tasksByDate[day.key] ?? [];
               const dayEvents = eventsByDate[day.key] ?? [];
-              const dayItems = [
-                ...dayEvents.map((event) => ({ id: event.id, type: "event" as const, item: event })),
-                ...dayTasks.map((task) => ({ id: task.id, type: "task" as const, item: task })),
-              ];
-              const visibleItems = dayItems.slice(0, 3);
-              const overflow = dayItems.length - visibleItems.length;
+              const visibleItems = dayEvents.slice(0, 3);
+              const overflow = dayEvents.length - visibleItems.length;
 
               return (
                 <div
@@ -391,13 +330,9 @@ export default function CalendarPage() {
                     {day.date.getDate()}
                   </div>
                   <div className="mt-1 min-w-0 space-y-1 md:mt-2">
-                    {visibleItems.map((item) =>
-                      item.type === "event" ? (
-                        <EventPill key={item.id} event={item.item} onDelete={handleDeleteEvent} onOpen={openEvent} />
-                      ) : (
-                        <TaskPill key={item.id} task={item.item} onDelete={handleDeleteTask} />
-                      ),
-                    )}
+                    {visibleItems.map((event) => (
+                      <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
+                    ))}
                     {overflow > 0 && (
                       <div className="overflow-hidden truncate rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                         +{overflow} more
@@ -428,14 +363,10 @@ export default function CalendarPage() {
             <div className="grid" style={{ gridTemplateColumns }}>
               <div className="w-16 shrink-0 border-b border-r border-slate-200 py-2 pr-2 text-right text-xs text-slate-400">All-day</div>
               {weekDates.map((day) => {
-                const allDayTasks = (tasksByDate[day.key] ?? []).filter((task) => !task.time);
                 const allDayEvents = (eventsByDate[day.key] ?? []).filter((event) => !event.time);
                 return (
                   <div key={day.key} className={`min-h-16 min-w-0 overflow-hidden border-b border-r border-slate-200 p-2 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
                     <div className="space-y-1">
-                      {allDayTasks.map((task) => (
-                        <TaskPill key={task.id} task={task} onDelete={handleDeleteTask} />
-                      ))}
                       {allDayEvents.map((event) => (
                         <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                       ))}
@@ -450,14 +381,10 @@ export default function CalendarPage() {
                   {hour > 12 ? hour - 12 : hour}{hour >= 12 ? "pm" : "am"}
                 </div>
                 {weekDates.map((day) => {
-                  const timedTasks = (tasksByDate[day.key] ?? []).filter((task) => task.time && Number(task.time.split(":")[0]) === hour);
                   const timedEvents = (eventsByDate[day.key] ?? []).filter((event) => event.time && Number(event.time.split(":")[0]) === hour);
                   return (
                     <div key={`${day.key}-${hour}`} className={`h-14 min-w-0 overflow-hidden border-b border-r border-slate-200 p-1.5 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
                       <div className="space-y-1">
-                        {timedTasks.map((task) => (
-                          <TaskPill key={task.id} task={task} prefix={`${task.time} `} onDelete={handleDeleteTask} />
-                        ))}
                         {timedEvents.map((event) => (
                           <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
                         ))}
@@ -495,14 +422,11 @@ export default function CalendarPage() {
               <div className="border-b border-r border-slate-200 py-3 pr-2 text-right text-xs text-slate-400">All-day</div>
               <div className="min-h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 md:p-3">
                 <div className="space-y-1">
-                  {(tasksByDate[todayKey] ?? []).map((task) => (
-                    <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} onDelete={handleDeleteTask} />
-                  ))}
                   {(eventsByDate[todayKey] ?? []).filter((event) => !event.time).map((event) => (
                     <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                   ))}
-                  {(tasksByDate[todayKey] ?? []).length === 0 && (eventsByDate[todayKey] ?? []).filter((event) => !event.time).length === 0 && (
-                    <p className="text-xs md:text-sm text-slate-500">No all-day tasks or events.</p>
+                  {(eventsByDate[todayKey] ?? []).filter((event) => !event.time).length === 0 && (
+                    <p className="text-xs md:text-sm text-slate-500">No all-day events.</p>
                   )}
                 </div>
               </div>
@@ -744,15 +668,6 @@ export default function CalendarPage() {
               </button>
             </div>
             <div className="mt-6 space-y-5">
-              <div>
-                <h3 className="text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tasks due today</h3>
-                <div className="mt-3 space-y-2">
-                  {(tasksByDate[todayKey] ?? []).map((task) => (
-                    <TaskPill key={task.id} task={task} prefix={task.time ? `${task.time} ` : undefined} onDelete={handleDeleteTask} />
-                  ))}
-                  {(tasksByDate[todayKey] ?? []).length === 0 && <p className="text-xs md:text-sm text-slate-500">No tasks due today.</p>}
-                </div>
-              </div>
               <div>
                 <h3 className="text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Events today</h3>
                 <div className="mt-3 space-y-2">

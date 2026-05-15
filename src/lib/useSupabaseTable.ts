@@ -3,79 +3,152 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
+type SupabaseRow<T> = {
+  id: string;
+  data: T | null;
+};
+
 export function useSupabaseTable<T extends { id: string }>(
   tableName: string,
   defaultData: T[],
 ) {
-  const storageKey = `threefold_${tableName}`;
-  const defaultDataRef = useRef(defaultData);
+  const mountedRef = useRef(false);
+  const reloadTimeoutRef = useRef<number | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const [subscriptionCycle, setSubscriptionCycle] = useState(0);
   const [data, setDataState] = useState<T[]>(defaultData);
-  const loading = false;
+  const [loading, setLoading] = useState(true);
 
-  defaultDataRef.current = defaultData;
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data: rows, error } = await supabase
+        .from(tableName)
+        .select("id,data")
+        .order("id", { ascending: false });
 
-  const saveData = useCallback(
-    (items: T[]) => {
-      localStorage.setItem(storageKey, JSON.stringify(items));
-      setDataState(items);
-    },
-    [storageKey],
-  );
+      if (error) {
+        console.error(`Failed to load Supabase table "${tableName}"`, error);
+        if (mountedRef.current) setDataState([]);
+        return;
+      }
+
+      const freshData = ((rows ?? []) as SupabaseRow<T>[])
+        .map((row) => row.data ?? ({ id: row.id } as T))
+        .filter((item): item is T => Boolean(item?.id));
+
+      if (mountedRef.current) setDataState(freshData);
+    } catch (error) {
+      console.error(`Failed to load Supabase table "${tableName}"`, error);
+      if (mountedRef.current) setDataState([]);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [tableName]);
+
+  const scheduleReload = useCallback(() => {
+    if (reloadTimeoutRef.current) window.clearTimeout(reloadTimeoutRef.current);
+    reloadTimeoutRef.current = window.setTimeout(() => {
+      void loadData();
+    }, 150);
+  }, [loadData]);
 
   useEffect(() => {
-    const stored = localStorage.getItem(storageKey);
+    mountedRef.current = true;
+    scheduleReload();
 
-    if (stored) {
-      try {
-        setDataState(JSON.parse(stored) as T[]);
-      } catch (error) {
-        console.error(`Failed to parse localStorage table "${tableName}"`, error);
-        saveData(defaultDataRef.current);
-      }
-    } else {
-      saveData(defaultDataRef.current);
-    }
-  }, [saveData, storageKey, tableName]);
+    const channelName = `live-${tableName}-${Math.random().toString(36).slice(2)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: tableName },
+        scheduleReload,
+      )
+      .subscribe((status) => {
+        if (!mountedRef.current) return;
 
-  const upsertItem = (item: T) => {
-    console.log(`Attempting upsert on table: ${tableName} with item:`, item);
-
-    setDataState((prev) => {
-      const exists = prev.some((current) => current.id === item.id);
-      const next = exists
-        ? prev.map((current) => (current.id === item.id ? item : current))
-        : [item, ...prev];
-
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      return next;
-    });
-
-    void (async () => {
-      try {
-        const { error } = await supabase.from(tableName).upsert({ id: item.id, data: item });
-        if (error) {
-          console.log("Supabase response error:", error);
+        if (status === "SUBSCRIBED") {
+          if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
           return;
         }
 
-        console.log("Upsert success, updating state");
-      } catch (error) {
-        console.log("Supabase response error:", error);
-      }
-    })();
-  };
+        if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+          scheduleReload();
+          if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            void loadData();
+            setSubscriptionCycle((current) => current + 1);
+          }, 1000);
+        }
+      });
 
-  const deleteItem = (id: string) => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") scheduleReload();
+    };
+
+    const handleOnline = () => scheduleReload();
+    const handleFocus = () => scheduleReload();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      mountedRef.current = false;
+      if (reloadTimeoutRef.current) window.clearTimeout(reloadTimeoutRef.current);
+      if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("focus", handleFocus);
+      void supabase.removeChannel(channel);
+    };
+  }, [loadData, scheduleReload, subscriptionCycle, tableName]);
+
+  const upsertItem = async (item: T) => {
     setDataState((prev) => {
-      const next = prev.filter((item) => item.id !== id);
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      return next;
+      const exists = prev.some((current) => current.id === item.id);
+      return exists
+        ? prev.map((current) => (current.id === item.id ? item : current))
+        : [item, ...prev];
     });
+
+    try {
+      const { error } = await supabase.from(tableName).upsert({ id: item.id, data: item });
+      if (error) throw error;
+      await loadData();
+    } catch (error) {
+      console.error(`Failed to upsert Supabase table "${tableName}"`, error);
+      await loadData();
+    }
   };
 
-  const setAll = (items: T[]) => {
-    saveData(items);
+  const deleteItem = async (id: string) => {
+    setDataState((prev) => prev.filter((item) => item.id !== id));
+
+    try {
+      const { error } = await supabase.from(tableName).delete().eq("id", id);
+      if (error) throw error;
+      await loadData();
+    } catch (error) {
+      console.error(`Failed to delete from Supabase table "${tableName}"`, error);
+      await loadData();
+    }
   };
 
-  return { data, upsertItem, deleteItem, setData: setAll, loading };
+  const setAll = async (items: T[]) => {
+    setDataState(items);
+
+    try {
+      const { error } = await supabase.from(tableName).upsert(items.map((item) => ({ id: item.id, data: item })));
+      if (error) throw error;
+      await loadData();
+    } catch (error) {
+      console.error(`Failed to replace Supabase table "${tableName}"`, error);
+      await loadData();
+    }
+  };
+
+  return { data, upsertItem, deleteItem, setData: setAll, loading, reload: loadData };
 }

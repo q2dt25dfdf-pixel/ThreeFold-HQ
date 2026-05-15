@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Package, Printer, Search, Trash2 } from "lucide-react";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Vendor = {
@@ -11,8 +12,12 @@ type Vendor = {
   type: string;
   turnaround: string;
   contact: string;
+  email: string;
+  phone: string;
+  address: string;
+  website: string;
   notes: string;
-  status: "Active" | "Review" | "Paused";
+  status: "Active" | "Review" | "Inactive";
   jobs: number;
 };
 
@@ -28,6 +33,10 @@ const defaultVendors: Vendor[] = [
     type: "Blank supplier",
     turnaround: "2–4 days",
     contact: "Online wholesale",
+    email: "",
+    phone: "",
+    address: "",
+    website: "",
     notes: "Primary blank supplier. Source heavyweight oversized tees and hoodies here. Wholesale pricing, wide SKU range.",
     status: "Active",
     jobs: 1,
@@ -38,13 +47,17 @@ const defaultVendors: Vendor[] = [
     type: "Screen print / DTG",
     turnaround: "5–7 days",
     contact: "TBD",
+    email: "",
+    phone: "",
+    address: "",
+    website: "",
     notes: "Sourcing a local Bay Area print shop for POPS first order. Need to confirm pricing, min quantities, and turnaround.",
     status: "Review",
     jobs: 0,
   },
 ];
 
-const emptyForm = { name: "", type: "", turnaround: "", contact: "", notes: "", status: "Review" as Vendor["status"], jobs: 0 };
+const emptyForm = { name: "", type: "", turnaround: "", contact: "", email: "", phone: "", address: "", website: "", notes: "", status: "Review" as Vendor["status"], jobs: 0 };
 export default function VendorsPage() {
   const router = useRouter();
   const { data: vendors, upsertItem, deleteItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
@@ -105,62 +118,132 @@ export default function VendorsPage() {
   };
 
   const renderFields = () => (
-    <div className="mt-6 space-y-4">
-      {[
-        { label: "Vendor name", key: "name", placeholder: "e.g. S&S Activewear" },
-        { label: "Type", key: "type", placeholder: "e.g. Blank supplier, Screen print, DTG" },
-        { label: "Turnaround time", key: "turnaround", placeholder: "e.g. 3–5 days" },
-        { label: "Contact", key: "contact", placeholder: "Name, email, or website" },
-      ].map(({ label, key, placeholder }) => (
-        <div key={key}>
-          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{label}</label>
-          {key === "type" ? (
-            <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
-              <option value="">Select type</option>
-              <option>Blank Supplier</option>
-              <option>Screen Print Shop</option>
-              <option>DTF Print Shop</option>
-              <option>DTG Print Shop</option>
-              <option>Embroidery Shop</option>
-              <option>Heat Press / Transfer</option>
-              <option>Fulfillment & Shipping</option>
-              <option>Packaging Supplier</option>
-              <option>Photography / Mockups</option>
-              <option>Other</option>
-            </select>
-          ) : (
-            <input
-              type="text"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-              placeholder={placeholder}
-              value={String(form[key as keyof typeof form] ?? "")}
-              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-            />
-          )}
-        </div>
-      ))}
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
-        <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm"
-          value={form.status}
-          onChange={(e) => setForm({ ...form, status: e.target.value as Vendor["status"] })}
-        >
-          <option>Active</option>
-          <option>Review</option>
-          <option>Paused</option>
-        </select>
+    <div className="space-y-6 px-6 py-6">
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Company Name
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="e.g. S&S Activewear"
+            value={form.name}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
+          />
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Contact Name
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="Name or primary contact"
+            value={form.contact}
+            onChange={(event) => setForm({ ...form, contact: event.target.value })}
+          />
+        </label>
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Email Address
+          <input
+            type="email"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.email}
+            onChange={(event) => setForm({ ...form, email: event.target.value })}
+          />
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Phone Number
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.phone}
+            onChange={(event) => setForm({ ...form, phone: event.target.value })}
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Vendor Type
+          <select
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.type}
+            onChange={(event) => setForm({ ...form, type: event.target.value })}
+          >
+            <option value="">Select type</option>
+            <option>Blank Supplier</option>
+            <option>Screen Print Shop</option>
+            <option>DTF Print Shop</option>
+            <option>DTG Print Shop</option>
+            <option>Embroidery Shop</option>
+            <option>Heat Press / Transfer</option>
+            <option>Fulfillment & Shipping</option>
+            <option>Packaging Supplier</option>
+            <option>Photography / Mockups</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Address
+          <AddressAutocomplete
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="Start typing an address..."
+            value={form.address}
+            onChange={(value) => setForm({ ...form, address: value })}
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Website
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="https://yourwebsite.com"
+            value={form.website}
+            onChange={(event) => setForm({ ...form, website: event.target.value })}
+          />
+        </label>
+        <label className="space-y-2 text-sm text-slate-700">
+          Turnaround Time
+          <input
+            type="text"
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            placeholder="e.g. 3-5 days"
+            value={form.turnaround}
+            onChange={(event) => setForm({ ...form, turnaround: event.target.value })}
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          Status
+          <select
+            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            value={form.status}
+            onChange={(event) => setForm({ ...form, status: event.target.value as Vendor["status"] })}
+          >
+            <option>Active</option>
+            <option>Review</option>
+            <option>Inactive</option>
+          </select>
+        </label>
+        <div />
+      </div>
+
+      <label className="block space-y-2 text-sm text-slate-700">
+        Notes
         <textarea
-          rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          rows={5}
+          className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
           placeholder="Pricing notes, minimums, quality feedback..."
           value={form.notes}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          onChange={(event) => setForm({ ...form, notes: event.target.value })}
         />
-      </div>
+      </label>
     </div>
   );
 
@@ -280,16 +363,36 @@ export default function VendorsPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
-            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add vendor</h2>
-            {renderFields()}
-            <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
-                Add vendor
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-900">Add vendor</h2>
+                <p className="text-sm text-slate-500">Keep vendor details ready for sourcing, production, and fulfillment.</p>
+              </div>
+              <button
+                type="button"
+                className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
+                onClick={() => { setShowModal(false); setForm(emptyForm); }}
+              >
+                Close
               </button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); }}>
+            </div>
+            {renderFields()}
+            <div className="flex flex-col gap-3 px-6 pb-6 pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => { setShowModal(false); setForm(emptyForm); }}
+              >
                 Cancel
+              </button>
+              <button
+                type="button"
+                className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={handleAdd}
+              >
+                Add vendor
               </button>
             </div>
           </div>
