@@ -29,54 +29,48 @@ const defaultClients: Client[] = [
 ];
 
 const emptyForm: ClientForm = { name: "", industry: "", contact: "", orders: 0, notes: "", status: "Active" };
-const industryOptions = [
-  "Amazon DSP",
-  "Dental Office",
-  "Medical Practice",
-  "Gym / Fitness Studio",
-  "Restaurant / Food & Beverage",
-  "Retail Store",
-  "Contractor / Trades",
-  "Corporate / Enterprise",
-  "Sports Team",
-  "Real Estate",
-  "Nonprofit",
-  "Other",
-];
-
-function FormFields({ data, onChange }: { data: ClientForm; onChange: (next: ClientForm) => void }) {
+function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: ClientForm) => void }) {
   return (
     <div className="space-y-4">
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Company name</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. POPS – Piranha Ops" value={data.name} onChange={(e) => onChange({ ...data, name: e.target.value })} />
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. POPS – Piranha Ops" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Industry</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={data.industry} onChange={(e) => onChange({ ...data, industry: e.target.value })}>
-          <option value="" disabled>Select industry</option>
-          {industryOptions.map((option) => (
-            <option key={option}>{option}</option>
-          ))}
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})}>
+          <option value="">Select industry</option>
+          <option>Amazon DSP</option>
+          <option>Dental Office</option>
+          <option>Medical Practice</option>
+          <option>Gym / Fitness Studio</option>
+          <option>Restaurant / Food & Beverage</option>
+          <option>Retail Store</option>
+          <option>Contractor / Trades</option>
+          <option>Corporate / Enterprise</option>
+          <option>Sports Team</option>
+          <option>Real Estate</option>
+          <option>Nonprofit</option>
+          <option>Other</option>
         </select>
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Primary contact</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. Ricky" value={data.contact} onChange={(e) => onChange({ ...data, contact: e.target.value })} />
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" placeholder="e.g. Ricky" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Orders</label>
-        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.orders} onChange={(e) => onChange({ ...data, orders: Number(e.target.value) })} />
+        <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={form.orders} onChange={(e) => setForm({ ...form, orders: Number(e.target.value) })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={data.status} onChange={(e) => onChange({ ...data, status: e.target.value as Client["status"] })}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Client["status"] })}>
           <option>Active</option><option>At Risk</option><option>Dormant</option><option>Lead</option>
         </select>
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       </div>
     </div>
   );
@@ -223,7 +217,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => setShowAdd(false)}><FormFields data={form} onChange={setForm} /></Modal>}
+      {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => setShowAdd(false)}><FormFields form={form} setForm={setForm} /></Modal>}
     </div>
   );
 }

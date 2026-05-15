@@ -238,6 +238,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
                 type="date"
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
                 value={followUpDate}
+                onClick={(event) => event.currentTarget.showPicker?.()}
                 onChange={(event) => setFollowUpDate(event.target.value)}
               />
             </label>

@@ -40,19 +40,6 @@ const defaultVendors: Vendor[] = [
 ];
 
 const emptyForm = { name: "", type: "", turnaround: "", contact: "", notes: "", status: "Review" as Vendor["status"], jobs: 0 };
-const vendorTypeOptions = [
-  "Blank Supplier",
-  "Screen Print Shop",
-  "DTF Print Shop",
-  "DTG Print Shop",
-  "Embroidery Shop",
-  "Heat Press / Transfer",
-  "Fulfillment & Shipping",
-  "Packaging Supplier",
-  "Photography / Mockups",
-  "Other",
-];
-
 export default function VendorsPage() {
   const router = useRouter();
   const { data: vendors, upsertItem, deleteItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
@@ -108,10 +95,7 @@ export default function VendorsPage() {
     deleteItem(id);
   };
 
-  const renderFields = (
-    data: typeof emptyForm | Vendor,
-    onChange: (next: typeof emptyForm | Vendor) => void,
-  ) => (
+  const renderFields = () => (
     <div className="mt-6 space-y-4">
       {[
         { label: "Vendor name", key: "name", placeholder: "e.g. S&S Activewear" },
@@ -122,23 +106,26 @@ export default function VendorsPage() {
         <div key={key}>
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
           {key === "type" ? (
-            <select
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-              value={String(data[key as keyof typeof data] ?? "")}
-              onChange={(e) => onChange({ ...data, [key]: e.target.value })}
-            >
-              <option value="" disabled>Select type</option>
-              {vendorTypeOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
+            <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
+              <option value="">Select type</option>
+              <option>Blank Supplier</option>
+              <option>Screen Print Shop</option>
+              <option>DTF Print Shop</option>
+              <option>DTG Print Shop</option>
+              <option>Embroidery Shop</option>
+              <option>Heat Press / Transfer</option>
+              <option>Fulfillment & Shipping</option>
+              <option>Packaging Supplier</option>
+              <option>Photography / Mockups</option>
+              <option>Other</option>
             </select>
           ) : (
             <input
               type="text"
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
               placeholder={placeholder}
-              value={String(data[key as keyof typeof data] ?? "")}
-              onChange={(e) => onChange({ ...data, [key]: e.target.value })}
+              value={String(form[key as keyof typeof form] ?? "")}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
             />
           )}
         </div>
@@ -147,8 +134,8 @@ export default function VendorsPage() {
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Status</label>
         <select
           className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900"
-          value={data.status}
-          onChange={(e) => onChange({ ...data, status: e.target.value as Vendor["status"] })}
+          value={form.status}
+          onChange={(e) => setForm({ ...form, status: e.target.value as Vendor["status"] })}
         >
           <option>Active</option>
           <option>Review</option>
@@ -161,8 +148,8 @@ export default function VendorsPage() {
           rows={3}
           className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
           placeholder="Pricing notes, minimums, quality feedback..."
-          value={data.notes}
-          onChange={(e) => onChange({ ...data, notes: e.target.value })}
+          value={form.notes}
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
       </div>
     </div>
@@ -287,7 +274,7 @@ export default function VendorsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl">
             <h2 className="text-2xl font-semibold text-slate-950">Add vendor</h2>
-            {renderFields(form, (next) => setForm(next as typeof emptyForm))}
+            {renderFields()}
             <div className="mt-6 flex gap-3">
               <button className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
                 Add vendor

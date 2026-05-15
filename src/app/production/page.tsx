@@ -161,7 +161,7 @@ function FormFields({ data, onChange }: { data: Job; onChange: (f: Job) => void 
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
           <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
-          <input type={key === "dueDate" ? "date" : "text"} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder={key === "dueDate" ? undefined : placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
+          <input type={key === "dueDate" ? "date" : "text"} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder={key === "dueDate" ? undefined : placeholder} value={data[key as keyof Pick<Job, "client" | "orderName" | "vendor" | "dueDate" | "quantity">]} onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined} onChange={(e) => onChange({ ...data, [key]: e.target.value })} />
         </div>
       ))}
       <div>

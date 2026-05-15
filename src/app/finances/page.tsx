@@ -150,6 +150,7 @@ export default function FinancesPage() {
             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
             placeholder={key === "dueDate" ? undefined : placeholder}
             value={String(data[key as keyof typeof data] ?? "")}
+            onClick={key === "dueDate" ? (e) => e.currentTarget.showPicker?.() : undefined}
             onChange={(e) => onChange({ ...data, [key]: e.target.value })}
           />
         </div>

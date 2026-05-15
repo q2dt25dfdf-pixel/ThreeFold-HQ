@@ -76,7 +76,7 @@ export default function TasksPage() {
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Due date</label>
-        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.dueDate} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
+        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-semibold text-slate-700">Assigned to</label>

@@ -127,7 +127,11 @@ export default function CRMPage() {
   );
 
   const leadsByStage = useMemo(
-    () => pipelineStages.map((stage) => visibleLeads.filter((lead) => lead.stage === stage)),
+    () =>
+      pipelineStages.map((stage) => ({
+        stage,
+        leads: visibleLeads.filter((lead) => lead.stage === stage),
+      })),
     [visibleLeads],
   );
 
@@ -158,21 +162,20 @@ export default function CRMPage() {
   const handleAddLead = (values: Omit<Lead, "id">) => {
     if (!values.company.trim()) return;
     const lead = { id: createId(), ...values };
-    const client: Client = {
+
+    upsertItem(lead);
+    upsertClient({
       id: `client-${lead.id}`,
       name: lead.company,
       company: lead.company,
-      industry: lead.companyProfile.industry,
       contact: lead.contact,
+      industry: lead.companyProfile.industry,
       email: lead.email,
       phone: lead.phone,
       orders: 0,
       notes: `Added from CRM. Initial inquiry: ${lead.notes}`,
       status: "Lead",
-    };
-
-    upsertItem(lead);
-    upsertClient(client);
+    });
 
     setShowAddModal(false);
     setToastMessage("Lead added to pipeline and client account created.");
@@ -242,9 +245,7 @@ export default function CRMPage() {
 
       <div className="-mx-6 overflow-x-auto bg-zinc-100 px-6 pb-6 lg:-mx-8 lg:px-8">
         <div className="flex min-w-max gap-6 bg-zinc-100">
-          {leadsByStage.map((stageLeads, stageIndex) => {
-            const stage = pipelineStages[stageIndex];
-
+          {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
             <div key={stage} className="w-[340px] flex-shrink-0 rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">

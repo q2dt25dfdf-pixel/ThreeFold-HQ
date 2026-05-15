@@ -315,7 +315,7 @@ export default function ClientDetailPage() {
             {showOrderForm && (
               <div className="mt-5 grid gap-3 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
                 <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Order name" value={orderForm.name} onChange={(event) => setOrderForm((current) => ({ ...current, name: event.target.value }))} />
-                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" value={orderForm.date} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
+                <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" value={orderForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderForm((current) => ({ ...current, date: event.target.value }))} />
                 <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Amount" value={orderForm.amount} onChange={(event) => setOrderForm((current) => ({ ...current, amount: event.target.value }))} />
                 <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" value={orderForm.status} onChange={(event) => setOrderForm((current) => ({ ...current, status: event.target.value as ClientOrder["status"] }))}>
                   <option>Draft</option>

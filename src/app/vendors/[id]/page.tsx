@@ -79,76 +79,12 @@ const vendorTypeOptions = [
   "Other",
 ];
 
-function InlineField({
-  label,
-  value,
-  onSave,
-  type = "text",
-  options,
-}: {
-  label: string;
-  value: string;
-  onSave: (value: string) => void;
-  type?: "text" | "select";
-  options?: string[];
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  const commit = () => {
-    onSave(draft);
-    setEditing(false);
-  };
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      {editing ? (
-        type === "select" && options ? (
-          <select
-            autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            className="mt-2 w-full bg-transparent text-sm font-semibold text-slate-950 outline-none"
-          >
-            {options.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-        ) : (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            onKeyDown={(event) => event.key === "Enter" && commit()}
-            className="mt-2 w-full bg-transparent text-sm font-semibold text-slate-950 outline-none"
-          />
-        )
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setDraft(value);
-            setEditing(true);
-          }}
-          className="mt-2 flex w-full items-center justify-between gap-3 text-left text-sm font-semibold text-slate-950 hover:text-slate-600"
-        >
-          <span>{value || "Add value"}</span>
-          <Edit2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function VendorDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const vendorId = params.id;
 
-  const { data: vendors, upsertItem: upsertVendor, deleteItem: deleteVendor, loading: vendorsLoading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: vendors, upsertItem, deleteItem, loading: vendorsLoading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
   const { data: jobs, upsertItem: upsertJob, loading: jobsLoading } = useSupabaseTable<VendorJob>("vendor_jobs", defaultVendorJobs);
   const [showJobForm, setShowJobForm] = useState(false);
   const [jobForm, setJobForm] = useState({
@@ -163,11 +99,6 @@ export default function VendorDetailPage() {
   const vendor = vendors.find((item) => item.id === vendorId);
   const vendorJobs = jobs.filter((job) => job.vendorId === vendorId);
 
-  const saveVendor = (fields: Partial<Vendor>) => {
-    if (!vendor) return;
-    upsertVendor({ ...vendor, ...fields });
-  };
-
   const openVendorEditor = () => {
     if (!vendor) return;
     setVendorDraft({ ...vendor });
@@ -176,13 +107,14 @@ export default function VendorDetailPage() {
 
   const saveVendorDraft = () => {
     if (!vendorDraft) return;
-    upsertVendor(vendorDraft);
+    upsertItem(vendorDraft);
     setEditingVendor(false);
+    setVendorDraft(null);
   };
 
   const handleDeleteVendor = () => {
     if (!vendor || !window.confirm("Delete this vendor?")) return;
-    deleteVendor(vendor.id);
+    deleteItem(vendor.id);
     router.push("/vendors");
   };
 
@@ -197,7 +129,7 @@ export default function VendorDetailPage() {
       status: jobForm.status,
     };
     upsertJob(nextJob);
-    if (vendor) upsertVendor({ ...vendor, jobs: vendorJobs.length + 1 });
+    if (vendor) upsertItem({ ...vendor, jobs: vendorJobs.length + 1 });
     setJobForm({ name: "", client: "", date: "", status: "Pending" });
     setShowJobForm(false);
   };
@@ -278,77 +210,29 @@ export default function VendorDetailPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Vendor details</h2>
-                <p className="mt-1 text-sm text-slate-500">Click a field to edit. Changes save on blur.</p>
+                <p className="mt-1 text-sm text-slate-500">Review vendor profile, contacts, and operational notes.</p>
               </div>
-              {editingVendor ? (
-                <div className="flex gap-2">
-                  <button type="button" onClick={saveVendorDraft} className="rounded-2xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
-                    Save
-                  </button>
-                  <button type="button" onClick={() => setEditingVendor(false)} className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button type="button" onClick={openVendorEditor} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                  <Edit2 className="h-4 w-4" aria-hidden="true" />
-                  Edit
-                </button>
-              )}
+              <button type="button" onClick={openVendorEditor} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <Edit2 className="h-4 w-4" aria-hidden="true" />
+                Edit
+              </button>
             </div>
-            {editingVendor && vendorDraft ? (
-              <div className="mt-5 space-y-3">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Name</span>
-                  <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.name} onChange={(event) => setVendorDraft({ ...vendorDraft, name: event.target.value })} />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Type</span>
-                  <select className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.type} onChange={(event) => setVendorDraft({ ...vendorDraft, type: event.target.value })}>
-                    {!vendorTypeOptions.includes(vendorDraft.type) && (
-                      <option>{vendorDraft.type}</option>
-                    )}
-                    {vendorTypeOptions.map((option) => (
-                      <option key={option}>{option}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Turnaround</span>
-                  <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.turnaround} onChange={(event) => setVendorDraft({ ...vendorDraft, turnaround: event.target.value })} />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Contact</span>
-                  <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.contact} onChange={(event) => setVendorDraft({ ...vendorDraft, contact: event.target.value })} />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status</span>
-                  <select className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.status} onChange={(event) => setVendorDraft({ ...vendorDraft, status: event.target.value as VendorStatus })}>
-                    <option>Active</option>
-                    <option>Review</option>
-                    <option>Paused</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Jobs</span>
-                  <input type="number" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Notes</span>
-                  <textarea rows={4} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none" value={vendorDraft.notes} onChange={(event) => setVendorDraft({ ...vendorDraft, notes: event.target.value })} />
-                </label>
-              </div>
-            ) : (
-              <div className="mt-5 space-y-3">
-                <InlineField label="Name" value={vendor.name} onSave={(value) => saveVendor({ name: value })} />
-                <InlineField label="Type" value={vendor.type} onSave={(value) => saveVendor({ type: value })} />
-                <InlineField label="Turnaround" value={vendor.turnaround} onSave={(value) => saveVendor({ turnaround: value })} />
-                <InlineField label="Contact" value={vendor.contact} onSave={(value) => saveVendor({ contact: value })} />
-                <InlineField label="Status" value={vendor.status} onSave={(value) => saveVendor({ status: value as VendorStatus })} type="select" options={["Active", "Review", "Paused"]} />
-                <InlineField label="Jobs" value={String(vendor.jobs)} onSave={(value) => saveVendor({ jobs: Number(value) })} />
-                <InlineField label="Notes" value={vendor.notes} onSave={(value) => saveVendor({ notes: value })} />
-              </div>
-            )}
+            <div className="mt-5 space-y-3">
+              {[
+                { label: "Name", value: vendor.name },
+                { label: "Type", value: vendor.type },
+                { label: "Turnaround", value: vendor.turnaround },
+                { label: "Contact", value: vendor.contact },
+                { label: "Status", value: vendor.status },
+                { label: "Jobs", value: String(vendor.jobs) },
+                { label: "Notes", value: vendor.notes },
+              ].map((field) => (
+                <div key={field.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{field.label}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-950">{field.value || "Not set"}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -367,7 +251,7 @@ export default function VendorDetailPage() {
               <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:grid-cols-2">
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Job name" value={jobForm.name} onChange={(event) => setJobForm((current) => ({ ...current, name: event.target.value }))} />
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Client" value={jobForm.client} onChange={(event) => setJobForm((current) => ({ ...current, client: event.target.value }))} />
-                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" value={jobForm.date} onChange={(event) => setJobForm((current) => ({ ...current, date: event.target.value }))} />
+                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" value={jobForm.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setJobForm((current) => ({ ...current, date: event.target.value }))} />
                 <select className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none" value={jobForm.status} onChange={(event) => setJobForm((current) => ({ ...current, status: event.target.value as VendorJob["status"] }))}>
                   <option>Pending</option>
                   <option>Approved</option>
@@ -395,14 +279,92 @@ export default function VendorDetailPage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-semibold">Notes</h2>
-          <textarea
-            value={vendor.notes}
-            onChange={(event) => saveVendor({ notes: event.target.value })}
-            rows={7}
-            className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700 outline-none focus:border-blue-300"
-          />
+          <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+            {vendor.notes || "No notes added yet."}
+          </p>
         </section>
       </div>
+
+      {editingVendor && vendorDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-8 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-950">Edit vendor</h2>
+                <p className="mt-1 text-sm text-slate-500">Update the vendor profile and save changes.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingVendor(false);
+                  setVendorDraft(null);
+                }}
+                className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Name</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.name} onChange={(event) => setVendorDraft({ ...vendorDraft, name: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Type</span>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.type} onChange={(event) => setVendorDraft({ ...vendorDraft, type: event.target.value })}>
+                  {!vendorTypeOptions.includes(vendorDraft.type) && (
+                    <option>{vendorDraft.type}</option>
+                  )}
+                  {vendorTypeOptions.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Turnaround</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.turnaround} onChange={(event) => setVendorDraft({ ...vendorDraft, turnaround: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Contact</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.contact} onChange={(event) => setVendorDraft({ ...vendorDraft, contact: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Status</span>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.status} onChange={(event) => setVendorDraft({ ...vendorDraft, status: event.target.value as VendorStatus })}>
+                  <option>Active</option>
+                  <option>Review</option>
+                  <option>Paused</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Jobs</span>
+                <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Notes</span>
+                <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={vendorDraft.notes} onChange={(event) => setVendorDraft({ ...vendorDraft, notes: event.target.value })} />
+              </label>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={saveVendorDraft} className="flex-1 rounded-3xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800">
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingVendor(false);
+                  setVendorDraft(null);
+                }}
+                className="flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

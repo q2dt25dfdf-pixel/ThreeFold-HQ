@@ -56,8 +56,6 @@ const defaultTasks: Task[] = [
   { id: "task-8", title: "Build Threefold website for client pitches", dueDate: "TBD", assignedTo: "Jordan", priority: "Medium", notes: "", completed: false },
   { id: "task-9", title: "Reach out to dental offices in LumaDent territory", dueDate: "TBD", assignedTo: "Alliyah", priority: "Low", notes: "Use existing LumaDent relationships to pitch branded scrubs, polos, team gear.", completed: false },
 ];
-const defaultEvents: CalendarEvent[] = [];
-
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hourSlots = Array.from({ length: 13 }, (_, index) => index + 8);
 
@@ -156,7 +154,7 @@ export default function CalendarPage() {
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarView>("month");
   const { data: tasks, deleteItem: deleteTask, loading: tasksLoading } = useSupabaseTable<Task>("tasks", defaultTasks);
-  const { data: events, upsertItem: upsertEvent, deleteItem: deleteEvent, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", defaultEvents);
+  const { data: events, upsertItem, deleteItem, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", []);
   const [showAdd, setShowAdd] = useState(false);
   const [showTodayDetails, setShowTodayDetails] = useState(false);
   const [form, setForm] = useState(emptyEvent);
@@ -259,7 +257,7 @@ export default function CalendarPage() {
   const handleAddEvent = () => {
     if (!form.title.trim() || !form.date) return;
     const newEvent = { id: `event-${Date.now()}`, ...form };
-    upsertEvent(newEvent);
+    upsertItem(newEvent);
     setForm(emptyEvent);
     setShowAdd(false);
   };
@@ -271,7 +269,7 @@ export default function CalendarPage() {
 
   const handleDeleteEvent = (id: string) => {
     if (!window.confirm("Delete this item?")) return;
-    deleteEvent(id);
+    deleteItem(id);
     setSelectedEvent(null);
     setEventDraft(null);
     setEditingEvent(false);
@@ -292,7 +290,7 @@ export default function CalendarPage() {
 
   const handleSaveEvent = () => {
     if (!eventDraft || !eventDraft.title.trim() || !eventDraft.date) return;
-    upsertEvent(eventDraft);
+    upsertItem(eventDraft);
     setSelectedEvent(eventDraft);
     setEditingEvent(false);
   };
@@ -584,7 +582,7 @@ export default function CalendarPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">Date</label>
-                <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
+                <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setForm({ ...form, date: event.target.value })} />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">Time</label>
@@ -658,7 +656,7 @@ export default function CalendarPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-slate-700">Date</label>
-                    <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={eventDraft.date} onChange={(event) => setEventDraft({ ...eventDraft, date: event.target.value })} />
+                    <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none" value={eventDraft.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setEventDraft({ ...eventDraft, date: event.target.value })} />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-slate-700">Time</label>
