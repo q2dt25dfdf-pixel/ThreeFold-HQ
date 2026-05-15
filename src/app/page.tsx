@@ -363,15 +363,15 @@ export default function Home() {
   return (
     <main className="min-h-screen text-xs text-[#0f172a] md:text-sm">
       <div className="space-y-6 text-xs md:text-sm">
-        <section className="overflow-hidden rounded-[8px] bg-[#0f172a] text-white">
-          <div className="grid min-h-[260px] gap-6 p-2 md:p-3 md:gap-8 md:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
+        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[8px]">
+          <div className="grid min-h-[200px] gap-6 p-4 pt-24 md:min-h-[260px] md:gap-8 md:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
             <div className="flex flex-col justify-between gap-10">
               <div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1]">
                   <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <p className="mt-8 text-xs md:text-sm font-medium text-[#e2e8f0]">Operations dashboard</p>
-                <h1 className="mt-3 text-base md:text-xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
+                <h1 className="mt-3 text-2xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
                 <p className="mt-4 max-w-xl text-xs md:text-sm leading-6 text-[#e2e8f0]">
                   A premium command center for revenue, client work, production progress, and founder execution.
                 </p>
