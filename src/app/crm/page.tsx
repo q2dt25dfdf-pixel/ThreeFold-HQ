@@ -257,7 +257,7 @@ export default function CRMPage() {
   return (
     <div className="min-h-screen min-w-0 space-y-10 text-xs md:text-sm">
       <ErrorBanner message={error} />
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:overflow-x-visible">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
           <h1 className="text-2xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
@@ -310,7 +310,7 @@ export default function CRMPage() {
       </div>
 
       <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8 lg:pb-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:gap-4 lg:items-start">
+        <div className="flex flex-col gap-4 lg:flex-row lg:gap-4 lg:items-start lg:pr-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
             <div key={stage} className="w-full lg:w-[280px] lg:flex-none rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4">
