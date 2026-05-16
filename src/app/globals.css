@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* Prevent white flash before Tailwind CSS loads */
+html,
+body {
+  background-color: #f4f4f5; /* zinc-100 */
+}
+
+/* Smooth page content fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.18s ease-out both;
+}
+
 button,
 a,
 input,

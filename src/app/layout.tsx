@@ -22,11 +22,14 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" style={{ backgroundColor: "#f4f4f5" }}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=0.8, maximum-scale=1" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} bg-zinc-100 antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} bg-zinc-100 antialiased`}
+        style={{ backgroundColor: "#f4f4f5" }}
+      >
         <AppShell>{children}</AppShell>
       </body>
     </html>

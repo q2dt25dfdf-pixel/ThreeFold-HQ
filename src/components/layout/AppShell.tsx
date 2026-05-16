@@ -48,16 +48,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <div className="min-h-dvh bg-zinc-100">{children}</div>;
   }
 
-  if (checkingSession) {
-    return (
-      <div className="min-h-dvh bg-zinc-100 p-4 sm:p-6 lg:p-8">
-        <LoadingState />
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-dvh bg-zinc-100">
+      {/* Desktop sidebar — always rendered so layout never jumps */}
       <div className={`hidden shrink-0 transition-[width] duration-300 ease-in-out lg:block ${desktopSidebarCollapsed ? "w-0" : "w-[280px]"}`}>
         <Sidebar
           className={`flex h-screen transition-transform duration-300 ease-in-out ${desktopSidebarCollapsed ? "-translate-x-full" : "translate-x-0"}`}
@@ -100,7 +93,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <main className="flex-1 bg-zinc-100 px-4 pb-8 pt-20 sm:px-6 lg:px-8 lg:py-8">
-        {children}
+        {checkingSession ? (
+          <LoadingState />
+        ) : (
+          <div className="fade-in">{children}</div>
+        )}
       </main>
     </div>
   );
