@@ -132,8 +132,11 @@ export function useSupabaseTable<T extends { id: string }>(
       const response = await supabase.from(tableName).upsert({ id: item.id, data: item });
       if (response.error) {
         console.error(`Failed to upsert Supabase table "${tableName}"`, response.error);
+        const isTableMissing = (response.error as { code?: string }).code === "42P01";
         await loadData();
-        if (mountedRef.current) setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
+        if (!isTableMissing && mountedRef.current) {
+          setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
+        }
         return response;
       }
 
@@ -142,8 +145,11 @@ export function useSupabaseTable<T extends { id: string }>(
       return response;
     } catch (error) {
       console.error(`Failed to upsert Supabase table "${tableName}"`, error);
+      const isTableMissing = (error as { code?: string })?.code === "42P01";
       await loadData();
-      if (mountedRef.current) setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
+      if (!isTableMissing && mountedRef.current) {
+        setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
+      }
       return { data: null, error, count: null, status: 0, statusText: "Client exception" } as MutationResponse;
     }
   };

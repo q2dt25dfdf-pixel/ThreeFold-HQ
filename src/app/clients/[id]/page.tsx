@@ -85,7 +85,7 @@ export default function ClientDetailPage() {
 
   const { data: clients, upsertItem: upsertClient, loading: clientsLoading, error: clientsError } = useSupabaseTable<Client>("clients", defaultClients);
   const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<Order>("orders", []);
-  const { data: activity, upsertItem: upsertActivity, loading: activityLoading, error: activityError } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
+  const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
   const [editingHeader, setEditingHeader] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [clientDraft, setClientDraft] = useState<Client | null>(null);
@@ -134,7 +134,7 @@ export default function ClientDetailPage() {
     await contactSave.runSave(() => upsertClient(client));
   };
 
-  const addActivity = () => {
+  const addActivity = async () => {
     if (!activityForm.notes.trim()) {
       setActivityErrorText("Activity notes are required.");
       return;
@@ -148,8 +148,19 @@ export default function ClientDetailPage() {
       notes: activityForm.notes.trim(),
       date: new Date().toISOString().split("T")[0],
     };
-    upsertActivity(entry);
-    setActivityForm((current) => ({ ...current, notes: "" }));
+    try {
+      const response = await upsertActivity(entry);
+      if (response?.error) {
+        const isTableMissing = (response.error as { code?: string })?.code === "42P01";
+        if (!isTableMissing) {
+          setActivityErrorText("Couldn't save activity. Please try again.");
+          return;
+        }
+      }
+      setActivityForm((current) => ({ ...current, notes: "" }));
+    } catch {
+      setActivityErrorText("Couldn't save activity. Please try again.");
+    }
   };
 
   if (clientsLoading || ordersLoading) return <LoadingState label="Loading client..." />;
@@ -312,11 +323,8 @@ export default function ClientDetailPage() {
 
           <div className="mt-5 space-y-3">
             {activityLoading && <p className="text-xs md:text-sm text-slate-400">Loading activity…</p>}
-            {!activityLoading && activityError && (
-              <p className="text-xs md:text-sm text-rose-500">{activityError}</p>
-            )}
-            {!activityLoading && !activityError && clientActivity.length === 0 && (
-              <p className="text-xs md:text-sm text-slate-500">No activity yet</p>
+            {!activityLoading && clientActivity.length === 0 && (
+              <p className="py-4 text-center text-xs md:text-sm text-slate-400">No activity yet.</p>
             )}
             {!activityLoading && clientActivity.map((entry) => (
               <div key={entry.id} className="rounded-2xl border border-slate-200 p-3 md:p-4">
