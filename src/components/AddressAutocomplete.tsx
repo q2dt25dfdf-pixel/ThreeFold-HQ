@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type NominatimResult = {
   place_id: number;
@@ -19,6 +19,7 @@ type AddressAutocompleteProps = {
 export default function AddressAutocomplete({ value, onChange, className = "", placeholder, onBlur, autoFocus = false }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [focused, setFocused] = useState(false);
+  const touchOnSuggestion = useRef(false);
 
   useEffect(() => {
     const query = value.trim();
@@ -59,22 +60,31 @@ export default function AddressAutocomplete({ value, onChange, className = "", p
         value={value}
         onFocus={() => setFocused(true)}
         onBlur={() => {
-          window.setTimeout(() => setFocused(false), 120);
-          onBlur?.();
+          window.setTimeout(() => {
+            if (!touchOnSuggestion.current) setFocused(false);
+            onBlur?.();
+          }, 200);
         }}
         onChange={(event) => onChange(event.target.value)}
       />
       {showSuggestions && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
           {suggestions.map((suggestion) => (
             <button
               key={suggestion.place_id}
               type="button"
               className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
               onMouseDown={(event) => {
-                event.preventDefault();
+                event.preventDefault(); // desktop: prevents input from losing focus
+              }}
+              onTouchStart={() => { touchOnSuggestion.current = true; }}
+              onTouchEnd={() => { touchOnSuggestion.current = false; }}
+              onTouchCancel={() => { touchOnSuggestion.current = false; }}
+              onClick={() => {
                 onChange(suggestion.display_name);
+                setSuggestions([]);
                 setFocused(false);
+                touchOnSuggestion.current = false;
               }}
             >
               {suggestion.display_name}

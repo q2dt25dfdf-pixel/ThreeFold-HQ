@@ -32,7 +32,7 @@ const industryOptions = [
 
 const defaultProfile: CompanyProfile = {
   industry: industryOptions[0],
-  address: "San Francisco, CA",
+  address: "",
   website: "",
 };
 

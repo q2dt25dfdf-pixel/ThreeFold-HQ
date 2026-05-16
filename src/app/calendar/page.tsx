@@ -546,7 +546,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Event type legend — scrollable on mobile */}
-      <div className="flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+      <div className="flex flex-wrap gap-2">
         {[
           { label: "Client Meeting", className: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
           { label: "Demo", className: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-500" },

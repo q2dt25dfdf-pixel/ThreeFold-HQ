@@ -147,7 +147,7 @@ export default function VendorDetailPage() {
   }
 
   return (
-    <main className="min-h-screen text-xs text-slate-950 md:text-sm">
+    <main className="min-h-screen overflow-x-hidden text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
       <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-6 md:py-8 text-white">
         <button type="button" onClick={() => router.push("/vendors")} className="mb-6 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
@@ -267,7 +267,7 @@ export default function VendorDetailPage() {
               <h2 className="text-base md:text-lg font-semibold">Notes</h2>
               <p className="mt-1 text-xs md:text-sm text-slate-500">Vendor notes save as you type.</p>
             </div>
-            <SaveButton state={notesSave.saveState} onClick={handleSaveVendorNotes} className="w-72" />
+            <SaveButton state={notesSave.saveState} onClick={handleSaveVendorNotes} className="w-auto" />
           </div>
           <textarea
             rows={7}
