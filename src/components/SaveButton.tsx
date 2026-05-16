@@ -35,8 +35,9 @@ export function useSaveState() {
         return false;
       }
 
-      setSaveState("success");
-      return true;
+     setSaveState("success");
+setTimeout(() => setSaveState("default"), 2500);
+return true;
     } catch (error) {
       console.error("Save failed", error);
       setSaveState("error");
