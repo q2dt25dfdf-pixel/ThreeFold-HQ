@@ -1,9 +1,9 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
+import ModalShell from "@/components/ModalShell";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
@@ -48,7 +48,7 @@ const defaultClients: Client[] = [
 const emptyForm: ClientForm = { name: "", industry: "", contact: "", email: "", phone: "", address: "", website: "", orders: 0, notes: "", status: "Active" };
 function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: ClientForm) => void }) {
   return (
-    <div className="space-y-6 px-6 py-6">
+    <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
         <label className="space-y-2 text-sm text-slate-700">
           Company Name
@@ -168,37 +168,21 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
 }
 
 function Modal({ title, onSave, onClose, onDelete, saveState, mode = "edit", children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; mode?: "add" | "edit"; children: ReactNode }) {
-  useScrollLock();
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm sm:px-6">
-      <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-            <p className="text-sm text-slate-500">Keep client account details ready for orders, follow-ups, and reporting.</p>
-          </div>
-          <button
-            type="button"
-            className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
-        {children}
-        <div className="flex flex-col gap-3 px-6 pb-6 pt-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <SaveButton state={saveState} onClick={onSave} mode={mode} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
-        </div>
-        {onDelete && <button className="mx-6 mb-6 w-[calc(100%-3rem)] rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
+  const footer = (
+    <div className="space-y-3">
+      <div className="flex gap-3">
+        <SaveButton state={saveState} onClick={onSave} mode={mode} className="flex-1 py-3" />
+        <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancel</button>
       </div>
+      {onDelete && (
+        <button type="button" className="w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>
+      )}
     </div>
+  );
+  return (
+    <ModalShell title={title} subtitle="Keep client account details ready for orders, follow-ups, and reporting." onClose={onClose} maxWidth="max-w-3xl" footer={footer}>
+      {children}
+    </ModalShell>
   );
 }
 

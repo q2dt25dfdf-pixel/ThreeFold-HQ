@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
+import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import type { Lead, PipelineStage, CommunicationEntry } from "./types";
 import { pipelineStages } from "./types";
@@ -124,24 +124,6 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
-  const scrollYRef = useRef(0);
-  useEffect(() => {
-    if (!open) return;
-    const scrollY = window.scrollY;
-    scrollYRef.current = scrollY;
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      window.scrollTo(0, scrollYRef.current);
-    };
-  }, [open]);
-
   if (!open || !lead) return null;
 
   // Use live lead data, patch locally via onSave
@@ -193,158 +175,140 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
     Other: "bg-slate-100 text-slate-700",
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="modal-enter h-auto max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2.5rem] bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+  const footer = (
+    <div className="flex items-center justify-between gap-3">
+      <button
+        type="button"
+        onClick={handleDelete}
+        className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
       >
-        <div className="flex flex-col gap-8 px-5 py-6 sm:px-10 sm:py-10">
-
-          {/* Header */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-600">Lead details</p>
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{current.company}</h2>
-              <p className="text-sm text-slate-600">{current.contact} · {current.email} · {current.phone}</p>
-            </div>
-            <button
-              type="button"
-              aria-label="Close"
-              onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Snapshot + Company Profile */}
-          <div className="border-t border-slate-300/60 pt-6 grid gap-6 sm:grid-cols-2">
-            <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Snapshot — click any field to edit</p>
-              <div className="space-y-3">
-                <InlineField label="Estimated value" value={formatLeadValue(current.value)} onSave={(v) => patch({ value: parseLeadValue(v) })} />
-                <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
-                <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
-                <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
-                <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} type="select" options={OWNERS} />
-              </div>
-            </div>
-
-            <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Company profile</p>
-              <div className="space-y-3">
-                <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} />
-                <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
-                <InlineField label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
-              </div>
-            </div>
-          </div>
-
-          {/* Activity Log + Notes */}
-          <div className="border-t border-slate-300/60 pt-6 grid gap-6 sm:grid-cols-2">
-
-            {/* Activity Log */}
-            <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-              <h3 className="font-semibold text-slate-950 mb-4">Activity log</h3>
-
-              {/* Add entry form */}
-              <div className="rounded-2xl bg-white border border-slate-300/50 p-4 mb-4 space-y-3">
-                <div className="flex gap-2">
-                  <select
-                    className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
-                    value={logType}
-                    onChange={(e) => setLogType(e.target.value as CommunicationEntry["type"])}
-                  >
-                    {CONTACT_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                  <select
-                    className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
-                    value={logOwner}
-                    onChange={(e) => setLogOwner(e.target.value)}
-                  >
-                    {OWNERS.map((o) => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-                <textarea
-                  rows={2}
-                  className="w-full resize-none rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
-                  placeholder="What happened? Add notes..."
-                  value={logNote}
-                  onChange={(e) => {
-                    setLogNote(e.target.value);
-                    if (logError) setLogError("");
-                  }}
-                />
-                <FieldError message={logError} />
-                <button
-                  type="button"
-                  onClick={addActivityEntry}
-                  disabled={!logNote.trim()}
-                  className="min-h-11 w-full rounded-xl bg-slate-950 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-                >
-                  Log activity · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </button>
-              </div>
-
-              {/* History */}
-              <div className="space-y-3">
-                {current.communicationHistory.length === 0 && (
-                  <p className="text-xs text-slate-600 text-center py-4">No activity logged yet.</p>
-                )}
-                {current.communicationHistory.map((entry) => (
-                  <div key={entry.id} className="rounded-2xl bg-white border border-slate-300/50 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${typeColors[entry.type]}`}>
-                        {entry.type}
-                      </span>
-                      <span className="text-xs text-slate-600">{entry.date} · {entry.owner}</span>
-                    </div>
-                    <p className="mt-2 text-sm text-slate-700">{entry.summary}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-              <label className="block font-semibold text-slate-950 mb-4">Notes</label>
-              <textarea
-                rows={8}
-                className="w-full resize-none rounded-2xl border border-slate-300/50 bg-white p-4 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
-                value={current.notes}
-                placeholder="Add notes about this lead..."
-                onChange={(e) => patch({ notes: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-slate-300/60 pt-6">
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 md:min-h-0"
-            >
-              Delete
-            </button>
-            <div className="flex items-center gap-3">
-              <SaveButton state={saveState} onClick={handleSaveChanges} className="w-72 rounded-2xl py-2 text-sm md:min-h-0" />
-              <button
-                type="button"
-                onClick={onClose}
-                className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100 md:min-h-0"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-
-        </div>
+        Delete
+      </button>
+      <div className="flex items-center gap-3">
+        <SaveButton state={saveState} onClick={handleSaveChanges} className="rounded-2xl py-2 text-sm" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100"
+        >
+          Close
+        </button>
       </div>
     </div>
+  );
+
+  return (
+    <ModalShell
+      title={current.company}
+      subtitle={[current.contact, current.email, current.phone].filter(Boolean).join(" · ")}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      footer={footer}
+    >
+      <div className="flex flex-col gap-8">
+
+        {/* Snapshot + Company Profile */}
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Snapshot — click any field to edit</p>
+            <div className="space-y-3">
+              <InlineField label="Estimated value" value={formatLeadValue(current.value)} onSave={(v) => patch({ value: parseLeadValue(v) })} />
+              <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
+              <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
+              <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
+              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} type="select" options={OWNERS} />
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Company profile</p>
+            <div className="space-y-3">
+              <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} />
+              <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
+              <InlineField label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
+            </div>
+          </div>
+        </div>
+
+        {/* Activity Log + Notes */}
+        <div className="grid gap-6 sm:grid-cols-2">
+
+          {/* Activity Log */}
+          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
+            <h3 className="font-semibold text-slate-950 mb-4">Activity log</h3>
+
+            {/* Add entry form */}
+            <div className="rounded-2xl bg-white border border-slate-300/50 p-4 mb-4 space-y-3">
+              <div className="flex gap-2">
+                <select
+                  className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
+                  value={logType}
+                  onChange={(e) => setLogType(e.target.value as CommunicationEntry["type"])}
+                >
+                  {CONTACT_TYPES.map((t) => <option key={t}>{t}</option>)}
+                </select>
+                <select
+                  className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
+                  value={logOwner}
+                  onChange={(e) => setLogOwner(e.target.value)}
+                >
+                  {OWNERS.map((o) => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <textarea
+                rows={2}
+                className="w-full resize-none rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
+                placeholder="What happened? Add notes..."
+                value={logNote}
+                onChange={(e) => {
+                  setLogNote(e.target.value);
+                  if (logError) setLogError("");
+                }}
+              />
+              <FieldError message={logError} />
+              <button
+                type="button"
+                onClick={addActivityEntry}
+                disabled={!logNote.trim()}
+                className="min-h-11 w-full rounded-xl bg-slate-950 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+              >
+                Log activity · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </button>
+            </div>
+
+            {/* History */}
+            <div className="space-y-3">
+              {current.communicationHistory.length === 0 && (
+                <p className="text-xs text-slate-600 text-center py-4">No activity logged yet.</p>
+              )}
+              {current.communicationHistory.map((entry) => (
+                <div key={entry.id} className="rounded-2xl bg-white border border-slate-300/50 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${typeColors[entry.type]}`}>
+                      {entry.type}
+                    </span>
+                    <span className="text-xs text-slate-600">{entry.date} · {entry.owner}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700">{entry.summary}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
+            <label className="block font-semibold text-slate-950 mb-4">Notes</label>
+            <textarea
+              rows={8}
+              className="w-full resize-none rounded-2xl border border-slate-300/50 bg-white p-4 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
+              value={current.notes}
+              placeholder="Add notes about this lead..."
+              onChange={(e) => patch({ notes: e.target.value })}
+            />
+          </div>
+        </div>
+
+      </div>
+    </ModalShell>
   );
 }

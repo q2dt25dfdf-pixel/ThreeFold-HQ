@@ -123,12 +123,29 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
     }, onClose);
   };
 
+  const footer = (
+    <div className="space-y-3">
+      <FieldError message={formError} />
+      <div className="flex gap-3">
+        <SaveButton state={saveState} onClick={handleSave} mode="add" className="flex-1 py-3" />
+        <button
+          type="button"
+          className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
+          onClick={onClose}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <ModalShell
       title="Add order"
       subtitle="Create one shared order record for production, vendors, and finances."
       onClose={onClose}
       maxWidth="max-w-2xl"
+      footer={footer}
     >
         <div className="space-y-4">
           <div>
@@ -256,19 +273,6 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
               onChange={(event) => setNotes(event.target.value)}
             />
           </div>
-        </div>
-
-        <FieldError message={formError} />
-
-        <div className="mt-6 flex gap-3">
-          <SaveButton state={saveState} onClick={handleSave} mode="add" className="flex-1 py-3" />
-          <button
-            type="button"
-            className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
         </div>
     </ModalShell>
   );

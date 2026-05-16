@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -280,23 +281,6 @@ export default function CalendarPage() {
   const eventSave = useSaveState();
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
-
-  const isModalOpen = showAdd || !!(selectedEvent && eventDraft) || showTodayDetails;
-  useEffect(() => {
-    if (!isModalOpen) return;
-    const scrollY = window.scrollY;
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      window.scrollTo(0, scrollY);
-    };
-  }, [isModalOpen]);
 
   const monthLabel = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const todayKey = formatDate(today);
@@ -852,266 +836,156 @@ export default function CalendarPage() {
 
       {/* Add event modal */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm">
-          <div className="modal-enter max-h-[90vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
-            <h2 className="text-base font-semibold text-slate-950 md:text-2xl">Add event</h2>
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Title</label>
-                <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date</label>
-                <input
-                  type="date"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                  value={form.date}
-                  onClick={(e) => e.currentTarget.showPicker?.()}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Time</label>
-                <input
-                  type="time"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                  value={form.time}
-                  onChange={(e) => setForm({ ...form, time: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Assigned to</label>
-                <AssigneeSelector value={form.assignedTo} onChange={(v) => setForm({ ...form, assignedTo: v })} />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Type</label>
-                <select
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm"
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value as EventType })}
-                >
-                  {eventTypes.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
-                <textarea
-                  rows={3}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
+        <ModalShell
+          title="Add event"
+          onClose={() => { setShowAdd(false); setFormError(""); }}
+          maxWidth="max-w-md"
+          footer={
+            <div className="space-y-2">
+              <FieldError message={formError} />
+              <div className="flex gap-3">
+                <SaveButton state={addSave.saveState} onClick={handleAddEvent} mode="add" className="flex-1 py-3" />
+                <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm" type="button" onClick={() => { setShowAdd(false); setFormError(""); }}>Cancel</button>
               </div>
             </div>
-            <FieldError message={formError} />
-            <div className="mt-6 flex gap-3">
-              <SaveButton state={addSave.saveState} onClick={handleAddEvent} mode="add" className="flex-1 py-3" />
-              <button
-                className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
-                type="button"
-                onClick={() => { setShowAdd(false); setFormError(""); }}
-              >
-                Cancel
-              </button>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Title</label>
+              <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date</label>
+              <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.date} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Time</label>
+              <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Assigned to</label>
+              <AssigneeSelector value={form.assignedTo} onChange={(v) => setForm({ ...form, assignedTo: v })} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Type</label>
+              <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as EventType })}>
+                {eventTypes.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
+              <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* Event detail / edit modal */}
       {selectedEvent && eventDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm">
-          <div className="modal-enter max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold text-slate-950 md:text-2xl">
-                  {editingEvent ? "Edit event" : selectedEvent.title}
-                </h2>
-                {!editingEvent && (
-                  <p className="mt-1 text-xs text-slate-500 md:text-sm">
-                    {selectedEvent.date}{selectedEvent.time ? ` at ${selectedEvent.time}` : ""} · {formatAssignedTo(selectedEvent.assignedTo)}
-                  </p>
+        <ModalShell
+          title={editingEvent ? "Edit event" : selectedEvent.title}
+          subtitle={!editingEvent ? `${selectedEvent.date}${selectedEvent.time ? ` at ${selectedEvent.time}` : ""} · ${formatAssignedTo(selectedEvent.assignedTo)}` : undefined}
+          onClose={closeEvent}
+          maxWidth="max-w-lg"
+          footer={
+            <div className="space-y-3">
+              <FieldError message={formError} />
+              <div className="flex gap-3">
+                {editingEvent ? (
+                  <SaveButton state={eventSave.saveState} onClick={handleSaveEvent} className="flex-1 py-3" />
+                ) : (
+                  <>
+                    <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm" type="button" onClick={() => { eventSave.resetSaveState(); setEditingEvent(true); }}>Edit</button>
+                    <SaveButton state={eventSave.saveState} onClick={handleSaveEvent} className="flex-1 py-3" />
+                  </>
                 )}
               </div>
-              <button
-                className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
-                type="button"
-                onClick={closeEvent}
-              >
-                Close
-              </button>
+              <button className="w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 md:text-sm" type="button" disabled={deletingId === selectedEvent.id} onClick={() => handleDeleteEvent(selectedEvent.id)}>Delete event</button>
             </div>
-
-            <div className="mt-6 space-y-4">
-              {editingEvent ? (
-                <>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Title</label>
-                    <input
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                      value={eventDraft.title}
-                      onChange={(e) => setEventDraft({ ...eventDraft, title: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date</label>
-                    <input
-                      type="date"
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                      value={eventDraft.date}
-                      onClick={(e) => e.currentTarget.showPicker?.()}
-                      onChange={(e) => setEventDraft({ ...eventDraft, date: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Time</label>
-                    <input
-                      type="time"
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                      value={eventDraft.time ?? ""}
-                      onChange={(e) => setEventDraft({ ...eventDraft, time: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Assigned to</label>
-                    <AssigneeSelector
-                      value={eventDraft.assignedTo}
-                      onChange={(v) => setEventDraft({ ...eventDraft, assignedTo: v })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Type</label>
-                    <select
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm"
-                      value={eventDraft.type}
-                      onChange={(e) => setEventDraft({ ...eventDraft, type: e.target.value as EventType })}
-                    >
-                      {eventTypes.map((t) => <option key={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Priority</label>
-                    <select
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm"
-                      value={eventPriority(eventDraft)}
-                      onChange={(e) => setEventDraft({ ...eventDraft, priority: e.target.value as Priority })}
-                    >
-                      <option>High</option>
-                      <option>Medium</option>
-                      <option>Low</option>
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Type</p>
-                    <p className="mt-2 text-xs font-semibold text-slate-950 md:text-sm">{selectedEvent.type}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Assigned to</p>
-                    <p className="mt-2 text-xs font-semibold text-slate-950 md:text-sm">{formatAssignedTo(selectedEvent.assignedTo)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Priority</p>
-                    <p className="mt-2 inline-flex items-center text-xs font-semibold text-slate-950 md:text-sm">
-                      {eventPriority(selectedEvent)}
-                      <PriorityDot priority={eventPriority(selectedEvent)} />
-                    </p>
-                  </div>
+          }
+        >
+          <div className="space-y-4">
+            {editingEvent ? (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Title</label>
+                  <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.title} onChange={(e) => setEventDraft({ ...eventDraft, title: e.target.value })} />
                 </div>
-              )}
-
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
-                <textarea
-                  rows={4}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                  value={eventDraft.notes ?? ""}
-                  onChange={(e) => setEventDraft({ ...eventDraft, notes: e.target.value })}
-                />
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date</label>
+                  <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.date} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => setEventDraft({ ...eventDraft, date: e.target.value })} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Time</label>
+                  <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.time ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, time: e.target.value })} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Assigned to</label>
+                  <AssigneeSelector value={eventDraft.assignedTo} onChange={(v) => setEventDraft({ ...eventDraft, assignedTo: v })} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Type</label>
+                  <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm" value={eventDraft.type} onChange={(e) => setEventDraft({ ...eventDraft, type: e.target.value as EventType })}>
+                    {eventTypes.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Priority</label>
+                  <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm" value={eventPriority(eventDraft)} onChange={(e) => setEventDraft({ ...eventDraft, priority: e.target.value as Priority })}>
+                    <option>High</option><option>Medium</option><option>Low</option>
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Type</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-950 md:text-sm">{selectedEvent.type}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Assigned to</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-950 md:text-sm">{formatAssignedTo(selectedEvent.assignedTo)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Priority</p>
+                  <p className="mt-2 inline-flex items-center text-xs font-semibold text-slate-950 md:text-sm">{eventPriority(selectedEvent)}<PriorityDot priority={eventPriority(selectedEvent)} /></p>
+                </div>
               </div>
+            )}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
+              <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.notes ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, notes: e.target.value })} />
             </div>
-
-            <FieldError message={formError} />
-
-            <div className="mt-6 flex gap-3">
-              {editingEvent ? (
-                <SaveButton state={eventSave.saveState} onClick={handleSaveEvent} className="flex-1 py-3" />
-              ) : (
-                <button
-                  className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
-                  type="button"
-                  onClick={() => { eventSave.resetSaveState(); setEditingEvent(true); }}
-                >
-                  Edit
-                </button>
-              )}
-              {!editingEvent && (
-                <SaveButton state={eventSave.saveState} onClick={handleSaveEvent} className="flex-1 py-3" />
-              )}
-            </div>
-            <button
-              className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 md:text-sm"
-              type="button"
-              disabled={deletingId === selectedEvent.id}
-              onClick={() => handleDeleteEvent(selectedEvent.id)}
-            >
-              Delete event
-            </button>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* Today details modal */}
       {showTodayDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm">
-          <div className="modal-enter max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold text-slate-950 md:text-2xl">Today</h2>
-                <p className="mt-1 text-xs text-slate-500 md:text-sm">{today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-              </div>
-              <button
-                className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
-                type="button"
-                onClick={() => setShowTodayDetails(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-6 space-y-5">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 md:text-sm">Events today</h3>
-                <div className="mt-3 space-y-2">
-                  {(eventsByDate[todayKey] ?? []).map((event) => (
-                    <EventPill key={event.id} event={event} prefix={event.time ? `${event.time} ` : undefined} onDelete={handleDeleteEvent} onOpen={openEvent} />
-                  ))}
-                  {(eventsByDate[todayKey] ?? []).length === 0 && (
-                    <p className="text-xs text-slate-500 md:text-sm">No events today.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-            <button
-              className="mt-6 min-h-11 w-full rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
-              type="button"
-              onClick={() => {
-                setForm({ ...freshForm(), date: todayKey });
-                setShowTodayDetails(false);
-                setFormError("");
-                addSave.resetSaveState();
-                setShowAdd(true);
-              }}
-            >
+        <ModalShell
+          title="Today"
+          subtitle={today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+          onClose={() => setShowTodayDetails(false)}
+          maxWidth="max-w-lg"
+          footer={
+            <button className="min-h-11 w-full rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm" type="button" onClick={() => { setForm({ ...freshForm(), date: todayKey }); setShowTodayDetails(false); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>
               Add event
             </button>
+          }
+        >
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 md:text-sm">Events today</h3>
+            <div className="space-y-2">
+              {(eventsByDate[todayKey] ?? []).map((event) => (
+                <EventPill key={event.id} event={event} prefix={event.time ? `${event.time} ` : undefined} onDelete={handleDeleteEvent} onOpen={openEvent} />
+              ))}
+              {(eventsByDate[todayKey] ?? []).length === 0 && (
+                <p className="text-xs text-slate-500 md:text-sm">No events today.</p>
+              )}
+            </div>
           </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

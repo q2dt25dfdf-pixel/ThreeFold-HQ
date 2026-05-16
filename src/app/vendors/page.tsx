@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ModalShell from "@/components/ModalShell";
 import { Box, Package, Printer, Search, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
@@ -71,22 +72,6 @@ export default function VendorsPage() {
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
-  useEffect(() => {
-    if (!showModal) return;
-    const scrollY = window.scrollY;
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      window.scrollTo(0, scrollY);
-    };
-  }, [showModal]);
-
   const orderCountForVendor = (vendorName: string) =>
     orders.filter((order) => order.vendor.trim().toLowerCase() === vendorName.trim().toLowerCase()).length;
 
@@ -146,7 +131,7 @@ export default function VendorsPage() {
   };
 
   const renderFields = () => (
-    <div className="space-y-6 px-6 py-6">
+    <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
         <label className="space-y-2 text-sm text-slate-700">
           Company Name
@@ -393,37 +378,23 @@ export default function VendorsPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm sm:px-6">
-          <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-              <div>
-                <h2 className="text-2xl font-semibold text-slate-900">Add vendor</h2>
-                <p className="text-sm text-slate-500">Keep vendor details ready for sourcing, production, and fulfillment.</p>
-              </div>
-              <button
-                type="button"
-                className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
-                onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}
-              >
-                Close
-              </button>
-            </div>
-            {renderFields()}
-            <div className="flex flex-col gap-3 px-6 pb-6 pt-4 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}
-              >
-                Cancel
-              </button>
-              <div className="w-full sm:w-auto">
-                <SaveButton state={addSave.saveState} onClick={handleAdd} mode="add" className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
-                <FieldError message={formError} />
+        <ModalShell
+          title="Add vendor"
+          subtitle="Keep vendor details ready for sourcing, production, and fulfillment."
+          onClose={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}
+          maxWidth="max-w-3xl"
+          footer={
+            <div className="space-y-3">
+              <FieldError message={formError} />
+              <div className="flex gap-3">
+                <SaveButton state={addSave.saveState} onClick={handleAdd} mode="add" className="flex-1 py-3" />
+                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}>Cancel</button>
               </div>
             </div>
-          </div>
-        </div>
+          }
+        >
+          {renderFields()}
+        </ModalShell>
       )}
     </div>
   );

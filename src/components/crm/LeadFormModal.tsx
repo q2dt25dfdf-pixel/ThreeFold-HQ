@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
+import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import type { CompanyProfile, Lead } from "./types";
 import { pipelineStages, type LeadStatus, type PipelineStage } from "./types";
@@ -82,24 +82,6 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
   const { saveState, resetSaveState, runSave } = useSaveState();
   const [formError, setFormError] = useState("");
 
-  const scrollYRef = useRef(0);
-  useEffect(() => {
-    if (!open) return;
-    const scrollY = window.scrollY;
-    scrollYRef.current = scrollY;
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      window.scrollTo(0, scrollYRef.current);
-    };
-  }, [open]);
-
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (lead) {
@@ -138,18 +120,9 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
 
   if (!open) return null;
 
-  const title = mode === "add" ? "Add New Lead" : "Edit Lead";
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!company.trim()) {
-      setFormError("Company name is required.");
-      return;
-    }
-    if (!contact.trim()) {
-      setFormError("Contact name is required.");
-      return;
-    }
+  const handleSave = async () => {
+    if (!company.trim()) { setFormError("Company name is required."); return; }
+    if (!contact.trim()) { setFormError("Contact name is required."); return; }
     setFormError("");
     await runSave(() => onSubmit({
       company: company.trim(),
@@ -167,200 +140,115 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
     }), onClose);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm sm:px-6">
-      <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-            <p className="text-sm text-slate-500">Keep the lead profile up to date for your operations team.</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <form className="space-y-6 px-6 py-6" onSubmit={handleSubmit}>
-          <div className="grid gap-6 md:grid-cols-2">
-            <label className="space-y-2 text-sm text-slate-700">
-              Company name
-              <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={company}
-                onChange={(event) => {
-                  setCompany(event.target.value);
-                  if (formError) setFormError("");
-                }}
-                required
-              />
-              <FieldError message={formError.includes("Company") ? formError : undefined} />
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Contact name
-              <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={contact}
-                onChange={(event) => {
-                  setContact(event.target.value);
-                  if (formError) setFormError("");
-                }}
-                required
-              />
-              <FieldError message={formError.includes("Contact") ? formError : undefined} />
-            </label>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <label className="space-y-2 text-sm text-slate-700">
-              Email address
-              <input
-                type="email"
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Phone number
-              <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                required
-              />
-            </label>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <label className="space-y-2 text-sm text-slate-700">
-              Industry
-              <select
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={industry}
-                onChange={(event) => setIndustry(event.target.value)}
-              >
-                {industryOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Address
-              <AddressAutocomplete
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={address}
-                onChange={setAddress}
-                placeholder="Start typing an address..."
-              />
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Website
-              <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={website}
-                onChange={(event) => setWebsite(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <label className="space-y-2 text-sm text-slate-700">
-              Estimated value
-              <input
-                type="text"
-                inputMode="numeric"
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={currencyInputValue(value)}
-                onKeyDown={allowCurrencyKey}
-                onPaste={(event) => {
-                  if (/\D/.test(event.clipboardData.getData("text"))) event.preventDefault();
-                }}
-                onChange={(event) => setValue(currencyInputNumber(event.target.value))}
-              />
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Owner
-              <input
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={owner}
-                onChange={(event) => setOwner(event.target.value)}
-                placeholder="Owner name"
-              />
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Stage
-              <select
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={stage}
-                onChange={(event) => setStage(event.target.value as Lead["stage"])}
-              >
-                {pipelineStages.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <label className="space-y-2 text-sm text-slate-700">
-              Status
-              <select
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-                value={status}
-                onChange={(event) => setStatus(event.target.value as Lead["status"])}
-              >
-                {leadStatuses.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="space-y-2 text-sm text-slate-700">
-              Next Follow-Up Date
-              <input
-                type="date"
-                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900"
-                value={followUpDate}
-                onClick={(event) => event.currentTarget.showPicker?.()}
-                onChange={(event) => setFollowUpDate(event.target.value)}
-              />
-            </label>
-            <div />
-          </div>
-
-          <label className="space-y-2 text-sm text-slate-700">
-            Notes
-            <textarea
-              rows={5}
-              className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-            />
-          </label>
-
-          <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <SaveButton type="submit" state={saveState} mode={mode === "add" ? "add" : "edit"} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
-          </div>
-        </form>
+  const footer = (
+    <div className="space-y-3">
+      <FieldError message={formError} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-row-reverse">
+        <SaveButton state={saveState} onClick={handleSave} mode={mode === "add" ? "add" : "edit"} className="flex-1 py-3" />
+        <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancel</button>
       </div>
     </div>
+  );
+
+  return (
+    <ModalShell
+      title={mode === "add" ? "Add New Lead" : "Edit Lead"}
+      subtitle="Keep the lead profile up to date for your operations team."
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      footer={footer}
+    >
+      <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); void handleSave(); }}>
+        {/* Hidden submit enables Enter-key submission from inputs */}
+        <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <label className="space-y-2 text-sm text-slate-700">
+            Company name
+            <input
+              className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+              value={company}
+              onChange={(event) => { setCompany(event.target.value); if (formError) setFormError(""); }}
+              required
+            />
+            <FieldError message={formError.includes("Company") ? formError : undefined} />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Contact name
+            <input
+              className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+              value={contact}
+              onChange={(event) => { setContact(event.target.value); if (formError) setFormError(""); }}
+              required
+            />
+            <FieldError message={formError.includes("Contact") ? formError : undefined} />
+          </label>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <label className="space-y-2 text-sm text-slate-700">
+            Email address
+            <input type="email" className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Phone number
+            <input className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={phone} onChange={(event) => setPhone(event.target.value)} required />
+          </label>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          <label className="space-y-2 text-sm text-slate-700">
+            Industry
+            <select className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={industry} onChange={(event) => setIndustry(event.target.value)}>
+              {industryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Address
+            <AddressAutocomplete className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={address} onChange={setAddress} placeholder="Start typing an address..." />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Website
+            <input className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={website} onChange={(event) => setWebsite(event.target.value)} />
+          </label>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          <label className="space-y-2 text-sm text-slate-700">
+            Estimated value
+            <input type="text" inputMode="numeric" className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={currencyInputValue(value)} onKeyDown={allowCurrencyKey} onPaste={(event) => { if (/\D/.test(event.clipboardData.getData("text"))) event.preventDefault(); }} onChange={(event) => setValue(currencyInputNumber(event.target.value))} />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Owner
+            <input className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="Owner name" />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Stage
+            <select className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={stage} onChange={(event) => setStage(event.target.value as Lead["stage"])}>
+              {pipelineStages.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          <label className="space-y-2 text-sm text-slate-700">
+            Status
+            <select className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={status} onChange={(event) => setStatus(event.target.value as Lead["status"])}>
+              {leadStatuses.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            Next Follow-Up Date
+            <input type="date" className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900" value={followUpDate} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setFollowUpDate(event.target.value)} />
+          </label>
+          <div />
+        </div>
+
+        <label className="space-y-2 text-sm text-slate-700">
+          Notes
+          <textarea rows={5} className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </label>
+      </form>
+    </ModalShell>
   );
 }

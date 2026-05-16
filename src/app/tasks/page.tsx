@@ -1,8 +1,8 @@
 "use client";
 
 import { type ReactNode, useMemo, useState } from "react";
-import { useScrollLock } from "@/hooks/useScrollLock";
-import { ChevronDown, ChevronUp, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, Trash2 } from "lucide-react";
+import ModalShell from "@/components/ModalShell";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -193,30 +193,22 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
 }
 
 function Modal({ title, onSave, onClose, onDelete, saveState, mode = "edit", error, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; mode?: "add" | "edit"; error?: string; children: ReactNode }) {
-  useScrollLock();
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm">
-      <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white px-5 py-6 shadow-2xl md:px-10 md:py-10">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <h2 className="text-base md:text-2xl font-semibold text-slate-950">{title}</h2>
-          <button
-            type="button"
-            aria-label="Close"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        {children}
-        <FieldError message={error} />
-        <div className="mt-6 flex gap-3">
-          <SaveButton state={saveState} mode={mode} className="flex-1 py-3" onClick={onSave} />
-          <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
-        </div>
-        {onDelete && <button type="button" className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
+  const footer = (
+    <div className="space-y-3">
+      {error && <FieldError message={error} />}
+      <div className="flex gap-3">
+        <SaveButton state={saveState} mode={mode} className="flex-1 py-3" onClick={onSave} />
+        <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm" onClick={onClose}>Cancel</button>
       </div>
+      {onDelete && (
+        <button type="button" className="w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 md:text-sm" onClick={onDelete}>Delete task</button>
+      )}
     </div>
+  );
+  return (
+    <ModalShell title={title} onClose={onClose} maxWidth="max-w-3xl" footer={footer}>
+      {children}
+    </ModalShell>
   );
 }
 
