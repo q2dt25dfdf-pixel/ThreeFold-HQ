@@ -1,7 +1,7 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Search, Trash2, X } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -20,6 +20,7 @@ type Task = {
   priority: "High" | "Medium" | "Low";
   notes: string;
   completed: boolean;
+  completedAt?: string;
   source?: "CRM" | string;
   crmLeadId?: string;
   leadId?: string;
@@ -60,9 +61,40 @@ function isCrmTask(task: Task) {
 function crmFollowUpDetails(task: Task) {
   const fallback = task.title.replace(/^Follow up with\s+/i, "");
   const [leadName = fallback, company = "Lead"] = fallback.split(/\s+—\s+/);
-
   return { leadName, company };
 }
+
+function taskMatchesSearch(task: Task, query: string): boolean {
+  if (!query.trim()) return true;
+  const q = query.toLowerCase();
+  return [task.title, task.assignedTo, task.owner, task.notes]
+    .filter(Boolean)
+    .some((f) => String(f).toLowerCase().includes(q));
+}
+
+type CompletionGroup = "today" | "yesterday" | "week" | "older";
+
+function getCompletionGroup(completedAt: string | undefined): CompletionGroup {
+  if (!completedAt) return "older";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const d = new Date(completedAt);
+  const completedStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((todayStart - completedStart) / 86400000);
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  if (diffDays <= 6) return "week";
+  return "older";
+}
+
+const COMPLETION_GROUP_LABELS: Record<CompletionGroup, string> = {
+  today: "Completed Today",
+  yesterday: "Completed Yesterday",
+  week: "Completed This Week",
+  older: "Older",
+};
+
+const COMPLETION_GROUP_ORDER: CompletionGroup[] = ["today", "yesterday", "week", "older"];
 
 function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onComplete: (id: string) => void; onOpen: (task: Task) => void }) {
   const sortedTasks = [...tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
@@ -75,20 +107,19 @@ function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onCom
           <h2 className="text-base font-bold text-slate-950 md:text-lg">Pipeline Follow-Ups</h2>
         </div>
         <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800 shadow-md">
-          {sortedTasks.filter((task) => !task.completed).length} open
+          {sortedTasks.length} open
         </span>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {sortedTasks.map((task) => {
           const { leadName, company } = crmFollowUpDetails(task);
-
           return (
             <article
               key={task.id}
               role="button"
               tabIndex={0}
-              className={"rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md " + (task.completed ? "border-slate-200 opacity-60" : "border-amber-200")}
+              className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md"
               onClick={() => onOpen(task)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -106,10 +137,10 @@ function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onCom
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Due {task.dueDate}</span>
                   <button
                     type="button"
-                    className={"min-h-11 rounded-2xl px-4 py-2 text-xs font-semibold text-white " + (task.completed ? "bg-slate-400" : "bg-slate-950 hover:bg-slate-800")}
+                    className="min-h-11 rounded-2xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (!task.completed) onComplete(task.id);
+                      onComplete(task.id);
                     }}
                   >
                     Mark complete
@@ -143,7 +174,7 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
         <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
-<option>Alliyah</option><option>Hannah</option><option>Jordan</option><option>All</option>
+          <option>Alliyah</option><option>Hannah</option><option>Jordan</option><option>All</option>
         </select>
       </div>
       <div>
@@ -162,16 +193,26 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
 
 function Modal({ title, onSave, onClose, onDelete, saveState, error, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; error?: string; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-3 md:py-6 shadow-xl md:px-10 md:py-10">
-        <h2 className="text-base md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <h2 className="text-base md:text-2xl font-semibold text-slate-950">{title}</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
         {children}
         <FieldError message={error} />
         <div className="mt-6 flex gap-3">
           <SaveButton state={saveState} className="flex-1 py-3" onClick={onSave} />
-          <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
+          <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
-        {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
+        {onDelete && <button type="button" className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
       </div>
     </div>
   );
@@ -180,6 +221,8 @@ function Modal({ title, onSave, onClose, onDelete, saveState, error, children }:
 export default function TasksPage() {
   const { data: tasks, upsertItem, deleteItem, loading, error } = useSupabaseTable<Task>("tasks", defaultTasks);
   const [filterOwner, setFilterOwner] = useState<TaskOwner | "All">("All");
+  const [search, setSearch] = useState("");
+  const [completedCollapsed, setCompletedCollapsed] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const addSave = useSaveState();
@@ -188,19 +231,28 @@ export default function TasksPage() {
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
+  const isSearching = search.trim().length > 0;
+
   const toggle = (id: string) => {
     const task = tasks.find((current) => current.id === id);
     if (task) {
       const completed = !task.completed;
-      upsertItem({ ...task, completed, status: completed ? "Done" : "Open" });
+      upsertItem({
+        ...task,
+        completed,
+        status: completed ? "Done" : "Open",
+        completedAt: completed ? new Date().toISOString() : undefined,
+      });
     }
   };
+
   const openAddForFounder = (founder: TaskColumn) => {
     setForm({ ...emptyForm, assignedTo: founder });
     setFormError("");
     addSave.resetSaveState();
     setShowAdd(true);
   };
+
   const handleAdd = async () => {
     if (!form.title.trim()) {
       setFormError("Task title is required.");
@@ -214,6 +266,7 @@ export default function TasksPage() {
       return response;
     });
   };
+
   const handleSaveEdit = async () => {
     if (!editTask) return;
     if (!editTask.title.trim()) {
@@ -223,6 +276,7 @@ export default function TasksPage() {
     setFormError("");
     await editSave.runSave(() => upsertItem(editTask));
   };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
     setDeletingId(id);
@@ -231,56 +285,78 @@ export default function TasksPage() {
     setEditTask(null);
   };
 
+  const completedTasks = useMemo(
+    () => tasks.filter((t) => t.completed && taskMatchesSearch(t, search)),
+    [tasks, search],
+  );
+
+  const showCompletedContent = isSearching ? completedTasks.length > 0 : !completedCollapsed;
+
+  const completedGroups = useMemo(
+    () =>
+      COMPLETION_GROUP_ORDER.map((key) => ({
+        key,
+        label: COMPLETION_GROUP_LABELS[key],
+        tasks: completedTasks.filter((t) => getCompletionGroup(t.completedAt) === key),
+      })).filter((g) => g.tasks.length > 0),
+    [completedTasks],
+  );
+
   const TaskCard = ({ task }: { task: Task }) => {
     const owner = taskAssignee(task);
-
     return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          editSave.resetSaveState();
-          setEditTask({ ...task });
-        }
-      }}
-      className={`rounded-[2rem] border bg-white p-2 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full ${task.completed ? "border-slate-300 opacity-60" : "border-slate-300"}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${priorityDotColors[task.priority]}`} aria-label={`${task.priority} priority`} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className={`min-w-0 text-xs md:text-base font-semibold ${task.completed ? "line-through text-slate-600" : "text-slate-950"}`}>{task.title}</p>
-              {isCrmTask(task) && <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">CRM</span>}
+      <article
+        role="button"
+        tabIndex={0}
+        onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            editSave.resetSaveState();
+            setEditTask({ ...task });
+          }
+        }}
+        className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-2">
+            <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${priorityDotColors[task.priority]}`} aria-label={`${task.priority} priority`} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="min-w-0 text-xs md:text-base font-semibold text-slate-950">{task.title}</p>
+                {isCrmTask(task) && <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">CRM</span>}
+              </div>
             </div>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
+              className="min-h-11 rounded-xl bg-slate-950 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 md:min-h-0"
+            >
+              Done
+            </button>
+            <button
+              type="button"
+              className="min-h-11 min-w-11 rounded-full p-1 text-rose-600 hover:bg-rose-50 md:min-h-0 md:min-w-0"
+              disabled={deletingId === task.id}
+              aria-label={`Delete ${task.title}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDelete(task.id);
+              }}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-            <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
-          <button
-            type="button"
-            className="min-h-11 min-w-11 rounded-full p-1 text-rose-600 hover:bg-rose-50 md:min-h-0 md:min-w-0"
-            disabled={deletingId === task.id}
-            aria-label={`Delete ${task.title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleDelete(task.id);
-            }}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {owner !== "All" && owner !== "" && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[owner as TaskOwner]}`}>{owner}</span>}
+          {owner === "All" && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">All</span>}
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>{task.priority}</span>
         </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {owner !== "All" && owner !== "" && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[owner]}`}>{owner}</span>}
-        {owner === "All" && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">All</span>}
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>{task.priority}</span>
-      </div>
-      <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
-    </article>
+        <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
+      </article>
     );
   };
 
@@ -289,71 +365,201 @@ export default function TasksPage() {
   return (
     <div className="space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
+
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Team tasks</p>
           <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Task board</h1>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add task</button>
-          <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative w-full md:w-auto">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <input
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              placeholder="Search tasks..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <button
+            className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
+            onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}
+          >
+            Add task
+          </button>
+          <select
+            className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
+            value={filterOwner}
+            onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}
+          >
             <option>All</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
           </select>
         </div>
       </div>
 
-      <PipelineFollowUps tasks={tasks.filter(isCrmTask)} onComplete={toggle} onOpen={(task) => { editSave.resetSaveState(); setEditTask({ ...task }); }} />
+      <PipelineFollowUps
+        tasks={tasks.filter((t) => isCrmTask(t) && !t.completed && taskMatchesSearch(t, search))}
+        onComplete={toggle}
+        onOpen={(task) => { editSave.resetSaveState(); setEditTask({ ...task }); }}
+      />
 
+      {/* Active Kanban board — completed tasks never appear here */}
       <div className="grid gap-5 xl:grid-cols-3">
         {founderColumns
           .filter((founder) => filterOwner === "All" || founder.name === filterOwner)
           .map((founder) => {
-          const founderTasks = tasks.filter((task) => !isCrmTask(task) && (taskAssignee(task) === founder.name || taskAssignee(task) === "All"));
-          const founderOpen = founderTasks.filter((task) => !task.completed);
-          const founderDone = founderTasks.filter((task) => task.completed);
+            const visibleTasks = tasks.filter(
+              (task) =>
+                !isCrmTask(task) &&
+                !task.completed &&
+                (taskAssignee(task) === founder.name || taskAssignee(task) === "All") &&
+                taskMatchesSearch(task, search),
+            );
 
-          return (
-            <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-300 bg-white shadow-md">
-              <div className={`rounded-t-[2rem] border-t-2 p-2 md:p-5 ${founder.headerClass}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />
-                    <h2 className="text-base md:text-lg font-bold text-slate-950">{founder.name}</h2>
+            return (
+              <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-300 bg-white shadow-md">
+                <div className={`rounded-t-[2rem] border-t-2 p-2 md:p-5 ${founder.headerClass}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />
+                      <h2 className="text-base md:text-lg font-bold text-slate-950">{founder.name}</h2>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-md">
+                      {visibleTasks.length} open
+                    </span>
                   </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-md">
-                    {founderOpen.length} open
-                  </span>
                 </div>
-              </div>
-              <div className="flex flex-1 flex-col gap-3 p-2 md:p-4">
-                {founderOpen.map((task) => <TaskCard key={task.id} task={task} />)}
-                {founderDone.length > 0 && (
-                  <div className="mt-auto space-y-3 border-t border-slate-100 pt-3">
-                    {founderDone.map((task) => <TaskCard key={task.id} task={task} />)}
+                <div className="flex flex-1 flex-col gap-3 p-2 md:p-4">
+                  {visibleTasks.map((task) => <TaskCard key={task.id} task={task} />)}
+                  {visibleTasks.length === 0 && (
+                    <div className="flex flex-1 items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-gray-100 px-4 py-10 text-center text-xs md:text-sm text-slate-600">
+                      {isSearching ? "No tasks match your search." : "No tasks assigned yet."}
+                    </div>
+                  )}
+                </div>
+                {!isSearching && (
+                  <div className="border-t border-slate-100 p-2 md:p-4">
+                    <button
+                      type="button"
+                      className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 transition hover:bg-gray-100"
+                      onClick={() => openAddForFounder(founder.name)}
+                    >
+                      Add task
+                    </button>
                   </div>
                 )}
-                {founderTasks.length === 0 && (
-                  <div className="flex flex-1 items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-gray-100 px-4 py-10 text-center text-xs md:text-sm text-slate-600">
-                    No tasks assigned yet.
-                  </div>
-                )}
-              </div>
-              <div className="border-t border-slate-100 p-2 md:p-4">
-                <button
-                  type="button"
-                  className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 transition hover:bg-gray-100"
-                  onClick={() => openAddForFounder(founder.name)}
-                >
-                  Add task
-                </button>
-              </div>
-            </section>
-          );
-        })}
+              </section>
+            );
+          })}
       </div>
 
-      {showAdd && <Modal title="Add task" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} error={formError}><FormFields data={form} onChange={(next) => { setForm(next); if (formError) setFormError(""); }} /></Modal>}
-      {editTask && <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setFormError(""); editSave.resetSaveState(); }} onDelete={() => handleDelete(editTask.id)} saveState={editSave.saveState} error={formError}><FormFields data={editTask} onChange={(next) => { setEditTask(next); if (formError) setFormError(""); }} /></Modal>}
+      {/* Completed tasks section — always present, collapsed by default */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white shadow-md">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 rounded-[2rem] p-2 text-left md:p-5"
+          onClick={() => { if (!isSearching) setCompletedCollapsed((prev) => !prev); }}
+        >
+          <div className="flex items-center gap-3">
+            <h2 className="text-base md:text-lg font-semibold text-slate-950">Completed</h2>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+              {completedTasks.length}
+            </span>
+          </div>
+          {!isSearching && (
+            completedCollapsed
+              ? <ChevronDown className="h-5 w-5 text-slate-400" aria-hidden="true" />
+              : <ChevronUp className="h-5 w-5 text-slate-400" aria-hidden="true" />
+          )}
+        </button>
+
+        {showCompletedContent && (
+          <div className="border-t border-slate-100 p-2 md:p-5">
+            {completedGroups.length === 0 ? (
+              <p className="py-4 text-center text-xs md:text-sm text-slate-500">
+                {isSearching ? "No completed tasks match your search." : "No completed tasks yet."}
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {completedGroups.map((group) => (
+                  <div key={group.key}>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                      {group.label}
+                    </h3>
+                    <div className="space-y-2">
+                      {group.tasks.map((task) => {
+                        const owner = taskAssignee(task);
+                        return (
+                          <div
+                            key={task.id}
+                            role="button"
+                            tabIndex={0}
+                            className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-left transition hover:border-slate-200 hover:bg-white"
+                            onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                editSave.resetSaveState();
+                                setEditTask({ ...task });
+                              }
+                            }}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-semibold text-slate-400 line-through md:text-sm">
+                                {task.title}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-1.5">
+                                {owner && owner !== "All" && (
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ownerColors[owner as TaskOwner]}`}>
+                                    {owner}
+                                  </span>
+                                )}
+                                {owner === "All" && (
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">All</span>
+                                )}
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>
+                                  {task.priority}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                              onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
+                            >
+                              Reopen
+                            </button>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-full p-1 text-rose-400 hover:bg-rose-50 hover:text-rose-600"
+                              disabled={deletingId === task.id}
+                              aria-label={`Delete ${task.title}`}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {showAdd && (
+        <Modal title="Add task" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} error={formError}>
+          <FormFields data={form} onChange={(next) => { setForm(next); if (formError) setFormError(""); }} />
+        </Modal>
+      )}
+      {editTask && (
+        <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setFormError(""); editSave.resetSaveState(); }} onDelete={() => handleDelete(editTask.id)} saveState={editSave.saveState} error={formError}>
+          <FormFields data={editTask} onChange={(next) => { setEditTask(next); if (formError) setFormError(""); }} />
+        </Modal>
+      )}
     </div>
   );
 }

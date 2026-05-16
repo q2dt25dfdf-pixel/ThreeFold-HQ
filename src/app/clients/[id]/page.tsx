@@ -6,6 +6,7 @@ import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -151,7 +152,7 @@ export default function ClientDetailPage() {
     setActivityForm((current) => ({ ...current, notes: "" }));
   };
 
-  if (clientsLoading || ordersLoading || activityLoading) return <LoadingState label="Loading client..." />;
+  if (clientsLoading || ordersLoading) return <LoadingState label="Loading client..." />;
 
   if (!client) {
     return (
@@ -169,7 +170,7 @@ export default function ClientDetailPage() {
 
   return (
     <main className="min-h-screen text-xs md:text-sm">
-      <ErrorBanner message={clientsError || ordersError || activityError} />
+      <ErrorBanner message={clientsError || ordersError} />
       <header className="bg-slate-950 p-2 md:p-3 text-white md:p-8">
         <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -310,8 +311,14 @@ export default function ClientDetailPage() {
           <FieldError message={activityErrorText} />
 
           <div className="mt-5 space-y-3">
-            {clientActivity.length === 0 && <p className="text-xs md:text-sm text-slate-500">No activity logged yet.</p>}
-            {clientActivity.map((entry) => (
+            {activityLoading && <p className="text-xs md:text-sm text-slate-400">Loading activity…</p>}
+            {!activityLoading && activityError && (
+              <p className="text-xs md:text-sm text-rose-500">{activityError}</p>
+            )}
+            {!activityLoading && !activityError && clientActivity.length === 0 && (
+              <p className="text-xs md:text-sm text-slate-500">No activity yet</p>
+            )}
+            {!activityLoading && clientActivity.map((entry) => (
               <div key={entry.id} className="rounded-2xl border border-slate-200 p-2 md:p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">{entry.type}</span>
@@ -327,10 +334,12 @@ export default function ClientDetailPage() {
       <AddOrderModal open={showOrderModal} onClose={() => setShowOrderModal(false)} prefilledClient={client.name} />
 
       {clientDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
-            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Edit client</h2>
-            <div className="mt-6 space-y-4">
+        <ModalShell
+          title="Edit client"
+          onClose={() => { setClientDraft(null); clientSave.resetSaveState(); }}
+          maxWidth="max-w-lg"
+        >
+            <div className="space-y-4">
               {[
                 { label: "Name", key: "name" },
                 { label: "Industry", key: "industry" },
@@ -356,7 +365,18 @@ export default function ClientDetailPage() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Orders</span>
-                <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.orders} onChange={(event) => setClientDraft({ ...clientDraft, orders: Number(event.target.value) })} />
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  placeholder="0"
+                  value={clientDraft.orders === 0 ? "" : clientDraft.orders}
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/^0+(?=\d)/, "");
+                    setClientDraft({ ...clientDraft, orders: raw === "" ? 0 : Number(raw) });
+                  }}
+                />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</span>
@@ -368,8 +388,7 @@ export default function ClientDetailPage() {
               <SaveButton state={clientSave.saveState} onClick={saveClientDraft} className="flex-1 py-3" />
               <button type="button" onClick={() => { setClientDraft(null); clientSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </main>
   );

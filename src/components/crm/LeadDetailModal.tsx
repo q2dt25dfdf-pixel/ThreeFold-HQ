@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -194,12 +195,11 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
             </div>
             <button
               type="button"
+              aria-label="Close"
               onClick={onClose}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-300 hover:bg-gray-100 md:h-10 md:w-10"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
             >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
 

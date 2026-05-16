@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import {
@@ -463,7 +464,7 @@ export default function FinancesPage() {
     };
 
     return (
-    <div className="mt-6 space-y-4">
+    <div className="space-y-4">
       <div className="relative">
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Client</label>
         <input
@@ -892,38 +893,40 @@ export default function FinancesPage() {
       </section>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
-            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add invoice</h2>
+        <ModalShell
+          title="Add invoice"
+          onClose={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}
+          maxWidth="max-w-md"
+        >
             {renderFields(form, (next) => setForm(next as typeof emptyForm))}
             <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
               <SaveButton state={addSave.saveState} onClick={handleAdd} className="flex-1 py-3" />
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
+              <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {editInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-8 shadow-xl">
-            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Edit invoice</h2>
+        <ModalShell
+          title="Edit invoice"
+          onClose={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}
+          maxWidth="max-w-md"
+        >
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
             <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
               <SaveButton state={editSave.saveState} onClick={handleSaveEdit} className="flex-1 py-3" />
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
+              <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                 Cancel
               </button>
             </div>
-            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" disabled={deletingId === editInvoice.id} onClick={() => handleDelete(editInvoice.id)}>
+            <button type="button" className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" disabled={deletingId === editInvoice.id} onClick={() => handleDelete(editInvoice.id)}>
               Delete invoice
             </button>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

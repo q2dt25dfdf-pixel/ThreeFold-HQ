@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { FieldError } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
-
-type LookupRecord = {
-  id: string;
-  name: string;
-  company?: string;
-};
-
-type OrderStatus = "Draft" | "In Production" | "Quality Control" | "Fulfilled";
+import ModalShell from "@/components/ModalShell";
+import {
+  centsToCurrency,
+  handleCurrencyKeyDown,
+  itemOptions,
+  LookupRecord,
+  OrderStatus,
+  recordName,
+  SmartSearchInput,
+  statusOptions,
+} from "./OrderFormShared";
 
 type Order = {
   id: string;
@@ -40,93 +43,6 @@ type AddOrderModalProps = {
 };
 
 type AddOrderModalContentProps = Omit<AddOrderModalProps, "open">;
-
-const itemOptions = ["T-Shirts", "Hoodies", "Long Sleeves", "Hats", "Jackets", "Tumblers", "Mugs", "Accessories", "Other"];
-const statusOptions: OrderStatus[] = ["Draft", "In Production", "Quality Control", "Fulfilled"];
-
-function centsToCurrency(cents: string) {
-  return (Number(cents || "0") / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function recordName(record: LookupRecord) {
-  return record.name || record.company || "";
-}
-
-function SmartSearchInput({
-  label,
-  value,
-  onChange,
-  onSelect,
-  records,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  onSelect?: (record: LookupRecord) => void;
-  records: LookupRecord[];
-  placeholder: string;
-}) {
-  const [focused, setFocused] = useState(false);
-  const normalizedValue = value.trim().toLowerCase();
-  const suggestions = useMemo(
-    () =>
-      records
-        .filter((record) => {
-          const name = recordName(record).toLowerCase();
-          return normalizedValue.length > 0 && name.includes(normalizedValue);
-        })
-        .slice(0, 6),
-    [normalizedValue, records],
-  );
-  const showSuggestions = focused && suggestions.length > 0;
-
-  return (
-    <div className="relative">
-      <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{label}</label>
-      <input
-        type="text"
-        className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-        placeholder={placeholder}
-        value={value}
-        onFocus={() => setFocused(true)}
-        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      {showSuggestions && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-xl">
-          {suggestions.map((record) => {
-            const name = recordName(record);
-
-            return (
-              <button
-                key={record.id}
-                type="button"
-                className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  if (onSelect) {
-                    onSelect(record);
-                  } else {
-                    onChange(name);
-                  }
-                  setFocused(false);
-                }}
-              >
-                {name}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function AddOrderModal({ open, onClose, prefilledClient = "", prefilledVendor = "", onSaved }: AddOrderModalProps) {
   if (!open) return null;
@@ -159,35 +75,20 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
   const { saveState, runSave } = useSaveState();
   const [formError, setFormError] = useState("");
 
-
   const toggleItem = (item: string) => {
     setSelectedItems((current) =>
       current.includes(item) ? current.filter((selectedItem) => selectedItem !== item) : [...current, item],
     );
   };
 
-  const handleCurrencyKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (["Tab", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-
-    if (event.key === "Backspace" || event.key === "Delete") {
-      event.preventDefault();
-      setAmountCents((current) => current.slice(0, -1));
-      return;
-    }
-
-    if (/^\d$/.test(event.key)) {
-      event.preventDefault();
-      setAmountCents((current) => (current + event.key).replace(/^0+(?=\d)/, ""));
-      return;
-    }
-
-    event.preventDefault();
-  };
-
   const handleSave = async () => {
     if (!orderName.trim()) {
       setFormError("Order name is required.");
+      return;
+    }
+    const qty = Number(quantity);
+    if (!quantity.trim() || qty <= 0) {
+      setFormError("Quantity must be greater than 0.");
       return;
     }
     setFormError("");
@@ -207,7 +108,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
         vendor_id: vendorId || resolvedVendor?.id || "",
         vendor_name: vendor.trim(),
         items: selectedItems,
-        quantity: Number(quantity || 0),
+        quantity: qty,
         amount: Number(amountCents || "0") / 100,
         status,
         estimatedDeliveryDate,
@@ -223,28 +124,18 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white p-2 shadow-xl md:p-8">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add order</h2>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Create one shared order record for production, vendors, and finances.</p>
-          </div>
-          <button
-            type="button"
-            className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-xs md:text-sm font-semibold text-slate-600 transition hover:bg-slate-200"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
-
+    <ModalShell
+      title="Add order"
+      subtitle="Create one shared order record for production, vendors, and finances."
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+    >
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Order name</label>
             <input
               type="text"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
               placeholder="e.g. Spring staff shirts"
               value={orderName}
               onChange={(event) => {
@@ -252,35 +143,22 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
                 if (formError) setFormError("");
               }}
             />
-            <FieldError message={formError} />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <SmartSearchInput
               label="Client"
               value={client}
-              onChange={(value) => {
-                setClient(value);
-                setClientId("");
-              }}
-              onSelect={(record) => {
-                setClient(recordName(record));
-                setClientId(record.id);
-              }}
+              onChange={(value) => { setClient(value); setClientId(""); }}
+              onSelect={(record) => { setClient(recordName(record)); setClientId(record.id); }}
               records={clients}
               placeholder="Type to search clients..."
             />
             <SmartSearchInput
               label="Vendor"
               value={vendor}
-              onChange={(value) => {
-                setVendor(value);
-                setVendorId("");
-              }}
-              onSelect={(record) => {
-                setVendor(recordName(record));
-                setVendorId(record.id);
-              }}
+              onChange={(value) => { setVendor(value); setVendorId(""); }}
+              onSelect={(record) => { setVendor(recordName(record)); setVendorId(record.id); }}
               records={vendors}
               placeholder="Type to search vendors..."
             />
@@ -291,7 +169,6 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
             <div className="flex flex-wrap gap-2">
               {itemOptions.map((item) => {
                 const selected = selectedItems.includes(item);
-
                 return (
                   <button
                     key={item}
@@ -316,12 +193,15 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
               <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Quantity</label>
               <input
                 type="number"
-                min="0"
+                min="1"
                 step="1"
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
                 placeholder="e.g. 48"
                 value={quantity}
-                onChange={(event) => setQuantity(event.target.value.replace(/^0+(?=\d)/, ""))}
+                onChange={(event) => {
+                  setQuantity(event.target.value.replace(/^0+(?=\d)/, ""));
+                  if (formError) setFormError("");
+                }}
               />
             </div>
             <div>
@@ -329,9 +209,9 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
               <input
                 type="text"
                 inputMode="numeric"
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
                 value={centsToCurrency(amountCents)}
-                onKeyDown={handleCurrencyKeyDown}
+                onKeyDown={(event) => handleCurrencyKeyDown(event, setAmountCents)}
                 onPaste={(event) => {
                   event.preventDefault();
                   setAmountCents((current) => (current + event.clipboardData.getData("text").replace(/\D/g, "")).replace(/^0+(?=\d)/, ""));
@@ -345,7 +225,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
             <div>
               <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
               <select
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900"
                 value={status}
                 onChange={(event) => setStatus(event.target.value as OrderStatus)}
               >
@@ -358,7 +238,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
               <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Est. delivery date</label>
               <input
                 type="date"
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
                 value={estimatedDeliveryDate}
                 onClick={(event) => event.currentTarget.showPicker?.()}
                 onChange={(event) => setEstimatedDeliveryDate(event.target.value)}
@@ -370,13 +250,15 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
             <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
             <textarea
               rows={4}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
               placeholder="Order details, delivery notes, production reminders..."
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
             />
           </div>
         </div>
+
+        <FieldError message={formError} />
 
         <div className="mt-6 flex gap-3">
           <SaveButton state={saveState} onClick={handleSave} className="flex-1 py-3" />
@@ -388,7 +270,6 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
             Cancel
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

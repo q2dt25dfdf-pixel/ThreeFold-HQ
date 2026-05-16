@@ -34,7 +34,11 @@ export function useSupabaseTable<T extends { id: string }>(
 
       if (error) {
         console.error(`Failed to load Supabase table "${tableName}"`, error);
-        if (mountedRef.current) setErrorMessage(`Couldn't load ${tableName.replaceAll("_", " ")}. Please try again.`);
+        // 42P01 = PostgreSQL "undefined_table" — treat as empty, not an error
+        const isTableMissing = (error as { code?: string }).code === "42P01";
+        if (!isTableMissing && mountedRef.current) {
+          setErrorMessage(`Couldn't load ${tableName.replaceAll("_", " ")}. Please try again.`);
+        }
         if (mountedRef.current) setDataState([]);
         return;
       }

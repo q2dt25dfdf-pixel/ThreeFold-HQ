@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Briefcase, Building2, Clock, Edit2, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -279,28 +280,13 @@ export default function VendorDetailPage() {
       </div>
 
       {editingVendor && vendorDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base md:text-2xl font-semibold text-slate-950">Edit vendor</h2>
-                <p className="mt-1 text-xs md:text-sm text-slate-500">Update the vendor profile and save changes.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingVendor(false);
-                  setVendorDraft(null);
-                  vendorSave.resetSaveState();
-                  setVendorFormError("");
-                }}
-                className="min-h-11 rounded-full border border-slate-300 px-3 py-1 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-6 space-y-4">
+        <ModalShell
+          title="Edit vendor"
+          subtitle="Update the vendor profile and save changes."
+          onClose={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
+          maxWidth="max-w-lg"
+        >
+            <div className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Name</span>
                 <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.name} onChange={(event) => { setVendorDraft({ ...vendorDraft, name: event.target.value }); if (vendorFormError) setVendorFormError(""); }} />
@@ -330,7 +316,18 @@ export default function VendorDetailPage() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Orders</span>
-                <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  value={vendorDraft.jobs === 0 ? "" : vendorDraft.jobs}
+                  placeholder="0"
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/^0+(?=\d)/, "");
+                    setVendorDraft({ ...vendorDraft, jobs: raw === "" ? 0 : Number(raw) });
+                  }}
+                />
               </label>
             </div>
             <FieldError message={vendorFormError} />
@@ -339,19 +336,13 @@ export default function VendorDetailPage() {
               <SaveButton state={vendorSave.saveState} onClick={saveVendorDraft} className="flex-1 py-3" />
               <button
                 type="button"
-                onClick={() => {
-                  setEditingVendor(false);
-                  setVendorDraft(null);
-                  vendorSave.resetSaveState();
-                  setVendorFormError("");
-                }}
+                onClick={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
                 className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
               >
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </main>
   );

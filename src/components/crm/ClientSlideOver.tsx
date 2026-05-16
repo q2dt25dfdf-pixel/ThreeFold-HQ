@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import type { Lead } from "./types";
 
 interface ClientSlideOverProps {
@@ -21,13 +22,11 @@ export default function ClientSlideOver({ open, lead, onClose }: ClientSlideOver
             </div>
             <button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50"
-              onClick={onClose}
               aria-label="Close"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+              onClick={onClose}
             >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
 
