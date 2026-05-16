@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Search, Trash2 } from "lucide-react";
+import { ErrorBanner, LoadingState } from "@/components/AppState";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -60,7 +61,8 @@ function formatCurrency(amount: number) {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { data: orders, deleteItem, loading, reload } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, deleteItem, loading, error, reload } = useSupabaseTable<Order>("orders", []);
+  const [deletingId, setDeletingId] = useState("");
   const [filter, setFilter] = useState<OrderStatus | "All">("All");
   const [query, setQuery] = useState("");
   const [showAddOrder, setShowAddOrder] = useState(false);
@@ -76,13 +78,16 @@ export default function OrdersPage() {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this order?")) return;
+    setDeletingId(id);
     await deleteItem(id);
+    setDeletingId("");
   };
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading orders..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Orders system</p>
@@ -172,6 +177,7 @@ export default function OrdersPage() {
                 <button
                   type="button"
                   className="flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:h-10 md:w-10"
+                  disabled={deletingId === order.id}
                   aria-label={`Delete ${order.orderName}`}
                   onClick={() => handleDelete(order.id)}
                 >
@@ -181,6 +187,11 @@ export default function OrdersPage() {
             </article>
           );
         })}
+        {visible.length === 0 && (
+          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-semibold text-slate-600 xl:col-span-3">
+            No orders match your filters.
+          </div>
+        )}
       </div>
 
       <AddOrderModal

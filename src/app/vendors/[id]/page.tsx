@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Briefcase, Building2, Clock, Edit2, Trash2 } from "lucide-react";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type VendorStatus = "Active" | "Review" | "Paused";
@@ -83,32 +85,32 @@ export default function VendorDetailPage() {
   const params = useParams<{ id: string }>();
   const vendorId = params.id;
 
-  const { data: vendors, upsertItem, deleteItem, loading: vendorsLoading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
-  const { data: orders, loading: ordersLoading } = useSupabaseTable<Order>("orders", []);
+  const { data: vendors, upsertItem, deleteItem, loading: vendorsLoading, error: vendorsError } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<Order>("orders", []);
   const [editingVendor, setEditingVendor] = useState(false);
   const [vendorDraft, setVendorDraft] = useState<Vendor | null>(null);
-  const [vendorSaveLabel, setVendorSaveLabel] = useState("Save Changes");
-  const [notesSaveLabel, setNotesSaveLabel] = useState("Save Changes");
+  const vendorSave = useSaveState();
+  const notesSave = useSaveState();
+  const [vendorFormError, setVendorFormError] = useState("");
 
   const vendor = vendors.find((item) => item.id === vendorId);
   const vendorOrders = orders.filter((order) => vendor && order.vendor.trim().toLowerCase() === vendor.name.trim().toLowerCase());
 
   const openVendorEditor = () => {
     if (!vendor) return;
-    setVendorSaveLabel("Save Changes");
+    vendorSave.resetSaveState();
     setVendorDraft({ ...vendor });
     setEditingVendor(true);
   };
 
   const saveVendorDraft = async () => {
     if (!vendorDraft) return;
-    await upsertItem(vendorDraft);
-    setVendorSaveLabel("Saved ✓");
-    window.setTimeout(() => {
-      setEditingVendor(false);
-      setVendorDraft(null);
-      setVendorSaveLabel("Save Changes");
-    }, 700);
+    if (!vendorDraft.name.trim()) {
+      setVendorFormError("Vendor name is required.");
+      return;
+    }
+    setVendorFormError("");
+    await vendorSave.runSave(() => upsertItem(vendorDraft));
   };
 
   const handleDeleteVendor = () => {
@@ -124,12 +126,10 @@ export default function VendorDetailPage() {
 
   const handleSaveVendorNotes = async () => {
     if (!vendor) return;
-    await upsertItem(vendor);
-    setNotesSaveLabel("Saved ✓");
-    window.setTimeout(() => setNotesSaveLabel("Save Changes"), 1200);
+    await notesSave.runSave(() => upsertItem(vendor));
   };
 
-  if (vendorsLoading || ordersLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (vendorsLoading || ordersLoading) return <LoadingState label="Loading vendor..." />;
 
   if (!vendor) {
     return (
@@ -147,6 +147,7 @@ export default function VendorDetailPage() {
 
   return (
     <main className="min-h-screen text-xs text-slate-950 md:text-sm">
+      <ErrorBanner message={vendorsError || ordersError} />
       <header className="bg-slate-950 p-2 md:p-3 text-white md:p-8">
         <button type="button" onClick={() => router.push("/vendors")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -265,13 +266,7 @@ export default function VendorDetailPage() {
               <h2 className="text-base md:text-lg font-semibold">Notes</h2>
               <p className="mt-1 text-xs md:text-sm text-slate-500">Vendor notes save as you type.</p>
             </div>
-            <button
-              type="button"
-              onClick={handleSaveVendorNotes}
-              className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              {notesSaveLabel}
-            </button>
+            <SaveButton state={notesSave.saveState} onClick={handleSaveVendorNotes} className="w-72" />
           </div>
           <textarea
             rows={7}
@@ -296,7 +291,8 @@ export default function VendorDetailPage() {
                 onClick={() => {
                   setEditingVendor(false);
                   setVendorDraft(null);
-                  setVendorSaveLabel("Save Changes");
+                  vendorSave.resetSaveState();
+                  setVendorFormError("");
                 }}
                 className="min-h-11 rounded-full border border-slate-300 px-3 py-1 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
@@ -307,7 +303,7 @@ export default function VendorDetailPage() {
             <div className="mt-6 space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Name</span>
-                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.name} onChange={(event) => setVendorDraft({ ...vendorDraft, name: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.name} onChange={(event) => { setVendorDraft({ ...vendorDraft, name: event.target.value }); if (vendorFormError) setVendorFormError(""); }} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Type</span>
@@ -337,17 +333,17 @@ export default function VendorDetailPage() {
                 <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.jobs} onChange={(event) => setVendorDraft({ ...vendorDraft, jobs: Number(event.target.value) })} />
               </label>
             </div>
+            <FieldError message={vendorFormError} />
 
             <div className="mt-6 flex gap-3">
-              <button type="button" onClick={saveVendorDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">
-                {vendorSaveLabel}
-              </button>
+              <SaveButton state={vendorSave.saveState} onClick={saveVendorDraft} className="flex-1 py-3" />
               <button
                 type="button"
                 onClick={() => {
                   setEditingVendor(false);
                   setVendorDraft(null);
-                  setVendorSaveLabel("Save Changes");
+                  vendorSave.resetSaveState();
+                  setVendorFormError("");
                 }}
                 className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
               >

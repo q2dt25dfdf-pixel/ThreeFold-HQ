@@ -4,6 +4,8 @@ import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Client = {
@@ -164,7 +166,7 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
   );
 }
 
-function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
+function Modal({ title, onSave, onClose, onDelete, saveState, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
@@ -190,13 +192,7 @@ function Modal({ title, onSave, onClose, onDelete, children }: { title: string; 
           >
             Cancel
           </button>
-          <button
-            type="button"
-            className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-            onClick={onSave}
-          >
-            Save
-          </button>
+          <SaveButton state={saveState} onClick={onSave} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
         </div>
         {onDelete && <button className="mx-6 mb-6 w-[calc(100%-3rem)] rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
       </div>
@@ -206,12 +202,15 @@ function Modal({ title, onSave, onClose, onDelete, children }: { title: string; 
 
 export default function ClientsPage() {
   const router = useRouter();
-  const { data: clients, upsertItem, deleteItem, loading } = useSupabaseTable<Client>("clients", defaultClients);
+  const { data: clients, upsertItem, deleteItem, loading, error } = useSupabaseTable<Client>("clients", defaultClients);
   const { data: orders } = useSupabaseTable<Order>("orders", []);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "orders">("all");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const addSave = useSaveState();
+  const [formError, setFormError] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const orderCountForClient = (clientName: string) =>
     orders.filter((order) => order.client.trim().toLowerCase() === clientName.trim().toLowerCase()).length;
@@ -225,23 +224,31 @@ export default function ClientsPage() {
   const totalOrders = orders.length;
   const activeClients = clients.filter((client) => client.status === "Active").length;
 
-  const handleAdd = () => {
-    if (!form.name.trim()) return;
+  const handleAdd = async () => {
+    if (!form.name.trim()) {
+      setFormError("Company name is required.");
+      return;
+    }
+    setFormError("");
     const newClient = { id: `client-${Date.now()}`, ...form };
-    upsertItem(newClient);
-    setForm(emptyForm);
-    setShowAdd(false);
+    await addSave.runSave(async () => {
+      const response = await upsertItem(newClient);
+      if (!response.error) setForm(emptyForm);
+      return response;
+    });
   };
 
   const handleDelete = (id: string) => {
     if (!window.confirm("Delete this item?")) return;
-    deleteItem(id);
+    setDeletingId(id);
+    void deleteItem(id).finally(() => setDeletingId(""));
   };
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading clients..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">Client accounts</p>
@@ -253,7 +260,7 @@ export default function ClientsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64" placeholder="Search clients..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add client</button>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-900 md:w-auto" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add client</button>
         </div>
       </div>
 
@@ -315,6 +322,7 @@ export default function ClientsPage() {
               <button
                 type="button"
                 className="justify-self-start rounded-full p-1 text-rose-600 hover:bg-rose-50 md:justify-self-end"
+                disabled={deletingId === client.id}
                 aria-label={`Delete ${client.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -333,7 +341,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => setShowAdd(false)}><FormFields form={form} setForm={setForm} /></Modal>}
+      {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState}><FormFields form={form} setForm={(next) => { setForm(next); if (formError) setFormError(""); }} /><div className="px-6"><FieldError message={formError} /></div></Modal>}
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import AddOrderModal from "@/components/orders/AddOrderModal";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type ClientStatus = "Active" | "At Risk" | "Dormant" | "Lead";
@@ -80,19 +82,21 @@ export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
   const clientId = params.id;
 
-  const { data: clients, upsertItem: upsertClient, loading: clientsLoading } = useSupabaseTable<Client>("clients", defaultClients);
-  const { data: orders, loading: ordersLoading } = useSupabaseTable<Order>("orders", []);
-  const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
+  const { data: clients, upsertItem: upsertClient, loading: clientsLoading, error: clientsError } = useSupabaseTable<Client>("clients", defaultClients);
+  const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<Order>("orders", []);
+  const { data: activity, upsertItem: upsertActivity, loading: activityLoading, error: activityError } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
   const [editingHeader, setEditingHeader] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [clientDraft, setClientDraft] = useState<Client | null>(null);
-  const [clientSaveLabel, setClientSaveLabel] = useState("Save Changes");
-  const [contactSaveLabel, setContactSaveLabel] = useState("Save Changes");
+  const clientSave = useSaveState();
+  const contactSave = useSaveState();
   const [activityForm, setActivityForm] = useState({
     type: "Call" as ActivityEntry["type"],
     owner: "Alliyah",
     notes: "",
   });
+  const [clientFormError, setClientFormError] = useState("");
+  const [activityErrorText, setActivityErrorText] = useState("");
 
   const client = clients.find((item) => item.id === clientId);
   const clientOrders = orders.filter((order) => client && order.client.trim().toLowerCase() === client.name.trim().toLowerCase());
@@ -110,32 +114,31 @@ export default function ClientDetailPage() {
 
   const openClientEditor = () => {
     if (!client) return;
-    setClientSaveLabel("Save Changes");
+    clientSave.resetSaveState();
     setClientDraft({ ...client });
   };
 
   const saveClientDraft = async () => {
     if (!clientDraft) return;
-    await upsertClient(clientDraft);
-    setClientSaveLabel("Saved ✓");
-    window.setTimeout(() => {
-      setClientDraft(null);
-      setClientSaveLabel("Save Changes");
-    }, 700);
+    if (!clientDraft.name.trim()) {
+      setClientFormError("Client name is required.");
+      return;
+    }
+    setClientFormError("");
+    await clientSave.runSave(() => upsertClient(clientDraft));
   };
 
   const saveHeaderContact = async () => {
     if (!client) return;
-    await upsertClient(client);
-    setContactSaveLabel("Saved ✓");
-    window.setTimeout(() => {
-      setEditingHeader(false);
-      setContactSaveLabel("Save Changes");
-    }, 700);
+    await contactSave.runSave(() => upsertClient(client));
   };
 
   const addActivity = () => {
-    if (!activityForm.notes.trim()) return;
+    if (!activityForm.notes.trim()) {
+      setActivityErrorText("Activity notes are required.");
+      return;
+    }
+    setActivityErrorText("");
     const entry: ActivityEntry = {
       id: `activity-${Date.now()}`,
       clientId,
@@ -148,7 +151,7 @@ export default function ClientDetailPage() {
     setActivityForm((current) => ({ ...current, notes: "" }));
   };
 
-  if (clientsLoading || ordersLoading || activityLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (clientsLoading || ordersLoading || activityLoading) return <LoadingState label="Loading client..." />;
 
   if (!client) {
     return (
@@ -166,6 +169,7 @@ export default function ClientDetailPage() {
 
   return (
     <main className="min-h-screen text-xs md:text-sm">
+      <ErrorBanner message={clientsError || ordersError || activityError} />
       <header className="bg-slate-950 p-2 md:p-3 text-white md:p-8">
         <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -186,7 +190,10 @@ export default function ClientDetailPage() {
           </div>
           <button
             type="button"
-            onClick={() => setEditingHeader((value) => !value)}
+            onClick={() => {
+              contactSave.resetSaveState();
+              setEditingHeader((value) => !value);
+            }}
             className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-white/10"
           >
             <Edit2 className="h-4 w-4" aria-hidden="true" />
@@ -211,13 +218,7 @@ export default function ClientDetailPage() {
               </label>
             ))}
             <div className="flex justify-end md:col-span-3">
-              <button
-                type="button"
-                onClick={saveHeaderContact}
-                className="min-h-11 rounded-3xl bg-white px-5 py-3 text-xs md:text-sm font-semibold text-slate-950 hover:bg-slate-100"
-              >
-                {contactSaveLabel}
-              </button>
+              <SaveButton state={contactSave.saveState} onClick={saveHeaderContact} className="w-72 bg-white text-slate-950 hover:bg-slate-100" />
             </div>
           </div>
         )}
@@ -303,9 +304,10 @@ export default function ClientDetailPage() {
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => setActivityForm((current) => ({ ...current, notes: event.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => { setActivityForm((current) => ({ ...current, notes: event.target.value })); if (activityErrorText) setActivityErrorText(""); }} />
             <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-xs md:text-sm font-semibold text-white">Log</button>
           </div>
+          <FieldError message={activityErrorText} />
 
           <div className="mt-5 space-y-3">
             {clientActivity.length === 0 && <p className="text-xs md:text-sm text-slate-500">No activity logged yet.</p>}
@@ -342,7 +344,7 @@ export default function ClientDetailPage() {
                   {field.key === "address" ? (
                     <AddressAutocomplete className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft.address ?? "")} onChange={(value) => setClientDraft({ ...clientDraft, address: value })} />
                   ) : (
-                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => setClientDraft({ ...clientDraft, [field.key]: event.target.value })} />
+                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => { setClientDraft({ ...clientDraft, [field.key]: event.target.value }); if (clientFormError) setClientFormError(""); }} />
                   )}
                 </label>
               ))}
@@ -361,9 +363,10 @@ export default function ClientDetailPage() {
                 <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.notes} onChange={(event) => setClientDraft({ ...clientDraft, notes: event.target.value })} />
               </label>
             </div>
+            <FieldError message={clientFormError} />
             <div className="mt-6 flex gap-3">
-              <button type="button" onClick={saveClientDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">{clientSaveLabel}</button>
-              <button type="button" onClick={() => { setClientDraft(null); setClientSaveLabel("Save Changes"); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
+              <SaveButton state={clientSave.saveState} onClick={saveClientDraft} className="flex-1 py-3" />
+              <button type="button" onClick={() => { setClientDraft(null); clientSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
             </div>
           </div>
         </div>

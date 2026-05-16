@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CalendarDays, DollarSign, Edit2, Package, UserRound } from "lucide-react";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type OrderStatus = "Draft" | "In Production" | "Quality Control" | "Fulfilled";
@@ -44,28 +46,30 @@ function normalizeOrder(order: Order): Order {
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { data: orders, upsertItem, loading } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, upsertItem, loading, error } = useSupabaseTable<Order>("orders", []);
   const order = orders.map(normalizeOrder).find((item) => item.id === params.id);
   const [orderDraft, setOrderDraft] = useState<Order | null>(null);
-  const [orderSaveLabel, setOrderSaveLabel] = useState("Save Changes");
+  const orderSave = useSaveState();
+  const [formError, setFormError] = useState("");
 
   const openOrderEditor = () => {
     if (!order) return;
     setOrderDraft({ ...order, items: [...order.items] });
-    setOrderSaveLabel("Save Changes");
+    setFormError("");
+    orderSave.resetSaveState();
   };
 
   const saveOrderDraft = async () => {
     if (!orderDraft) return;
-    await upsertItem(normalizeOrder(orderDraft));
-    setOrderSaveLabel("Saved ✓");
-    window.setTimeout(() => {
-      setOrderDraft(null);
-      setOrderSaveLabel("Save Changes");
-    }, 700);
+    if (!orderDraft.orderName.trim()) {
+      setFormError("Order name is required.");
+      return;
+    }
+    setFormError("");
+    await orderSave.runSave(() => upsertItem(normalizeOrder(orderDraft)));
   };
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading order..." />;
 
   if (!order) {
     return (
@@ -84,6 +88,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <button type="button" onClick={() => router.push("/orders")} className="inline-flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-600 hover:text-slate-950">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Orders
@@ -150,7 +155,7 @@ export default function OrderDetailPage() {
               </div>
               <button
                 type="button"
-                onClick={() => { setOrderDraft(null); setOrderSaveLabel("Save Changes"); }}
+                onClick={() => { setOrderDraft(null); setFormError(""); orderSave.resetSaveState(); }}
                 className="min-h-11 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
               >
                 Close
@@ -160,7 +165,7 @@ export default function OrderDetailPage() {
             <div className="mt-6 space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Order name</span>
-                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.orderName} onChange={(event) => setOrderDraft({ ...orderDraft, orderName: event.target.value })} />
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.orderName} onChange={(event) => { setOrderDraft({ ...orderDraft, orderName: event.target.value }); if (formError) setFormError(""); }} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Client</span>
@@ -204,12 +209,11 @@ export default function OrderDetailPage() {
                 <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.notes} onChange={(event) => setOrderDraft({ ...orderDraft, notes: event.target.value })} />
               </label>
             </div>
+            <FieldError message={formError} />
 
             <div className="mt-6 flex gap-3">
-              <button type="button" onClick={saveOrderDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm">
-                {orderSaveLabel}
-              </button>
-              <button type="button" onClick={() => { setOrderDraft(null); setOrderSaveLabel("Save Changes"); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm">
+              <SaveButton state={orderSave.saveState} onClick={saveOrderDraft} className="flex-1 py-3" />
+              <button type="button" onClick={() => { setOrderDraft(null); setFormError(""); orderSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm">
                 Cancel
               </button>
             </div>

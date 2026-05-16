@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
+import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
@@ -129,7 +130,7 @@ const initialLeads: Lead[] = [
 ];
 
 export default function CRMPage() {
-  const { data: leads, upsertItem, deleteItem, loading } = useSupabaseTable<Lead>("crm_leads", initialLeads);
+  const { data: leads, upsertItem, deleteItem, loading, error } = useSupabaseTable<Lead>("crm_leads", initialLeads);
   const { upsertItem: upsertClient } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -209,12 +210,14 @@ export default function CRMPage() {
     });
   };
 
-  const handleAddLead = (values: Omit<Lead, "id">) => {
-    if (!values.company.trim()) return;
+  const handleAddLead = async (values: Omit<Lead, "id">) => {
+    if (!values.company.trim()) return false;
     const lead = { id: createId(), ...values };
 
-    upsertItem(lead);
-    upsertClient({
+    const leadResponse = await upsertItem(lead);
+    if (leadResponse.error) return leadResponse;
+
+    const clientResponse = await upsertClient({
       id: `client-${lead.id}`,
       name: lead.company,
       company: lead.company,
@@ -226,10 +229,11 @@ export default function CRMPage() {
       notes: `Added from CRM. Initial inquiry: ${lead.notes}`,
       status: "Lead",
     });
-    syncFollowUpTask(lead);
+    if (clientResponse.error) return clientResponse;
 
-    setShowAddModal(false);
+    syncFollowUpTask(lead);
     setToastMessage("Lead added to pipeline and client account created.");
+    return leadResponse;
   };
 
   const handleSaveDetailLead = async (updated: Lead) => {
@@ -248,10 +252,11 @@ export default function CRMPage() {
     if (viewLead?.id === lead.id) setViewLead(null);
   };
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading CRM..." />;
 
   return (
     <div className="min-h-screen min-w-0 space-y-10 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>

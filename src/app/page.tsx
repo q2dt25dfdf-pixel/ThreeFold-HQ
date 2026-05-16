@@ -27,6 +27,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { pipelineStages } from "@/components/crm/types";
 
@@ -164,13 +165,14 @@ export default function Home() {
   const searchRef = useRef<HTMLDivElement | null>(null);
   const [globalQuery, setGlobalQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const { data: clients } = useSupabaseTable<StorageRecord>("clients", defaultSearchRows);
-  const { data: vendors } = useSupabaseTable<StorageRecord>("vendors", defaultSearchRows);
-  const { data: orders } = useSupabaseTable<StorageRecord>("orders", defaultSearchRows);
-  const { data: finances } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
-  const { data: tasks } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
-  const { data: crmLeads } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
-  const { data: pipeline } = useSupabaseTable<StorageRecord>("pipeline", []);
+  const { data: clients, loading: clientsLoading, error: clientsError } = useSupabaseTable<StorageRecord>("clients", defaultSearchRows);
+  const { data: vendors, loading: vendorsLoading, error: vendorsError } = useSupabaseTable<StorageRecord>("vendors", defaultSearchRows);
+  const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<StorageRecord>("orders", defaultSearchRows);
+  const { data: finances, loading: financesLoading, error: financesError } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
+  const { data: tasks, loading: tasksLoading, error: tasksError } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
+  const { data: crmLeads, loading: crmLoading, error: crmError } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
+  const loading = clientsLoading || vendorsLoading || ordersLoading || financesLoading || tasksLoading || crmLoading;
+  const loadError = clientsError || vendorsError || ordersError || financesError || tasksError || crmError;
 
   const openTasks = useMemo(() => tasks.filter((task) => !isTaskDone(task)), [tasks]);
   const doneTasks = useMemo(() => tasks.filter(isTaskDone), [tasks]);
@@ -185,10 +187,10 @@ export default function Home() {
   );
   const pipelineValue = useMemo(
     () =>
-      pipeline
+      crmLeads
         .filter((record) => stringField(record, "stage").trim().toLowerCase() !== "closed lost")
         .reduce((sum, record) => sum + numericAmount(record.value), 0),
-    [pipeline],
+    [crmLeads],
   );
   const focusItems = useMemo(() => {
     const latestOrders = mostRecentRecord(orders);
@@ -395,9 +397,12 @@ export default function Home() {
 
   const totalResults = Object.values(groupedResults).reduce((sum, items) => sum + items.length, 0);
 
+  if (loading) return <LoadingState label="Loading dashboard..." />;
+
   return (
     <main className="min-h-screen text-xs text-[#0f172a] md:text-sm">
       <div className="space-y-6 text-xs md:text-sm">
+        <ErrorBanner message={loadError} />
         <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[8px]">
           <div className="grid min-h-[200px] gap-6 p-4 pt-24 md:min-h-[260px] md:gap-8 md:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
             <div className="flex flex-col justify-between gap-10">

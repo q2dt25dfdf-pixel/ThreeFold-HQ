@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { LoadingState } from "@/components/AppState";
 import Sidebar from "./Sidebar";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -49,8 +50,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (checkingSession) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-zinc-100 text-sm font-semibold text-slate-600">
-        Loading Threefold HQ...
+      <div className="min-h-dvh bg-zinc-100 p-4 sm:p-6 lg:p-8">
+        <LoadingState />
       </div>
     );
   }
@@ -77,7 +78,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!sidebarOpen && (
         <button
           type="button"
-          className="fixed left-4 top-4 z-[99999] flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-2xl leading-none text-white shadow-lg lg:hidden"
+          className="fixed left-4 top-4 z-[99999] flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-2xl leading-none text-white shadow-lg hover:bg-slate-800 active:bg-slate-900 lg:hidden"
           aria-label="Open navigation"
           onClick={() => setSidebarOpen(true)}
         >

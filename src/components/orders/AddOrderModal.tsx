@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FieldError } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type LookupRecord = {
@@ -154,6 +156,8 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
   const [status, setStatus] = useState<OrderStatus>("Draft");
   const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
+  const { saveState, runSave } = useSaveState();
+  const [formError, setFormError] = useState("");
 
 
   const toggleItem = (item: string) => {
@@ -182,36 +186,40 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
   };
 
   const handleSave = async () => {
-    if (!orderName.trim()) return;
+    if (!orderName.trim()) {
+      setFormError("Order name is required.");
+      return;
+    }
+    setFormError("");
 
-    const resolvedClient = clients.find((record) => recordName(record).trim().toLowerCase() === client.trim().toLowerCase());
-    const resolvedVendor = vendors.find((record) => recordName(record).trim().toLowerCase() === vendor.trim().toLowerCase());
+    await runSave(async () => {
+      const resolvedClient = clients.find((record) => recordName(record).trim().toLowerCase() === client.trim().toLowerCase());
+      const resolvedVendor = vendors.find((record) => recordName(record).trim().toLowerCase() === vendor.trim().toLowerCase());
 
-    const order: Order = {
-      id: `order-${Date.now()}`,
-      orderName: orderName.trim(),
-      order_name: orderName.trim(),
-      client: client.trim(),
-      client_id: clientId || resolvedClient?.id || "",
-      client_name: client.trim(),
-      vendor: vendor.trim(),
-      vendor_id: vendorId || resolvedVendor?.id || "",
-      vendor_name: vendor.trim(),
-      items: selectedItems,
-      quantity: Number(quantity || 0),
-      amount: Number(amountCents || "0") / 100,
-      status,
-      estimatedDeliveryDate,
-      notes: notes.trim(),
-    };
+      const order: Order = {
+        id: `order-${Date.now()}`,
+        orderName: orderName.trim(),
+        order_name: orderName.trim(),
+        client: client.trim(),
+        client_id: clientId || resolvedClient?.id || "",
+        client_name: client.trim(),
+        vendor: vendor.trim(),
+        vendor_id: vendorId || resolvedVendor?.id || "",
+        vendor_name: vendor.trim(),
+        items: selectedItems,
+        quantity: Number(quantity || 0),
+        amount: Number(amountCents || "0") / 100,
+        status,
+        estimatedDeliveryDate,
+        notes: notes.trim(),
+      };
 
-    const response = await upsertItem(order);
-    console.log("AddOrderModal orders upsert response", { order, response });
+      const response = await upsertItem(order);
+      if (response.error) return response;
 
-    if (response.error) return;
-
-    await onSaved?.(order);
-    onClose();
+      await onSaved?.(order);
+      return response;
+    });
   };
 
   return (
@@ -239,8 +247,12 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
               placeholder="e.g. Spring staff shirts"
               value={orderName}
-              onChange={(event) => setOrderName(event.target.value)}
+              onChange={(event) => {
+                setOrderName(event.target.value);
+                if (formError) setFormError("");
+              }}
             />
+            <FieldError message={formError} />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -367,13 +379,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
         </div>
 
         <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
-            onClick={handleSave}
-          >
-            Save order
-          </button>
+          <SaveButton state={saveState} onClick={handleSave} className="flex-1 py-3" />
           <button
             type="button"
             className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"

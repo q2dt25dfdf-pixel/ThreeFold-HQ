@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { FieldError } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import type { CompanyProfile, Lead } from "./types";
 import { pipelineStages, type LeadStatus, type PipelineStage } from "./types";
 
@@ -9,7 +11,7 @@ interface LeadFormModalProps {
   lead?: Lead | null;
   initialStage?: PipelineStage;
   onClose: () => void;
-  onSubmit: (values: Omit<Lead, "id">) => void | Promise<void>;
+  onSubmit: (values: Omit<Lead, "id">) => unknown | Promise<unknown>;
 }
 
 const industryOptions = [
@@ -76,6 +78,8 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
   const [status, setStatus] = useState<Lead["status"]>(lead?.status ?? "Open");
   const [followUpDate, setFollowUpDate] = useState(lead?.followUpDate ?? "");
   const [notes, setNotes] = useState(lead?.notes ?? "");
+  const { saveState, resetSaveState, runSave } = useSaveState();
+  const [formError, setFormError] = useState("");
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -108,29 +112,41 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       setFollowUpDate("");
       setNotes("");
     }
-  }, [lead, mode, open, initialStage]);
+    resetSaveState();
+    setFormError("");
+  }, [lead, mode, open, initialStage, resetSaveState]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!open) return null;
 
   const title = mode === "add" ? "Add New Lead" : "Edit Lead";
-  const submitLabel = mode === "add" ? "Create Lead" : "Save Changes";
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit({
-      company: company.trim(),
-      companyProfile: { industry, address: address.trim(), website: website.trim() },
-      contact: contact.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      value,
-      owner: owner.trim() || "Unassigned",
-      stage,
-      status,
-      followUpDate: followUpDate || "TBD",
-      notes: notes.trim() || "No additional notes yet.",
-      communicationHistory: lead?.communicationHistory ?? [],
+    if (!company.trim()) {
+      setFormError("Company name is required.");
+      return;
+    }
+    if (!contact.trim()) {
+      setFormError("Contact name is required.");
+      return;
+    }
+    setFormError("");
+    await runSave(() => {
+      return onSubmit({
+        company: company.trim(),
+        companyProfile: { industry, address: address.trim(), website: website.trim() },
+        contact: contact.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        value,
+        owner: owner.trim() || "Unassigned",
+        stage,
+        status,
+        followUpDate: followUpDate || "TBD",
+        notes: notes.trim() || "No additional notes yet.",
+        communicationHistory: lead?.communicationHistory ?? [],
+      });
     });
   };
 
@@ -158,18 +174,26 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
               <input
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={company}
-                onChange={(event) => setCompany(event.target.value)}
+                onChange={(event) => {
+                  setCompany(event.target.value);
+                  if (formError) setFormError("");
+                }}
                 required
               />
+              <FieldError message={formError.includes("Company") ? formError : undefined} />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               Contact name
               <input
                 className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
                 value={contact}
-                onChange={(event) => setContact(event.target.value)}
+                onChange={(event) => {
+                  setContact(event.target.value);
+                  if (formError) setFormError("");
+                }}
                 required
               />
+              <FieldError message={formError.includes("Contact") ? formError : undefined} />
             </label>
           </div>
 
@@ -315,12 +339,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              {submitLabel}
-            </button>
+            <SaveButton type="submit" state={saveState} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
           </div>
         </form>
       </div>

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Package, Printer, Search, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Vendor = {
@@ -60,11 +62,14 @@ const defaultVendors: Vendor[] = [
 const emptyForm = { name: "", type: "", turnaround: "", contact: "", email: "", phone: "", address: "", website: "", notes: "", status: "Review" as Vendor["status"], jobs: 0 };
 export default function VendorsPage() {
   const router = useRouter();
-  const { data: vendors, upsertItem, deleteItem, loading } = useSupabaseTable<Vendor>("vendors", defaultVendors);
+  const { data: vendors, upsertItem, deleteItem, loading, error } = useSupabaseTable<Vendor>("vendors", defaultVendors);
   const { data: orders } = useSupabaseTable<Order>("orders", []);
   const [showModal, setShowModal] = useState(false);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyForm);
+  const addSave = useSaveState();
+  const [formError, setFormError] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const orderCountForVendor = (vendorName: string) =>
     orders.filter((order) => order.vendor.trim().toLowerCase() === vendorName.trim().toLowerCase()).length;
@@ -104,17 +109,24 @@ export default function VendorsPage() {
     },
   ].filter((section) => section.vendors.length > 0);
 
-  const handleAdd = () => {
-    if (!form.name.trim()) return;
+  const handleAdd = async () => {
+    if (!form.name.trim()) {
+      setFormError("Company name is required.");
+      return;
+    }
+    setFormError("");
     const newVendor = { id: `vendor-${Date.now()}`, ...form };
-    upsertItem(newVendor);
-    setForm(emptyForm);
-    setShowModal(false);
+    await addSave.runSave(async () => {
+      const response = await upsertItem(newVendor);
+      if (!response.error) setForm(emptyForm);
+      return response;
+    });
   };
 
   const handleDelete = (id: string) => {
     if (!window.confirm("Delete this item?")) return;
-    deleteItem(id);
+    setDeletingId(id);
+    void deleteItem(id).finally(() => setDeletingId(""));
   };
 
   const renderFields = () => (
@@ -247,10 +259,11 @@ export default function VendorsPage() {
     </div>
   );
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading vendors..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Vendors</p>
@@ -268,7 +281,7 @@ export default function VendorsPage() {
           </label>
           <button
             className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
-            onClick={() => setShowModal(true)}
+            onClick={() => { setFormError(""); addSave.resetSaveState(); setShowModal(true); }}
           >
             Add vendor
           </button>
@@ -320,6 +333,7 @@ export default function VendorsPage() {
                         <button
                           type="button"
                           className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                          disabled={deletingId === vendor.id}
                           aria-label={`Delete ${vendor.name}`}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -373,7 +387,7 @@ export default function VendorsPage() {
               <button
                 type="button"
                 className="min-h-11 rounded-full bg-slate-100 px-3 py-2 text-slate-600 transition hover:bg-slate-200"
-                onClick={() => { setShowModal(false); setForm(emptyForm); }}
+                onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}
               >
                 Close
               </button>
@@ -383,17 +397,14 @@ export default function VendorsPage() {
               <button
                 type="button"
                 className="min-h-11 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => { setShowModal(false); setForm(emptyForm); }}
+                onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-                onClick={handleAdd}
-              >
-                Add vendor
-              </button>
+              <div className="w-full sm:w-auto">
+                <SaveButton state={addSave.saveState} onClick={handleAdd} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
+                <FieldError message={formError} />
+              </div>
             </div>
           </div>
         </div>

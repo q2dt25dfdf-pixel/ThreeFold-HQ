@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Founder = "All" | "Alliyah" | "Hannah" | "Jordan";
@@ -115,14 +117,17 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarView>("month");
-  const { data: events, upsertItem, deleteItem, loading: eventsLoading } = useSupabaseTable<CalendarEvent>("calendar_events", []);
+  const { data: events, upsertItem, deleteItem, loading: eventsLoading, error } = useSupabaseTable<CalendarEvent>("calendar_events", []);
   const [showAdd, setShowAdd] = useState(false);
   const [showTodayDetails, setShowTodayDetails] = useState(false);
   const [form, setForm] = useState(emptyEvent);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [eventDraft, setEventDraft] = useState<CalendarEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState(false);
-  const [eventSaveLabel, setEventSaveLabel] = useState("Save Changes");
+  const addSave = useSaveState();
+  const eventSave = useSaveState();
+  const [formError, setFormError] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const monthLabel = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const todayKey = formatDate(today);
@@ -210,18 +215,29 @@ export default function CalendarPage() {
     setCurrentWeek(new Date(startOfWeek));
   };
 
-  const handleAddEvent = () => {
-    if (!form.title.trim() || !form.date) return;
+  const handleAddEvent = async () => {
+    if (!form.title.trim()) {
+      setFormError("Event title is required.");
+      return;
+    }
+    if (!form.date) {
+      setFormError("Event date is required.");
+      return;
+    }
+    setFormError("");
     const newEvent = { id: `event-${Date.now()}`, ...form };
-    upsertItem(newEvent);
-    setForm(emptyEvent);
-    setShowAdd(false);
+    await addSave.runSave(async () => {
+      const response = await upsertItem(newEvent);
+      if (!response.error) setForm(emptyEvent);
+      return response;
+    });
   };
 
 
   const handleDeleteEvent = (id: string) => {
     if (!window.confirm("Delete this item?")) return;
-    deleteItem(id);
+    setDeletingId(id);
+    void deleteItem(id).finally(() => setDeletingId(""));
     setSelectedEvent(null);
     setEventDraft(null);
     setEditingEvent(false);
@@ -231,7 +247,8 @@ export default function CalendarPage() {
     setSelectedEvent(event);
     setEventDraft({ ...event, priority: eventPriority(event), notes: event.notes ?? "" });
     setEditingEvent(false);
-    setEventSaveLabel("Save Changes");
+    eventSave.resetSaveState();
+    setFormError("");
     setShowTodayDetails(false);
   };
 
@@ -239,22 +256,32 @@ export default function CalendarPage() {
     setSelectedEvent(null);
     setEventDraft(null);
     setEditingEvent(false);
-    setEventSaveLabel("Save Changes");
+    eventSave.resetSaveState();
   };
 
   const handleSaveEvent = async () => {
-    if (!eventDraft || !eventDraft.title.trim() || !eventDraft.date) return;
-    await upsertItem(eventDraft);
-    setSelectedEvent(eventDraft);
-    setEditingEvent(false);
-    setEventSaveLabel("Saved ✓");
-    window.setTimeout(() => setEventSaveLabel("Save Changes"), 1200);
+    if (!eventDraft) return;
+    if (!eventDraft.title.trim()) {
+      setFormError("Event title is required.");
+      return;
+    }
+    if (!eventDraft.date) {
+      setFormError("Event date is required.");
+      return;
+    }
+    setFormError("");
+    await eventSave.runSave(async () => {
+      const response = await upsertItem(eventDraft);
+      if (!response.error) setSelectedEvent(eventDraft);
+      return response;
+    });
   };
 
-  if (eventsLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (eventsLoading) return <LoadingState label="Loading calendar..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handlePrevious} aria-label={view === "week" ? "Previous week" : "Previous month"}>
@@ -284,7 +311,7 @@ export default function CalendarPage() {
               {option}
             </button>
           ))}
-          <button className="ml-3 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-emerald-700 md:min-h-0" type="button" onClick={() => setShowAdd(true)}>
+          <button className="ml-3 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-emerald-700 md:min-h-0" type="button" onClick={() => { setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add event
           </button>
@@ -415,6 +442,8 @@ export default function CalendarPage() {
               type="button"
               onClick={() => {
                 setForm({ ...emptyEvent, date: todayKey });
+                setFormError("");
+                addSave.resetSaveState();
                 setShowAdd(true);
               }}
             >
@@ -487,10 +516,11 @@ export default function CalendarPage() {
                 type="button"
                 className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
                 aria-label={`Delete ${event.title}`}
-                onClick={(clickEvent) => {
-                  clickEvent.stopPropagation();
-                  handleDeleteEvent(event.id);
-                }}
+                          onClick={(clickEvent) => {
+                            clickEvent.stopPropagation();
+                            handleDeleteEvent(event.id);
+                          }}
+                          disabled={deletingId === event.id}
                 onKeyDown={(keyEvent) => keyEvent.stopPropagation()}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -548,10 +578,12 @@ export default function CalendarPage() {
                 />
               </div>
             </div>
+            <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleAddEvent}>Save</button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={() => setShowAdd(false)}>Cancel</button>
+              <SaveButton state={addSave.saveState} onClick={handleAddEvent} className="flex-1 py-3" />
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={() => { setShowAdd(false); setFormError(""); }}>Cancel</button>
             </div>
+            <FieldError message={formError} />
           </div>
         </div>
       )}
@@ -647,15 +679,15 @@ export default function CalendarPage() {
 
             <div className="mt-6 flex gap-3">
               {editingEvent ? (
-                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleSaveEvent}>{eventSaveLabel}</button>
+                <SaveButton state={eventSave.saveState} onClick={handleSaveEvent} className="flex-1 py-3" />
               ) : (
-                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={() => setEditingEvent(true)}>Edit</button>
+                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={() => { eventSave.resetSaveState(); setEditingEvent(true); }}>Edit</button>
               )}
               {!editingEvent && (
-                <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={handleSaveEvent}>{eventSaveLabel}</button>
+                <SaveButton state={eventSave.saveState} onClick={handleSaveEvent} className="flex-1 py-3" />
               )}
             </div>
-            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" type="button" onClick={() => handleDeleteEvent(selectedEvent.id)}>
+            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" type="button" disabled={deletingId === selectedEvent.id} onClick={() => handleDeleteEvent(selectedEvent.id)}>
               Delete event
             </button>
           </div>
@@ -691,6 +723,8 @@ export default function CalendarPage() {
               onClick={() => {
                 setForm({ ...emptyEvent, date: todayKey });
                 setShowTodayDetails(false);
+                setFormError("");
+                addSave.resetSaveState();
                 setShowAdd(true);
               }}
             >

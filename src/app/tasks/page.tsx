@@ -2,6 +2,8 @@
 
 import { type ReactNode, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
@@ -158,14 +160,15 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
   );
 }
 
-function Modal({ title, onSave, onClose, onDelete, saveLabel = "Save", children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveLabel?: string; children: ReactNode }) {
+function Modal({ title, onSave, onClose, onDelete, saveState, error, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; error?: string; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-3 md:py-6 shadow-xl md:px-10 md:py-10">
         <h2 className="text-base md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
         {children}
+        <FieldError message={error} />
         <div className="mt-6 flex gap-3">
-          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>{saveLabel}</button>
+          <SaveButton state={saveState} className="flex-1 py-3" onClick={onSave} />
           <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
         {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
@@ -175,12 +178,15 @@ function Modal({ title, onSave, onClose, onDelete, saveLabel = "Save", children 
 }
 
 export default function TasksPage() {
-  const { data: tasks, upsertItem, deleteItem, loading } = useSupabaseTable<Task>("tasks", defaultTasks);
+  const { data: tasks, upsertItem, deleteItem, loading, error } = useSupabaseTable<Task>("tasks", defaultTasks);
   const [filterOwner, setFilterOwner] = useState<TaskOwner | "All">("All");
   const [showAdd, setShowAdd] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
-  const [editSaveLabel, setEditSaveLabel] = useState("Save Changes");
+  const addSave = useSaveState();
+  const editSave = useSaveState();
   const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const toggle = (id: string) => {
     const task = tasks.find((current) => current.id === id);
@@ -191,26 +197,37 @@ export default function TasksPage() {
   };
   const openAddForFounder = (founder: TaskColumn) => {
     setForm({ ...emptyForm, assignedTo: founder });
+    setFormError("");
+    addSave.resetSaveState();
     setShowAdd(true);
   };
-  const handleAdd = () => {
-    if (!form.title.trim()) return;
+  const handleAdd = async () => {
+    if (!form.title.trim()) {
+      setFormError("Task title is required.");
+      return;
+    }
+    setFormError("");
     const newTask = { id: `task-${Date.now()}`, ...form };
-    upsertItem(newTask);
-    setForm(emptyForm); setShowAdd(false);
+    await addSave.runSave(async () => {
+      const response = await upsertItem(newTask);
+      if (!response.error) setForm(emptyForm);
+      return response;
+    });
   };
   const handleSaveEdit = async () => {
     if (!editTask) return;
-    await upsertItem(editTask);
-    setEditSaveLabel("Saved ✓");
-    window.setTimeout(() => {
-      setEditTask(null);
-      setEditSaveLabel("Save Changes");
-    }, 700);
+    if (!editTask.title.trim()) {
+      setFormError("Task title is required.");
+      return;
+    }
+    setFormError("");
+    await editSave.runSave(() => upsertItem(editTask));
   };
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
+    setDeletingId(id);
     await deleteItem(id);
+    setDeletingId("");
     setEditTask(null);
   };
 
@@ -221,10 +238,11 @@ export default function TasksPage() {
     <article
       role="button"
       tabIndex={0}
-      onClick={() => setEditTask({ ...task })}
+      onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
+          editSave.resetSaveState();
           setEditTask({ ...task });
         }
       }}
@@ -241,10 +259,11 @@ export default function TasksPage() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
+            <button onClick={(e) => { e.stopPropagation(); toggle(task.id); }} className={`min-h-11 rounded-xl px-3 py-1 text-xs font-semibold text-white md:min-h-0 ${task.completed ? "bg-slate-400" : "bg-slate-950"}`}>{task.completed ? "Reopen" : "Done"}</button>
           <button
             type="button"
             className="min-h-11 min-w-11 rounded-full p-1 text-rose-600 hover:bg-rose-50 md:min-h-0 md:min-w-0"
+            disabled={deletingId === task.id}
             aria-label={`Delete ${task.title}`}
             onClick={(event) => {
               event.stopPropagation();
@@ -265,24 +284,25 @@ export default function TasksPage() {
     );
   };
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading tasks..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Team tasks</p>
           <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Task board</h1>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setShowAdd(true); }}>Add task</button>
+          <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add task</button>
           <select className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900" value={filterOwner} onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}>
             <option>All</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
           </select>
         </div>
       </div>
 
-      <PipelineFollowUps tasks={tasks.filter(isCrmTask)} onComplete={toggle} onOpen={(task) => setEditTask({ ...task })} />
+      <PipelineFollowUps tasks={tasks.filter(isCrmTask)} onComplete={toggle} onOpen={(task) => { editSave.resetSaveState(); setEditTask({ ...task }); }} />
 
       <div className="grid gap-5 xl:grid-cols-3">
         {founderColumns
@@ -332,8 +352,8 @@ export default function TasksPage() {
         })}
       </div>
 
-      {showAdd && <Modal title="Add task" onSave={handleAdd} onClose={() => setShowAdd(false)}><FormFields data={form} onChange={setForm} /></Modal>}
-      {editTask && <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setEditSaveLabel("Save Changes"); }} onDelete={() => handleDelete(editTask.id)} saveLabel={editSaveLabel}><FormFields data={editTask} onChange={setEditTask} /></Modal>}
+      {showAdd && <Modal title="Add task" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} error={formError}><FormFields data={form} onChange={(next) => { setForm(next); if (formError) setFormError(""); }} /></Modal>}
+      {editTask && <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setFormError(""); editSave.resetSaveState(); }} onDelete={() => handleDelete(editTask.id)} saveState={editSave.saveState} error={formError}><FormFields data={editTask} onChange={(next) => { setEditTask(next); if (formError) setFormError(""); }} /></Modal>}
     </div>
   );
 }

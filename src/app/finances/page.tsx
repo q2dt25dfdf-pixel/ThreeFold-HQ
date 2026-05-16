@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import {
   Area,
@@ -272,17 +274,20 @@ function applyOrderToInvoice<T extends InvoiceFields>(invoice: T, order: Order):
 }
 
 export default function FinancesPage() {
-  const { data: invoices, upsertItem, deleteItem, loading } = useSupabaseTable<Invoice>("finances", []);
+  const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders } = useSupabaseTable<Order>("orders", []);
   const [filter, setFilter] = useState<InvoiceStatus | "All">("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
-  const [editSaveLabel, setEditSaveLabel] = useState("Save Changes");
+  const addSave = useSaveState();
+  const editSave = useSaveState();
   const [form, setForm] = useState(emptyForm);
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const normalizedInvoices = useMemo(() => invoices.map((invoice) => normalizeInvoice(invoice)), [invoices]);
 
   const visible = (filter === "All" ? normalizedInvoices : normalizedInvoices.filter((invoice) => invoice.status === filter)).filter((invoice) =>
@@ -358,7 +363,7 @@ export default function FinancesPage() {
   const openEditInvoice = (invoice: Invoice) => {
     setClientDropdownOpen(false);
     setOrderDropdownOpen(false);
-    setEditSaveLabel("Save Changes");
+    editSave.resetSaveState();
     setEditInvoice(hydrateInvoiceLinks(invoice));
   };
 
@@ -378,36 +383,48 @@ export default function FinancesPage() {
     return () => window.clearTimeout(timeout);
   }, [form.client, form.client_id, form.client_name, form.order_id, orders, showModal]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const linkedForm = normalizeInvoice(form);
-    if (!linkedForm.client_name.trim()) return;
+    if (!linkedForm.client_name.trim()) {
+      setFormError("Client is required.");
+      return;
+    }
+    setFormError("");
     const newInvoice = { id: "invoice-" + Date.now(), ...linkedForm };
-    upsertItem(newInvoice);
-    setForm(emptyForm);
-    setClientDropdownOpen(false);
-    setOrderDropdownOpen(false);
-    setShowModal(false);
+    await addSave.runSave(async () => {
+      const response = await upsertItem(newInvoice);
+      if (!response.error) {
+        setForm(emptyForm);
+        setClientDropdownOpen(false);
+        setOrderDropdownOpen(false);
+      }
+      return response;
+    });
   };
 
   const handleSaveEdit = async () => {
     if (!editInvoice) return;
     const linkedInvoice = normalizeInvoice(editInvoice);
-    await upsertItem(linkedInvoice);
-    setEditSaveLabel("Saved ✓");
-    window.setTimeout(() => {
-      setEditInvoice(null);
-      setEditSaveLabel("Save Changes");
-    }, 700);
+    if (!invoiceClientName(linkedInvoice).trim()) {
+      setFormError("Client is required.");
+      return;
+    }
+    setFormError("");
+    await editSave.runSave(() => upsertItem(linkedInvoice));
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
+    setDeletingId(id);
     await deleteItem(id);
+    setDeletingId("");
     setEditInvoice(null);
   };
 
   const openAddModal = () => {
     setForm(emptyForm);
+    setFormError("");
+    addSave.resetSaveState();
     setClientDropdownOpen(false);
     setOrderDropdownOpen(false);
     setShowModal(true);
@@ -654,10 +671,11 @@ export default function FinancesPage() {
   );
   };
 
-  if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingState label="Loading finances..." />;
 
   return (
     <div className="space-y-7 text-xs md:text-sm">
+      <ErrorBanner message={error} />
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Finances</p>
@@ -837,6 +855,7 @@ export default function FinancesPage() {
                 <button
                   type="button"
                   className="rounded-full p-2 text-rose-600 hover:bg-rose-50"
+                  disabled={deletingId === invoice.id}
                   aria-label={"Delete " + invoiceOrderName(invoice)}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -877,11 +896,10 @@ export default function FinancesPage() {
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-3 shadow-xl md:p-8">
             <h2 className="text-base md:text-2xl font-semibold text-slate-950">Add invoice</h2>
             {renderFields(form, (next) => setForm(next as typeof emptyForm))}
+            <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={handleAdd}>
-                Add invoice
-              </button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
+              <SaveButton state={addSave.saveState} onClick={handleAdd} className="flex-1 py-3" />
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                 Cancel
               </button>
             </div>
@@ -894,15 +912,14 @@ export default function FinancesPage() {
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-2 md:p-8 shadow-xl">
             <h2 className="text-base md:text-2xl font-semibold text-slate-950">Edit invoice</h2>
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
+            <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
-              <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={handleSaveEdit}>
-                {editSaveLabel}
-              </button>
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setEditInvoice(null); setEditSaveLabel("Save Changes"); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
+              <SaveButton state={editSave.saveState} onClick={handleSaveEdit} className="flex-1 py-3" />
+              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                 Cancel
               </button>
             </div>
-            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={() => handleDelete(editInvoice.id)}>
+            <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" disabled={deletingId === editInvoice.id} onClick={() => handleDelete(editInvoice.id)}>
               Delete invoice
             </button>
           </div>

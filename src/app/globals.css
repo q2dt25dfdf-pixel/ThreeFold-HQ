@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+button,
+a,
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+button:not(:disabled):active,
+a:active {
+  transform: translateY(1px) scale(0.99);
+}

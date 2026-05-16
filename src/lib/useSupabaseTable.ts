@@ -17,13 +17,16 @@ export function useSupabaseTable<T extends { id: string }>(
   const mountedRef = useRef(false);
   const reloadTimeoutRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const hasLoadedRef = useRef(false);
   const [subscriptionCycle, setSubscriptionCycle] = useState(0);
   const [data, setDataState] = useState<T[]>(defaultData);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!hasLoadedRef.current) setLoading(true);
+      setErrorMessage("");
       const { data: rows, error } = await supabase
         .from(tableName)
         .select("id,data")
@@ -31,6 +34,7 @@ export function useSupabaseTable<T extends { id: string }>(
 
       if (error) {
         console.error(`Failed to load Supabase table "${tableName}"`, error);
+        if (mountedRef.current) setErrorMessage(`Couldn't load ${tableName.replaceAll("_", " ")}. Please try again.`);
         if (mountedRef.current) setDataState([]);
         return;
       }
@@ -42,9 +46,13 @@ export function useSupabaseTable<T extends { id: string }>(
       if (mountedRef.current) setDataState(freshData);
     } catch (error) {
       console.error(`Failed to load Supabase table "${tableName}"`, error);
+      if (mountedRef.current) setErrorMessage(`Couldn't load ${tableName.replaceAll("_", " ")}. Please try again.`);
       if (mountedRef.current) setDataState([]);
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current) {
+        hasLoadedRef.current = true;
+        setLoading(false);
+      }
     }
   }, [tableName]);
 
@@ -121,28 +129,35 @@ export function useSupabaseTable<T extends { id: string }>(
       if (response.error) {
         console.error(`Failed to upsert Supabase table "${tableName}"`, response.error);
         await loadData();
+        if (mountedRef.current) setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
         return response;
       }
 
+      if (mountedRef.current) setErrorMessage("");
       await loadData();
       return response;
     } catch (error) {
       console.error(`Failed to upsert Supabase table "${tableName}"`, error);
       await loadData();
+      if (mountedRef.current) setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
       return { data: null, error, count: null, status: 0, statusText: "Client exception" } as MutationResponse;
     }
   };
 
-  const deleteItem = async (id: string) => {
+  const deleteItem = async (id: string): Promise<{ error: unknown | null }> => {
     setDataState((prev) => prev.filter((item) => item.id !== id));
 
     try {
       const { error } = await supabase.from(tableName).delete().eq("id", id);
       if (error) throw error;
+      if (mountedRef.current) setErrorMessage("");
       await loadData();
+      return { error: null };
     } catch (error) {
       console.error(`Failed to delete from Supabase table "${tableName}"`, error);
       await loadData();
+      if (mountedRef.current) setErrorMessage(`Couldn't delete from ${tableName.replaceAll("_", " ")}.`);
+      return { error };
     }
   };
 
@@ -152,12 +167,14 @@ export function useSupabaseTable<T extends { id: string }>(
     try {
       const { error } = await supabase.from(tableName).upsert(items.map((item) => ({ id: item.id, data: item })));
       if (error) throw error;
+      if (mountedRef.current) setErrorMessage("");
       await loadData();
     } catch (error) {
       console.error(`Failed to replace Supabase table "${tableName}"`, error);
       await loadData();
+      if (mountedRef.current) setErrorMessage(`Couldn't save changes to ${tableName.replaceAll("_", " ")}.`);
     }
   };
 
-  return { data, upsertItem, deleteItem, setData: setAll, loading, reload: loadData };
+  return { data, upsertItem, deleteItem, setData: setAll, loading, error: errorMessage, reload: loadData };
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { FieldError } from "@/components/AppState";
+import SaveButton, { useSaveState } from "@/components/SaveButton";
 import type { Lead, PipelineStage, CommunicationEntry } from "./types";
 import { pipelineStages } from "./types";
 
@@ -109,12 +111,17 @@ function InlineField({
 
 export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete }: Props) {
   const [data, setData] = useState<Lead | null>(null);
-  const [saveLabel, setSaveLabel] = useState("Save Changes");
+  const { saveState, resetSaveState, runSave } = useSaveState();
 
   // Activity log form state
   const [logType, setLogType] = useState<CommunicationEntry["type"]>("Call");
   const [logOwner, setLogOwner] = useState("Alliyah");
   const [logNote, setLogNote] = useState("");
+  const [logError, setLogError] = useState("");
+
+  useEffect(() => {
+    if (open) resetSaveState();
+  }, [lead?.id, open, resetSaveState]);
 
   if (!open || !lead) return null;
 
@@ -138,13 +145,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
   };
 
   const handleSaveChanges = async () => {
-    await onSave(current);
-    setSaveLabel("Saved ✓");
-    window.setTimeout(() => setSaveLabel("Save Changes"), 1200);
+    await runSave(() => onSave(current));
   };
 
   const addActivityEntry = () => {
-    if (!logNote.trim()) return;
+    if (!logNote.trim()) {
+      setLogError("Activity notes are required.");
+      return;
+    }
+    setLogError("");
     const entry: CommunicationEntry = {
       id: `comm-${Date.now()}`,
       type: logType,
@@ -247,8 +256,12 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
                   className="w-full resize-none rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
                   placeholder="What happened? Add notes..."
                   value={logNote}
-                  onChange={(e) => setLogNote(e.target.value)}
+                  onChange={(e) => {
+                    setLogNote(e.target.value);
+                    if (logError) setLogError("");
+                  }}
                 />
+                <FieldError message={logError} />
                 <button
                   type="button"
                   onClick={addActivityEntry}
@@ -301,13 +314,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
               Delete
             </button>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSaveChanges}
-                className="min-h-11 rounded-2xl bg-slate-950 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 md:min-h-0"
-              >
-                {saveLabel}
-              </button>
+              <SaveButton state={saveState} onClick={handleSaveChanges} className="w-72 rounded-2xl py-2 text-sm md:min-h-0" />
               <button
                 type="button"
                 onClick={onClose}

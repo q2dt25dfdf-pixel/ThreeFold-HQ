@@ -56,13 +56,13 @@ export default function Sidebar({
 
           <nav className="space-y-2">
             {sections.map((section) => {
-              const active = pathname === section.href;
+              const active = section.href === "/" ? pathname === "/" : pathname === section.href || pathname.startsWith(`${section.href}/`);
               return (
                 <Link
                   key={section.href}
                   href={section.href}
                   onClick={onNavigate}
-                  className={`block rounded-3xl px-4 py-3 text-sm font-semibold transition ${
+                  className={`block rounded-3xl px-4 py-3 text-sm font-semibold transition active:bg-white/10 ${
                     active
                       ? "bg-slate-100 text-slate-950 shadow-md"
                       : "text-slate-300 hover:bg-white/5 hover:text-slate-50"
@@ -99,7 +99,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={handleSignOut}
-            className="w-full rounded-3xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/5 hover:text-white"
+            className="w-full rounded-3xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/5 hover:text-white active:bg-white/10"
           >
             Sign Out
           </button>
