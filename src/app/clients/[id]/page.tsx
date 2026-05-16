@@ -1,5 +1,16 @@
 "use client";
 
+/*
+ * SQL migration — run once in Supabase SQL editor to enable client activity logging:
+ *
+ * create table if not exists client_activity (
+ *   id   text primary key,
+ *   data jsonb
+ * );
+ * alter table client_activity enable row level security;
+ * create policy "open_access" on client_activity for all using (true) with check (true);
+ */
+
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
@@ -29,6 +40,7 @@ type Order = {
   id: string;
   orderName: string;
   client: string;
+  client_id?: string;
   vendor: string;
   items: string[];
   quantity: number;
@@ -84,7 +96,7 @@ export default function ClientDetailPage() {
   const clientId = params.id;
 
   const { data: clients, upsertItem: upsertClient, loading: clientsLoading, error: clientsError } = useSupabaseTable<Client>("clients", defaultClients);
-  const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, upsertItem: upsertOrder, loading: ordersLoading, error: ordersError, reload: reloadOrders } = useSupabaseTable<Order>("orders", []);
   const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
   const [editingHeader, setEditingHeader] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -100,7 +112,11 @@ export default function ClientDetailPage() {
   const [activityErrorText, setActivityErrorText] = useState("");
 
   const client = clients.find((item) => item.id === clientId);
-  const clientOrders = orders.filter((order) => client && order.client.trim().toLowerCase() === client.name.trim().toLowerCase());
+  const clientOrders = orders.filter((order) => {
+    if (!client) return false;
+    if (order.client_id) return order.client_id === clientId;
+    return order.client.trim().toLowerCase() === client.name.trim().toLowerCase();
+  });
   const clientActivity = activity.filter((entry) => entry.clientId === clientId);
 
   const totalSpend = useMemo(
@@ -151,11 +167,8 @@ export default function ClientDetailPage() {
     try {
       const response = await upsertActivity(entry);
       if (response?.error) {
-        const isTableMissing = (response.error as { code?: string })?.code === "42P01";
-        if (!isTableMissing) {
-          setActivityErrorText("Couldn't save activity. Please try again.");
-          return;
-        }
+        setActivityErrorText("Couldn't save activity. Please try again.");
+        return;
       }
       setActivityForm((current) => ({ ...current, notes: "" }));
     } catch {
@@ -229,8 +242,8 @@ export default function ClientDetailPage() {
                 />
               </label>
             ))}
-            <div className="flex justify-end md:col-span-3">
-              <SaveButton state={contactSave.saveState} onClick={saveHeaderContact} className="w-72 bg-white text-slate-950 hover:bg-slate-100" />
+            <div className="md:col-span-3 md:flex md:justify-end">
+              <SaveButton state={contactSave.saveState} onClick={saveHeaderContact} className="w-full md:w-72 border border-white/20 bg-white text-slate-950 hover:bg-slate-100" />
             </div>
           </div>
         )}
@@ -339,7 +352,17 @@ export default function ClientDetailPage() {
         </section>
       </div>
 
-      <AddOrderModal open={showOrderModal} onClose={() => setShowOrderModal(false)} prefilledClient={client.name} />
+      <AddOrderModal
+        open={showOrderModal}
+        onClose={() => setShowOrderModal(false)}
+        prefilledClient={client.name}
+        onSaved={async (savedOrder) => {
+          if (!savedOrder.client_id) {
+            await upsertOrder({ ...savedOrder, client_id: clientId });
+          }
+          await reloadOrders();
+        }}
+      />
 
       {clientDraft && (
         <ModalShell
