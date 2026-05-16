@@ -335,7 +335,7 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="space-y-6 text-xs md:text-sm">
+      <div className="w-full overflow-x-hidden space-y-6 text-xs md:text-sm">
         <button type="button" onClick={() => router.push("/orders")} className="inline-flex items-center gap-2 font-semibold text-slate-600 hover:text-slate-950">
           <ArrowLeft className="h-4 w-4" />
           Orders
@@ -357,9 +357,9 @@ export default function OrderDetailPage() {
   // --- Section JSX (rendered once per layout; both layouts share state) ---
 
   const TimelineSection = (
-    <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Timeline</h2>
-      <div className="overflow-x-auto pb-2">
+      <div className="w-full overflow-x-auto pb-2">
         <div className="flex min-w-max items-start">
           {TIMELINE_STAGES.map((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
@@ -455,9 +455,9 @@ export default function OrderDetailPage() {
               ),
             },
           ].map(({ label, value, extra, valueClass }) => (
-            <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-              <span className="text-xs text-slate-500">{label}</span>
-              <div className="flex items-center gap-2">
+            <div key={label} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+              <span className="shrink-0 text-xs text-slate-500">{label}</span>
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
                 {value && <span className={`text-xs font-semibold ${valueClass ?? "text-slate-950"}`}>{value}</span>}
                 {extra}
               </div>
@@ -498,7 +498,7 @@ export default function OrderDetailPage() {
         ] as const).map(({ label, value }) => (
           <div key={label} className="flex items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
             <span className="shrink-0 text-xs text-slate-500">{label}</span>
-            <span className="text-right text-xs font-medium text-slate-950">{value}</span>
+            <span className="min-w-0 break-words text-right text-xs font-medium text-slate-950">{value}</span>
           </div>
         ))}
         {order.notes && (
@@ -566,7 +566,7 @@ export default function OrderDetailPage() {
   );
 
   return (
-    <div className="space-y-5 text-xs md:text-sm">
+    <div className="w-full overflow-x-hidden space-y-5 text-xs md:text-sm">
       <ErrorBanner message={error} />
 
       {/* Back nav */}
@@ -585,7 +585,7 @@ export default function OrderDetailPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Order</p>
-              <h1 className="mt-2 text-2xl font-bold leading-tight text-white md:text-4xl">{order.orderName}</h1>
+              <h1 className="mt-2 break-words text-2xl font-bold leading-tight text-white md:text-4xl">{order.orderName}</h1>
               <p className="mt-1.5 text-sm text-slate-300">{order.client || "No client assigned"}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClass(order.status)}`}>
