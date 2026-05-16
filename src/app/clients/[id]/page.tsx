@@ -242,8 +242,18 @@ export default function ClientDetailPage() {
                 />
               </label>
             ))}
-            <div className="md:col-span-3 md:flex md:justify-end">
-              <SaveButton state={contactSave.saveState} onClick={saveHeaderContact} className="w-full md:w-72 border border-white/20 bg-white text-slate-950 hover:bg-slate-100" />
+            <div className="md:col-span-3">
+              <button
+                type="button"
+                onClick={saveHeaderContact}
+                disabled={contactSave.saveState === "saving"}
+                className="min-h-11 w-full rounded-3xl border border-white/25 bg-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/25 disabled:opacity-60 md:text-sm"
+              >
+                {contactSave.saveState === "saving" ? "Saving…" :
+                 contactSave.saveState === "success" ? "Saved ✓" :
+                 contactSave.saveState === "error" ? "Couldn't save. Try again." :
+                 "Save contact"}
+              </button>
             </div>
           </div>
         )}
