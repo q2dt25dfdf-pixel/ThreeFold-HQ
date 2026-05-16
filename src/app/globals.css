@@ -9,8 +9,10 @@
 /* Prevent white flash before Tailwind CSS loads; block horizontal scroll globally */
 html,
 body {
+  height: 100%;
   background-color: #f4f4f5; /* zinc-100 */
   overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 /* Form fields never exceed their container */
