@@ -71,7 +71,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!sidebarOpen && (
         <button
           type="button"
-          className="fixed left-4 top-4 z-[99999] flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-2xl leading-none text-white shadow-lg hover:bg-slate-800 active:bg-slate-900 lg:hidden"
+          className="fixed left-4 top-4 z-[50000] flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-2xl leading-none text-white shadow-lg hover:bg-slate-800 active:bg-slate-900 lg:hidden"
           aria-label="Open navigation"
           onClick={() => setSidebarOpen(true)}
         >

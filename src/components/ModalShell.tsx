@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -21,6 +23,8 @@ export default function ModalShell({
   children,
   footer,
 }: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   useScrollLock();
 
   const header = (
@@ -40,30 +44,52 @@ export default function ModalShell({
     </div>
   );
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
-      {/* Mobile: full-screen sheet — sits above the hamburger (z-[99999]) */}
-      <div className="fixed inset-0 z-[100000] flex h-dvh flex-col bg-white md:hidden">
+      {/* Mobile: full-screen sheet — portal ensures fixed positioning is never trapped by parent transforms */}
+      <div
+        className="md:hidden"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 100000,
+          display: "flex",
+          flexDirection: "column",
+          height: "100dvh",
+          backgroundColor: "white",
+        }}
+      >
+        {/* Header — never scrolls */}
         <div className="shrink-0 border-b border-slate-100 px-5 py-4">
           {header}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-none px-5 py-5">
+
+        {/* Content — only scrollable area */}
+        <div
+          className="overscroll-y-none px-5 py-5"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
+        >
           {children}
         </div>
-        {footer ? (
-          <div
-            className="shrink-0 border-t border-slate-100 px-5 py-4"
-            style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 1rem)" }}
-          >
-            {footer}
-          </div>
-        ) : (
-          <div style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }} />
-        )}
+
+        {/* Footer — never scrolls, always visible */}
+        <div
+          className="shrink-0 border-t border-slate-100 px-5 py-4"
+          style={{
+            paddingBottom: "max(env(safe-area-inset-bottom, 0px), 1rem)",
+          }}
+        >
+          {footer}
+        </div>
       </div>
 
-      {/* Desktop: centered dialog */}
-      <div className="fixed inset-0 z-[100000] hidden items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm md:flex">
+      {/* Desktop: centered dialog — portal keeps z-index reliable */}
+      <div
+        className="hidden items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm md:flex"
+        style={{ position: "fixed", inset: 0, zIndex: 100000 }}
+      >
         <div
           className={`modal-enter max-h-[90vh] w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 shadow-2xl`}
         >
@@ -72,6 +98,7 @@ export default function ModalShell({
           {footer && <div className="mt-6">{footer}</div>}
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
