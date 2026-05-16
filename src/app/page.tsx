@@ -61,7 +61,8 @@ function isTaskDone(task: StorageRecord) {
 }
 
 function taskOwner(task: StorageRecord) {
-  return stringField(task, "owner").trim();
+  const owner = stringField(task, "owner").trim();
+  return owner || stringField(task, "assignedTo").trim();
 }
 
 function numericAmount(value: unknown) {

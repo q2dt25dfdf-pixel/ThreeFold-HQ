@@ -264,6 +264,14 @@ export default function CRMPage() {
           <p className="text-slate-600 text-xs md:text-sm mt-2">
             Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
           </p>
+          <button
+            type="button"
+            onClick={() => openAddLeadModal()}
+            className="hidden md:flex mt-4 items-center gap-2 rounded-2xl bg-slate-950 px-5 py-2.5 text-xs font-semibold text-white hover:bg-slate-800"
+          >
+            <Plus size={16} />
+            Add lead
+          </button>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-center md:w-auto">
           <div className="relative w-full md:w-auto">
@@ -278,7 +286,7 @@ export default function CRMPage() {
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:py-2.5"
+            className="md:hidden flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800"
           >
             <Plus size={16} />
             Add lead
@@ -301,11 +309,11 @@ export default function CRMPage() {
         </div>
       </div>
 
-      <div className="overflow-x-hidden bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8">
-        <div className="flex flex-col gap-4 bg-zinc-100 lg:min-w-max lg:flex-row lg:gap-6">
+      <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:gap-5">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
-            <div key={stage} className="w-full rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-3 shadow-sm md:p-5 lg:w-[340px] lg:flex-shrink-0">
+            <div key={stage} className="w-full lg:min-w-[280px] lg:flex-none rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-3 shadow-sm md:p-5">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
