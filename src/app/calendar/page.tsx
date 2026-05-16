@@ -38,6 +38,16 @@ const eventTypeColors: Record<EventType, string> = {
   Other: "border-l-2 border-slate-400 bg-slate-100 text-slate-700",
 };
 
+const eventTypeDotColors: Record<EventType, string> = {
+  "Client Meeting": "bg-blue-500",
+  Demo: "bg-indigo-500",
+  "Video Call": "bg-cyan-500",
+  Delivery: "bg-emerald-500",
+  Deadline: "bg-rose-500",
+  "Internal Meeting": "bg-violet-500",
+  Other: "bg-slate-400",
+};
+
 const assigneePillColors: Record<Assignee, string> = {
   Alliyah: "bg-violet-100 text-violet-700",
   Hannah: "bg-blue-100 text-blue-700",
@@ -208,11 +218,56 @@ function AssigneeSelector({ value, onChange }: { value: Assignee[]; onChange: (v
   );
 }
 
+function AgendaEventCard({
+  event,
+  onOpen,
+  onDelete,
+  deletingId,
+}: {
+  event: CalendarEvent;
+  onOpen: (e: CalendarEvent) => void;
+  onDelete: (id: string) => void;
+  deletingId: string;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:bg-slate-50 active:bg-slate-100"
+      onClick={() => onOpen(event)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(event); } }}
+    >
+      <div className={`w-1 shrink-0 self-stretch rounded-full ${eventTypeDotColors[event.type] ?? "bg-slate-400"}`} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-slate-950">{event.title}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{event.time || "All day"}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex items-center gap-0.5">
+          <AssigneeChips assignees={event.assignedTo} />
+        </div>
+        <PriorityDot priority={eventPriority(event)} />
+        <button
+          type="button"
+          className="rounded-full p-1 text-rose-500 hover:bg-rose-50"
+          aria-label={`Delete ${event.title}`}
+          disabled={deletingId === event.id}
+          onClick={(e) => { e.stopPropagation(); onDelete(event.id); }}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CalendarPage() {
   const [today] = useState(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarView>("month");
+  const [mobileView, setMobileView] = useState<"agenda" | "grid">("agenda");
   const [filterOwner, setFilterOwner] = useState<FilterOption>("All Events");
   const { data: rawEvents, upsertItem, deleteItem, loading: eventsLoading, error } = useSupabaseTable<CalendarEvent>("calendar_events", []);
   const [showAdd, setShowAdd] = useState(false);
@@ -246,7 +301,8 @@ export default function CalendarPage() {
   const monthLabel = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const todayKey = formatDate(today);
   const todayLabel = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-  const weekLabel = `${currentWeek.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${new Date(currentWeek.getFullYear(), currentWeek.getMonth(), currentWeek.getDate() + 6).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  const weekLabel = `${currentWeek.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(currentWeek.getFullYear(), currentWeek.getMonth(), currentWeek.getDate() + 6).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  const currentViewLabel = view === "week" ? weekLabel : view === "today" ? todayLabel : monthLabel;
   const gridTemplateColumns = "4rem repeat(7, minmax(0, 1fr))";
 
   const normalizedEvents = useMemo(() => {
@@ -296,6 +352,25 @@ export default function CalendarPage() {
         return ds !== 0 ? ds : (a.time ?? "").localeCompare(b.time ?? "");
       });
   }, [filteredEvents]);
+
+  const agendaGroups = useMemo(() => {
+    const grouped = upcomingEvents
+      .filter((e) => e.date >= todayKey)
+      .reduce<Record<string, CalendarEvent[]>>((acc, e) => {
+        acc[e.date] = [...(acc[e.date] ?? []), e];
+        return acc;
+      }, {});
+    return Object.keys(grouped)
+      .sort()
+      .map((dateKey) => {
+        const date = new Date(dateKey + "T00:00:00");
+        const isToday = dateKey === todayKey;
+        const label = isToday
+          ? "Today"
+          : date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+        return { dateKey, label, isToday, events: grouped[dateKey] };
+      });
+  }, [upcomingEvents, todayKey]);
 
   const changeMonth = (offset: number) => {
     setCurrentDate((c) => new Date(c.getFullYear(), c.getMonth() + offset, 1));
@@ -386,14 +461,73 @@ export default function CalendarPage() {
     <div className="space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
 
-      {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      {/* Mobile header */}
+      <div className="space-y-3 md:hidden">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex overflow-hidden rounded-xl border border-slate-300 bg-white">
+            <button
+              type="button"
+              className={`px-4 py-2 text-xs font-semibold transition ${mobileView === "agenda" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              onClick={() => setMobileView("agenda")}
+            >
+              Agenda
+            </button>
+            <button
+              type="button"
+              className={`border-l border-slate-300 px-4 py-2 text-xs font-semibold transition ${mobileView === "grid" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              onClick={() => setMobileView("grid")}
+            >
+              Grid
+            </button>
+          </div>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+            type="button"
+            onClick={() => { setFormError(""); addSave.resetSaveState(); setForm(freshForm()); setShowAdd(true); }}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add event
+          </button>
+        </div>
+        {mobileView === "grid" && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handlePrevious} aria-label={view === "week" ? "Previous week" : "Previous month"}>
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <div className="flex-1 text-center text-xs font-semibold text-slate-950">{currentViewLabel}</div>
+              <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handleNext} aria-label={view === "week" ? "Next week" : "Next month"}>
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50" type="button" onClick={goToToday}>
+                <Home className="h-3 w-3" aria-hidden="true" />
+                Now
+              </button>
+            </div>
+            <div className="flex gap-1.5">
+              {(["today", "week", "month"] as const).map((option) => (
+                <button
+                  key={option}
+                  className={`flex-1 rounded-xl py-2 text-xs font-semibold capitalize ${view === option ? "bg-slate-950 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+                  type="button"
+                  onClick={() => setView(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop header */}
+      <div className="hidden flex-col gap-3 md:flex md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handlePrevious} aria-label={view === "week" ? "Previous week" : "Previous month"}>
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
           <div className="min-w-fit text-xs font-semibold text-slate-950 md:text-base">
-            {view === "week" ? weekLabel : view === "today" ? todayLabel : monthLabel}
+            {currentViewLabel}
           </div>
           <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handleNext} aria-label={view === "week" ? "Next week" : "Next month"}>
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -427,8 +561,8 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Event type legend */}
-      <div className="flex flex-wrap gap-2">
+      {/* Event type legend — scrollable on mobile */}
+      <div className="flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
         {[
           { label: "Client Meeting", className: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
           { label: "Demo", className: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-500" },
@@ -438,7 +572,7 @@ export default function CalendarPage() {
           { label: "Internal Meeting", className: "bg-violet-100 text-violet-700", dot: "bg-violet-500" },
           { label: "Other", className: "bg-slate-100 text-slate-700", dot: "bg-slate-500" },
         ].map((item) => (
-          <span key={item.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${item.className}`}>
+          <span key={item.label} className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${item.className}`}>
             <span className={`inline-block h-2 w-2 rounded-full ${item.dot}`} />
             {item.label}
           </span>
@@ -463,187 +597,250 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      {/* Month view */}
-      {view === "month" && (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
-          <div className="grid grid-cols-7">
-            {weekDays.map((day) => (
-              <div key={day} className="border-b border-r border-slate-200 px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-400 last:border-r-0 md:px-2 md:text-xs">
-                {day}
+      {/* Mobile agenda view */}
+      {mobileView === "agenda" && (
+        <div className="space-y-5 md:hidden">
+          {agendaGroups.length === 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+              No upcoming events.
+            </div>
+          )}
+          {agendaGroups.map(({ dateKey, label, isToday, events }) => (
+            <div key={dateKey}>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`shrink-0 text-xs font-bold uppercase tracking-widest ${isToday ? "text-slate-950" : "text-slate-500"}`}>
+                  {label}
+                </span>
+                {isToday && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />}
+                <div className="h-px min-w-0 flex-1 bg-slate-200" />
               </div>
-            ))}
-            {calendarDays.map((day) => {
-              const dayEvents = eventsByDate[day.key] ?? [];
-              const visibleItems = dayEvents.slice(0, 3);
-              const overflow = dayEvents.length - visibleItems.length;
-              return (
-                <div
-                  key={day.key}
-                  className={`min-h-20 min-w-0 border-b border-r border-slate-200 p-1 last:border-r-0 md:min-h-28 md:p-2 ${day.inMonth ? "bg-white" : "bg-slate-50 text-slate-300"} ${day.key === todayKey ? "cursor-pointer bg-blue-50/40 hover:bg-blue-50" : ""}`}
-                  onClick={() => { if (day.key === todayKey) setShowTodayDetails(true); }}
-                >
-                  <div className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold text-slate-600 md:h-7 md:w-7 md:text-xs ${day.key === todayKey ? "bg-slate-950 text-white" : ""}`}>
-                    {day.date.getDate()}
-                  </div>
-                  <div className="mt-1 min-w-0 space-y-1 md:mt-2">
-                    {visibleItems.map((event) => (
-                      <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
-                    ))}
-                    {overflow > 0 && (
-                      <div className="overflow-hidden truncate rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        +{overflow} more
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+              <div className="space-y-2">
+                {events.map((event) => (
+                  <AgendaEventCard
+                    key={event.id}
+                    event={event}
+                    onOpen={openEvent}
+                    onDelete={handleDeleteEvent}
+                    deletingId={deletingId}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Week view */}
-      {view === "week" && (
-        <div className="overflow-hidden border-l border-t border-slate-200 bg-white">
-          <div className="min-w-0">
-            <div className="grid" style={{ gridTemplateColumns }}>
-              <div className="w-16 shrink-0 border-b border-r border-slate-200" />
-              {weekDates.map((day, i) => (
-                <div key={day.key} className={`min-w-0 overflow-hidden border-b border-r border-slate-200 px-3 py-3 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
-                  <p className="text-xs uppercase text-slate-400">{weekDays[i]}</p>
-                  <p className={`mt-1 inline-flex text-xs font-semibold text-slate-600 md:text-sm ${day.key === todayKey ? "h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-white" : ""}`}>
-                    {day.date.getDate()}
-                  </p>
+      {/* Calendar grid views — always on desktop; on mobile only when mobileView === "grid" */}
+      <div className={mobileView === "grid" ? "" : "hidden md:block"}>
+        {/* Month view */}
+        {view === "month" && (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+            <div className="grid grid-cols-7">
+              {weekDays.map((day) => (
+                <div key={day} className="border-b border-r border-slate-200 px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-400 last:border-r-0 md:px-2 md:text-xs">
+                  {day}
                 </div>
               ))}
-            </div>
-            <div className="grid" style={{ gridTemplateColumns }}>
-              <div className="w-16 shrink-0 border-b border-r border-slate-200 py-2 pr-2 text-right text-xs text-slate-400">All-day</div>
-              {weekDates.map((day) => {
-                const allDayEvents = (eventsByDate[day.key] ?? []).filter((e) => !e.time);
+              {calendarDays.map((day) => {
+                const dayEvents = eventsByDate[day.key] ?? [];
+                const visibleItems = dayEvents.slice(0, 3);
+                const overflow = dayEvents.length - visibleItems.length;
                 return (
-                  <div key={day.key} className={`min-h-16 min-w-0 overflow-hidden border-b border-r border-slate-200 p-2 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
-                    <div className="space-y-1">
-                      {allDayEvents.map((event) => (
+                  <div
+                    key={day.key}
+                    className={`min-h-20 min-w-0 border-b border-r border-slate-200 p-1 last:border-r-0 md:min-h-28 md:p-2 ${day.inMonth ? "bg-white" : "bg-slate-50 text-slate-300"} ${day.key === todayKey ? "cursor-pointer bg-blue-50/40 hover:bg-blue-50" : ""}`}
+                    onClick={() => { if (day.key === todayKey) setShowTodayDetails(true); }}
+                  >
+                    <div className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold text-slate-600 md:h-7 md:w-7 md:text-xs ${day.key === todayKey ? "bg-slate-950 text-white" : ""}`}>
+                      {day.date.getDate()}
+                    </div>
+                    <div className="mt-1 min-w-0 space-y-1 md:mt-2">
+                      {visibleItems.map((event) => (
                         <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                       ))}
+                      {overflow > 0 && (
+                        <div className="overflow-hidden truncate rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                          +{overflow} more
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
-            {hourSlots.map((hour) => (
-              <div key={hour} className="grid" style={{ gridTemplateColumns }}>
-                <div className="h-14 w-16 shrink-0 border-b border-r border-slate-200 pr-2 pt-2 text-right text-xs text-slate-400">
-                  {hour > 12 ? hour - 12 : hour}{hour >= 12 ? "pm" : "am"}
-                </div>
+          </div>
+        )}
+
+        {/* Week view */}
+        {view === "week" && (
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-md">
+            <div className="min-w-[36rem]">
+              <div className="grid border-l border-t border-slate-200" style={{ gridTemplateColumns }}>
+                <div className="w-16 shrink-0 border-b border-r border-slate-200" />
+                {weekDates.map((day, i) => (
+                  <div key={day.key} className={`min-w-0 overflow-hidden border-b border-r border-slate-200 px-3 py-3 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
+                    <p className="text-xs uppercase text-slate-400">{weekDays[i]}</p>
+                    <p className={`mt-1 inline-flex text-xs font-semibold text-slate-600 md:text-sm ${day.key === todayKey ? "h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-white" : ""}`}>
+                      {day.date.getDate()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid border-l border-slate-200" style={{ gridTemplateColumns }}>
+                <div className="w-16 shrink-0 border-b border-r border-slate-200 py-2 pr-2 text-right text-xs text-slate-400">All-day</div>
                 {weekDates.map((day) => {
-                  const timedEvents = (eventsByDate[day.key] ?? []).filter((e) => e.time && Number(e.time.split(":")[0]) === hour);
+                  const allDayEvents = (eventsByDate[day.key] ?? []).filter((e) => !e.time);
                   return (
-                    <div key={`${day.key}-${hour}`} className={`h-14 min-w-0 overflow-hidden border-b border-r border-slate-200 p-1.5 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
+                    <div key={day.key} className={`min-h-16 min-w-0 overflow-hidden border-b border-r border-slate-200 p-2 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
                       <div className="space-y-1">
-                        {timedEvents.map((event) => (
-                          <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
+                        {allDayEvents.map((event) => (
+                          <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
                         ))}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Today view */}
-      {view === "today" && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-2 shadow-md md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-400 md:text-sm">Today</p>
-              <h2 className="mt-2 text-base font-bold text-slate-950 md:text-3xl">{todayLabel}</h2>
-            </div>
-            <button
-              className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
-              type="button"
-              onClick={() => {
-                setForm({ ...freshForm(), date: todayKey });
-                setFormError("");
-                addSave.resetSaveState();
-                setShowAdd(true);
-              }}
-            >
-              Add event
-            </button>
-          </div>
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-            <div className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)]">
-              <div className="border-b border-r border-slate-200 py-3 pr-2 text-right text-xs text-slate-400">All-day</div>
-              <div className="min-h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 md:p-3">
-                <div className="space-y-1">
-                  {(eventsByDate[todayKey] ?? []).filter((e) => !e.time).map((event) => (
-                    <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
-                  ))}
-                  {(eventsByDate[todayKey] ?? []).filter((e) => !e.time).length === 0 && (
-                    <p className="text-xs text-slate-500 md:text-sm">No all-day events.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-            {hourSlots.map((hour) => {
-              const timedEvents = (eventsByDate[todayKey] ?? []).filter((e) => e.time && Number(e.time.split(":")[0]) === hour);
-              return (
-                <div key={`today-${hour}`} className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)]">
-                  <div className="h-16 w-16 shrink-0 border-b border-r border-slate-200 pr-2 pt-3 text-right text-xs text-slate-400">
+              {hourSlots.map((hour) => (
+                <div key={hour} className="grid border-l border-slate-200" style={{ gridTemplateColumns }}>
+                  <div className="h-14 w-16 shrink-0 border-b border-r border-slate-200 pr-2 pt-2 text-right text-xs text-slate-400">
                     {hour > 12 ? hour - 12 : hour}{hour >= 12 ? "pm" : "am"}
                   </div>
-                  <div className={`h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 ${timedEvents.length === 0 ? "border-dashed bg-slate-50/40" : "bg-white"}`}>
-                    <div className="space-y-1">
-                      {timedEvents.map((event) => (
-                        <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
-                      ))}
-                    </div>
+                  {weekDates.map((day) => {
+                    const timedEvents = (eventsByDate[day.key] ?? []).filter((e) => e.time && Number(e.time.split(":")[0]) === hour);
+                    return (
+                      <div key={`${day.key}-${hour}`} className={`h-14 min-w-0 overflow-hidden border-b border-r border-slate-200 p-1.5 ${day.key === todayKey ? "bg-blue-50/30" : "bg-white"}`}>
+                        <div className="space-y-1">
+                          {timedEvents.map((event) => (
+                            <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Today view */}
+        {view === "today" && (
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-md md:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-400 md:text-sm">Today</p>
+                <h2 className="mt-2 text-base font-bold text-slate-950 md:text-3xl">{todayLabel}</h2>
+              </div>
+              <button
+                className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
+                type="button"
+                onClick={() => {
+                  setForm({ ...freshForm(), date: todayKey });
+                  setFormError("");
+                  addSave.resetSaveState();
+                  setShowAdd(true);
+                }}
+              >
+                Add event
+              </button>
+            </div>
+            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+              <div className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)]">
+                <div className="border-b border-r border-slate-200 py-3 pr-2 text-right text-xs text-slate-400">All-day</div>
+                <div className="min-h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 md:p-3">
+                  <div className="space-y-1">
+                    {(eventsByDate[todayKey] ?? []).filter((e) => !e.time).map((event) => (
+                      <EventPill key={event.id} event={event} onDelete={handleDeleteEvent} onOpen={openEvent} />
+                    ))}
+                    {(eventsByDate[todayKey] ?? []).filter((e) => !e.time).length === 0 && (
+                      <p className="text-xs text-slate-500 md:text-sm">No all-day events.</p>
+                    )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+              {hourSlots.map((hour) => {
+                const timedEvents = (eventsByDate[todayKey] ?? []).filter((e) => e.time && Number(e.time.split(":")[0]) === hour);
+                return (
+                  <div key={`today-${hour}`} className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)]">
+                    <div className="h-16 w-16 shrink-0 border-b border-r border-slate-200 pr-2 pt-3 text-right text-xs text-slate-400">
+                      {hour > 12 ? hour - 12 : hour}{hour >= 12 ? "pm" : "am"}
+                    </div>
+                    <div className={`h-16 min-w-0 overflow-hidden border-b border-slate-200 p-2 ${timedEvents.length === 0 ? "border-dashed bg-slate-50/40" : "bg-white"}`}>
+                      <div className="space-y-1">
+                        {timedEvents.map((event) => (
+                          <EventPill key={event.id} event={event} prefix={`${event.time} `} onDelete={handleDeleteEvent} onOpen={openEvent} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Upcoming events */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-2 shadow-md md:p-6">
+      {/* Upcoming events — hidden on mobile when agenda is active (agenda already shows all events) */}
+      <section className={`rounded-[2rem] border border-slate-200 bg-white p-4 shadow-md md:p-6 ${mobileView === "agenda" ? "hidden md:block" : ""}`}>
         <h2 className="text-base font-bold text-slate-950 md:text-xl">Upcoming events</h2>
-        <div className="mt-4 overflow-hidden">
-          <div className="min-w-0 divide-y divide-slate-200">
+        <div className="mt-4">
+          <div className="divide-y divide-slate-200">
             {upcomingEvents.map((event) => (
               <div
                 key={event.id}
                 role="button"
                 tabIndex={0}
-                className="grid w-full cursor-pointer grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-3 py-3 text-left hover:bg-slate-50"
+                className="w-full cursor-pointer py-3 text-left hover:bg-slate-50"
                 onClick={() => openEvent(event)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEvent(event); } }}
               >
-                <p className="text-xs font-semibold text-slate-950 md:text-sm">{event.title}</p>
-                <span className="text-xs text-slate-600 md:text-sm">{event.date}</span>
-                <span className="text-xs text-slate-600 md:text-sm">{event.time || "All-day"}</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {formatAssignedTo(event.assignedTo)}
-                </span>
-                <span className="inline-flex items-center justify-center rounded-full bg-white px-2 py-1">
-                  <PriorityDot priority={eventPriority(event)} />
-                </span>
-                <button
-                  type="button"
-                  className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
-                  aria-label={`Delete ${event.title}`}
-                  onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                  disabled={deletingId === event.id}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
+                {/* Mobile card layout */}
+                <div className="flex items-center gap-3 md:hidden">
+                  <div className={`h-2 w-2 shrink-0 rounded-full ${eventTypeDotColors[event.type] ?? "bg-slate-400"}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-950">{event.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{event.date} · {event.time || "All day"}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex items-center gap-0.5">
+                      <AssigneeChips assignees={event.assignedTo} />
+                    </div>
+                    <PriorityDot priority={eventPriority(event)} />
+                    <button
+                      type="button"
+                      className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                      aria-label={`Delete ${event.title}`}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+                      disabled={deletingId === event.id}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                {/* Desktop grid layout */}
+                <div className="hidden md:grid md:grid-cols-[1fr_auto_auto_auto_auto_auto] md:items-center md:gap-3">
+                  <p className="text-xs font-semibold text-slate-950 md:text-sm">{event.title}</p>
+                  <span className="text-xs text-slate-600 md:text-sm">{event.date}</span>
+                  <span className="text-xs text-slate-600 md:text-sm">{event.time || "All-day"}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {formatAssignedTo(event.assignedTo)}
+                  </span>
+                  <span className="inline-flex items-center justify-center rounded-full bg-white px-2 py-1">
+                    <PriorityDot priority={eventPriority(event)} />
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                    aria-label={`Delete ${event.title}`}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+                    disabled={deletingId === event.id}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             ))}
             {upcomingEvents.length === 0 && (
@@ -727,7 +924,7 @@ export default function CalendarPage() {
 
       {/* Event detail / edit modal */}
       {selectedEvent && eventDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm">
           <div className="modal-enter max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -811,15 +1008,15 @@ export default function CalendarPage() {
                 </>
               ) : (
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-2 md:p-4">
+                  <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Type</p>
                     <p className="mt-2 text-xs font-semibold text-slate-950 md:text-sm">{selectedEvent.type}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 p-2 md:p-4">
+                  <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Assigned to</p>
                     <p className="mt-2 text-xs font-semibold text-slate-950 md:text-sm">{formatAssignedTo(selectedEvent.assignedTo)}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 p-2 md:p-4">
+                  <div className="rounded-2xl border border-slate-200 p-3 md:p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Priority</p>
                     <p className="mt-2 inline-flex items-center text-xs font-semibold text-slate-950 md:text-sm">
                       {eventPriority(selectedEvent)}
@@ -872,7 +1069,7 @@ export default function CalendarPage() {
 
       {/* Today details modal */}
       {showTodayDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm">
           <div className="modal-enter max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
