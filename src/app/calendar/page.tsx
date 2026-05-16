@@ -323,7 +323,7 @@ export default function CalendarPage() {
       const response = await upsertItem(newEvent);
       if (!response.error) setForm(freshForm());
       return response;
-    });
+    }, () => setShowAdd(false));
   };
 
   const handleDeleteEvent = (id: string) => {
@@ -360,7 +360,7 @@ export default function CalendarPage() {
       const response = await upsertItem(eventDraft);
       if (!response.error) setSelectedEvent(eventDraft);
       return response;
-    });
+    }, () => closeEvent());
   };
 
   if (eventsLoading) return <LoadingState label="Loading calendar..." />;
@@ -695,7 +695,7 @@ export default function CalendarPage() {
             </div>
             <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
-              <SaveButton state={addSave.saveState} onClick={handleAddEvent} className="flex-1 py-3" />
+              <SaveButton state={addSave.saveState} onClick={handleAddEvent} mode="add" className="flex-1 py-3" />
               <button
                 className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
                 type="button"

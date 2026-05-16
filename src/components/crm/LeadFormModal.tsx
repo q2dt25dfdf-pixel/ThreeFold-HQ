@@ -133,22 +133,20 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       return;
     }
     setFormError("");
-    await runSave(() => {
-      return onSubmit({
-        company: company.trim(),
-        companyProfile: { industry, address: address.trim(), website: website.trim() },
-        contact: contact.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        value,
-        owner: owner.trim() || "Unassigned",
-        stage,
-        status,
-        followUpDate: followUpDate || "TBD",
-        notes: notes.trim() || "No additional notes yet.",
-        communicationHistory: lead?.communicationHistory ?? [],
-      });
-    });
+    await runSave(() => onSubmit({
+      company: company.trim(),
+      companyProfile: { industry, address: address.trim(), website: website.trim() },
+      contact: contact.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      value,
+      owner: owner.trim() || "Unassigned",
+      stage,
+      status,
+      followUpDate: followUpDate || "TBD",
+      notes: notes.trim() || "No additional notes yet.",
+      communicationHistory: lead?.communicationHistory ?? [],
+    }), onClose);
   };
 
   return (
@@ -341,7 +339,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
             >
               Cancel
             </button>
-            <SaveButton type="submit" state={saveState} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
+            <SaveButton type="submit" state={saveState} mode={mode === "add" ? "add" : "edit"} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
           </div>
         </form>
       </div>

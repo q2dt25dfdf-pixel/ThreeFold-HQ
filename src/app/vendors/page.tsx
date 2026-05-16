@@ -120,7 +120,7 @@ export default function VendorsPage() {
       const response = await upsertItem(newVendor);
       if (!response.error) setForm(emptyForm);
       return response;
-    });
+    }, () => { setShowModal(false); setFormError(""); });
   };
 
   const handleDelete = (id: string) => {
@@ -311,7 +311,7 @@ export default function VendorsPage() {
                         router.push(`/vendors/${vendor.id}`);
                       }
                     }}
-                    className={`rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
+                    className={`rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
                       vendor.status === "Active" ? "border-t-2 border-t-emerald-400" :
                       vendor.status === "Review" ? "border-t-2 border-t-amber-400" : "border-t-2 border-t-slate-300"
                     }`}
@@ -402,7 +402,7 @@ export default function VendorsPage() {
                 Cancel
               </button>
               <div className="w-full sm:w-auto">
-                <SaveButton state={addSave.saveState} onClick={handleAdd} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
+                <SaveButton state={addSave.saveState} onClick={handleAdd} mode="add" className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
                 <FieldError message={formError} />
               </div>
             </div>

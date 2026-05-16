@@ -126,7 +126,7 @@ export default function ClientDetailPage() {
       return;
     }
     setClientFormError("");
-    await clientSave.runSave(() => upsertClient(clientDraft));
+    await clientSave.runSave(() => upsertClient(clientDraft), () => { setClientDraft(null); setClientFormError(""); });
   };
 
   const saveHeaderContact = async () => {
@@ -171,8 +171,8 @@ export default function ClientDetailPage() {
   return (
     <main className="min-h-screen text-xs md:text-sm">
       <ErrorBanner message={clientsError || ordersError} />
-      <header className="bg-slate-950 p-2 md:p-3 text-white md:p-8">
-        <button type="button" onClick={() => router.push("/clients")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
+      <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-6 md:py-8 text-white">
+        <button type="button" onClick={() => router.push("/clients")} className="mb-6 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Clients
         </button>
@@ -182,7 +182,7 @@ export default function ClientDetailPage() {
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
               <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
             </div>
-            <h1 className="mt-5 text-base md:text-xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
             <div className="mt-6 flex flex-wrap gap-4 text-xs md:text-sm text-slate-300">
               <span className="flex items-center gap-2"><Building2 className="h-4 w-4" aria-hidden="true" />{client.contact || "No contact"}</span>
               <span className="flex items-center gap-2"><Mail className="h-4 w-4" aria-hidden="true" />{client.email || "No email"}</span>
@@ -203,7 +203,7 @@ export default function ClientDetailPage() {
         </div>
 
         {editingHeader && (
-          <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-2 md:p-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-4 md:grid-cols-3">
             {[
               { label: "Contact", key: "contact", value: client.contact },
               { label: "Email", key: "email", value: client.email ?? "" },
@@ -225,22 +225,22 @@ export default function ClientDetailPage() {
         )}
       </header>
 
-      <div className="space-y-6 p-2 md:p-6 lg:p-8">
+      <div className="space-y-6 p-4 md:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders", value: String(clientOrders.length) },
             { label: "Total spend", value: totalSpend > 0 ? `$${totalSpend.toLocaleString()}` : "$0" },
             { label: "Account status", value: client.status },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
               <p className="text-xs md:text-sm text-slate-500">{stat.label}</p>
-              <p className="mt-3 text-base md:text-3xl font-semibold text-slate-950">{stat.value}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{stat.value}</p>
             </div>
           ))}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Account details</h2>
@@ -267,7 +267,7 @@ export default function ClientDetailPage() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Order history</h2>
@@ -280,7 +280,7 @@ export default function ClientDetailPage() {
             </div>
 
             <div className="mt-5 space-y-3">
-              {clientOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-2 md:p-5 text-xs md:text-sm text-slate-500">No orders added yet.</p>}
+              {clientOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-4 md:p-5 text-xs md:text-sm text-slate-500">No orders added yet.</p>}
               {clientOrders.map((order) => (
                 <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -296,9 +296,9 @@ export default function ClientDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
           <h2 className="text-base md:text-lg font-semibold text-slate-950">Activity log</h2>
-          <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-2 md:p-4 lg:grid-cols-[160px_160px_1fr_auto]">
+          <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-3 md:p-4 lg:grid-cols-[160px_160px_1fr_auto]">
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
               {activityTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
@@ -319,7 +319,7 @@ export default function ClientDetailPage() {
               <p className="text-xs md:text-sm text-slate-500">No activity yet</p>
             )}
             {!activityLoading && clientActivity.map((entry) => (
-              <div key={entry.id} className="rounded-2xl border border-slate-200 p-2 md:p-4">
+              <div key={entry.id} className="rounded-2xl border border-slate-200 p-3 md:p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">{entry.type}</span>
                   <span className="text-xs text-slate-400">{entry.date} · {entry.owner}</span>

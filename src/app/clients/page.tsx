@@ -166,7 +166,7 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
   );
 }
 
-function Modal({ title, onSave, onClose, onDelete, saveState, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; children: ReactNode }) {
+function Modal({ title, onSave, onClose, onDelete, saveState, mode = "edit", children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; mode?: "add" | "edit"; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
@@ -192,7 +192,7 @@ function Modal({ title, onSave, onClose, onDelete, saveState, children }: { titl
           >
             Cancel
           </button>
-          <SaveButton state={saveState} onClick={onSave} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
+          <SaveButton state={saveState} onClick={onSave} mode={mode} className="w-72 bg-slate-900 text-sm hover:bg-slate-800" />
         </div>
         {onDelete && <button className="mx-6 mb-6 w-[calc(100%-3rem)] rounded-3xl border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete client</button>}
       </div>
@@ -235,7 +235,7 @@ export default function ClientsPage() {
       const response = await upsertItem(newClient);
       if (!response.error) setForm(emptyForm);
       return response;
-    });
+    }, () => setShowAdd(false));
   };
 
   const handleDelete = (id: string) => {
@@ -274,11 +274,11 @@ export default function ClientsPage() {
             key={stat.label}
             type="button"
             onClick={() => setActiveFilter(stat.filter)}
-            className={`rounded-2xl bg-white p-2 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
+            className={`rounded-2xl bg-white p-4 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
               activeFilter === stat.filter ? "border-2 border-slate-950" : "border border-slate-300"
             }`}
           >
-            <p className="text-base md:text-4xl font-bold tracking-tight text-slate-950">{stat.value}</p>
+            <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-4xl">{stat.value}</p>
             <p className="mt-2 text-xs md:text-sm text-slate-600">{stat.label}</p>
           </button>
         ))}
@@ -341,7 +341,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState}><FormFields form={form} setForm={(next) => { setForm(next); if (formError) setFormError(""); }} /><div className="px-6"><FieldError message={formError} /></div></Modal>}
+      {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} mode="add"><FormFields form={form} setForm={(next) => { setForm(next); if (formError) setFormError(""); }} /><div className="px-6"><FieldError message={formError} /></div></Modal>}
     </div>
   );
 }

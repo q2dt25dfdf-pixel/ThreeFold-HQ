@@ -260,7 +260,7 @@ export default function CRMPage() {
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
-          <h1 className="text-base md:text-xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
+          <h1 className="text-2xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
           <p className="text-slate-600 text-xs md:text-sm mt-2">
             Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
           </p>
@@ -287,17 +287,17 @@ export default function CRMPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
           <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-500">Total leads</p>
-          <p className="mt-3 text-base md:text-3xl font-semibold text-slate-950">{leads.length}</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.length}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
           <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-500">Pipeline value</p>
-          <p className="mt-3 text-base md:text-3xl font-semibold text-slate-950">${totalValue.toLocaleString()}</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">${totalValue.toLocaleString()}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-2 md:p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
           <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-500">Open approvals</p>
-          <p className="mt-3 text-base md:text-3xl font-semibold text-slate-950">{leads.filter((lead) => lead.stage === "Approved").length}</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => lead.stage === "Approved").length}</p>
         </div>
       </div>
 
@@ -305,10 +305,10 @@ export default function CRMPage() {
         <div className="flex flex-col gap-4 bg-zinc-100 lg:min-w-max lg:flex-row lg:gap-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
-            <div key={stage} className="w-full rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-2 md:p-3 shadow-sm md:p-5 lg:w-[340px] lg:flex-shrink-0">
+            <div key={stage} className="w-full rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-3 shadow-sm md:p-5 lg:w-[340px] lg:flex-shrink-0">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
-                  <h2 className="text-xs md:text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
+                  <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
                   <p className="mt-1 text-xs text-slate-500">{stageLeads.length} lead{stageLeads.length === 1 ? "" : "s"}</p>
                 </div>
                 <div className="flex items-center gap-2">

@@ -424,9 +424,9 @@ export default function Home() {
                   { label: "Pipeline value", value: formatCurrency(pipelineValue) },
                   { label: "Active clients", value: String(clients.length) },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
+                  <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
                     <p className="text-xs font-medium text-[#e2e8f0]">{item.label}</p>
-                    <p className="mt-2 text-base md:text-2xl font-semibold text-white">{item.value}</p>
+                    <p className="mt-2 text-lg font-semibold text-white md:text-2xl">{item.value}</p>
                   </div>
                 ))}
               </div>
@@ -530,7 +530,7 @@ export default function Home() {
                 key={card.label}
                 type="button"
                 onClick={() => router.push(card.href)}
-                className="group min-h-11 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
+                className="group min-h-11 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#3b82f6]">
@@ -547,7 +547,7 @@ export default function Home() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Revenue and balances</h2>
@@ -597,7 +597,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Order Progress</h2>
@@ -631,7 +631,7 @@ export default function Home() {
 
             <div className="grid gap-3 md:grid-cols-2">
               {orderProgressData.map((item) => (
-                <div key={item.name} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
+                <div key={item.name} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
                   <p className="text-xs md:text-sm font-semibold" style={{ color: item.color }}>{item.name}</p>
                   <p className="mt-2 text-base md:text-2xl font-semibold text-[#0f172a]">{item.value}</p>
                 </div>
@@ -641,7 +641,7 @@ export default function Home() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-3">
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md xl:col-span-2">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md xl:col-span-2">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Pipeline stages</h2>
@@ -677,7 +677,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Founder tasks</h2>
@@ -711,7 +711,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
+        <section className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Operational focus</h2>
@@ -729,7 +729,7 @@ export default function Home() {
 
           <div className="mt-6 grid gap-3 lg:grid-cols-3">
             {focusItems.map((item) => (
-              <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
+              <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs md:text-sm font-medium text-[#64748b]">{item.meta}</p>
                   <span className="rounded-[8px] border border-[#cbd5e1] px-2.5 py-1 text-xs font-medium text-[#0f172a]">

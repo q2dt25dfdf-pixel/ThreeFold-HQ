@@ -146,7 +146,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
   };
 
   const handleSaveChanges = async () => {
-    await runSave(() => onSave(current));
+    await runSave(() => onSave(current), onClose);
   };
 
   const addActivityEntry = () => {

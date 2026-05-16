@@ -11,13 +11,22 @@ type SaveButtonProps = {
   type?: "button" | "submit";
   className?: string;
   disabled?: boolean;
+  mode?: "add" | "edit";
 };
 
-const labels: Record<SaveState, string> = {
-  default: "Save Changes",
-  saving: "Saving…",
-  success: "Changes saved",
-  error: "Couldn't save changes. Please try again.",
+const labelsByMode: Record<"add" | "edit", Record<SaveState, string>> = {
+  add: {
+    default: "Save",
+    saving: "Saving…",
+    success: "Saved",
+    error: "Couldn't save. Please try again.",
+  },
+  edit: {
+    default: "Save Changes",
+    saving: "Saving…",
+    success: "Changes saved",
+    error: "Couldn't save changes. Please try again.",
+  },
 };
 
 export function useSaveState() {
@@ -25,7 +34,10 @@ export function useSaveState() {
 
   const resetSaveState = useCallback(() => setSaveState("default"), []);
 
-  const runSave = useCallback(async (save: () => Promise<unknown> | unknown) => {
+  const runSave = useCallback(async (
+    save: () => Promise<unknown> | unknown,
+    onSuccess?: () => void,
+  ) => {
     setSaveState("saving");
 
     try {
@@ -35,9 +47,15 @@ export function useSaveState() {
         return false;
       }
 
-     setSaveState("success");
-setTimeout(() => setSaveState("default"), 2500);
-return true;
+      setSaveState("success");
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          setSaveState("default");
+        }
+      }, 1500);
+      return true;
     } catch (error) {
       console.error("Save failed", error);
       setSaveState("error");
@@ -48,7 +66,8 @@ return true;
   return { saveState, setSaveState, resetSaveState, runSave };
 }
 
-export default function SaveButton({ state, onClick, type = "button", className = "", disabled = false }: SaveButtonProps) {
+export default function SaveButton({ state, onClick, type = "button", className = "", disabled = false, mode = "edit" }: SaveButtonProps) {
+  const labels = labelsByMode[mode];
   const isSaving = state === "saving";
 
   return (

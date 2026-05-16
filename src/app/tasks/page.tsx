@@ -162,39 +162,39 @@ function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onCom
 
 function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T; onChange: (f: T) => void }) {
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-      <div className="sm:col-span-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="col-span-full">
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Task</label>
-        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <input type="text" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder="What needs to get done?" value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Due date</label>
-        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
+        <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" value={data.dueDate} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => onChange({ ...data, dueDate: e.target.value })} />
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Assigned to</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={data.assignedTo} onChange={(e) => onChange({ ...data, assignedTo: e.target.value as Task["assignedTo"] })}>
           <option>Alliyah</option><option>Hannah</option><option>Jordan</option><option>All</option>
         </select>
       </div>
       <div>
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Priority</label>
-        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
+        <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" value={data.priority} onChange={(e) => onChange({ ...data, priority: e.target.value as Task["priority"] })}>
           <option>High</option><option>Medium</option><option>Low</option>
         </select>
       </div>
-      <div className="sm:col-span-2">
+      <div className="col-span-full">
         <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
-        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:outline-none md:text-sm" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+        <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none" placeholder="Additional context..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
       </div>
     </div>
   );
 }
 
-function Modal({ title, onSave, onClose, onDelete, saveState, error, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; error?: string; children: ReactNode }) {
+function Modal({ title, onSave, onClose, onDelete, saveState, mode = "edit", error, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; mode?: "add" | "edit"; error?: string; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-3 md:py-6 shadow-xl md:px-10 md:py-10">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white px-5 py-6 shadow-xl md:px-10 md:py-10">
         <div className="mb-6 flex items-start justify-between gap-4">
           <h2 className="text-base md:text-2xl font-semibold text-slate-950">{title}</h2>
           <button
@@ -209,7 +209,7 @@ function Modal({ title, onSave, onClose, onDelete, saveState, error, children }:
         {children}
         <FieldError message={error} />
         <div className="mt-6 flex gap-3">
-          <SaveButton state={saveState} className="flex-1 py-3" onClick={onSave} />
+          <SaveButton state={saveState} mode={mode} className="flex-1 py-3" onClick={onSave} />
           <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
         {onDelete && <button type="button" className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
@@ -264,7 +264,7 @@ export default function TasksPage() {
       const response = await upsertItem(newTask);
       if (!response.error) setForm(emptyForm);
       return response;
-    });
+    }, () => { setShowAdd(false); setFormError(""); });
   };
 
   const handleSaveEdit = async () => {
@@ -274,7 +274,7 @@ export default function TasksPage() {
       return;
     }
     setFormError("");
-    await editSave.runSave(() => upsertItem(editTask));
+    await editSave.runSave(() => upsertItem(editTask), () => { setEditTask(null); setFormError(""); });
   };
 
   const handleDelete = async (id: string) => {
@@ -316,7 +316,7 @@ export default function TasksPage() {
             setEditTask({ ...task });
           }
         }}
-        className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full"
+        className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-2">
@@ -418,7 +418,7 @@ export default function TasksPage() {
 
             return (
               <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-300 bg-white shadow-md">
-                <div className={`rounded-t-[2rem] border-t-2 p-2 md:p-5 ${founder.headerClass}`}>
+                <div className={`rounded-t-[2rem] border-t-2 p-4 md:p-5 ${founder.headerClass}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />
@@ -429,7 +429,7 @@ export default function TasksPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-1 flex-col gap-3 p-2 md:p-4">
+                <div className="flex flex-1 flex-col gap-3 p-3 md:p-4">
                   {visibleTasks.map((task) => <TaskCard key={task.id} task={task} />)}
                   {visibleTasks.length === 0 && (
                     <div className="flex flex-1 items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-gray-100 px-4 py-10 text-center text-xs md:text-sm text-slate-600">
@@ -438,7 +438,7 @@ export default function TasksPage() {
                   )}
                 </div>
                 {!isSearching && (
-                  <div className="border-t border-slate-100 p-2 md:p-4">
+                  <div className="border-t border-slate-100 p-3 md:p-4">
                     <button
                       type="button"
                       className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 transition hover:bg-gray-100"
@@ -457,7 +457,7 @@ export default function TasksPage() {
       <section className="rounded-[2rem] border border-slate-200 bg-white shadow-md">
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-3 rounded-[2rem] p-2 text-left md:p-5"
+          className="flex w-full items-center justify-between gap-3 rounded-[2rem] p-4 text-left md:p-5"
           onClick={() => { if (!isSearching) setCompletedCollapsed((prev) => !prev); }}
         >
           <div className="flex items-center gap-3">
@@ -474,7 +474,7 @@ export default function TasksPage() {
         </button>
 
         {showCompletedContent && (
-          <div className="border-t border-slate-100 p-2 md:p-5">
+          <div className="border-t border-slate-100 p-4 md:p-5">
             {completedGroups.length === 0 ? (
               <p className="py-4 text-center text-xs md:text-sm text-slate-500">
                 {isSearching ? "No completed tasks match your search." : "No completed tasks yet."}
@@ -551,12 +551,12 @@ export default function TasksPage() {
       </section>
 
       {showAdd && (
-        <Modal title="Add task" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} error={formError}>
+        <Modal title="Add task" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} mode="add" error={formError}>
           <FormFields data={form} onChange={(next) => { setForm(next); if (formError) setFormError(""); }} />
         </Modal>
       )}
       {editTask && (
-        <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setFormError(""); editSave.resetSaveState(); }} onDelete={() => handleDelete(editTask.id)} saveState={editSave.saveState} error={formError}>
+        <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setFormError(""); editSave.resetSaveState(); }} onDelete={() => handleDelete(editTask.id)} saveState={editSave.saveState} mode="edit" error={formError}>
           <FormFields data={editTask} onChange={(next) => { setEditTask(next); if (formError) setFormError(""); }} />
         </Modal>
       )}

@@ -109,7 +109,7 @@ export default function OrderDetailPage() {
           amount: Number(editAmountCents || "0") / 100,
         }),
       ),
-    );
+    closeOrderEditor);
   };
 
   if (loading) return <LoadingState label="Loading order..." />;
@@ -142,7 +142,7 @@ export default function OrderDetailPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-slate-300">Order detail</p>
-              <h1 className="mt-3 text-base font-semibold md:text-3xl">{order.orderName}</h1>
+              <h1 className="mt-3 text-xl font-semibold md:text-3xl">{order.orderName}</h1>
               <p className="mt-2 text-xs text-slate-300 md:text-sm">{order.client || "No client selected"}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -161,7 +161,7 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 p-2 md:grid-cols-2 md:p-8">
+        <div className="grid gap-4 p-4 md:grid-cols-2 md:p-8">
           {[
             { label: "Vendor", value: order.vendor || "Not assigned", icon: UserRound },
             { label: "Items", value: order.items.length ? order.items.join(", ") : "None selected", icon: Package },

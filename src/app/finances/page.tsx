@@ -400,7 +400,7 @@ export default function FinancesPage() {
         setOrderDropdownOpen(false);
       }
       return response;
-    });
+    }, () => { setShowModal(false); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
   };
 
   const handleSaveEdit = async () => {
@@ -411,7 +411,7 @@ export default function FinancesPage() {
       return;
     }
     setFormError("");
-    await editSave.runSave(() => upsertItem(linkedInvoice));
+    await editSave.runSave(() => upsertItem(linkedInvoice), () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
   };
 
   const handleDelete = async (id: string) => {
@@ -707,10 +707,10 @@ export default function FinancesPage() {
         ].map((card) => {
           const TrendIcon = card.trend === "up" ? TrendingUp : TrendingDown;
           return (
-            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-2 md:p-5 shadow-md">
+            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-4 md:p-5 shadow-md">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-base md:text-3xl font-bold tracking-tight text-slate-950">{card.value}</p>
+                  <p className="text-xl font-bold tracking-tight text-slate-950 md:text-3xl">{card.value}</p>
                   <p className="mt-2 text-xs md:text-sm text-slate-600">{card.label}</p>
                 </div>
                 <span className={`rounded-2xl p-2 ${card.label === "Overdue Count" || card.trend === "down" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
@@ -723,7 +723,7 @@ export default function FinancesPage() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 shadow-md">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue over time</h2>
@@ -753,7 +753,7 @@ export default function FinancesPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 shadow-md">
           <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoice status breakdown</h2>
           <div className="relative mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -783,7 +783,7 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-5 shadow-md">
+      <section className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-5 shadow-md">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoices</h2>
@@ -876,7 +876,7 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-2 md:p-6 shadow-md">
+      <section className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 shadow-md">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue goal</h2>
@@ -901,7 +901,7 @@ export default function FinancesPage() {
             {renderFields(form, (next) => setForm(next as typeof emptyForm))}
             <FieldError message={formError} />
             <div className="mt-6 flex gap-3">
-              <SaveButton state={addSave.saveState} onClick={handleAdd} className="flex-1 py-3" />
+              <SaveButton state={addSave.saveState} onClick={handleAdd} mode="add" className="flex-1 py-3" />
               <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                 Cancel
               </button>

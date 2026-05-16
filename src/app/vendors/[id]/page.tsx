@@ -111,7 +111,7 @@ export default function VendorDetailPage() {
       return;
     }
     setVendorFormError("");
-    await vendorSave.runSave(() => upsertItem(vendorDraft));
+    await vendorSave.runSave(() => upsertItem(vendorDraft), () => { setEditingVendor(false); setVendorDraft(null); setVendorFormError(""); });
   };
 
   const handleDeleteVendor = () => {
@@ -149,8 +149,8 @@ export default function VendorDetailPage() {
   return (
     <main className="min-h-screen text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
-      <header className="bg-slate-950 p-2 md:p-3 text-white md:p-8">
-        <button type="button" onClick={() => router.push("/vendors")} className="mb-8 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
+      <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-6 md:py-8 text-white">
+        <button type="button" onClick={() => router.push("/vendors")} className="mb-6 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Vendors
         </button>
@@ -160,7 +160,7 @@ export default function VendorDetailPage() {
               <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type}</span>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
             </div>
-            <h1 className="mt-5 text-base md:text-xl font-semibold tracking-tight md:text-5xl">{vendor.name}</h1>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight md:text-5xl">{vendor.name}</h1>
             <p className="mt-4 flex items-center gap-2 text-xs md:text-sm text-slate-300">
               <Building2 className="h-4 w-4" aria-hidden="true" />
               {vendor.contact || "No contact listed"}
@@ -187,7 +187,7 @@ export default function VendorDetailPage() {
         </div>
       </header>
 
-      <div className="space-y-6 p-2 md:p-6 lg:p-8">
+      <div className="space-y-6 p-4 md:p-6 lg:p-8">
         <section className="rounded-2xl border border-slate-200 bg-white">
           <div className="grid divide-y divide-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
             {[
@@ -197,7 +197,7 @@ export default function VendorDetailPage() {
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="flex items-start gap-3 p-2 md:p-5">
+                <div key={item.label} className="flex items-start gap-3 p-4 md:p-5">
                   <Icon className="mt-0.5 h-5 w-5 text-blue-500" aria-hidden="true" />
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
@@ -210,7 +210,7 @@ export default function VendorDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold">Vendor details</h2>
@@ -230,7 +230,7 @@ export default function VendorDetailPage() {
                 { label: "Status", value: vendor.status },
                 { label: "Orders", value: String(vendor.jobs) },
               ].map((field) => (
-                <div key={field.label} className="rounded-2xl border border-slate-200 bg-white p-2 md:p-4">
+                <div key={field.label} className="rounded-2xl border border-slate-200 bg-white p-3 md:p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{field.label}</p>
                   <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{field.value || "Not set"}</p>
                 </div>
@@ -238,14 +238,14 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <div>
               <h2 className="text-base md:text-lg font-semibold">Assigned orders</h2>
               <p className="mt-1 text-xs md:text-sm text-slate-500">Orders assigned to this vendor.</p>
             </div>
 
             <div className="mt-5 space-y-3">
-              {vendorOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-2 md:p-5 text-xs md:text-sm text-slate-500">No orders assigned yet.</p>}
+              {vendorOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-4 md:p-5 text-xs md:text-sm text-slate-500">No orders assigned yet.</p>}
               {vendorOrders.map((order) => (
                 <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -261,7 +261,7 @@ export default function VendorDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-2 md:p-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-base md:text-lg font-semibold">Notes</h2>

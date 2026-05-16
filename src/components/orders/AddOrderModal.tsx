@@ -120,7 +120,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
 
       await onSaved?.(order);
       return response;
-    });
+    }, onClose);
   };
 
   return (
@@ -261,7 +261,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
         <FieldError message={formError} />
 
         <div className="mt-6 flex gap-3">
-          <SaveButton state={saveState} onClick={handleSave} className="flex-1 py-3" />
+          <SaveButton state={saveState} onClick={handleSave} mode="add" className="flex-1 py-3" />
           <button
             type="button"
             className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
