@@ -257,7 +257,7 @@ export default function CRMPage() {
   return (
     <div className="min-h-screen min-w-0 space-y-10 text-xs md:text-sm">
       <ErrorBanner message={error} />
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
           <h1 className="text-2xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
@@ -267,17 +267,17 @@ export default function CRMPage() {
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="hidden md:flex mt-4 items-center gap-2 rounded-2xl bg-slate-950 px-5 py-2.5 text-xs font-semibold text-white hover:bg-slate-800"
+            className="hidden md:inline-flex mt-4 min-h-11 items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
           >
             <Plus size={16} />
             Add lead
           </button>
         </div>
-        <div className="flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-center md:w-auto">
-          <div className="relative w-full md:w-auto">
+        <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto md:flex-row md:items-center">
+          <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
-              className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-xs md:text-sm focus:border-slate-500 focus:outline-none sm:w-56 md:py-2.5 md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-xs focus:border-slate-500 focus:outline-none md:py-2.5 md:text-sm"
               placeholder="Search CRM..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -309,11 +309,11 @@ export default function CRMPage() {
         </div>
       </div>
 
-      <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:gap-5">
+      <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8 lg:pb-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:gap-4 lg:items-start">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
-            <div key={stage} className="w-full lg:min-w-[280px] lg:flex-none rounded-[2rem] border border-slate-200/70 bg-slate-50/50 p-3 shadow-sm md:p-5">
+            <div key={stage} className="w-full lg:w-[280px] lg:flex-none rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
