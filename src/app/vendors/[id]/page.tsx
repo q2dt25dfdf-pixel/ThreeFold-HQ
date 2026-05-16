@@ -87,21 +87,28 @@ export default function VendorDetailPage() {
   const { data: orders, loading: ordersLoading } = useSupabaseTable<Order>("orders", []);
   const [editingVendor, setEditingVendor] = useState(false);
   const [vendorDraft, setVendorDraft] = useState<Vendor | null>(null);
+  const [vendorSaveLabel, setVendorSaveLabel] = useState("Save Changes");
+  const [notesSaveLabel, setNotesSaveLabel] = useState("Save Changes");
 
   const vendor = vendors.find((item) => item.id === vendorId);
   const vendorOrders = orders.filter((order) => vendor && order.vendor.trim().toLowerCase() === vendor.name.trim().toLowerCase());
 
   const openVendorEditor = () => {
     if (!vendor) return;
+    setVendorSaveLabel("Save Changes");
     setVendorDraft({ ...vendor });
     setEditingVendor(true);
   };
 
-  const saveVendorDraft = () => {
+  const saveVendorDraft = async () => {
     if (!vendorDraft) return;
-    upsertItem(vendorDraft);
-    setEditingVendor(false);
-    setVendorDraft(null);
+    await upsertItem(vendorDraft);
+    setVendorSaveLabel("Saved ✓");
+    window.setTimeout(() => {
+      setEditingVendor(false);
+      setVendorDraft(null);
+      setVendorSaveLabel("Save Changes");
+    }, 700);
   };
 
   const handleDeleteVendor = () => {
@@ -113,6 +120,13 @@ export default function VendorDetailPage() {
   const saveVendorNotes = (notes: string) => {
     if (!vendor) return;
     upsertItem({ ...vendor, notes });
+  };
+
+  const handleSaveVendorNotes = async () => {
+    if (!vendor) return;
+    await upsertItem(vendor);
+    setNotesSaveLabel("Saved ✓");
+    window.setTimeout(() => setNotesSaveLabel("Save Changes"), 1200);
   };
 
   if (vendorsLoading || ordersLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
@@ -251,7 +265,13 @@ export default function VendorDetailPage() {
               <h2 className="text-base md:text-lg font-semibold">Notes</h2>
               <p className="mt-1 text-xs md:text-sm text-slate-500">Vendor notes save as you type.</p>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Saved</span>
+            <button
+              type="button"
+              onClick={handleSaveVendorNotes}
+              className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              {notesSaveLabel}
+            </button>
           </div>
           <textarea
             rows={7}
@@ -276,6 +296,7 @@ export default function VendorDetailPage() {
                 onClick={() => {
                   setEditingVendor(false);
                   setVendorDraft(null);
+                  setVendorSaveLabel("Save Changes");
                 }}
                 className="min-h-11 rounded-full border border-slate-300 px-3 py-1 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
@@ -319,13 +340,14 @@ export default function VendorDetailPage() {
 
             <div className="mt-6 flex gap-3">
               <button type="button" onClick={saveVendorDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">
-                Save
+                {vendorSaveLabel}
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setEditingVendor(false);
                   setVendorDraft(null);
+                  setVendorSaveLabel("Save Changes");
                 }}
                 className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
               >

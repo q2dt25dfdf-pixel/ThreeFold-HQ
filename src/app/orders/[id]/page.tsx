@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, DollarSign, Package, UserRound } from "lucide-react";
+import { ArrowLeft, CalendarDays, DollarSign, Edit2, Package, UserRound } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type OrderStatus = "Draft" | "In Production" | "Quality Control" | "Fulfilled";
@@ -43,8 +44,26 @@ function normalizeOrder(order: Order): Order {
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { data: orders, loading } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, upsertItem, loading } = useSupabaseTable<Order>("orders", []);
   const order = orders.map(normalizeOrder).find((item) => item.id === params.id);
+  const [orderDraft, setOrderDraft] = useState<Order | null>(null);
+  const [orderSaveLabel, setOrderSaveLabel] = useState("Save Changes");
+
+  const openOrderEditor = () => {
+    if (!order) return;
+    setOrderDraft({ ...order, items: [...order.items] });
+    setOrderSaveLabel("Save Changes");
+  };
+
+  const saveOrderDraft = async () => {
+    if (!orderDraft) return;
+    await upsertItem(normalizeOrder(orderDraft));
+    setOrderSaveLabel("Saved ✓");
+    window.setTimeout(() => {
+      setOrderDraft(null);
+      setOrderSaveLabel("Save Changes");
+    }, 700);
+  };
 
   if (loading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
 
@@ -78,9 +97,19 @@ export default function OrderDetailPage() {
               <h1 className="mt-3 text-base font-semibold md:text-3xl">{order.orderName}</h1>
               <p className="mt-2 text-xs text-slate-300 md:text-sm">{order.client || "No client selected"}</p>
             </div>
-            <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${statusColors[order.status]}`}>
-              {order.status}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={openOrderEditor}
+                className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-white/10"
+              >
+                <Edit2 className="h-4 w-4" aria-hidden="true" />
+                Edit order
+              </button>
+              <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${statusColors[order.status]}`}>
+                {order.status}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -110,6 +139,83 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </section>
+
+      {orderDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-2 shadow-xl md:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950 md:text-2xl">Edit order</h2>
+                <p className="mt-1 text-xs text-slate-500 md:text-sm">Update order details and save changes.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setOrderDraft(null); setOrderSaveLabel("Save Changes"); }}
+                className="min-h-11 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Order name</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.orderName} onChange={(event) => setOrderDraft({ ...orderDraft, orderName: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Client</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.client} onChange={(event) => setOrderDraft({ ...orderDraft, client: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Vendor</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.vendor} onChange={(event) => setOrderDraft({ ...orderDraft, vendor: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Items</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.items.join(", ")} onChange={(event) => setOrderDraft({ ...orderDraft, items: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} />
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Quantity</span>
+                  <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.quantity} onChange={(event) => setOrderDraft({ ...orderDraft, quantity: Number(event.target.value) })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount</span>
+                  <input type="number" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.amount} onChange={(event) => setOrderDraft({ ...orderDraft, amount: Number(event.target.value) })} />
+                </label>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Status</span>
+                  <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.status} onChange={(event) => setOrderDraft({ ...orderDraft, status: event.target.value as OrderStatus })}>
+                    <option>Draft</option>
+                    <option>In Production</option>
+                    <option>Quality Control</option>
+                    <option>Fulfilled</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Est. delivery date</span>
+                  <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.estimatedDeliveryDate} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setOrderDraft({ ...orderDraft, estimatedDeliveryDate: event.target.value })} />
+                </label>
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</span>
+                <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={orderDraft.notes} onChange={(event) => setOrderDraft({ ...orderDraft, notes: event.target.value })} />
+              </label>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={saveOrderDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm">
+                {orderSaveLabel}
+              </button>
+              <button type="button" onClick={() => { setOrderDraft(null); setOrderSaveLabel("Save Changes"); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

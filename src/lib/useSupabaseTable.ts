@@ -8,6 +8,8 @@ type SupabaseRow<T> = {
   data: T | null;
 };
 
+type MutationResponse = Awaited<ReturnType<ReturnType<typeof supabase.from>["upsert"]>>;
+
 export function useSupabaseTable<T extends { id: string }>(
   tableName: string,
   defaultData: T[],
@@ -106,7 +108,7 @@ export function useSupabaseTable<T extends { id: string }>(
     };
   }, [loadData, scheduleReload, subscriptionCycle, tableName]);
 
-  const upsertItem = async (item: T) => {
+  const upsertItem = async (item: T): Promise<MutationResponse> => {
     setDataState((prev) => {
       const exists = prev.some((current) => current.id === item.id);
       return exists
@@ -115,12 +117,19 @@ export function useSupabaseTable<T extends { id: string }>(
     });
 
     try {
-      const { error } = await supabase.from(tableName).upsert({ id: item.id, data: item });
-      if (error) throw error;
+      const response = await supabase.from(tableName).upsert({ id: item.id, data: item });
+      if (response.error) {
+        console.error(`Failed to upsert Supabase table "${tableName}"`, response.error);
+        await loadData();
+        return response;
+      }
+
       await loadData();
+      return response;
     } catch (error) {
       console.error(`Failed to upsert Supabase table "${tableName}"`, error);
       await loadData();
+      return { data: null, error, count: null, status: 0, statusText: "Client exception" } as MutationResponse;
     }
   };
 

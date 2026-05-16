@@ -14,8 +14,13 @@ type OrderStatus = "Draft" | "In Production" | "Quality Control" | "Fulfilled";
 type Order = {
   id: string;
   orderName: string;
+  order_name?: string;
   client: string;
+  client_id?: string;
+  client_name?: string;
   vendor: string;
+  vendor_id?: string;
+  vendor_name?: string;
   items: string[];
   quantity: number;
   amount: number;
@@ -29,7 +34,7 @@ type AddOrderModalProps = {
   onClose: () => void;
   prefilledClient?: string;
   prefilledVendor?: string;
-  onSaved?: (order: Order) => void;
+  onSaved?: (order: Order) => void | Promise<void>;
 };
 
 type AddOrderModalContentProps = Omit<AddOrderModalProps, "open">;
@@ -54,12 +59,14 @@ function SmartSearchInput({
   label,
   value,
   onChange,
+  onSelect,
   records,
   placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onSelect?: (record: LookupRecord) => void;
   records: LookupRecord[];
   placeholder: string;
 }) {
@@ -101,7 +108,11 @@ function SmartSearchInput({
                 className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  onChange(name);
+                  if (onSelect) {
+                    onSelect(record);
+                  } else {
+                    onChange(name);
+                  }
                   setFocused(false);
                 }}
               >
@@ -134,7 +145,9 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
   const { upsertItem } = useSupabaseTable<Order>("orders", []);
   const [orderName, setOrderName] = useState("");
   const [client, setClient] = useState(prefilledClient);
+  const [clientId, setClientId] = useState("");
   const [vendor, setVendor] = useState(prefilledVendor);
+  const [vendorId, setVendorId] = useState("");
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [quantity, setQuantity] = useState("");
   const [amountCents, setAmountCents] = useState("");
@@ -168,14 +181,22 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
     event.preventDefault();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!orderName.trim()) return;
+
+    const resolvedClient = clients.find((record) => recordName(record).trim().toLowerCase() === client.trim().toLowerCase());
+    const resolvedVendor = vendors.find((record) => recordName(record).trim().toLowerCase() === vendor.trim().toLowerCase());
 
     const order: Order = {
       id: `order-${Date.now()}`,
       orderName: orderName.trim(),
+      order_name: orderName.trim(),
       client: client.trim(),
+      client_id: clientId || resolvedClient?.id || "",
+      client_name: client.trim(),
       vendor: vendor.trim(),
+      vendor_id: vendorId || resolvedVendor?.id || "",
+      vendor_name: vendor.trim(),
       items: selectedItems,
       quantity: Number(quantity || 0),
       amount: Number(amountCents || "0") / 100,
@@ -184,8 +205,12 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
       notes: notes.trim(),
     };
 
-    upsertItem(order);
-    onSaved?.(order);
+    const response = await upsertItem(order);
+    console.log("AddOrderModal orders upsert response", { order, response });
+
+    if (response.error) return;
+
+    await onSaved?.(order);
     onClose();
   };
 
@@ -219,8 +244,34 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <SmartSearchInput label="Client" value={client} onChange={setClient} records={clients} placeholder="Type to search clients..." />
-            <SmartSearchInput label="Vendor" value={vendor} onChange={setVendor} records={vendors} placeholder="Type to search vendors..." />
+            <SmartSearchInput
+              label="Client"
+              value={client}
+              onChange={(value) => {
+                setClient(value);
+                setClientId("");
+              }}
+              onSelect={(record) => {
+                setClient(recordName(record));
+                setClientId(record.id);
+              }}
+              records={clients}
+              placeholder="Type to search clients..."
+            />
+            <SmartSearchInput
+              label="Vendor"
+              value={vendor}
+              onChange={(value) => {
+                setVendor(value);
+                setVendorId("");
+              }}
+              onSelect={(record) => {
+                setVendor(recordName(record));
+                setVendorId(record.id);
+              }}
+              records={vendors}
+              placeholder="Type to search vendors..."
+            />
           </div>
 
           <div>

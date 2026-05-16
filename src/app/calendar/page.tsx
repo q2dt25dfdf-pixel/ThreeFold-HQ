@@ -122,6 +122,7 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [eventDraft, setEventDraft] = useState<CalendarEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState(false);
+  const [eventSaveLabel, setEventSaveLabel] = useState("Save Changes");
 
   const monthLabel = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const todayKey = formatDate(today);
@@ -230,6 +231,7 @@ export default function CalendarPage() {
     setSelectedEvent(event);
     setEventDraft({ ...event, priority: eventPriority(event), notes: event.notes ?? "" });
     setEditingEvent(false);
+    setEventSaveLabel("Save Changes");
     setShowTodayDetails(false);
   };
 
@@ -237,13 +239,16 @@ export default function CalendarPage() {
     setSelectedEvent(null);
     setEventDraft(null);
     setEditingEvent(false);
+    setEventSaveLabel("Save Changes");
   };
 
-  const handleSaveEvent = () => {
+  const handleSaveEvent = async () => {
     if (!eventDraft || !eventDraft.title.trim() || !eventDraft.date) return;
-    upsertItem(eventDraft);
+    await upsertItem(eventDraft);
     setSelectedEvent(eventDraft);
     setEditingEvent(false);
+    setEventSaveLabel("Saved ✓");
+    window.setTimeout(() => setEventSaveLabel("Save Changes"), 1200);
   };
 
   if (eventsLoading) return <div className="p-2 md:p-8 text-slate-500">Loading...</div>;
@@ -642,11 +647,13 @@ export default function CalendarPage() {
 
             <div className="mt-6 flex gap-3">
               {editingEvent ? (
-                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleSaveEvent}>Save</button>
+                <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={handleSaveEvent}>{eventSaveLabel}</button>
               ) : (
                 <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" type="button" onClick={() => setEditingEvent(true)}>Edit</button>
               )}
-              <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={handleSaveEvent}>Save notes</button>
+              {!editingEvent && (
+                <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" type="button" onClick={handleSaveEvent}>{eventSaveLabel}</button>
+              )}
             </div>
             <button className="mt-3 min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" type="button" onClick={() => handleDeleteEvent(selectedEvent.id)}>
               Delete event

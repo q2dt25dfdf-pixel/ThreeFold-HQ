@@ -60,7 +60,7 @@ function formatCurrency(amount: number) {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { data: orders, upsertItem, deleteItem, loading } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, deleteItem, loading, reload } = useSupabaseTable<Order>("orders", []);
   const [filter, setFilter] = useState<OrderStatus | "All">("All");
   const [query, setQuery] = useState("");
   const [showAddOrder, setShowAddOrder] = useState(false);
@@ -186,7 +186,7 @@ export default function OrdersPage() {
       <AddOrderModal
         open={showAddOrder}
         onClose={() => setShowAddOrder(false)}
-        onSaved={(order) => upsertItem(order)}
+        onSaved={() => reload()}
       />
     </div>
   );

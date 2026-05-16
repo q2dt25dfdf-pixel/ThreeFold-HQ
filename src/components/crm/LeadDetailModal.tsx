@@ -9,7 +9,7 @@ interface Props {
   open: boolean;
   lead: Lead | null;
   onClose: () => void;
-  onSave: (lead: Lead) => void;
+  onSave: (lead: Lead) => void | Promise<void>;
   onDelete: (lead: Lead) => void;
 }
 
@@ -109,6 +109,7 @@ function InlineField({
 
 export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete }: Props) {
   const [data, setData] = useState<Lead | null>(null);
+  const [saveLabel, setSaveLabel] = useState("Save Changes");
 
   // Activity log form state
   const [logType, setLogType] = useState<CommunicationEntry["type"]>("Call");
@@ -134,6 +135,12 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
     if (!window.confirm(`Delete lead "${lead.company}"? This cannot be undone.`)) return;
     onDelete(lead);
     onClose();
+  };
+
+  const handleSaveChanges = async () => {
+    await onSave(current);
+    setSaveLabel("Saved ✓");
+    window.setTimeout(() => setSaveLabel("Save Changes"), 1200);
   };
 
   const addActivityEntry = () => {
@@ -293,13 +300,22 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
             >
               Delete
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100 md:min-h-0"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSaveChanges}
+                className="min-h-11 rounded-2xl bg-slate-950 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 md:min-h-0"
+              >
+                {saveLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100 md:min-h-0"
+              >
+                Close
+              </button>
+            </div>
           </div>
 
         </div>

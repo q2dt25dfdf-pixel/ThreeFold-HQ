@@ -47,8 +47,9 @@ const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 const defaultSearchRows: StorageRecord[] = [];
 const founderNames = ["Alliyah", "Hannah", "Jordan"] as const;
 const taskDoneStatuses = new Set(["done", "complete"]);
+const completedOrderStatuses = new Set(["fulfilled", "complete", "done"]);
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
-const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "estimatedDeliveryDate", "followUpDate"];
+const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "final_due_date", "deposit_paid_date", "final_paid_date", "estimatedDeliveryDate", "followUpDate"];
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -88,6 +89,28 @@ function numericAmount(value: unknown) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function invoiceTotal(record: StorageRecord) {
+  return numericAmount(record.total_amount ?? record.amount);
+}
+
+function invoiceDeposit(record: StorageRecord) {
+  const deposit = numericAmount(record.deposit_amount);
+  return deposit > 0 ? deposit : invoiceTotal(record) * 0.5;
+}
+
+function invoiceBalance(record: StorageRecord) {
+  const balance = numericAmount(record.balance_remaining);
+  return balance > 0 ? balance : Math.max(invoiceTotal(record) - invoiceDeposit(record), 0);
+}
+
+function invoiceCollected(record: StorageRecord) {
+  return (record.deposit_paid === true ? invoiceDeposit(record) : 0) + (record.final_paid === true ? invoiceTotal(record) : 0);
+}
+
+function isInvoiceCancelled(record: StorageRecord) {
+  return statusText(record) === "cancelled";
+}
+
 function parseRecordDate(rawDate: string) {
   if (!rawDate) return null;
   const date = new Date(rawDate);
@@ -97,7 +120,7 @@ function parseRecordDate(rawDate: string) {
 }
 
 function monthIndex(record: StorageRecord) {
-  const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "dueDate", stringField(record, "estimatedDeliveryDate", stringField(record, "followUpDate")))));
+  const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "final_paid_date", stringField(record, "deposit_paid_date", stringField(record, "final_due_date", stringField(record, "dueDate", stringField(record, "estimatedDeliveryDate", stringField(record, "followUpDate"))))))));
   return parseRecordDate(rawDate)?.getMonth() ?? -1;
 }
 
@@ -147,17 +170,25 @@ export default function Home() {
   const { data: finances } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
   const { data: tasks } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
   const { data: crmLeads } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
+  const { data: pipeline } = useSupabaseTable<StorageRecord>("pipeline", []);
 
   const openTasks = useMemo(() => tasks.filter((task) => !isTaskDone(task)), [tasks]);
   const doneTasks = useMemo(() => tasks.filter(isTaskDone), [tasks]);
   const activeOrders = useMemo(() => orders.filter(isOrderActive), [orders]);
   const collectedRevenue = useMemo(
-    () => orders.filter((order) => statusText(order) === "fulfilled").reduce((sum, order) => sum + numericAmount(order.amount), 0),
-    [orders],
+    () => finances.reduce((sum, invoice) => sum + invoiceCollected(invoice), 0),
+    [finances],
+  );
+  const outstandingBalance = useMemo(
+    () => finances.filter((invoice) => invoice.final_paid !== true).reduce((sum, invoice) => sum + invoiceBalance(invoice), 0),
+    [finances],
   );
   const pipelineValue = useMemo(
-    () => orders.reduce((sum, order) => sum + numericAmount(order.amount), 0),
-    [orders],
+    () =>
+      pipeline
+        .filter((record) => stringField(record, "stage").trim().toLowerCase() !== "closed lost")
+        .reduce((sum, record) => sum + numericAmount(record.value), 0),
+    [pipeline],
   );
   const focusItems = useMemo(() => {
     const latestOrders = mostRecentRecord(orders);
@@ -188,20 +219,19 @@ export default function Home() {
       monthLabels.map((month, index) => ({
         month,
         value:
-          orders.filter((order) => monthIndex(order) <= index && statusText(order) === "fulfilled").reduce((sum, order) => sum + numericAmount(order.amount), 0) +
-          orders.filter((order) => monthIndex(order) <= index).reduce((sum, order) => sum + numericAmount(order.amount), 0),
+          finances.filter((invoice) => monthIndex(invoice) <= index).reduce((sum, invoice) => sum + invoiceCollected(invoice) + (invoice.final_paid === true ? 0 : invoiceBalance(invoice)), 0),
       })),
-    [orders],
+    [finances],
   );
 
   const revenueData = useMemo(
     () =>
       monthLabels.slice(0, 6).map((month, index) => ({
         month,
-        collected: orders.filter((order) => monthIndex(order) === index && statusText(order) === "fulfilled").reduce((sum, order) => sum + numericAmount(order.amount), 0),
-        pipeline: orders.filter((order) => monthIndex(order) === index).reduce((sum, order) => sum + numericAmount(order.amount), 0),
+        collected: finances.filter((invoice) => monthIndex(invoice) === index).reduce((sum, invoice) => sum + invoiceCollected(invoice), 0),
+        outstanding: finances.filter((invoice) => monthIndex(invoice) === index && invoice.final_paid !== true && !isInvoiceCancelled(invoice)).reduce((sum, invoice) => sum + invoiceBalance(invoice), 0),
       })),
-    [orders],
+    [finances],
   );
 
   const pipelineData = useMemo(() => {
@@ -227,13 +257,18 @@ export default function Home() {
     [doneTasks, openTasks],
   );
 
-  const workloadData = useMemo(
-    () => [
-      { name: "Open", value: openTasks.length, color: "#3b82f6" },
-      { name: "Done", value: doneTasks.length, color: "#10b981" },
-    ],
-    [doneTasks.length, openTasks.length],
-  );
+  const orderProgressData = useMemo(() => {
+    const fulfilled = orders.filter((order) => completedOrderStatuses.has(statusText(order))).length;
+    const open = Math.max(orders.length - fulfilled, 0);
+
+    return [
+      { name: "Open", value: open, color: "#3b82f6" },
+      { name: "Fulfilled", value: fulfilled, color: "#10b981" },
+    ];
+  }, [orders]);
+  const orderProgressTotal = useMemo(() => orderProgressData.reduce((sum, item) => sum + item.value, 0), [orderProgressData]);
+  const orderProgressChartData = orderProgressTotal > 0 ? orderProgressData : [{ name: "No orders", value: 1, color: "#e2e8f0" }];
+  const orderProgressPercent = orderProgressTotal > 0 ? Math.round((orderProgressData[1].value / orderProgressTotal) * 100) : 0;
 
   const metricCards = useMemo(
     () => [
@@ -336,7 +371,7 @@ export default function Home() {
         id: stringField(invoice, "id", `invoice-${stringField(invoice, "orderName", "unknown")}`),
         category: "Finances",
         title: stringField(invoice, "orderName", stringField(invoice, "client", "Untitled invoice")),
-        context: [stringField(invoice, "client"), stringField(invoice, "amount"), stringField(invoice, "status")].filter(Boolean).join(" · "),
+        context: [stringField(invoice, "client_name", stringField(invoice, "client")), stringField(invoice, "total_amount", stringField(invoice, "amount")), stringField(invoice, "status")].filter(Boolean).join(" · "),
         href: "/finances",
         searchText: recordText(invoice),
       })),
@@ -377,9 +412,10 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 {[
                   { label: "Revenue collected", value: formatCurrency(collectedRevenue) },
+                  { label: "Outstanding balance", value: formatCurrency(outstandingBalance) },
                   { label: "Pipeline value", value: formatCurrency(pipelineValue) },
                   { label: "Active clients", value: String(clients.length) },
                 ].map((item) => (
@@ -509,8 +545,8 @@ export default function Home() {
           <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Revenue and pipeline</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Collected revenue against expected sales motion.</p>
+                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Revenue and balances</h2>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Collected revenue against outstanding balances.</p>
               </div>
               <div className="flex items-center gap-4 text-xs md:text-sm">
                 <span className="flex items-center gap-2 text-[#64748b]">
@@ -519,7 +555,7 @@ export default function Home() {
                 </span>
                 <span className="flex items-center gap-2 text-[#64748b]">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#3b82f6]" />
-                  Pipeline
+                  Outstanding
                 </span>
               </div>
             </div>
@@ -549,7 +585,7 @@ export default function Home() {
                       color: "#0f172a",
                     }}
                   />
-                  <Area type="monotone" dataKey="pipeline" stroke="#3b82f6" strokeWidth={2} fill="url(#pipelineFill)" dot={false} />
+                  <Area type="monotone" dataKey="outstanding" stroke="#3b82f6" strokeWidth={2} fill="url(#pipelineFill)" dot={false} />
                   <Area type="monotone" dataKey="collected" stroke="#10b981" strokeWidth={2} fill="url(#collectedFill)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -559,8 +595,8 @@ export default function Home() {
           <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-2 md:p-6 shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Workload</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Open versus complete.</p>
+                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Order Progress</h2>
+                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Open versus fulfilled.</p>
               </div>
               <CheckCircle2 className="h-5 w-5 text-[#10b981]" aria-hidden="true" />
             </div>
@@ -568,11 +604,14 @@ export default function Home() {
             <div className="mt-6 h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={workloadData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={88} paddingAngle={3}>
-                    {workloadData.map((entry) => (
+                  <Pie data={orderProgressChartData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={88} paddingAngle={3}>
+                    {orderProgressChartData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
+                  <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-[#0f172a] text-2xl font-semibold">
+                    {orderProgressPercent}%
+                  </text>
                   <Tooltip
                     contentStyle={{
                       background: "#ffffff",
@@ -586,9 +625,9 @@ export default function Home() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              {workloadData.map((item) => (
+              {orderProgressData.map((item) => (
                 <div key={item.name} className="rounded-[8px] border border-[#cbd5e1] p-2 md:p-4 shadow-md">
-                  <p className="text-xs md:text-sm text-[#64748b]">{item.name}</p>
+                  <p className="text-xs md:text-sm font-semibold" style={{ color: item.color }}>{item.name}</p>
                   <p className="mt-2 text-base md:text-2xl font-semibold text-[#0f172a]">{item.value}</p>
                 </div>
               ))}

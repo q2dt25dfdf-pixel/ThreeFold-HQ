@@ -86,6 +86,8 @@ export default function ClientDetailPage() {
   const [editingHeader, setEditingHeader] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [clientDraft, setClientDraft] = useState<Client | null>(null);
+  const [clientSaveLabel, setClientSaveLabel] = useState("Save Changes");
+  const [contactSaveLabel, setContactSaveLabel] = useState("Save Changes");
   const [activityForm, setActivityForm] = useState({
     type: "Call" as ActivityEntry["type"],
     owner: "Alliyah",
@@ -108,13 +110,28 @@ export default function ClientDetailPage() {
 
   const openClientEditor = () => {
     if (!client) return;
+    setClientSaveLabel("Save Changes");
     setClientDraft({ ...client });
   };
 
-  const saveClientDraft = () => {
+  const saveClientDraft = async () => {
     if (!clientDraft) return;
-    upsertClient(clientDraft);
-    setClientDraft(null);
+    await upsertClient(clientDraft);
+    setClientSaveLabel("Saved ✓");
+    window.setTimeout(() => {
+      setClientDraft(null);
+      setClientSaveLabel("Save Changes");
+    }, 700);
+  };
+
+  const saveHeaderContact = async () => {
+    if (!client) return;
+    await upsertClient(client);
+    setContactSaveLabel("Saved ✓");
+    window.setTimeout(() => {
+      setEditingHeader(false);
+      setContactSaveLabel("Save Changes");
+    }, 700);
   };
 
   const addActivity = () => {
@@ -193,6 +210,15 @@ export default function ClientDetailPage() {
                 />
               </label>
             ))}
+            <div className="flex justify-end md:col-span-3">
+              <button
+                type="button"
+                onClick={saveHeaderContact}
+                className="min-h-11 rounded-3xl bg-white px-5 py-3 text-xs md:text-sm font-semibold text-slate-950 hover:bg-slate-100"
+              >
+                {contactSaveLabel}
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -336,8 +362,8 @@ export default function ClientDetailPage() {
               </label>
             </div>
             <div className="mt-6 flex gap-3">
-              <button type="button" onClick={saveClientDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">Save</button>
-              <button type="button" onClick={() => setClientDraft(null)} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
+              <button type="button" onClick={saveClientDraft} className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">{clientSaveLabel}</button>
+              <button type="button" onClick={() => { setClientDraft(null); setClientSaveLabel("Save Changes"); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
             </div>
           </div>
         </div>

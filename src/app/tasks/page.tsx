@@ -158,14 +158,14 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
   );
 }
 
-function Modal({ title, onSave, onClose, onDelete, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; children: ReactNode }) {
+function Modal({ title, onSave, onClose, onDelete, saveLabel = "Save", children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveLabel?: string; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white px-5 py-3 md:py-6 shadow-xl md:px-10 md:py-10">
         <h2 className="text-base md:text-2xl font-semibold text-slate-950 mb-6">{title}</h2>
         {children}
         <div className="mt-6 flex gap-3">
-          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>Save</button>
+          <button className="min-h-11 flex-1 rounded-3xl bg-slate-950 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={onSave}>{saveLabel}</button>
           <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={onClose}>Cancel</button>
         </div>
         {onDelete && <button className="mt-3 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" onClick={onDelete}>Delete task</button>}
@@ -179,6 +179,7 @@ export default function TasksPage() {
   const [filterOwner, setFilterOwner] = useState<TaskOwner | "All">("All");
   const [showAdd, setShowAdd] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editSaveLabel, setEditSaveLabel] = useState("Save Changes");
   const [form, setForm] = useState(emptyForm);
 
   const toggle = (id: string) => {
@@ -201,7 +202,11 @@ export default function TasksPage() {
   const handleSaveEdit = async () => {
     if (!editTask) return;
     await upsertItem(editTask);
-    setEditTask(null);
+    setEditSaveLabel("Saved ✓");
+    window.setTimeout(() => {
+      setEditTask(null);
+      setEditSaveLabel("Save Changes");
+    }, 700);
   };
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
@@ -328,7 +333,7 @@ export default function TasksPage() {
       </div>
 
       {showAdd && <Modal title="Add task" onSave={handleAdd} onClose={() => setShowAdd(false)}><FormFields data={form} onChange={setForm} /></Modal>}
-      {editTask && <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => setEditTask(null)} onDelete={() => handleDelete(editTask.id)}><FormFields data={editTask} onChange={setEditTask} /></Modal>}
+      {editTask && <Modal title="Edit task" onSave={handleSaveEdit} onClose={() => { setEditTask(null); setEditSaveLabel("Save Changes"); }} onDelete={() => handleDelete(editTask.id)} saveLabel={editSaveLabel}><FormFields data={editTask} onChange={setEditTask} /></Modal>}
     </div>
   );
 }

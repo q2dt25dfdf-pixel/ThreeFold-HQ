@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS orders (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL
+);
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
