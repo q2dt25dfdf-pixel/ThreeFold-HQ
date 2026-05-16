@@ -346,6 +346,15 @@ export default function ClientDetailPage() {
           title="Edit client"
           onClose={() => { setClientDraft(null); clientSave.resetSaveState(); }}
           maxWidth="max-w-lg"
+          footer={
+            <div className="space-y-3">
+              <FieldError message={clientFormError} />
+              <div className="flex gap-3">
+                <SaveButton state={clientSave.saveState} onClick={saveClientDraft} className="flex-1 py-3" />
+                <button type="button" onClick={() => { setClientDraft(null); clientSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
+              </div>
+            </div>
+          }
         >
             <div className="space-y-4">
               {[
@@ -390,11 +399,6 @@ export default function ClientDetailPage() {
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</span>
                 <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.notes} onChange={(event) => setClientDraft({ ...clientDraft, notes: event.target.value })} />
               </label>
-            </div>
-            <FieldError message={clientFormError} />
-            <div className="mt-6 flex gap-3">
-              <SaveButton state={clientSave.saveState} onClick={saveClientDraft} className="flex-1 py-3" />
-              <button type="button" onClick={() => { setClientDraft(null); clientSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
             </div>
         </ModalShell>
       )}

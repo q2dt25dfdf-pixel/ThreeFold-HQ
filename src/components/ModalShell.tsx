@@ -43,11 +43,11 @@ export default function ModalShell({
   return (
     <>
       {/* Mobile: full-screen sheet — sits above the hamburger (z-[99999]) */}
-      <div className="fixed inset-0 z-[100000] flex flex-col bg-white md:hidden">
+      <div className="fixed inset-0 z-[100000] flex h-dvh flex-col bg-white md:hidden">
         <div className="shrink-0 border-b border-slate-100 px-5 py-4">
           {header}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-none px-5 py-5">
           {children}
         </div>
         {footer ? (

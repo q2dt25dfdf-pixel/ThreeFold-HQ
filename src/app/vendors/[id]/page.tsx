@@ -285,6 +285,21 @@ export default function VendorDetailPage() {
           subtitle="Update the vendor profile and save changes."
           onClose={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
           maxWidth="max-w-lg"
+          footer={
+            <div className="space-y-3">
+              <FieldError message={vendorFormError} />
+              <div className="flex gap-3">
+                <SaveButton state={vendorSave.saveState} onClick={saveVendorDraft} className="flex-1 py-3" />
+                <button
+                  type="button"
+                  onClick={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
+                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          }
         >
             <div className="space-y-4">
               <label className="block">
@@ -329,18 +344,6 @@ export default function VendorDetailPage() {
                   }}
                 />
               </label>
-            </div>
-            <FieldError message={vendorFormError} />
-
-            <div className="mt-6 flex gap-3">
-              <SaveButton state={vendorSave.saveState} onClick={saveVendorDraft} className="flex-1 py-3" />
-              <button
-                type="button"
-                onClick={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
-                className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
             </div>
         </ModalShell>
       )}

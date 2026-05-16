@@ -193,6 +193,21 @@ export default function OrderDetailPage() {
           subtitle="Update this order's details, items, and production status."
           onClose={closeOrderEditor}
           maxWidth="max-w-2xl"
+          footer={
+            <div className="space-y-3">
+              <FieldError message={formError} />
+              <div className="flex gap-3">
+                <SaveButton state={orderSave.saveState} onClick={saveOrderDraft} className="flex-1 py-3" />
+                <button
+                  type="button"
+                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                  onClick={closeOrderEditor}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          }
         >
             <div className="space-y-4">
               <div>
@@ -321,19 +336,6 @@ export default function OrderDetailPage() {
                   onChange={(event) => setOrderDraft({ ...orderDraft, notes: event.target.value })}
                 />
               </div>
-            </div>
-
-            <FieldError message={formError} />
-
-            <div className="mt-6 flex gap-3">
-              <SaveButton state={orderSave.saveState} onClick={saveOrderDraft} className="flex-1 py-3" />
-              <button
-                type="button"
-                className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
-                onClick={closeOrderEditor}
-              >
-                Cancel
-              </button>
             </div>
         </ModalShell>
       )}
