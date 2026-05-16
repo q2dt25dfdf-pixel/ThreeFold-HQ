@@ -7,7 +7,7 @@ import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Assignee = "Alliyah" | "Hannah" | "Jordan";
-type FilterOption = "All Events" | "Alliyah" | "Hannah" | "Jordyn" | "Shared";
+type FilterOption = "All Events" | "Alliyah" | "Hannah" | "Jordan" | "Shared";
 type Priority = "High" | "Medium" | "Low";
 type EventType = "Client Meeting" | "Demo" | "Video Call" | "Delivery" | "Deadline" | "Internal Meeting" | "Other";
 
@@ -26,7 +26,7 @@ type CalendarView = "today" | "week" | "month";
 
 const ASSIGNEES: Assignee[] = ["Alliyah", "Hannah", "Jordan"];
 const eventTypes: EventType[] = ["Client Meeting", "Demo", "Video Call", "Delivery", "Deadline", "Internal Meeting", "Other"];
-const filterOptions: FilterOption[] = ["All Events", "Alliyah", "Hannah", "Jordyn", "Shared"];
+const filterOptions: FilterOption[] = ["All Events", "Alliyah", "Hannah", "Jordan", "Shared"];
 
 const eventTypeColors: Record<EventType, string> = {
   "Client Meeting": "border-l-2 border-blue-400 bg-blue-100 text-blue-700",
@@ -78,7 +78,7 @@ function eventMatchesFilter(assignedTo: Assignee[], filter: FilterOption): boole
   if (filter === "Shared") return assignedTo.length >= 2;
   if (filter === "Alliyah") return assignedTo.includes("Alliyah");
   if (filter === "Hannah") return assignedTo.includes("Hannah");
-  if (filter === "Jordyn") return assignedTo.includes("Jordan");
+  if (filter === "Jordan") return assignedTo.includes("Jordan");
   return true;
 }
 
