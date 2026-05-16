@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
@@ -82,6 +82,24 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
   const { saveState, resetSaveState, runSave } = useSaveState();
   const [formError, setFormError] = useState("");
 
+  const scrollYRef = useRef(0);
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    scrollYRef.current = scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollYRef.current);
+    };
+  }, [open]);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (lead) {
@@ -150,8 +168,8 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+      <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>

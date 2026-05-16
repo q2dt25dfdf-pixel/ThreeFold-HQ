@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
@@ -124,6 +124,24 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
+  const scrollYRef = useRef(0);
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    scrollYRef.current = scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollYRef.current);
+    };
+  }, [open]);
+
   if (!open || !lead) return null;
 
   // Use live lead data, patch locally via onSave
@@ -177,11 +195,11 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="h-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2.5rem] border border-slate-300 bg-white shadow-2xl"
+        className="modal-enter h-auto max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2.5rem] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-8 px-5 py-6 sm:px-10 sm:py-10">

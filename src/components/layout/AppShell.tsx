@@ -49,7 +49,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-dvh bg-zinc-100">
+    <div className="flex min-h-dvh overflow-x-hidden bg-zinc-100">
       {/* Desktop sidebar — always rendered so layout never jumps */}
       <div className={`hidden shrink-0 transition-[width] duration-300 ease-in-out lg:block ${desktopSidebarCollapsed ? "w-0" : "w-[280px]"}`}>
         <Sidebar

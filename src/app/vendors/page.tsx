@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Package, Printer, Search, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
@@ -70,6 +70,22 @@ export default function VendorsPage() {
   const addSave = useSaveState();
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
+
+  useEffect(() => {
+    if (!showModal) return;
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [showModal]);
 
   const orderCountForVendor = (vendorName: string) =>
     orders.filter((order) => order.vendor.trim().toLowerCase() === vendorName.trim().toLowerCase()).length;
@@ -377,8 +393,8 @@ export default function VendorsPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 sm:px-6">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+          <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">Add vendor</h2>

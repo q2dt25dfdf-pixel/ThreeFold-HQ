@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { useScrollLock } from "@/hooks/useScrollLock";
 
 type Props = {
   title: string;
@@ -12,13 +13,15 @@ type Props = {
 };
 
 export default function ModalShell({ title, subtitle, maxWidth = "max-w-2xl", onClose, children }: Props) {
+  useScrollLock();
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className={`max-h-[90vh] w-full ${maxWidth} overflow-y-auto rounded-[2rem] bg-white p-2 shadow-xl md:p-8`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm">
+      <div className={`modal-enter max-h-[90vh] w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-5 shadow-2xl md:p-8`}>
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base md:text-2xl font-semibold text-slate-950">{title}</h2>
-            {subtitle && <p className="mt-1 text-xs md:text-sm text-slate-600">{subtitle}</p>}
+            <h2 className="text-base font-semibold text-slate-950 md:text-2xl">{title}</h2>
+            {subtitle && <p className="mt-1 text-xs text-slate-500 md:text-sm">{subtitle}</p>}
           </div>
           <button
             type="button"

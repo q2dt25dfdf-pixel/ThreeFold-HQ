@@ -301,7 +301,7 @@ export default function CRMPage() {
         </div>
       </div>
 
-      <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8">
+      <div className="overflow-x-hidden bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8">
         <div className="flex flex-col gap-4 bg-zinc-100 lg:min-w-max lg:flex-row lg:gap-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (

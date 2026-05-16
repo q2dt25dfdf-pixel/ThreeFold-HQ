@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useMemo, useState } from "react";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import { ChevronDown, ChevronUp, Search, Trash2, X } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
@@ -192,9 +193,10 @@ function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T
 }
 
 function Modal({ title, onSave, onClose, onDelete, saveState, mode = "edit", error, children }: { title: string; onSave: () => void; onClose: () => void; onDelete?: () => void; saveState: SaveState; mode?: "add" | "edit"; error?: string; children: ReactNode }) {
+  useScrollLock();
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white px-5 py-6 shadow-xl md:px-10 md:py-10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 py-6 backdrop-blur-sm">
+      <div className="modal-enter max-h-[90vh] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white px-5 py-6 shadow-2xl md:px-10 md:py-10">
         <div className="mb-6 flex items-start justify-between gap-4">
           <h2 className="text-base md:text-2xl font-semibold text-slate-950">{title}</h2>
           <button

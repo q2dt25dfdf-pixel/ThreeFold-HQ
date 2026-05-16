@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -225,6 +225,23 @@ export default function CalendarPage() {
   const eventSave = useSaveState();
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
+
+  const isModalOpen = showAdd || !!(selectedEvent && eventDraft) || showTodayDetails;
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [isModalOpen]);
 
   const monthLabel = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const todayKey = formatDate(today);
@@ -638,8 +655,8 @@ export default function CalendarPage() {
 
       {/* Add event modal */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-6 shadow-xl md:p-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 px-4 backdrop-blur-sm">
+          <div className="modal-enter max-h-[90vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
             <h2 className="text-base font-semibold text-slate-950 md:text-2xl">Add event</h2>
             <div className="mt-6 space-y-4">
               <div>
@@ -710,8 +727,8 @@ export default function CalendarPage() {
 
       {/* Event detail / edit modal */}
       {selectedEvent && eventDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-6 shadow-xl md:p-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 px-4">
+          <div className="modal-enter max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-950 md:text-2xl">
@@ -855,8 +872,8 @@ export default function CalendarPage() {
 
       {/* Today details modal */}
       {showTodayDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white p-6 shadow-xl md:p-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 px-4">
+          <div className="modal-enter max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-950 md:text-2xl">Today</h2>
