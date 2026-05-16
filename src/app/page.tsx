@@ -3,38 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   ArrowUpRight,
-  Building2,
-  CheckCircle2,
-  ChevronRight,
-  Factory,
-  LayoutDashboard,
-  ListChecks,
+  Calendar,
+  CheckSquare,
+  Clock,
+  DollarSign,
+  Package,
   Search,
   Users,
 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
-import { pipelineStages } from "@/components/crm/types";
 
 type StorageRecord = Record<string, unknown> & { id: string };
-
 type SearchCategory = "Clients" | "Vendors" | "Orders" | "Finances" | "Tasks";
-
 type SearchResult = {
   id: string;
   category: SearchCategory;
@@ -43,14 +25,17 @@ type SearchResult = {
   href: string;
   searchText: string;
 };
+type Deadline = { title: string; date: Date; type: "Order" | "Event"; href: string };
 
-const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 const defaultSearchRows: StorageRecord[] = [];
 const founderNames = ["Alliyah", "Hannah", "Jordan"] as const;
-const taskDoneStatuses = new Set(["done", "complete"]);
-const completedOrderStatuses = new Set(["fulfilled", "complete", "done"]);
-const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
-const recentDateKeys = ["updatedAt", "updated_at", "createdAt", "created_at", "date", "dueDate", "final_due_date", "deposit_paid_date", "final_paid_date", "estimatedDeliveryDate", "followUpDate"];
+const taskDoneStatuses = new Set(["done", "complete", "completed"]);
+const inactiveOrderStatuses = new Set(["delivered", "cancelled", "fulfilled", "completed", "done"]);
+const inactiveFinanceStatuses = new Set(["draft", "cancelled"]);
+
+function formatCurrency(value: number) {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -79,15 +64,11 @@ function taskOwner(task: StorageRecord) {
   return stringField(task, "owner").trim();
 }
 
-function isOrderActive(order: StorageRecord) {
-  return statusText(order) !== "fulfilled";
-}
-
 function numericAmount(value: unknown) {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return 0;
-  const amount = Number(value.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(amount) ? amount : 0;
+  const n = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
 }
 
 function invoiceTotal(record: StorageRecord) {
@@ -95,24 +76,11 @@ function invoiceTotal(record: StorageRecord) {
 }
 
 function invoiceDeposit(record: StorageRecord) {
-  const deposit = numericAmount(record.deposit_amount);
-  return deposit > 0 ? deposit : invoiceTotal(record) * 0.5;
+  const d = numericAmount(record.deposit_amount);
+  return d > 0 ? d : invoiceTotal(record) * 0.5;
 }
 
-function invoiceBalance(record: StorageRecord) {
-  const balance = numericAmount(record.balance_remaining);
-  return balance > 0 ? balance : Math.max(invoiceTotal(record) - invoiceDeposit(record), 0);
-}
-
-function invoiceCollected(record: StorageRecord) {
-  return (record.deposit_paid === true ? invoiceDeposit(record) : 0) + (record.final_paid === true ? invoiceTotal(record) : 0);
-}
-
-function isInvoiceCancelled(record: StorageRecord) {
-  return statusText(record) === "cancelled";
-}
-
-function parseRecordDate(rawDate: string) {
+function parseRecordDate(rawDate: string): Date | null {
   if (!rawDate) return null;
   const date = new Date(rawDate);
   if (!Number.isNaN(date.getTime())) return date;
@@ -120,44 +88,17 @@ function parseRecordDate(rawDate: string) {
   return Number.isNaN(dateOnly.getTime()) ? null : dateOnly;
 }
 
-function monthIndex(record: StorageRecord) {
-  const rawDate = stringField(record, "createdAt", stringField(record, "created_at", stringField(record, "final_paid_date", stringField(record, "deposit_paid_date", stringField(record, "final_due_date", stringField(record, "dueDate", stringField(record, "estimatedDeliveryDate", stringField(record, "followUpDate"))))))));
-  return parseRecordDate(rawDate)?.getMonth() ?? -1;
+function formatDateShort(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function recordTime(record: StorageRecord) {
-  for (const key of recentDateKeys) {
-    const rawDate = stringField(record, key);
-    if (!rawDate) continue;
-    const date = parseRecordDate(rawDate);
-    if (date) return date.getTime();
-  }
-
-  const idTimestamp = Number(stringField(record, "id").split("-").pop());
-  return Number.isFinite(idTimestamp) ? idTimestamp : 0;
-}
-
-function mostRecentRecord(records: StorageRecord[]) {
-  return records.reduce<StorageRecord | null>((latest, record) => {
-    if (!latest) return record;
-    return recordTime(record) > recordTime(latest) ? record : latest;
-  }, null);
-}
-
-function recordTitle(record: StorageRecord | null, keys: string[], fallback: string) {
-  if (!record) return fallback;
-  for (const key of keys) {
-    const value = stringField(record, key).trim();
-    if (value) return value;
-  }
-  return fallback;
-}
-
-function displayStatus(record: StorageRecord | null, fallback = "No status") {
-  if (!record) return fallback;
-  const status = stringField(record, "status").trim();
-  if (status) return status;
-  return record.completed === true ? "Done" : fallback;
+function statusBadgeClass(status: string) {
+  const lower = status.toLowerCase();
+  if (lower.includes("review") || lower.includes("approval")) return "bg-amber-100 text-amber-700";
+  if (lower.includes("progress") || lower.includes("production")) return "bg-blue-100 text-blue-700";
+  if (lower.includes("shipped") || lower.includes("transit")) return "bg-purple-100 text-purple-700";
+  if (lower.includes("hold") || lower.includes("risk")) return "bg-red-100 text-red-700";
+  return "bg-slate-100 text-slate-600";
 }
 
 export default function Home() {
@@ -165,155 +106,107 @@ export default function Home() {
   const searchRef = useRef<HTMLDivElement | null>(null);
   const [globalQuery, setGlobalQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+
   const { data: clients, loading: clientsLoading, error: clientsError } = useSupabaseTable<StorageRecord>("clients", defaultSearchRows);
   const { data: vendors, loading: vendorsLoading, error: vendorsError } = useSupabaseTable<StorageRecord>("vendors", defaultSearchRows);
   const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<StorageRecord>("orders", defaultSearchRows);
   const { data: finances, loading: financesLoading, error: financesError } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
   const { data: tasks, loading: tasksLoading, error: tasksError } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
   const { data: crmLeads, loading: crmLoading, error: crmError } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
-  const loading = clientsLoading || vendorsLoading || ordersLoading || financesLoading || tasksLoading || crmLoading;
-  const loadError = clientsError || vendorsError || ordersError || financesError || tasksError || crmError;
+  const { data: calendarEvents, loading: calendarLoading, error: calendarError } = useSupabaseTable<StorageRecord>("calendar_events", defaultSearchRows);
 
-  const openTasks = useMemo(() => tasks.filter((task) => !isTaskDone(task)), [tasks]);
-  const doneTasks = useMemo(() => tasks.filter(isTaskDone), [tasks]);
-  const activeOrders = useMemo(() => orders.filter(isOrderActive), [orders]);
-  const collectedRevenue = useMemo(
-    () => finances.reduce((sum, invoice) => sum + invoiceCollected(invoice), 0),
-    [finances],
-  );
-  const outstandingBalance = useMemo(
-    () => finances.filter((invoice) => invoice.final_paid !== true).reduce((sum, invoice) => sum + invoiceBalance(invoice), 0),
-    [finances],
-  );
-  const pipelineValue = useMemo(
-    () =>
-      crmLeads
-        .filter((record) => stringField(record, "stage").trim().toLowerCase() !== "closed lost")
-        .reduce((sum, record) => sum + numericAmount(record.value), 0),
-    [crmLeads],
-  );
-  const focusItems = useMemo(() => {
-    const latestOrders = mostRecentRecord(orders);
-    const latestLead = mostRecentRecord(crmLeads);
-    const latestTask = mostRecentRecord(tasks);
+  const loading = clientsLoading || vendorsLoading || ordersLoading || financesLoading || tasksLoading || crmLoading || calendarLoading;
+  const loadError = clientsError || vendorsError || ordersError || financesError || tasksError || crmError || calendarError;
 
-    return [
-      {
-        label: recordTitle(latestOrders, ["orderName", "name", "title", "client"], "No orders"),
-        meta: "Orders",
-        status: displayStatus(latestOrders),
-      },
-      {
-        label: recordTitle(latestLead, ["name", "company", "title", "contact"], "No CRM leads"),
-        meta: "CRM",
-        status: displayStatus(latestLead),
-      },
-      {
-        label: recordTitle(latestTask, ["title", "task", "name"], "No tasks"),
-        meta: "Operations",
-        status: displayStatus(latestTask, "Open"),
-      },
-    ];
-  }, [crmLeads, orders, tasks]);
+  const todayLabel = useMemo(
+    () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+    [],
+  );
+  const todayISO = useMemo(() => new Date().toISOString().split("T")[0] ?? "", []);
 
-  const heroTrend = useMemo(
-    () =>
-      monthLabels.map((month, index) => ({
-        month,
-        value:
-          finances.filter((invoice) => monthIndex(invoice) <= index).reduce((sum, invoice) => sum + invoiceCollected(invoice) + (invoice.final_paid === true ? 0 : invoiceBalance(invoice)), 0),
-      })),
+  // Section 1: Active Orders
+  const activeOrders = useMemo(
+    () => orders.filter((o) => !inactiveOrderStatuses.has(statusText(o))),
+    [orders],
+  );
+
+  // Section 2: Unpaid Deposits
+  const unpaidDeposits = useMemo(
+    () => finances.filter((f) => f.deposit_paid !== true && !inactiveFinanceStatuses.has(statusText(f))),
     [finances],
   );
 
-  const revenueData = useMemo(
-    () =>
-      monthLabels.slice(0, 6).map((month, index) => ({
-        month,
-        collected: finances.filter((invoice) => monthIndex(invoice) === index).reduce((sum, invoice) => sum + invoiceCollected(invoice), 0),
-        outstanding: finances.filter((invoice) => monthIndex(invoice) === index && invoice.final_paid !== true && !isInvoiceCancelled(invoice)).reduce((sum, invoice) => sum + invoiceBalance(invoice), 0),
-      })),
-    [finances],
-  );
-
-  const pipelineData = useMemo(() => {
-    const counts = crmLeads.reduce<Record<string, number>>((acc, lead) => {
-      const stage = stringField(lead, "stage", "Unknown");
-      acc[stage] = (acc[stage] ?? 0) + 1;
-      return acc;
-    }, {});
-    const knownStages = pipelineStages.map((stage) => ({ stage, count: counts[stage] ?? 0 }));
-    const extraStages = Object.entries(counts)
-      .filter(([stage]) => !(pipelineStages as readonly string[]).includes(stage))
-      .map(([stage, count]) => ({ stage, count }));
-    return [...knownStages, ...extraStages];
-  }, [crmLeads]);
-
-  const taskData = useMemo(
-    () =>
-      founderNames.map((name) => ({
-        name,
-        open: openTasks.filter((task) => taskOwner(task) === name).length,
-        complete: doneTasks.filter((task) => taskOwner(task) === name).length,
-      })),
-    [doneTasks, openTasks],
-  );
-
-  const orderProgressData = useMemo(() => {
-    const fulfilled = orders.filter((order) => completedOrderStatuses.has(statusText(order))).length;
-    const open = Math.max(orders.length - fulfilled, 0);
-
-    return [
-      { name: "Open", value: open, color: "#3b82f6" },
-      { name: "Fulfilled", value: fulfilled, color: "#10b981" },
-    ];
-  }, [orders]);
-  const orderProgressTotal = useMemo(() => orderProgressData.reduce((sum, item) => sum + item.value, 0), [orderProgressData]);
-  const orderProgressChartData = orderProgressTotal > 0 ? orderProgressData : [{ name: "No orders", value: 1, color: "#e2e8f0" }];
-  const orderProgressPercent = orderProgressTotal > 0 ? Math.round((orderProgressData[1].value / orderProgressTotal) * 100) : 0;
-
-  const metricCards = useMemo(
-    () => [
-      {
-        label: "Clients",
-        value: String(clients.length),
-        detail: "Active clients",
-        href: "/clients",
-        icon: Users,
-      },
-      {
-        label: "CRM",
-        value: String(crmLeads.length),
-        detail: "Leads across pipeline",
-        href: "/crm",
-        icon: Building2,
-      },
-      {
-        label: "Orders",
-        value: String(activeOrders.length),
-        detail: "Orders in progress",
-        href: "/orders",
-        icon: Factory,
-      },
-      {
-        label: "Tasks",
-        value: String(openTasks.length),
-        detail: "Open founder actions",
-        href: "/tasks",
-        icon: ListChecks,
-      },
-    ],
-    [activeOrders.length, clients.length, crmLeads.length, openTasks.length],
-  );
-
-  const searchData = useMemo<Record<SearchCategory, StorageRecord[]>>(
-    () => ({
-      Clients: clients,
-      Vendors: vendors,
-      Orders: orders,
-      Finances: finances,
-      Tasks: tasks,
+  // Section 3: Pending Approvals
+  const pendingApprovals = useMemo(
+    () => orders.filter((o) => {
+      const s = statusText(o);
+      return s.includes("review") || s.includes("approval") || s === "pending approval";
     }),
+    [orders],
+  );
+
+  // Section 4: Upcoming Deadlines (next 7 days)
+  const upcomingDeadlines = useMemo<Deadline[]>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const limit = new Date(today);
+    limit.setDate(today.getDate() + 7);
+    const deadlines: Deadline[] = [];
+
+    for (const o of orders) {
+      if (inactiveOrderStatuses.has(statusText(o))) continue;
+      const dateStr = stringField(o, "dueDate") || stringField(o, "estimatedDeliveryDate") || stringField(o, "final_due_date");
+      if (!dateStr) continue;
+      const date = parseRecordDate(dateStr);
+      if (!date) continue;
+      date.setHours(0, 0, 0, 0);
+      if (date >= today && date <= limit) {
+        deadlines.push({ title: stringField(o, "orderName", "Unnamed order"), date, type: "Order", href: `/orders/${o.id}` });
+      }
+    }
+
+    for (const e of calendarEvents) {
+      const dateStr = stringField(e, "date") || stringField(e, "start_date") || stringField(e, "startDate");
+      if (!dateStr) continue;
+      const date = parseRecordDate(dateStr);
+      if (!date) continue;
+      date.setHours(0, 0, 0, 0);
+      if (date >= today && date <= limit) {
+        deadlines.push({ title: stringField(e, "title", "Unnamed event"), date, type: "Event", href: "/calendar" });
+      }
+    }
+
+    return deadlines.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [orders, calendarEvents]);
+
+  // Section 5: Open Tasks
+  const openTasks = useMemo(() => tasks.filter((t) => !isTaskDone(t)), [tasks]);
+  const tasksByOwner = useMemo(
+    () => founderNames.map((name) => ({
+      name,
+      tasks: openTasks.filter((t) => taskOwner(t).toLowerCase().includes(name.toLowerCase())),
+    })),
+    [openTasks],
+  );
+
+  // Section 6: Next Actions — overdue or due-today CRM follow-ups
+  const nextActions = useMemo(
+    () => crmLeads
+      .filter((lead) => {
+        const date = stringField(lead, "followUpDate") || stringField(lead, "follow_up_date");
+        return date && date !== "TBD" && date <= todayISO;
+      })
+      .sort((a, b) => {
+        const dateA = stringField(a, "followUpDate") || stringField(a, "follow_up_date");
+        const dateB = stringField(b, "followUpDate") || stringField(b, "follow_up_date");
+        return dateA.localeCompare(dateB);
+      }),
+    [crmLeads, todayISO],
+  );
+
+  // Search
+  const searchData = useMemo<Record<SearchCategory, StorageRecord[]>>(
+    () => ({ Clients: clients, Vendors: vendors, Orders: orders, Finances: finances, Tasks: tasks }),
     [clients, finances, orders, tasks, vendors],
   );
 
@@ -324,7 +217,6 @@ export default function Home() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setSearchOpen(false);
     };
-
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -335,13 +227,7 @@ export default function Home() {
 
   const groupedResults = useMemo(() => {
     const query = globalQuery.trim().toLowerCase();
-    const empty: Record<SearchCategory, SearchResult[]> = {
-      Clients: [],
-      Vendors: [],
-      Orders: [],
-      Finances: [],
-      Tasks: [],
-    };
+    const empty: Record<SearchCategory, SearchResult[]> = { Clients: [], Vendors: [], Orders: [], Finances: [], Tasks: [] };
     if (query.length < 2) return empty;
 
     const results: Record<SearchCategory, SearchResult[]> = {
@@ -401,79 +287,21 @@ export default function Home() {
 
   return (
     <main className="min-h-screen text-xs text-[#0f172a] md:text-sm">
-      <div className="space-y-6 text-xs md:text-sm">
+      <div className="space-y-6">
         <ErrorBanner message={loadError} />
-        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[8px]">
-          <div className="grid min-h-[200px] gap-6 p-4 pt-24 md:min-h-[260px] md:gap-8 md:p-6 lg:grid-cols-[1.1fr_1fr] lg:p-8">
-            <div className="flex flex-col justify-between gap-10">
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1]">
-                  <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <p className="mt-8 text-xs md:text-sm font-medium text-[#e2e8f0]">Operations dashboard</p>
-                <h1 className="mt-3 text-2xl font-semibold tracking-normal text-white md:text-5xl">Threefold HQ</h1>
-                <p className="mt-4 max-w-xl text-xs md:text-sm leading-6 text-[#e2e8f0]">
-                  Born from real friendship, built for real money, and rooted in a story worth wearing.
-                </p>
-              </div>
 
-              <div className="grid gap-3 md:grid-cols-4">
-                {[
-                  { label: "Revenue collected", value: formatCurrency(collectedRevenue) },
-                  { label: "Outstanding balance", value: formatCurrency(outstandingBalance) },
-                  { label: "Pipeline value", value: formatCurrency(pipelineValue) },
-                  { label: "Active clients", value: String(clients.length) },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
-                    <p className="text-xs font-medium text-[#e2e8f0]">{item.label}</p>
-                    <p className="mt-2 text-lg font-semibold text-white md:text-2xl">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative min-h-[220px]">
-              <div className="absolute right-0 top-0 flex items-center gap-2 rounded-[8px] border border-[#cbd5e1] px-3 py-2 text-xs font-medium text-[#e2e8f0]">
-                <ArrowUpRight className="h-4 w-4 text-[#10b981]" aria-hidden="true" />
-                Operational trend
-              </div>
-              <div className="h-full pt-14">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={heroTrend} margin={{ top: 16, right: 0, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="heroTrendFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.45} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Tooltip
-                      cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }}
-                      contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: 8,
-                        color: "#0f172a",
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      fill="url(#heroTrendFill)"
-                      dot={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
+        {/* Header */}
+        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] p-4 pt-24 text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[8px] md:p-6">
+          <p className="text-xs font-medium text-[#94a3b8]">{todayLabel}</p>
+          <h1 className="mt-2 text-2xl font-semibold text-white md:text-4xl">Today at Threefold</h1>
+          <p className="mt-1 text-xs text-[#94a3b8]">Your operations at a glance.</p>
         </section>
 
+        {/* Global search */}
         <section ref={searchRef} className="relative">
           <Search className="pointer-events-none absolute left-4 top-5 h-5 w-5 text-[#64748b]" aria-hidden="true" />
           <input
-            className="w-full rounded-2xl border border-slate-300 bg-white py-4 pl-12 pr-4 text-xs md:text-sm text-slate-950 outline-none transition focus:border-[#3b82f6] focus:ring-4 focus:ring-blue-500/10"
+            className="w-full rounded-2xl border border-slate-300 bg-white py-4 pl-12 pr-4 text-xs text-slate-950 outline-none transition focus:border-[#3b82f6] focus:ring-4 focus:ring-blue-500/10 md:text-sm"
             placeholder="Search clients, vendors, orders, finances, and tasks..."
             value={globalQuery}
             onChange={(event) => {
@@ -484,11 +312,10 @@ export default function Home() {
               setSearchOpen(globalQuery.trim().length >= 2);
             }}
           />
-
           {searchOpen && globalQuery.trim().length >= 2 && (
             <div className="absolute left-0 right-0 z-30 mt-2 max-h-96 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
               {totalResults === 0 ? (
-                <div className="px-4 py-3 md:py-6 text-xs md:text-sm text-slate-600">No results found</div>
+                <div className="px-4 py-6 text-sm text-slate-600">No results found</div>
               ) : (
                 (Object.keys(groupedResults) as SearchCategory[]).map((category) => {
                   const items = groupedResults[category];
@@ -508,7 +335,7 @@ export default function Home() {
                           className="block min-h-11 w-full cursor-pointer px-4 py-3 text-left hover:bg-gray-100"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs md:text-sm font-semibold text-slate-950">{item.title}</p>
+                            <p className="text-xs font-semibold text-slate-950 md:text-sm">{item.title}</p>
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{item.category}</span>
                           </div>
                           <p className="mt-1 text-xs text-slate-600">{item.context || "No additional context"}</p>
@@ -522,225 +349,300 @@ export default function Home() {
           )}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {metricCards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <button
-                key={card.label}
-                type="button"
-                onClick={() => router.push(card.href)}
-                className="group min-h-11 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-5 text-left shadow-md transition hover:border-[#3b82f6] hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#3b82f6]">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-[#64748b] transition group-hover:translate-x-0.5 group-hover:text-[#3b82f6]" aria-hidden="true" />
-                </div>
-                <p className="mt-6 text-xs md:text-sm font-medium text-[#64748b]">{card.label}</p>
-                <p className="mt-2 text-base md:text-3xl font-semibold tracking-normal text-[#0f172a]">{card.value}</p>
-                <p className="mt-2 text-xs md:text-sm text-[#64748b]">{card.detail}</p>
+        {/* 6 operational sections */}
+        <div className="grid gap-6 lg:grid-cols-2">
+
+          {/* 1 — Active Orders */}
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+                <h2 className="font-semibold text-[#0f172a]">Active Orders</h2>
+                {activeOrders.length > 0 && (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">{activeOrders.length}</span>
+                )}
+              </div>
+              <button type="button" onClick={() => router.push("/orders")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+                View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
-            );
-          })}
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Revenue and balances</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Collected revenue against outstanding balances.</p>
-              </div>
-              <div className="flex items-center gap-4 text-xs md:text-sm">
-                <span className="flex items-center gap-2 text-[#64748b]">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />
-                  Collected
-                </span>
-                <span className="flex items-center gap-2 text-[#64748b]">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#3b82f6]" />
-                  Outstanding
-                </span>
-              </div>
             </div>
-
-            <div className="mt-6 h-[310px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="collectedFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.24} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="pipelineFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={formatCurrency} />
-                  <Tooltip
-                    formatter={(value) => formatCurrency(Number(value ?? 0))}
-                    contentStyle={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: 8,
-                      color: "#0f172a",
-                    }}
-                  />
-                  <Area type="monotone" dataKey="outstanding" stroke="#3b82f6" strokeWidth={2} fill="url(#pipelineFill)" dot={false} />
-                  <Area type="monotone" dataKey="collected" stroke="#10b981" strokeWidth={2} fill="url(#collectedFill)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              {activeOrders.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No active orders — all clear.</p>
+              ) : (
+                <>
+                  {activeOrders.slice(0, 5).map((order) => {
+                    const name = stringField(order, "orderName", "Unnamed order");
+                    const client = stringField(order, "client");
+                    const status = stringField(order, "status");
+                    const dueStr = stringField(order, "dueDate") || stringField(order, "estimatedDeliveryDate") || stringField(order, "final_due_date");
+                    const due = dueStr ? parseRecordDate(dueStr) : null;
+                    return (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => router.push(`/orders/${order.id}`)}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-[#0f172a]">{name}</p>
+                          {client && <p className="mt-0.5 truncate text-xs text-[#64748b]">{client}</p>}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {status && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(status)}`}>{status}</span>}
+                          {due && <span className="text-xs text-[#94a3b8]">{formatDateShort(due)}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {activeOrders.length > 5 && (
+                    <button type="button" onClick={() => router.push("/orders")} className="w-full pt-1 text-center text-xs text-[#64748b] hover:text-[#3b82f6]">
+                      +{activeOrders.length - 5} more
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Order Progress</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Open versus fulfilled.</p>
+          {/* 2 — Unpaid Deposits */}
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+                <h2 className="font-semibold text-[#0f172a]">Unpaid Deposits</h2>
+                {unpaidDeposits.length > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-600">{unpaidDeposits.length}</span>
+                )}
               </div>
-              <CheckCircle2 className="h-5 w-5 text-[#10b981]" aria-hidden="true" />
-            </div>
-
-            <div className="mt-6 h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={orderProgressChartData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={88} paddingAngle={3}>
-                    {orderProgressChartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-[#0f172a] text-2xl font-semibold">
-                    {orderProgressPercent}%
-                  </text>
-                  <Tooltip
-                    contentStyle={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: 8,
-                      color: "#0f172a",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              {orderProgressData.map((item) => (
-                <div key={item.name} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
-                  <p className="text-xs md:text-sm font-semibold" style={{ color: item.color }}>{item.name}</p>
-                  <p className="mt-2 text-base md:text-2xl font-semibold text-[#0f172a]">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-3">
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md xl:col-span-2">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Pipeline stages</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Lead flow from first contact through orders.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push("/crm")}
-                className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] px-3 py-2 text-xs md:text-sm font-medium text-[#0f172a] transition hover:border-[#3b82f6]"
-              >
-                Open CRM
-                <ArrowUpRight className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+              <button type="button" onClick={() => router.push("/finances")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+                View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
-
-            <div className="mt-6 h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData} margin={{ top: 6, right: 10, left: -18, bottom: 0 }}>
-                  <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="stage" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: 8,
-                      color: "#0f172a",
-                    }}
-                  />
-                  <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              {unpaidDeposits.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No unpaid deposits — all caught up.</p>
+              ) : (
+                <>
+                  {unpaidDeposits.slice(0, 5).map((invoice) => {
+                    const name = stringField(invoice, "orderName", stringField(invoice, "client", "Unnamed invoice"));
+                    const client = stringField(invoice, "client", stringField(invoice, "client_name"));
+                    const depositAmt = invoiceDeposit(invoice);
+                    const total = invoiceTotal(invoice);
+                    return (
+                      <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-[#0f172a]">{name}</p>
+                          {client && name !== client && <p className="mt-0.5 truncate text-xs text-[#64748b]">{client}</p>}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-semibold text-amber-600">{formatCurrency(depositAmt)}</p>
+                          {total > 0 && <p className="text-xs text-[#94a3b8]">of {formatCurrency(total)}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {unpaidDeposits.length > 5 && (
+                    <button type="button" onClick={() => router.push("/finances")} className="w-full pt-1 text-center text-xs text-[#64748b] hover:text-[#3b82f6]">
+                      +{unpaidDeposits.length - 5} more
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Founder tasks</h2>
-                <p className="mt-1 text-xs md:text-sm text-[#64748b]">Open work by owner.</p>
+          {/* 3 — Pending Approvals */}
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+                <h2 className="font-semibold text-[#0f172a]">Pending Approvals</h2>
+                {pendingApprovals.length > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-600">{pendingApprovals.length}</span>
+                )}
               </div>
-              <button
-                type="button"
-                aria-label="Open tasks"
-                onClick={() => router.push("/tasks")}
-                className="flex h-11 w-11 items-center justify-center rounded-[8px] border border-[#cbd5e1] text-[#0f172a] transition hover:border-[#3b82f6] hover:text-[#3b82f6] md:h-9 md:w-9"
-              >
-                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              <button type="button" onClick={() => router.push("/orders")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+                View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
+            <div className="mt-4 space-y-2">
+              {pendingApprovals.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No pending approvals.</p>
+              ) : (
+                <>
+                  {pendingApprovals.slice(0, 5).map((order) => {
+                    const name = stringField(order, "orderName", "Unnamed order");
+                    const client = stringField(order, "client");
+                    const status = stringField(order, "status");
+                    return (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => router.push(`/orders/${order.id}`)}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-[#0f172a]">{name}</p>
+                          {client && <p className="mt-0.5 truncate text-xs text-[#64748b]">{client}</p>}
+                        </div>
+                        {status && (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{status}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {pendingApprovals.length > 5 && (
+                    <button type="button" onClick={() => router.push("/orders")} className="w-full pt-1 text-center text-xs text-[#64748b] hover:text-[#3b82f6]">
+                      +{pendingApprovals.length - 5} more
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
 
-            <div className="mt-6 space-y-4">
-              {taskData.map((person) => (
-                <div key={person.name}>
-                  <div className="flex items-center justify-between text-xs md:text-sm">
-                    <span className="font-medium text-[#0f172a]">{person.name}</span>
-                    <span className="text-[#64748b]">{person.open} open</span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-[8px] bg-[#e2e8f0]">
-                    {person.open > 0 && (
-                      <div className="h-full rounded-[8px] bg-[#3b82f6]" style={{ width: String(Math.min(100, person.open * 18)) + "%" }} />
+          {/* 4 — Upcoming Deadlines */}
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+                <h2 className="font-semibold text-[#0f172a]">Upcoming Deadlines</h2>
+                {upcomingDeadlines.length > 0 && (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">{upcomingDeadlines.length}</span>
+                )}
+              </div>
+              <button type="button" onClick={() => router.push("/calendar")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+                Calendar <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {upcomingDeadlines.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No deadlines in the next 7 days.</p>
+              ) : (
+                upcomingDeadlines.slice(0, 6).map((item) => (
+                  <button
+                    key={`${item.type}-${item.title}-${item.date.getTime()}`}
+                    type="button"
+                    onClick={() => router.push(item.href)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                  >
+                    <p className="min-w-0 flex-1 truncate font-semibold text-[#0f172a]">{item.title}</p>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${item.type === "Order" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                        {item.type}
+                      </span>
+                      <span className="text-xs text-[#64748b]">{formatDateShort(item.date)}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 5 — Open Tasks */}
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+                <h2 className="font-semibold text-[#0f172a]">Open Tasks</h2>
+                {openTasks.length > 0 && (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">{openTasks.length}</span>
+                )}
+              </div>
+              <button type="button" onClick={() => router.push("/tasks")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+                View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              {openTasks.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No open tasks — all done.</p>
+              ) : (
+                tasksByOwner.map(({ name, tasks: ownerTasks }) => (
+                  <div key={name}>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-[#0f172a]">{name}</p>
+                      <span className="text-xs text-[#64748b]">{ownerTasks.length} open</span>
+                    </div>
+                    {ownerTasks.length === 0 ? (
+                      <p className="text-xs text-[#94a3b8]">Nothing open</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {ownerTasks.slice(0, 3).map((task) => {
+                          const title = stringField(task, "title", stringField(task, "task", "Untitled task"));
+                          const dueDateStr = stringField(task, "dueDate") || stringField(task, "due_date");
+                          const due = dueDateStr ? parseRecordDate(dueDateStr) : null;
+                          return (
+                            <div key={task.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2">
+                              <p className="min-w-0 flex-1 truncate text-[#0f172a]">{title}</p>
+                              {due && <span className="shrink-0 text-xs text-[#94a3b8]">{formatDateShort(due)}</span>}
+                            </div>
+                          );
+                        })}
+                        {ownerTasks.length > 3 && (
+                          <p className="text-xs text-[#64748b]">+{ownerTasks.length - 3} more</p>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
-        </section>
 
-        <section className="rounded-[8px] border border-[#cbd5e1] bg-[#ffffff] p-4 md:p-6 shadow-md">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-base md:text-lg font-semibold text-[#0f172a]">Operational focus</h2>
-              <p className="mt-1 text-xs md:text-sm text-[#64748b]">The highest-signal work for this week.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => router.push("/orders")}
-              className="inline-flex min-h-11 items-center gap-2 rounded-[8px] bg-[#0f172a] px-4 py-2 text-xs md:text-sm font-medium text-white transition hover:bg-[#0f172a]"
-            >
-              Orders queue
-              <Factory className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="mt-6 grid gap-3 lg:grid-cols-3">
-            {focusItems.map((item) => (
-              <div key={item.label} className="rounded-[8px] border border-[#cbd5e1] p-3 md:p-4 shadow-md">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs md:text-sm font-medium text-[#64748b]">{item.meta}</p>
-                  <span className="rounded-[8px] border border-[#cbd5e1] px-2.5 py-1 text-xs font-medium text-[#0f172a]">
-                    {item.status}
-                  </span>
-                </div>
-                <p className="mt-4 text-xs md:text-sm font-semibold text-[#0f172a] md:text-base">{item.label}</p>
+          {/* 6 — Next Actions (CRM) */}
+          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
+                <h2 className="font-semibold text-[#0f172a]">Next Actions</h2>
+                {nextActions.length > 0 && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">{nextActions.length}</span>
+                )}
               </div>
-            ))}
+              <button type="button" onClick={() => router.push("/crm")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+                Open CRM <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {nextActions.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No overdue follow-ups — pipeline is on track.</p>
+              ) : (
+                <>
+                  {nextActions.slice(0, 5).map((lead) => {
+                    const company = stringField(lead, "company", stringField(lead, "name", "Unnamed lead"));
+                    const contact = stringField(lead, "contact");
+                    const dateStr = stringField(lead, "followUpDate") || stringField(lead, "follow_up_date");
+                    const isToday = dateStr === todayISO;
+                    const isOverdue = dateStr < todayISO;
+                    return (
+                      <button
+                        key={lead.id}
+                        type="button"
+                        onClick={() => router.push("/crm")}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-[#0f172a]">{company}</p>
+                          {contact && <p className="mt-0.5 truncate text-xs text-[#64748b]">{contact}</p>}
+                        </div>
+                        <span className={`shrink-0 text-xs font-medium ${isOverdue && !isToday ? "text-red-600" : "text-[#64748b]"}`}>
+                          {isToday ? "Today" : dateStr}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {nextActions.length > 5 && (
+                    <button type="button" onClick={() => router.push("/crm")} className="w-full pt-1 text-center text-xs text-[#64748b] hover:text-[#3b82f6]">
+                      +{nextActions.length - 5} more
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </section>
+
+        </div>
       </div>
     </main>
   );
