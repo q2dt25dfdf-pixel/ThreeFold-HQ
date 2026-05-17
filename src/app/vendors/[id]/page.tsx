@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Edit2, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, Edit2, Mail, Phone, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -16,6 +16,8 @@ type Vendor = {
   type: string;
   turnaround: string;
   contact: string;
+  email?: string;
+  phone?: string;
   notes: string;
   status: VendorStatus;
   jobs: number;
@@ -149,19 +151,20 @@ export default function VendorDetailPage() {
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
-      <header className="px-4 pt-4 text-white sm:px-6 lg:px-8">
+      <header className="px-2 pt-2 text-white sm:px-6 sm:pt-4 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 shadow-sm md:p-7">
           <button type="button" onClick={() => router.push("/vendors")} className="mb-5 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
             <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
             Vendors
           </button>
-          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] lg:items-start">
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
             <div className="min-w-0">
               <h1 className="break-words text-2xl font-bold leading-tight tracking-tight text-white md:text-4xl">{vendor.name}</h1>
-              <p className="mt-2 flex min-w-0 items-center gap-2 break-words text-xs text-slate-300 md:text-sm">
-                <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {vendor.contact || "No contact listed"}
-              </p>
+              <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
+                <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.contact || "No contact"}</span>
+                <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.email || "No email"}</span>
+                <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.phone || "No phone"}</span>
+              </div>
             </div>
             <div className="flex min-w-0 flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -191,7 +194,7 @@ export default function VendorDetailPage() {
         </div>
       </header>
 
-      <div className="space-y-6 p-4 md:p-6 lg:p-8">
+      <div className="space-y-6 px-2 pb-4 pt-3 sm:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders assigned", value: String(vendorOrders.length) },

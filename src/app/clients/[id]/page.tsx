@@ -292,7 +292,7 @@ export default function ClientDetailPage() {
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs md:text-sm">
       <ErrorBanner message={clientsError || ordersError} />
-      <header className="px-4 pt-4 text-white sm:px-6 lg:px-8">
+      <header className="px-2 pt-2 text-white sm:px-6 sm:pt-4 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 shadow-sm md:p-8">
           <button type="button" onClick={() => router.push("/clients")} className="mb-6 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
             <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -373,7 +373,7 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      <div className="space-y-6 p-4 md:p-6 lg:p-8">
+      <div className="space-y-6 px-2 pb-4 pt-3 sm:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders", value: String(clientOrders.length) },
