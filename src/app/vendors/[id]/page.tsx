@@ -91,8 +91,11 @@ export default function VendorDetailPage() {
   const { data: vendors, upsertItem, deleteItem, loading: vendorsLoading, error: vendorsError } = useSupabaseTable<Vendor>("vendors", defaultVendors);
   const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<Order>("orders", []);
   const [editingVendor, setEditingVendor] = useState(false);
+  const [editingHeaderContact, setEditingHeaderContact] = useState(false);
   const [vendorDraft, setVendorDraft] = useState<Vendor | null>(null);
+  const [vendorHeaderDraft, setVendorHeaderDraft] = useState({ contact: "", email: "", phone: "" });
   const vendorSave = useSaveState();
+  const headerContactSave = useSaveState();
   const notesSave = useSaveState();
   const [vendorFormError, setVendorFormError] = useState("");
 
@@ -114,6 +117,25 @@ export default function VendorDetailPage() {
     }
     setVendorFormError("");
     await vendorSave.runSave(() => upsertItem(vendorDraft), () => { setEditingVendor(false); setVendorDraft(null); setVendorFormError(""); });
+  };
+
+  const openVendorHeaderEditor = () => {
+    if (!vendor) return;
+    headerContactSave.resetSaveState();
+    setVendorHeaderDraft({
+      contact: vendor.contact ?? "",
+      email: vendor.email ?? "",
+      phone: vendor.phone ?? "",
+    });
+    setEditingHeaderContact((value) => !value);
+  };
+
+  const saveVendorHeaderContact = async () => {
+    if (!vendor) return;
+    await headerContactSave.runSave(
+      () => upsertItem({ ...vendor, ...vendorHeaderDraft }),
+      () => setEditingHeaderContact(false),
+    );
   };
 
   const handleDeleteVendor = () => {
@@ -151,7 +173,7 @@ export default function VendorDetailPage() {
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
-      <header className="px-2 pt-2 text-white sm:px-6 sm:pt-4 lg:px-8">
+      <header className="px-1 pt-1 text-white sm:px-6 sm:pt-4 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 shadow-sm md:p-7">
           <button type="button" onClick={() => router.push("/vendors")} className="mb-5 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
             <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -174,11 +196,11 @@ export default function VendorDetailPage() {
               <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
-                  onClick={openVendorEditor}
+                  onClick={openVendorHeaderEditor}
                   className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
                 >
                   <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  Edit vendor
+                  Edit contact
                 </button>
                 <button
                   type="button"
@@ -191,10 +213,42 @@ export default function VendorDetailPage() {
               </div>
             </div>
           </div>
+
+          {editingHeaderContact && (
+            <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-4 md:grid-cols-3">
+              {[
+                { label: "Contact", key: "contact", value: vendorHeaderDraft.contact },
+                { label: "Email", key: "email", value: vendorHeaderDraft.email },
+                { label: "Phone", key: "phone", value: vendorHeaderDraft.phone },
+              ].map((field) => (
+                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  {field.label}
+                  <input
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
+                    value={field.value}
+                    onChange={(event) => setVendorHeaderDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                  />
+                </label>
+              ))}
+              <div className="md:col-span-3">
+                <button
+                  type="button"
+                  onClick={saveVendorHeaderContact}
+                  disabled={headerContactSave.saveState === "saving"}
+                  className="min-h-11 w-full rounded-3xl border border-white/25 bg-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/25 disabled:opacity-60 md:text-sm"
+                >
+                  {headerContactSave.saveState === "saving" ? "Saving..." :
+                   headerContactSave.saveState === "success" ? "Saved" :
+                   headerContactSave.saveState === "error" ? "Couldn't save. Try again." :
+                   "Save contact"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="space-y-6 px-2 pb-4 pt-3 sm:p-6 lg:p-8">
+      <div className="space-y-6 px-1 pb-4 pt-2 sm:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
             { label: "Total orders assigned", value: String(vendorOrders.length) },
