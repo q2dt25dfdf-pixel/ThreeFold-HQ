@@ -59,6 +59,16 @@ type ActivityEntry = {
   notes: string;
 };
 
+type CRMLead = {
+  id: string;
+  company: string;
+  email: string;
+  stage: string;
+  status: string;
+  notes: string;
+  communicationHistory: Array<{ id: string; type: string; date: string; owner: string; summary: string }>;
+};
+
 const defaultClients: Client[] = [
   {
     id: "client-1",
@@ -98,6 +108,7 @@ export default function ClientDetailPage() {
   const { data: clients, upsertItem: upsertClient, loading: clientsLoading, error: clientsError } = useSupabaseTable<Client>("clients", defaultClients);
   const { data: orders, upsertItem: upsertOrder, loading: ordersLoading, error: ordersError, reload: reloadOrders } = useSupabaseTable<Order>("orders", []);
   const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
+  const { data: crmLeads } = useSupabaseTable<CRMLead>("crm_leads", []);
   const [editingHeader, setEditingHeader] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [clientDraft, setClientDraft] = useState<Client | null>(null);
@@ -123,6 +134,20 @@ export default function ClientDetailPage() {
     () => clientOrders.reduce((sum, order) => sum + orderAmount(order.amount), 0),
     [clientOrders],
   );
+
+  const matchingLead = useMemo(() => {
+    if (!client) return null;
+    const email = client.email?.trim().toLowerCase();
+    const name = client.name?.trim().toLowerCase();
+    return crmLeads.find((l) =>
+      (email && l.email?.trim().toLowerCase() === email) ||
+      (name && l.company?.trim().toLowerCase() === name)
+    ) ?? null;
+  }, [client, crmLeads]);
+
+  const leadCommHistory = Array.isArray(matchingLead?.communicationHistory)
+    ? matchingLead.communicationHistory
+    : [];
 
   const saveClient = (fields: Partial<Client>) => {
     if (!client) return;
@@ -259,6 +284,19 @@ export default function ClientDetailPage() {
         )}
       </header>
 
+      {matchingLead && (
+        <div className="border-b border-slate-100 bg-white px-4 py-2.5 sm:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={() => router.push("/crm")}
+            className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800"
+          >
+            <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+            View CRM Lead
+          </button>
+        </div>
+      )}
+
       <div className="space-y-6 p-4 md:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
@@ -329,6 +367,56 @@ export default function ClientDetailPage() {
             </div>
           </div>
         </section>
+
+        {matchingLead && (
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950 md:text-lg">Lead History</h2>
+                <p className="mt-1 text-xs text-slate-500 md:text-sm">Original CRM lead data — edit on the CRM page.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push("/crm")}
+                className="shrink-0 rounded-2xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-slate-50"
+              >
+                Open in CRM
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-700">
+                  {matchingLead.stage}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  {matchingLead.status}
+                </span>
+              </div>
+              {matchingLead.notes && (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Lead notes</p>
+                  <p className="mt-1.5 text-xs text-slate-700 md:text-sm">{matchingLead.notes}</p>
+                </div>
+              )}
+              {leadCommHistory.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Activity from CRM</p>
+                  <div className="space-y-2">
+                    {leadCommHistory.map((entry) => (
+                      <div key={entry.id} className="rounded-2xl border border-slate-200 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">{entry.type}</span>
+                          <span className="text-xs text-slate-400">{entry.date} · {entry.owner}</span>
+                        </div>
+                        <p className="mt-1.5 text-xs text-slate-700 md:text-sm">{entry.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
           <h2 className="text-base md:text-lg font-semibold text-slate-950">Activity log</h2>

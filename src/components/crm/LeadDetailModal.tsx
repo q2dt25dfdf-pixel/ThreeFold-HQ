@@ -14,6 +14,8 @@ interface Props {
   onClose: () => void;
   onSave: (lead: Lead) => void | Promise<void>;
   onDelete: (lead: Lead) => void;
+  matchingClientId?: string | null;
+  onViewClient?: () => void;
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
@@ -110,7 +112,7 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, onViewClient }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
@@ -175,24 +177,51 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete 
     Other: "bg-slate-100 text-slate-700",
   };
 
+  const hasClient = Boolean(matchingClientId);
+  const clientBtnClass = hasClient
+    ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+    : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400";
+  const clientBtnLabel = hasClient ? "View Client Record" : "Client record pending";
+
   const footer = (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-col gap-3">
+      {/* Mobile: full-width button */}
       <button
         type="button"
-        onClick={handleDelete}
-        className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+        disabled={!hasClient}
+        onClick={hasClient ? onViewClient : undefined}
+        className={`flex min-h-11 w-full items-center justify-center rounded-2xl border px-5 py-3 text-sm font-semibold transition lg:hidden ${clientBtnClass}`}
       >
-        Delete
+        {clientBtnLabel}
       </button>
-      <div className="flex items-center gap-3">
-        <SaveButton state={saveState} onClick={handleSaveChanges} className="rounded-2xl py-2 text-sm" />
+
+      <div className="flex items-center justify-between gap-3">
         <button
           type="button"
-          onClick={onClose}
-          className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100"
+          onClick={handleDelete}
+          className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
         >
-          Close
+          Delete
         </button>
+        <div className="flex items-center gap-3">
+          {/* Desktop: inline button */}
+          <button
+            type="button"
+            disabled={!hasClient}
+            onClick={hasClient ? onViewClient : undefined}
+            className={`hidden min-h-11 items-center rounded-2xl border px-4 py-2 text-sm font-semibold transition lg:inline-flex ${clientBtnClass}`}
+          >
+            {clientBtnLabel}
+          </button>
+          <SaveButton state={saveState} onClick={handleSaveChanges} className="rounded-2xl py-2 text-sm" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
@@ -130,8 +131,9 @@ const initialLeads: Lead[] = [
 ];
 
 export default function CRMPage() {
+  const router = useRouter();
   const { data: leads, upsertItem, deleteItem, loading, error } = useSupabaseTable<Lead>("crm_leads", initialLeads);
-  const { upsertItem: upsertClient } = useSupabaseTable<Client>("clients", []);
+  const { data: clients, upsertItem: upsertClient } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
@@ -210,6 +212,32 @@ export default function CRMPage() {
     });
   };
 
+  const findClientForLead = (lead: Lead | null): Client | null => {
+    if (!lead) return null;
+    const email = lead.email?.trim().toLowerCase();
+    const company = lead.company?.trim().toLowerCase();
+    return clients.find((c) =>
+      c.id === `client-${lead.id}` ||
+      (email && c.email?.trim().toLowerCase() === email) ||
+      (company && c.name?.trim().toLowerCase() === company)
+    ) ?? null;
+  };
+
+  const syncClientFromLead = (lead: Lead) => {
+    const match = findClientForLead(lead);
+    if (!match) return;
+    upsertClient({
+      ...match,
+      name: lead.company || match.name,
+      company: lead.company || match.company,
+      contact: lead.contact || match.contact,
+      email: lead.email || match.email,
+      phone: lead.phone || match.phone,
+      notes: lead.notes || match.notes,
+      industry: lead.companyProfile?.industry || match.industry,
+    });
+  };
+
   const handleAddLead = async (values: Omit<Lead, "id">) => {
     if (!values.company.trim()) return false;
     const lead = { id: createId(), ...values };
@@ -239,6 +267,7 @@ export default function CRMPage() {
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
+    syncClientFromLead(updated);
     setViewLead(updated);
   };
 
@@ -382,6 +411,11 @@ export default function CRMPage() {
         onClose={() => setViewLead(null)}
         onSave={handleSaveDetailLead}
         onDelete={handleDeleteLead}
+        matchingClientId={viewLead ? (findClientForLead(viewLead)?.id ?? null) : null}
+        onViewClient={() => {
+          const match = viewLead ? findClientForLead(viewLead) : null;
+          if (match) { setViewLead(null); router.push(`/clients/${match.id}`); }
+        }}
       />
 
       {toastMessage && (
