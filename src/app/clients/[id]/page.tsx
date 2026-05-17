@@ -292,68 +292,72 @@ export default function ClientDetailPage() {
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs md:text-sm">
       <ErrorBanner message={clientsError || ordersError} />
-      <header className="-mx-4 overflow-hidden bg-slate-950 px-4 py-6 text-white sm:-mx-6 sm:px-6 md:py-8 lg:-mx-8 lg:px-8">
-        <button type="button" onClick={() => router.push("/clients")} className="mb-6 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
-          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Clients
-        </button>
-        <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
-              <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
-            </div>
-            <h1 className="mt-4 break-words text-2xl font-semibold leading-tight tracking-tight md:text-5xl">{client.name}</h1>
-            <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
-              <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{client.contact || "No contact"}</span>
-              <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{client.email || "No email"}</span>
-              <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{client.phone || "No phone"}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              contactSave.resetSaveState();
-              setEditingHeader((value) => !value);
-            }}
-            className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 sm:w-auto md:text-sm"
-          >
-            <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Edit contact
+      <header className="px-4 pt-4 text-white sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 shadow-sm md:p-8">
+          <button type="button" onClick={() => router.push("/clients")} className="mb-6 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
+            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Clients
           </button>
-        </div>
-
-        {editingHeader && (
-          <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-4 md:grid-cols-3">
-            {[
-              { label: "Contact", key: "contact", value: client.contact },
-              { label: "Email", key: "email", value: client.email ?? "" },
-              { label: "Phone", key: "phone", value: client.phone ?? "" },
-            ].map((field) => (
-              <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                {field.label}
-                <input
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs md:text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
-                  value={field.value}
-                  onChange={(event) => saveClient({ [field.key]: event.target.value } as Partial<Client>)}
-                />
-              </label>
-            ))}
-            <div className="md:col-span-3">
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
+            <div className="min-w-0">
+              <h1 className="break-words text-2xl font-semibold leading-tight tracking-tight md:text-5xl">{client.name}</h1>
+              <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
+                <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{client.contact || "No contact"}</span>
+                <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{client.email || "No email"}</span>
+                <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{client.phone || "No phone"}</span>
+              </div>
+            </div>
+            <div className="flex min-w-0 flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-4 lg:items-stretch">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
+                <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
+              </div>
               <button
                 type="button"
-                onClick={saveHeaderContact}
-                disabled={contactSave.saveState === "saving"}
-                className="min-h-11 w-full rounded-3xl border border-white/25 bg-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/25 disabled:opacity-60 md:text-sm"
+                onClick={() => {
+                  contactSave.resetSaveState();
+                  setEditingHeader((value) => !value);
+                }}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
               >
-                {contactSave.saveState === "saving" ? "Saving…" :
-                 contactSave.saveState === "success" ? "Saved ✓" :
-                 contactSave.saveState === "error" ? "Couldn't save. Try again." :
-                 "Save contact"}
+                <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Edit contact
               </button>
             </div>
           </div>
-        )}
+
+          {editingHeader && (
+            <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-4 md:grid-cols-3">
+              {[
+                { label: "Contact", key: "contact", value: client.contact },
+                { label: "Email", key: "email", value: client.email ?? "" },
+                { label: "Phone", key: "phone", value: client.phone ?? "" },
+              ].map((field) => (
+                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  {field.label}
+                  <input
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs md:text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
+                    value={field.value}
+                    onChange={(event) => saveClient({ [field.key]: event.target.value } as Partial<Client>)}
+                  />
+                </label>
+              ))}
+              <div className="md:col-span-3">
+                <button
+                  type="button"
+                  onClick={saveHeaderContact}
+                  disabled={contactSave.saveState === "saving"}
+                  className="min-h-11 w-full rounded-3xl border border-white/25 bg-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/25 disabled:opacity-60 md:text-sm"
+                >
+                  {contactSave.saveState === "saving" ? "Saving…" :
+                   contactSave.saveState === "success" ? "Saved ✓" :
+                   contactSave.saveState === "error" ? "Couldn't save. Try again." :
+                   "Save contact"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       {matchingLead && (
