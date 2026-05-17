@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Briefcase, Building2, Clock, Edit2, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, Edit2, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -147,38 +147,38 @@ export default function VendorDetailPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden text-xs text-slate-950 md:text-sm">
+    <main className="min-h-screen min-w-0 overflow-x-hidden text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
-      <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-6 md:py-8 text-white">
-        <button type="button" onClick={() => router.push("/vendors")} className="mb-6 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
+      <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-5 md:py-6 text-white">
+        <button type="button" onClick={() => router.push("/vendors")} className="mb-4 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Vendors
         </button>
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type}</span>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
             </div>
-            <h1 className="mt-4 text-2xl font-semibold tracking-tight md:text-5xl">{vendor.name}</h1>
-            <p className="mt-4 flex items-center gap-2 text-xs md:text-sm text-slate-300">
-              <Building2 className="h-4 w-4" aria-hidden="true" />
+            <h1 className="mt-3 break-words text-2xl font-bold leading-tight tracking-tight text-white md:text-4xl">{vendor.name}</h1>
+            <p className="mt-2 flex items-center gap-2 text-xs text-slate-300 md:text-sm">
+              <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
               {vendor.contact || "No contact listed"}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={openVendorEditor}
-              className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-white/10"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
             >
               <Edit2 className="h-4 w-4" aria-hidden="true" />
-              Edit contact
+              Edit vendor
             </button>
             <button
               type="button"
               onClick={handleDeleteVendor}
-              className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs md:text-sm font-semibold text-rose-100 hover:bg-white/10"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-rose-200 hover:bg-white/10 md:text-sm"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               Delete
@@ -188,94 +188,83 @@ export default function VendorDetailPage() {
       </header>
 
       <div className="space-y-6 p-4 md:p-6 lg:p-8">
-        <section className="rounded-2xl border border-slate-200 bg-white">
-          <div className="grid divide-y divide-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-            {[
-              { label: "Total orders assigned", value: String(vendorOrders.length), icon: Briefcase },
-              { label: "Turnaround time", value: vendor.turnaround, icon: Clock },
-              { label: "Status", value: vendor.status, icon: Building2 },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.label} className="flex items-start gap-3 p-4 md:p-5">
-                  <Icon className="mt-0.5 h-5 w-5 text-blue-500" aria-hidden="true" />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
-                    <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{item.value}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        <section className="grid gap-4 md:grid-cols-3">
+          {[
+            { label: "Total orders assigned", value: String(vendorOrders.length) },
+            { label: "Turnaround time", value: vendor.turnaround || "Not set" },
+            { label: "Status", value: vendor.status },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+              <p className="text-xs text-slate-500 md:text-sm">{stat.label}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{stat.value}</p>
+            </div>
+          ))}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base md:text-lg font-semibold">Vendor details</h2>
-                <p className="mt-1 text-xs md:text-sm text-slate-500">Review vendor profile and contact details.</p>
+                <h2 className="text-base font-semibold text-slate-950 md:text-lg">Vendor details</h2>
+                <p className="mt-1 text-xs text-slate-500 md:text-sm">Profile and contact information.</p>
               </div>
-              <button type="button" onClick={openVendorEditor} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                <Edit2 className="h-4 w-4" aria-hidden="true" />
+              <button type="button" onClick={openVendorEditor} className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 md:px-4">
+                <Edit2 className="h-3 w-3" aria-hidden="true" />
                 Edit
               </button>
             </div>
-            <div className="mt-5 space-y-3">
+            <div className="space-y-2">
               {[
                 { label: "Name", value: vendor.name },
                 { label: "Type", value: vendor.type },
                 { label: "Turnaround", value: vendor.turnaround },
                 { label: "Contact", value: vendor.contact },
                 { label: "Status", value: vendor.status },
-                { label: "Orders", value: String(vendor.jobs) },
               ].map((field) => (
-                <div key={field.label} className="rounded-2xl border border-slate-200 bg-white p-3 md:p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{field.label}</p>
-                  <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{field.value || "Not set"}</p>
+                <div key={field.label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                  <span className="shrink-0 text-xs text-slate-500">{field.label}</span>
+                  <span className="min-w-0 break-words text-right text-xs font-medium text-slate-950">{field.value || "Not set"}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
-            <div>
-              <h2 className="text-base md:text-lg font-semibold">Assigned orders</h2>
-              <p className="mt-1 text-xs md:text-sm text-slate-500">Orders assigned to this vendor.</p>
+          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+            <div className="mb-5">
+              <h2 className="text-base font-semibold text-slate-950 md:text-lg">Assigned orders</h2>
+              <p className="mt-1 text-xs text-slate-500 md:text-sm">Orders assigned to this vendor.</p>
             </div>
-
-            <div className="mt-5 space-y-3">
-              {vendorOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-4 md:p-5 text-xs md:text-sm text-slate-500">No orders assigned yet.</p>}
+            <div className="space-y-3">
+              {vendorOrders.length === 0 && (
+                <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-xs text-slate-500 md:p-5 md:text-sm">No orders assigned yet.</p>
+              )}
               {vendorOrders.map((order) => (
                 <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-semibold text-slate-950">{order.orderName}</p>
-                    <p className="mt-1 text-xs md:text-sm text-slate-500">
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-slate-950">{order.orderName}</p>
+                    <p className="mt-1 text-xs text-slate-500 md:text-sm">
                       {order.client || "No client"} · {order.estimatedDeliveryDate || "TBD"} · {formatCurrency(order.amount)}
                     </p>
                   </div>
-                  <span className="w-fit rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">{order.status}</span>
+                  <span className="w-fit shrink-0 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">{order.status}</span>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base md:text-lg font-semibold">Notes</h2>
-              <p className="mt-1 text-xs md:text-sm text-slate-500">Vendor notes save as you type.</p>
-            </div>
-            <SaveButton state={notesSave.saveState} onClick={handleSaveVendorNotes} className="w-auto" />
-          </div>
+        <section className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Notes</h2>
           <textarea
-            rows={7}
+            rows={6}
             value={vendor.notes}
             onChange={(event) => saveVendorNotes(event.target.value)}
-            className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-2 text-xs leading-6 text-slate-700 outline-none focus:border-slate-400 md:p-4 md:text-sm"
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
             placeholder="Add vendor notes..."
           />
+          <div className="mt-3 flex justify-end">
+            <SaveButton state={notesSave.saveState} onClick={handleSaveVendorNotes} className="w-full lg:w-auto" />
+          </div>
         </section>
       </div>
 
