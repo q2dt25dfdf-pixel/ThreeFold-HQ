@@ -566,7 +566,7 @@ export default function OrderDetailPage() {
   );
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden space-y-5 text-xs md:text-sm">
+    <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="space-y-5 text-xs md:text-sm">
       <ErrorBanner message={error} />
 
       {/* Back nav */}
@@ -616,7 +616,7 @@ export default function OrderDetailPage() {
       </section>
 
       {/* Mobile layout — single column */}
-      <div className="flex min-w-0 flex-col gap-4 lg:hidden">
+      <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
         {TimelineSection}
         {NextActionSection}
         {PaymentStatusSection}
