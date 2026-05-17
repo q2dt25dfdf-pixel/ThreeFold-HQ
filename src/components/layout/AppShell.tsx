@@ -92,7 +92,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           />
         </div>
       </div>
-      <main className="flex-1 bg-zinc-100 px-4 pb-8 pt-20 sm:px-6 lg:px-8 lg:py-8">
+      <main className="flex-1 min-w-0 overflow-x-hidden bg-zinc-100 px-4 pb-8 pt-20 sm:px-6 lg:px-8 lg:py-8">
         {checkingSession ? (
           <LoadingState />
         ) : (
