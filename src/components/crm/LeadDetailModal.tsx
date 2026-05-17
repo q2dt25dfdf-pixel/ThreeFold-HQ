@@ -239,7 +239,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-100"
+            className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Close
           </button>
@@ -260,8 +260,8 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
 
         {/* Snapshot + Company Profile */}
         <div className="grid gap-6 sm:grid-cols-2">
-          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Snapshot — click any field to edit</p>
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Snapshot — click any field to edit</p>
             <div className="space-y-3">
               <InlineField label="Estimated value" value={formatLeadValue(current.value)} onSave={(v) => patch({ value: parseLeadValue(v) })} />
               <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
@@ -271,8 +271,8 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             </div>
           </div>
 
-          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Company profile</p>
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Company profile</p>
             <div className="space-y-3">
               <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
               <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
@@ -285,21 +285,21 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
         <div className="grid gap-6 sm:grid-cols-2">
 
           {/* Activity Log */}
-          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
             <h3 className="font-semibold text-slate-950 mb-4">Activity log</h3>
 
             {/* Add entry form */}
-            <div className="rounded-2xl bg-white border border-slate-300/50 p-4 mb-4 space-y-3">
+            <div className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex gap-2">
                 <select
-                  className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
+                  className="min-h-11 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none md:text-sm"
                   value={logType}
                   onChange={(e) => setLogType(e.target.value as CommunicationEntry["type"])}
                 >
                   {CONTACT_TYPES.map((t) => <option key={t}>{t}</option>)}
                 </select>
                 <select
-                  className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none sm:text-xs"
+                  className="min-h-11 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none md:text-sm"
                   value={logOwner}
                   onChange={(e) => setLogOwner(e.target.value)}
                 >
@@ -308,7 +308,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               </div>
               <textarea
                 rows={2}
-                className="w-full resize-none rounded-xl border border-slate-300 bg-gray-100 px-3 py-2 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
+                className="w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
                 placeholder="What happened? Add notes..."
                 value={logNote}
                 onChange={(e) => {
@@ -321,7 +321,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 type="button"
                 onClick={addActivityEntry}
                 disabled={!logNote.trim()}
-                className="min-h-11 w-full rounded-xl bg-slate-950 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                className="min-h-11 w-full rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
               >
                 Log activity · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </button>
@@ -330,12 +330,12 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             {/* History */}
             <div className="space-y-3">
               {current.communicationHistory.length === 0 && (
-                <p className="text-xs text-slate-600 text-center py-4">No activity logged yet.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No activity logged yet.</p>
               )}
               {current.communicationHistory.map((entry) => (
-                <div key={entry.id} className="rounded-2xl bg-white border border-slate-300/50 p-4">
+                <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${typeColors[entry.type]}`}>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${typeColors[entry.type]}`}>
                       {entry.type}
                     </span>
                     <span className="text-xs text-slate-600">{entry.date} · {entry.owner}</span>
@@ -347,11 +347,11 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           </div>
 
           {/* Notes */}
-          <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
-            <label className="block font-semibold text-slate-950 mb-4">Notes</label>
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+            <label className="mb-4 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Notes</label>
             <textarea
               rows={8}
-              className="w-full resize-none rounded-2xl border border-slate-300/50 bg-white p-4 text-base text-slate-700 outline-none focus:border-slate-400 md:text-sm"
+              className="w-full resize-none rounded-2xl border border-slate-300 bg-white p-4 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
               value={current.notes}
               placeholder="Add notes about this lead..."
               onChange={(e) => patch({ notes: e.target.value })}

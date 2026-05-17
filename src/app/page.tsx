@@ -95,9 +95,9 @@ function formatDateShort(date: Date): string {
 
 function statusBadgeClass(status: string) {
   const lower = status.toLowerCase();
+  if (lower.includes("paid") || lower.includes("fulfilled") || lower.includes("complete") || lower.includes("done") || lower.includes("approved")) return "bg-emerald-100 text-emerald-700";
   if (lower.includes("review") || lower.includes("approval")) return "bg-amber-100 text-amber-700";
   if (lower.includes("progress") || lower.includes("production")) return "bg-blue-100 text-blue-700";
-  if (lower.includes("shipped") || lower.includes("transit")) return "bg-purple-100 text-purple-700";
   if (lower.includes("hold") || lower.includes("risk")) return "bg-red-100 text-red-700";
   return "bg-slate-100 text-slate-600";
 }
@@ -292,7 +292,7 @@ export default function Home() {
         <ErrorBanner message={loadError} />
 
         {/* Header */}
-        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] p-4 pt-24 text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[8px] md:p-6">
+        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] p-4 pt-24 text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[2rem] md:p-6">
           <p className="text-xs font-medium text-[#94a3b8]">{todayLabel}</p>
           <h1 className="mt-2 text-2xl font-semibold text-white md:text-4xl">Today at Threefold</h1>
           <p className="mt-1 text-xs text-[#94a3b8]">Your operations at a glance.</p>
@@ -333,7 +333,7 @@ export default function Home() {
                             setGlobalQuery("");
                             router.push(item.href);
                           }}
-                          className="block min-h-11 w-full cursor-pointer px-4 py-3 text-left hover:bg-gray-100"
+                          className="block min-h-11 w-full cursor-pointer px-4 py-3 text-left hover:bg-slate-50"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-xs font-semibold text-slate-950 md:text-sm">{item.title}</p>
@@ -354,7 +354,7 @@ export default function Home() {
         <div className="grid gap-6 lg:grid-cols-2">
 
           {/* 1 — Active Orders */}
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -363,13 +363,13 @@ export default function Home() {
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">{activeOrders.length}</span>
                 )}
               </div>
-              <button type="button" onClick={() => router.push("/orders")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+              <button type="button" onClick={() => router.push("/orders")} className="flex min-h-11 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 md:min-h-0">
                 View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {activeOrders.length === 0 ? (
-                <p className="text-xs text-[#64748b]">No active orders — all clear.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No active orders — all clear.</p>
               ) : (
                 <>
                   {activeOrders.slice(0, 5).map((order) => {
@@ -383,14 +383,14 @@ export default function Home() {
                         key={order.id}
                         type="button"
                         onClick={() => router.push(`/orders/${order.id}`)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-left hover:border-slate-200 hover:bg-white"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-[#0f172a]">{name}</p>
                           {client && <p className="mt-0.5 truncate text-xs text-[#64748b]">{client}</p>}
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
-                          {status && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(status)}`}>{status}</span>}
+                          {status && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(status)}`}>{status}</span>}
                           {due && <span className="text-xs text-[#94a3b8]">{formatDateShort(due)}</span>}
                         </div>
                       </button>
@@ -407,7 +407,7 @@ export default function Home() {
           </div>
 
           {/* 2 — Unpaid Deposits */}
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -416,13 +416,13 @@ export default function Home() {
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-600">{unpaidDeposits.length}</span>
                 )}
               </div>
-              <button type="button" onClick={() => router.push("/finances")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+              <button type="button" onClick={() => router.push("/finances")} className="flex min-h-11 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 md:min-h-0">
                 View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {unpaidDeposits.length === 0 ? (
-                <p className="text-xs text-[#64748b]">No unpaid deposits — all caught up.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No unpaid deposits — all caught up.</p>
               ) : (
                 <>
                   {unpaidDeposits.slice(0, 5).map((invoice) => {
@@ -431,7 +431,7 @@ export default function Home() {
                     const depositAmt = invoiceDeposit(invoice);
                     const total = invoiceTotal(invoice);
                     return (
-                      <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5">
+                      <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-[#0f172a]">{name}</p>
                           {client && name !== client && <p className="mt-0.5 truncate text-xs text-[#64748b]">{client}</p>}
@@ -454,7 +454,7 @@ export default function Home() {
           </div>
 
           {/* 3 — Pending Approvals */}
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -463,13 +463,13 @@ export default function Home() {
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-600">{pendingApprovals.length}</span>
                 )}
               </div>
-              <button type="button" onClick={() => router.push("/orders")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+              <button type="button" onClick={() => router.push("/orders")} className="flex min-h-11 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 md:min-h-0">
                 View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {pendingApprovals.length === 0 ? (
-                <p className="text-xs text-[#64748b]">No pending approvals.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No pending approvals.</p>
               ) : (
                 <>
                   {pendingApprovals.slice(0, 5).map((order) => {
@@ -481,14 +481,14 @@ export default function Home() {
                         key={order.id}
                         type="button"
                         onClick={() => router.push(`/orders/${order.id}`)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-left hover:border-slate-200 hover:bg-white"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-[#0f172a]">{name}</p>
                           {client && <p className="mt-0.5 truncate text-xs text-[#64748b]">{client}</p>}
                         </div>
                         {status && (
-                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{status}</span>
+                          <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{status}</span>
                         )}
                       </button>
                     );
@@ -504,7 +504,7 @@ export default function Home() {
           </div>
 
           {/* 4 — Upcoming Deadlines */}
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -513,24 +513,24 @@ export default function Home() {
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">{upcomingDeadlines.length}</span>
                 )}
               </div>
-              <button type="button" onClick={() => router.push("/calendar")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+              <button type="button" onClick={() => router.push("/calendar")} className="flex min-h-11 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 md:min-h-0">
                 Calendar <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {upcomingDeadlines.length === 0 ? (
-                <p className="text-xs text-[#64748b]">No deadlines in the next 7 days.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No deadlines in the next 7 days.</p>
               ) : (
                 upcomingDeadlines.slice(0, 6).map((item) => (
                   <button
                     key={`${item.type}-${item.title}-${item.date.getTime()}`}
                     type="button"
                     onClick={() => router.push(item.href)}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-left hover:border-slate-200 hover:bg-white"
                   >
                     <p className="min-w-0 flex-1 truncate font-semibold text-[#0f172a]">{item.title}</p>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${item.type === "Order" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${item.type === "Order" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-700"}`}>
                         {item.type}
                       </span>
                       <span className="text-xs text-[#64748b]">{formatDateShort(item.date)}</span>
@@ -542,7 +542,7 @@ export default function Home() {
           </div>
 
           {/* 5 — Open Tasks */}
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -551,13 +551,13 @@ export default function Home() {
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">{openTasks.length}</span>
                 )}
               </div>
-              <button type="button" onClick={() => router.push("/tasks")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+              <button type="button" onClick={() => router.push("/tasks")} className="flex min-h-11 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 md:min-h-0">
                 View all <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4 space-y-4">
               {openTasks.length === 0 ? (
-                <p className="text-xs text-[#64748b]">No open tasks — all done.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No open tasks — all done.</p>
               ) : (
                 tasksByOwner.map(({ name, tasks: ownerTasks }) => (
                   <div key={name}>
@@ -574,7 +574,7 @@ export default function Home() {
                           const dueDateStr = stringField(task, "dueDate") || stringField(task, "due_date");
                           const due = dueDateStr ? parseRecordDate(dueDateStr) : null;
                           return (
-                            <div key={task.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2">
+                            <div key={task.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                               <p className="min-w-0 flex-1 truncate text-[#0f172a]">{title}</p>
                               {due && <span className="shrink-0 text-xs text-[#94a3b8]">{formatDateShort(due)}</span>}
                             </div>
@@ -592,7 +592,7 @@ export default function Home() {
           </div>
 
           {/* 6 — Next Actions (CRM) */}
-          <div className="rounded-[8px] border border-[#cbd5e1] bg-white p-4 shadow-sm md:p-5">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -601,13 +601,13 @@ export default function Home() {
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">{nextActions.length}</span>
                 )}
               </div>
-              <button type="button" onClick={() => router.push("/crm")} className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#3b82f6]">
+              <button type="button" onClick={() => router.push("/crm")} className="flex min-h-11 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 md:min-h-0">
                 Open CRM <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {nextActions.length === 0 ? (
-                <p className="text-xs text-[#64748b]">No overdue follow-ups — pipeline is on track.</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No overdue follow-ups — pipeline is on track.</p>
               ) : (
                 <>
                   {nextActions.slice(0, 5).map((lead) => {
@@ -621,7 +621,7 @@ export default function Home() {
                         key={lead.id}
                         type="button"
                         onClick={() => router.push("/crm")}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5 text-left hover:border-[#cbd5e1] hover:bg-white"
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-left hover:border-slate-200 hover:bg-white"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-[#0f172a]">{company}</p>

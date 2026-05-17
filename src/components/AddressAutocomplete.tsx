@@ -74,7 +74,7 @@ export default function AddressAutocomplete({ value, onChange, className = "", p
             <button
               key={suggestion.place_id}
               type="button"
-              className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
+              className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
               onMouseDown={(event) => {
                 event.preventDefault(); // desktop: prevents input from losing focus
               }}

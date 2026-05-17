@@ -32,8 +32,8 @@ export default function ClientSlideOver({ open, lead, onClose }: ClientSlideOver
 
           <div className="border-t border-slate-200/60 pt-8">
             <div className="grid gap-6 sm:grid-cols-2">
-              <div className="rounded-[1.75rem] border border-slate-200/70 bg-slate-50/50 p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600">Snapshot</p>
+              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">Snapshot</p>
                 <div className="mt-5 space-y-3 text-sm text-slate-700">
                   <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 border border-slate-200/50">
                     <span className="text-slate-600">Status</span>
@@ -54,8 +54,8 @@ export default function ClientSlideOver({ open, lead, onClose }: ClientSlideOver
                 </div>
               </div>
 
-              <div className="rounded-[1.75rem] border border-slate-200/70 bg-slate-50/50 p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600">Company profile</p>
+              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">Company profile</p>
                 <div className="mt-5 space-y-3 text-sm text-slate-700">
                   <div className="rounded-2xl bg-white px-4 py-3 border border-slate-200/50">
                     <div className="font-semibold text-slate-950">Industry</div>
@@ -76,10 +76,10 @@ export default function ClientSlideOver({ open, lead, onClose }: ClientSlideOver
 
           <div className="border-t border-slate-200/60 pt-8">
             <div className="grid gap-6 sm:grid-cols-2">
-              <div className="rounded-[1.75rem] border border-slate-200/70 bg-slate-50/50 p-5">
+              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-slate-950">Activity log</h3>
-                  <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">History</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-700">History</span>
                 </div>
                 <div className="mt-5 space-y-3 text-slate-700">
                   {lead.communicationHistory.map((entry) => (
@@ -95,7 +95,7 @@ export default function ClientSlideOver({ open, lead, onClose }: ClientSlideOver
                 </div>
               </div>
 
-              <div className="rounded-[1.75rem] border border-slate-200/70 bg-slate-50/50 p-5">
+              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <p className="font-semibold text-slate-950">Notes</p>
                 <div className="mt-4 rounded-2xl bg-white border border-slate-200/50 px-4 py-4 text-sm leading-7 text-slate-700">
                   {lead.notes}

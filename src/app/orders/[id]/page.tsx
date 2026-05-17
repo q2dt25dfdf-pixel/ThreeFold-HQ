@@ -462,7 +462,7 @@ export default function OrderDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Orders
         </button>
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-md md:p-8">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <h1 className="text-base font-semibold text-slate-950 md:text-2xl">Order not found</h1>
           <p className="mt-2 text-slate-500">This order may have been deleted or is not available.</p>
         </div>
@@ -825,7 +825,7 @@ export default function OrderDetailPage() {
       </button>
 
       {/* SECTION 1 — Header */}
-      <section className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-md">
+      <section className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
         <div className="bg-slate-950 px-5 py-6 text-white md:px-8 md:py-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
@@ -900,7 +900,7 @@ export default function OrderDetailPage() {
               <SaveButton state={addDesignVersionSave.saveState} onClick={saveNewDesignVersion} mode="add" className="flex-1 py-3" />
               <button
                 type="button"
-                className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
+                className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
                 onClick={closeAddVersionModal}
               >
                 Cancel
@@ -966,7 +966,7 @@ export default function OrderDetailPage() {
                 <SaveButton state={orderSave.saveState} onClick={saveOrderDraft} className="flex-1 py-3" />
                 <button
                   type="button"
-                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
+                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
                   onClick={closeOrderEditor}
                 >
                   Cancel
@@ -1014,7 +1014,7 @@ export default function OrderDetailPage() {
                       type="button"
                       aria-pressed={selected}
                       className={`rounded-2xl border px-3 py-2 text-xs font-semibold transition md:text-sm ${
-                        selected ? "border-slate-400 bg-gray-100 text-slate-900" : "border-slate-300 bg-white text-slate-700 hover:bg-gray-100"
+                        selected ? "border-slate-400 bg-slate-50 text-slate-900" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                       }`}
                       onClick={() => toggleEditItem(item)}
                     >

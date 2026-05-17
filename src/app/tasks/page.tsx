@@ -41,8 +41,8 @@ const defaultTasks: Task[] = [
 
 const emptyForm = { title: "", dueDate: "", assignedTo: "Alliyah" as Task["assignedTo"], priority: "Medium" as Task["priority"], notes: "", completed: false };
 
-const priorityColors: Record<Task["priority"], string> = { High: "bg-rose-100 text-rose-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
-const priorityDotColors: Record<Task["priority"], string> = { High: "bg-rose-500", Medium: "bg-amber-500", Low: "bg-emerald-500" };
+const priorityColors: Record<Task["priority"], string> = { High: "bg-red-100 text-red-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
+const priorityDotColors: Record<Task["priority"], string> = { High: "bg-red-500", Medium: "bg-amber-500", Low: "bg-slate-400" };
 const ownerColors: Record<TaskOwner, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800" };
 const founderColumns: { name: TaskColumn; headerClass: string; accentClass: string }[] = [
   { name: "Alliyah", headerClass: "bg-violet-50 border-violet-400", accentClass: "bg-violet-400" },
@@ -101,13 +101,13 @@ function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onCom
   const sortedTasks = [...tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   return (
-    <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-2 shadow-md md:p-5">
+    <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-4 shadow-sm md:p-5">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">CRM</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">CRM</p>
           <h2 className="text-base font-bold text-slate-950 md:text-lg">Pipeline Follow-Ups</h2>
         </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800 shadow-md">
+        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800 shadow-sm">
           {sortedTasks.length} open
         </span>
       </div>
@@ -198,7 +198,7 @@ function Modal({ title, onSave, onClose, onDelete, saveState, mode = "edit", err
       {error && <FieldError message={error} />}
       <div className="flex gap-3">
         <SaveButton state={saveState} mode={mode} className="flex-1 py-3" onClick={onSave} />
-        <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm" onClick={onClose}>Cancel</button>
+        <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" onClick={onClose}>Cancel</button>
       </div>
       {onDelete && (
         <button type="button" className="w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 md:text-sm" onClick={onDelete}>Delete task</button>
@@ -310,7 +310,7 @@ export default function TasksPage() {
             setEditTask({ ...task });
           }
         }}
-        className="rounded-[2rem] border border-slate-300 bg-white p-3 md:p-5 shadow-md text-left transition hover:shadow-md hover:-translate-y-0.5 w-full"
+        className="w-full rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-2">
@@ -318,7 +318,7 @@ export default function TasksPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="min-w-0 text-xs md:text-base font-semibold text-slate-950">{task.title}</p>
-                {isCrmTask(task) && <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">CRM</span>}
+                {isCrmTask(task) && <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-white">CRM</span>}
               </div>
             </div>
           </div>
@@ -326,13 +326,13 @@ export default function TasksPage() {
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
-              className="min-h-11 rounded-xl bg-slate-950 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 md:min-h-0"
+              className="min-h-11 rounded-3xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 md:min-h-0"
             >
               Done
             </button>
             <button
               type="button"
-              className="min-h-11 min-w-11 rounded-full p-1 text-rose-600 hover:bg-rose-50 md:min-h-0 md:min-w-0"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"
               disabled={deletingId === task.id}
               aria-label={`Delete ${task.title}`}
               onClick={(event) => {
@@ -345,9 +345,9 @@ export default function TasksPage() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {owner !== "All" && owner !== "" && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ownerColors[owner as TaskOwner]}`}>{owner}</span>}
-          {owner === "All" && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">All</span>}
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>{task.priority}</span>
+          {owner !== "All" && owner !== "" && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${ownerColors[owner as TaskOwner]}`}>{owner}</span>}
+          {owner === "All" && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">All</span>}
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${priorityColors[task.priority]}`}>{task.priority}</span>
         </div>
         <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
       </article>
@@ -411,14 +411,14 @@ export default function TasksPage() {
             );
 
             return (
-              <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-300 bg-white shadow-md">
+              <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-200 bg-white shadow-sm">
                 <div className={`rounded-t-[2rem] border-t-2 p-4 md:p-5 ${founder.headerClass}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />
                       <h2 className="text-base md:text-lg font-bold text-slate-950">{founder.name}</h2>
                     </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-md">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
                       {visibleTasks.length} open
                     </span>
                   </div>
@@ -426,7 +426,7 @@ export default function TasksPage() {
                 <div className="flex flex-1 flex-col gap-3 p-3 md:p-4">
                   {visibleTasks.map((task) => <TaskCard key={task.id} task={task} />)}
                   {visibleTasks.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-gray-100 px-4 py-10 text-center text-xs md:text-sm text-slate-600">
+                    <div className="flex flex-1 items-center justify-center rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-xs text-slate-500 md:text-sm">
                       {isSearching ? "No tasks match your search." : "No tasks assigned yet."}
                     </div>
                   )}
@@ -435,7 +435,7 @@ export default function TasksPage() {
                   <div className="border-t border-slate-100 p-3 md:p-4">
                     <button
                       type="button"
-                      className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 transition hover:bg-gray-100"
+                      className="min-h-11 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 md:text-sm"
                       onClick={() => openAddForFounder(founder.name)}
                     >
                       Add task
@@ -448,7 +448,7 @@ export default function TasksPage() {
       </div>
 
       {/* Completed tasks section — always present, collapsed by default */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white shadow-md">
+      <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           className="flex w-full items-center justify-between gap-3 rounded-[2rem] p-4 text-left md:p-5"
@@ -518,14 +518,14 @@ export default function TasksPage() {
                             </div>
                             <button
                               type="button"
-                              className="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                              className="min-h-11 shrink-0 rounded-3xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 md:min-h-0"
                               onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
                             >
                               Reopen
                             </button>
                             <button
                               type="button"
-                              className="shrink-0 rounded-full p-1 text-rose-400 hover:bg-rose-50 hover:text-rose-600"
+                              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-500 hover:border-rose-200 hover:bg-rose-100 hover:text-rose-600 md:min-h-10 md:min-w-10"
                               disabled={deletingId === task.id}
                               aria-label={`Delete ${task.title}`}
                               onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}

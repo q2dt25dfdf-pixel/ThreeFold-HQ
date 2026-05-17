@@ -123,7 +123,7 @@ function toggleAssignee(current: Assignee[], assignee: Assignee): Assignee[] {
 function PriorityDot({ priority }: { priority: Priority }) {
   return (
     <span
-      className={`ml-1 inline-block h-2 w-2 shrink-0 rounded-full ${priority === "High" ? "bg-rose-500" : priority === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`}
+      className={`ml-1 inline-block h-2 w-2 shrink-0 rounded-full ${priority === "High" ? "bg-red-500" : priority === "Medium" ? "bg-amber-500" : "bg-slate-400"}`}
       aria-label={`${priority} priority`}
     />
   );
@@ -138,7 +138,7 @@ function AssigneeChips({ assignees }: { assignees: Assignee[] }) {
   const isTeam = ASSIGNEES.every((a) => assignees.includes(a));
   if (isTeam) {
     return (
-      <span className="rounded-full bg-slate-200 px-1 text-[9px] font-bold leading-4 text-slate-600">
+      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
         Team
       </span>
     );
@@ -234,7 +234,7 @@ function AgendaEventCard({
     <div
       role="button"
       tabIndex={0}
-      className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:bg-slate-50 active:bg-slate-100"
+      className="flex cursor-pointer items-center gap-3 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm hover:bg-slate-50 active:bg-slate-100"
       onClick={() => onOpen(event)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(event); } }}
     >
@@ -250,7 +250,7 @@ function AgendaEventCard({
         <PriorityDot priority={eventPriority(event)} />
         <button
           type="button"
-          className="rounded-full p-1 text-rose-500 hover:bg-rose-50"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
           aria-label={`Delete ${event.title}`}
           disabled={deletingId === event.id}
           onClick={(e) => { e.stopPropagation(); onDelete(event.id); }}
@@ -451,21 +451,21 @@ export default function CalendarPage() {
           <div className="flex overflow-hidden rounded-xl border border-slate-300 bg-white">
             <button
               type="button"
-              className={`px-4 py-2 text-xs font-semibold transition ${mobileView === "agenda" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`min-h-11 px-4 py-2 text-xs font-semibold transition ${mobileView === "agenda" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
               onClick={() => setMobileView("agenda")}
             >
               Agenda
             </button>
             <button
               type="button"
-              className={`border-l border-slate-300 px-4 py-2 text-xs font-semibold transition ${mobileView === "grid" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`min-h-11 border-l border-slate-300 px-4 py-2 text-xs font-semibold transition ${mobileView === "grid" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
               onClick={() => setMobileView("grid")}
             >
               Grid
             </button>
           </div>
           <button
-            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-3xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
             type="button"
             onClick={() => { setFormError(""); addSave.resetSaveState(); setForm(freshForm()); setShowAdd(true); }}
           >
@@ -476,14 +476,14 @@ export default function CalendarPage() {
         {mobileView === "grid" && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handlePrevious} aria-label={view === "week" ? "Previous week" : "Previous month"}>
+              <button className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handlePrevious} aria-label={view === "week" ? "Previous week" : "Previous month"}>
                 <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               </button>
               <div className="flex-1 text-center text-xs font-semibold text-slate-950">{currentViewLabel}</div>
-              <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handleNext} aria-label={view === "week" ? "Next week" : "Next month"}>
+              <button className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-50" type="button" onClick={handleNext} aria-label={view === "week" ? "Next week" : "Next month"}>
                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50" type="button" onClick={goToToday}>
+              <button className="inline-flex min-h-11 items-center gap-1 rounded-3xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" type="button" onClick={goToToday}>
                 <Home className="h-3 w-3" aria-hidden="true" />
                 Now
               </button>
@@ -492,7 +492,7 @@ export default function CalendarPage() {
               {(["today", "week", "month"] as const).map((option) => (
                 <button
                   key={option}
-                  className={`flex-1 rounded-xl py-2 text-xs font-semibold capitalize ${view === option ? "bg-slate-950 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+                  className={`min-h-11 flex-1 rounded-3xl py-2 text-xs font-semibold capitalize ${view === option ? "bg-slate-950 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
                   type="button"
                   onClick={() => setView(option)}
                 >
@@ -585,7 +585,7 @@ export default function CalendarPage() {
       {mobileView === "agenda" && (
         <div className="space-y-5 md:hidden">
           {agendaGroups.length === 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+            <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500 md:text-sm">
               No upcoming events.
             </div>
           )}
@@ -618,7 +618,7 @@ export default function CalendarPage() {
       <div className={mobileView === "grid" ? "" : "hidden md:block"}>
         {/* Month view */}
         {view === "month" && (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
             <div className="grid grid-cols-7">
               {weekDays.map((day) => (
                 <div key={day} className="border-b border-r border-slate-200 px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-400 last:border-r-0 md:px-2 md:text-xs">
@@ -657,7 +657,7 @@ export default function CalendarPage() {
 
         {/* Week view */}
         {view === "week" && (
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-md">
+          <div className="overflow-x-auto rounded-[2rem] border border-slate-200 bg-white shadow-sm">
             <div className="min-w-[36rem]">
               <div className="grid border-l border-t border-slate-200" style={{ gridTemplateColumns }}>
                 <div className="w-16 shrink-0 border-b border-r border-slate-200" />
@@ -710,10 +710,10 @@ export default function CalendarPage() {
 
         {/* Today view */}
         {view === "today" && (
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-md md:p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-400 md:text-sm">Today</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-400 md:text-sm">Today</p>
                 <h2 className="mt-2 text-base font-bold text-slate-950 md:text-3xl">{todayLabel}</h2>
               </div>
               <button
@@ -766,7 +766,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Upcoming events — hidden on mobile when agenda is active (agenda already shows all events) */}
-      <section className={`rounded-[2rem] border border-slate-200 bg-white p-4 shadow-md md:p-6 ${mobileView === "agenda" ? "hidden md:block" : ""}`}>
+      <section className={`rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${mobileView === "agenda" ? "hidden md:block" : ""}`}>
         <h2 className="text-base font-bold text-slate-950 md:text-xl">Upcoming events</h2>
         <div className="mt-4">
           <div className="divide-y divide-slate-200">
@@ -793,7 +793,7 @@ export default function CalendarPage() {
                     <PriorityDot priority={eventPriority(event)} />
                     <button
                       type="button"
-                      className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                      className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
                       aria-label={`Delete ${event.title}`}
                       onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                       disabled={deletingId === event.id}
@@ -816,7 +816,7 @@ export default function CalendarPage() {
                   </span>
                   <button
                     type="button"
-                    className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                    className="flex min-h-10 min-w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
                     aria-label={`Delete ${event.title}`}
                     onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                     disabled={deletingId === event.id}
@@ -828,7 +828,7 @@ export default function CalendarPage() {
               </div>
             ))}
             {upcomingEvents.length === 0 && (
-              <div className="py-3 text-xs text-slate-600 md:py-6 md:text-sm">No upcoming dated events yet.</div>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No upcoming dated events yet.</div>
             )}
           </div>
         </div>
@@ -845,7 +845,7 @@ export default function CalendarPage() {
               <FieldError message={formError} />
               <div className="flex gap-3">
                 <SaveButton state={addSave.saveState} onClick={handleAddEvent} mode="add" className="flex-1 py-3" />
-                <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm" type="button" onClick={() => { setShowAdd(false); setFormError(""); }}>Cancel</button>
+                <button className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" type="button" onClick={() => { setShowAdd(false); setFormError(""); }}>Cancel</button>
               </div>
             </div>
           }

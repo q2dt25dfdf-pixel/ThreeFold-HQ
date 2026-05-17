@@ -128,48 +128,48 @@ export default function OrdersPage() {
           const dueSoon = isDueSoon(order.estimatedDeliveryDate);
 
           return (
-            <article key={order.id} className="overflow-hidden rounded-[2rem] border border-slate-300 bg-white shadow-md transition hover:-translate-y-0.5 hover:shadow-md">
-              <div className="w-full p-2 text-left md:p-6">
+            <article key={order.id} className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="w-full p-4 text-left md:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="truncate text-base font-semibold text-slate-950 md:text-xl">{order.orderName}</h2>
                     <p className="mt-1 text-xs text-slate-600 md:text-sm">{order.client || "No client selected"}</p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${statusColors[order.status]}`}>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${statusColors[order.status]}`}>
                     {order.status}
                   </span>
                 </div>
                 <div className="mt-4 space-y-2 text-xs text-slate-600 md:text-sm">
-                  <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
                     <span>Vendor</span>
                     <span className="max-w-[150px] truncate text-right font-medium text-slate-900">{order.vendor || "Not assigned"}</span>
                   </div>
-                  <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
                     <span>Items</span>
                     <span className="max-w-[180px] truncate text-right font-medium text-slate-900">{order.items.length ? order.items.join(", ") : "None selected"}</span>
                   </div>
-                  <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
                     <span>Quantity</span>
                     <span className="font-medium text-slate-900">{order.quantity || 0}</span>
                   </div>
-                  <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
                     <span>Amount</span>
                     <span className="font-medium text-slate-900">{formatCurrency(order.amount)}</span>
                   </div>
-                  <div className="flex justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
                     <span>Est. delivery</span>
                     <span className={`inline-flex items-center gap-1 ${dueSoon ? "font-bold text-rose-600" : "font-medium text-slate-900"}`}>
                       {dueSoon && <Clock className="h-3.5 w-3.5" aria-hidden="true" />}
                       {order.estimatedDeliveryDate || "TBD"}
                     </span>
                   </div>
-                  {order.notes && <div className="rounded-2xl bg-gray-100 px-4 py-2 text-xs text-slate-600">{order.notes}</div>}
+                  {order.notes && <div className="rounded-2xl bg-slate-50 px-4 py-2 text-xs text-slate-600">{order.notes}</div>}
                 </div>
               </div>
               <div className="flex gap-3 border-t border-slate-100 px-3 pb-5 pt-4 md:px-6">
                 <button
                   type="button"
-                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
                   onClick={() => router.push(`/orders/${order.id}`)}
                 >
                   View order
@@ -188,7 +188,7 @@ export default function OrdersPage() {
           );
         })}
         {visible.length === 0 && (
-          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-semibold text-slate-600 xl:col-span-3">
+          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-xs font-semibold text-slate-500 md:text-sm xl:col-span-3">
             No orders match your filters.
           </div>
         )}

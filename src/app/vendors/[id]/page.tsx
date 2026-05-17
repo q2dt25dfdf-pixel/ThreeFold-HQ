@@ -60,7 +60,7 @@ const defaultVendors: Vendor[] = [
 ];
 
 const statusStyles: Record<VendorStatus, string> = {
-  Active: "bg-blue-100 text-blue-800",
+  Active: "bg-emerald-100 text-emerald-800",
   Review: "bg-amber-100 text-amber-800",
   Paused: "bg-slate-100 text-slate-700",
 };
@@ -188,7 +188,7 @@ export default function VendorDetailPage() {
                 <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.phone || "No phone"}</span>
               </div>
             </div>
-            <div className="flex min-w-0 flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+            <div className="flex min-w-0 flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/5 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type}</span>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
@@ -197,7 +197,7 @@ export default function VendorDetailPage() {
                 <button
                   type="button"
                   onClick={openVendorHeaderEditor}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-3xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
                 >
                   <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                   Edit contact
@@ -205,7 +205,7 @@ export default function VendorDetailPage() {
                 <button
                   type="button"
                   onClick={handleDeleteVendor}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-rose-200 hover:bg-white/10 md:text-sm"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-3xl border border-rose-300/40 bg-rose-400/10 px-5 py-3 text-xs font-semibold text-rose-100 hover:bg-rose-400/15 md:text-sm"
                 >
                   <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                   Delete
@@ -221,7 +221,7 @@ export default function VendorDetailPage() {
                 { label: "Email", key: "email", value: vendorHeaderDraft.email },
                 { label: "Phone", key: "phone", value: vendorHeaderDraft.phone },
               ].map((field) => (
-                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
                   {field.label}
                   <input
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
@@ -255,7 +255,7 @@ export default function VendorDetailPage() {
             { label: "Turnaround time", value: vendor.turnaround || "Not set" },
             { label: "Status", value: vendor.status },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
               <p className="text-xs text-slate-500 md:text-sm">{stat.label}</p>
               <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{stat.value}</p>
             </div>
@@ -263,7 +263,7 @@ export default function VendorDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-950 md:text-lg">Vendor details</h2>
@@ -290,7 +290,7 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="mb-5">
               <h2 className="text-base font-semibold text-slate-950 md:text-lg">Assigned orders</h2>
               <p className="mt-1 text-xs text-slate-500 md:text-sm">Orders assigned to this vendor.</p>
@@ -307,14 +307,14 @@ export default function VendorDetailPage() {
                       {order.client || "No client"} · {order.estimatedDeliveryDate || "TBD"} · {formatCurrency(order.amount)}
                     </p>
                   </div>
-                  <span className="w-fit shrink-0 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">{order.status}</span>
+                  <span className="w-fit shrink-0 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-800">{order.status}</span>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+        <section className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Notes</h2>
           <textarea
             rows={6}
@@ -343,7 +343,7 @@ export default function VendorDetailPage() {
                 <button
                   type="button"
                   onClick={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
-                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
                 </button>

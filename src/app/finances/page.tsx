@@ -78,10 +78,10 @@ const statusColors: Record<InvoiceStatus, string> = {
   Sent: "bg-blue-100 text-blue-800",
   "Deposit Due": "bg-amber-100 text-amber-800",
   "Deposit Paid": "bg-emerald-100 text-emerald-800",
-  "In Progress": "bg-indigo-100 text-indigo-800",
-  "Final Payment Due": "bg-orange-100 text-orange-800",
+  "In Progress": "bg-blue-100 text-blue-800",
+  "Final Payment Due": "bg-amber-100 text-amber-800",
   "Paid in Full": "bg-emerald-100 text-emerald-800",
-  Overdue: "bg-rose-100 text-rose-800",
+  Overdue: "bg-red-100 text-red-800",
   Cancelled: "bg-slate-200 text-slate-600",
 };
 
@@ -90,10 +90,10 @@ const statusPalette: Record<InvoiceStatus, string> = {
   Sent: "#3b82f6",
   "Deposit Due": "#f59e0b",
   "Deposit Paid": "#10b981",
-  "In Progress": "#6366f1",
-  "Final Payment Due": "#f97316",
+  "In Progress": "#2563eb",
+  "Final Payment Due": "#f59e0b",
   "Paid in Full": "#059669",
-  Overdue: "#e11d48",
+  Overdue: "#dc2626",
   Cancelled: "#94a3b8",
 };
 
@@ -499,7 +499,7 @@ export default function FinancesPage() {
               <button
                 key={client.id}
                 type="button"
-                className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   selectClient(client);
@@ -536,7 +536,7 @@ export default function FinancesPage() {
                 <button
                   key={order.id}
                   type="button"
-                  className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                  className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   onMouseDown={(event) => {
                     event.preventDefault();
                     selectOrder(order);
@@ -707,7 +707,7 @@ export default function FinancesPage() {
         ].map((card) => {
           const TrendIcon = card.trend === "up" ? TrendingUp : TrendingDown;
           return (
-            <div key={card.label} className="rounded-[1.75rem] border border-slate-300 bg-white p-4 md:p-5 shadow-md">
+            <div key={card.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xl font-bold tracking-tight text-slate-950 md:text-3xl">{card.value}</p>
@@ -723,7 +723,7 @@ export default function FinancesPage() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue over time</h2>
@@ -753,7 +753,7 @@ export default function FinancesPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 shadow-md">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoice status breakdown</h2>
           <div className="relative mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -783,7 +783,7 @@ export default function FinancesPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-5 shadow-md">
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoices</h2>
@@ -809,7 +809,7 @@ export default function FinancesPage() {
               key={invoice.id}
               role="button"
               tabIndex={0}
-              className="rounded-2xl border border-slate-200 bg-white p-2 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md md:p-4"
+              className="rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md md:p-5"
               onClick={() => openEditInvoice(invoice)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -823,27 +823,27 @@ export default function FinancesPage() {
                   <p className="truncate text-xs font-semibold text-slate-500 md:text-sm">{invoiceClientName(invoice)}</p>
                   <h3 className="mt-1 truncate text-base font-semibold text-slate-950 md:text-lg">{invoiceOrderName(invoice) || "Untitled invoice"}</h3>
                 </div>
-                <span className={"shrink-0 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] " + statusColors[invoice.status]}>
+                <span className={"shrink-0 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] " + statusColors[invoice.status]}>
                   {invoice.status}
                 </span>
               </div>
 
               <div className="mt-4 grid gap-2 text-xs text-slate-600 md:text-sm">
-                <div className="flex items-center justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
                   <span>Total amount</span>
                   <span className="font-semibold text-slate-950">{currencyInputValue(invoice.total_amount)}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
                   <span>Deposit</span>
                   <span className={invoice.deposit_paid ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
                     {invoice.deposit_paid ? "Paid" : "Due"} · {currencyInputValue(invoice.deposit_amount)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
                   <span>Balance remaining</span>
                   <span className="font-semibold text-slate-950">{currencyInputValue(invoice.balance_remaining)}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-2xl bg-gray-100 px-4 py-2">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
                   <span>Final payment</span>
                   <span className={invoice.final_paid ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
                     {invoice.final_paid ? "Paid" : "Open"}
@@ -855,7 +855,7 @@ export default function FinancesPage() {
                 <span className="text-xs font-semibold text-slate-500">{invoice.final_due_date ? "Due " + invoice.final_due_date : "No final due date"}</span>
                 <button
                   type="button"
-                  className="rounded-full p-2 text-rose-600 hover:bg-rose-50"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"
                   disabled={deletingId === invoice.id}
                   aria-label={"Delete " + invoiceOrderName(invoice)}
                   onClick={(event) => {
@@ -869,14 +869,14 @@ export default function FinancesPage() {
             </article>
           ))}
           {visible.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500 md:col-span-2 md:text-sm xl:col-span-3">
+            <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500 md:col-span-2 md:text-sm xl:col-span-3">
               No invoices found.
             </div>
           )}
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 shadow-md">
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue goal</h2>
@@ -902,7 +902,7 @@ export default function FinancesPage() {
               <FieldError message={formError} />
               <div className="flex gap-3">
                 <SaveButton state={addSave.saveState} onClick={handleAdd} mode="add" className="flex-1 py-3" />
-                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
+                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => { setShowModal(false); setForm(emptyForm); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                   Cancel
                 </button>
               </div>
@@ -923,7 +923,7 @@ export default function FinancesPage() {
               <FieldError message={formError} />
               <div className="flex gap-3">
                 <SaveButton state={editSave.saveState} onClick={handleSaveEdit} className="flex-1 py-3" />
-                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100" onClick={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
+                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                   Cancel
                 </button>
               </div>

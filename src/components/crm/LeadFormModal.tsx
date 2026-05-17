@@ -163,20 +163,20 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
         <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
 
         <div className="grid gap-6 md:grid-cols-2">
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Company name
             <input
-              className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
               value={company}
               onChange={(event) => { setCompany(event.target.value); if (formError) setFormError(""); }}
               required
             />
             <FieldError message={formError.includes("Company") ? formError : undefined} />
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Contact name
             <input
-              className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
               value={contact}
               onChange={(event) => { setContact(event.target.value); if (formError) setFormError(""); }}
               required
@@ -186,67 +186,67 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Email address
-            <input type="email" className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            <input type="email" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={email} onChange={(event) => setEmail(event.target.value)} required />
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Phone number
-            <input className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={phone} onChange={(event) => setPhone(event.target.value)} required />
+            <input className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={phone} onChange={(event) => setPhone(event.target.value)} required />
           </label>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Industry
-            <select className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={industry} onChange={(event) => setIndustry(event.target.value)}>
+            <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={industry} onChange={(event) => setIndustry(event.target.value)}>
               {industryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Address
-            <AddressAutocomplete className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={address} onChange={setAddress} placeholder="Start typing an address..." />
+            <AddressAutocomplete className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={address} onChange={setAddress} placeholder="Start typing an address..." />
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Website
-            <input className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={website} onChange={(event) => setWebsite(event.target.value)} />
+            <input className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={website} onChange={(event) => setWebsite(event.target.value)} />
           </label>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Estimated value
-            <input type="text" inputMode="numeric" className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={currencyInputValue(value)} onKeyDown={allowCurrencyKey} onPaste={(event) => { if (/\D/.test(event.clipboardData.getData("text"))) event.preventDefault(); }} onChange={(event) => setValue(currencyInputNumber(event.target.value))} />
+            <input type="text" inputMode="numeric" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={currencyInputValue(value)} onKeyDown={allowCurrencyKey} onPaste={(event) => { if (/\D/.test(event.clipboardData.getData("text"))) event.preventDefault(); }} onChange={(event) => setValue(currencyInputNumber(event.target.value))} />
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Owner
-            <input className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="Owner name" />
+            <input className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="Owner name" />
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Stage
-            <select className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={stage} onChange={(event) => setStage(event.target.value as Lead["stage"])}>
+            <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={stage} onChange={(event) => setStage(event.target.value as Lead["stage"])}>
               {pipelineStages.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Status
-            <select className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={status} onChange={(event) => setStatus(event.target.value as Lead["status"])}>
+            <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={status} onChange={(event) => setStatus(event.target.value as Lead["status"])}>
               {leadStatuses.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
-          <label className="space-y-2 text-sm text-slate-700">
+          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Next Follow-Up Date
-            <input type="date" className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900" value={followUpDate} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setFollowUpDate(event.target.value)} />
+            <input type="date" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={followUpDate} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setFollowUpDate(event.target.value)} />
           </label>
           <div />
         </div>
 
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Notes
-          <textarea rows={5} className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} />
+          <textarea rows={5} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} />
         </label>
       </form>
     </ModalShell>

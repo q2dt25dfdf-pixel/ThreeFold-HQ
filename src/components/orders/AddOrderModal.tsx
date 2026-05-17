@@ -130,7 +130,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
         <SaveButton state={saveState} onClick={handleSave} mode="add" className="flex-1 py-3" />
         <button
           type="button"
-          className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
+          className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
           onClick={onClose}
         >
           Cancel
@@ -193,8 +193,8 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
                     aria-pressed={selected}
                     className={`rounded-2xl border px-3 py-2 text-xs md:text-sm font-semibold transition ${
                       selected
-                        ? "border-slate-400 bg-gray-100 text-slate-900"
-                        : "border-slate-300 bg-white text-slate-700 hover:bg-gray-100"
+                        ? "border-slate-400 bg-slate-50 text-slate-900"
+                        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                     }`}
                     onClick={() => toggleItem(item)}
                   >

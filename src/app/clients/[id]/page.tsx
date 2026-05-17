@@ -307,7 +307,7 @@ export default function ClientDetailPage() {
                 <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{client.phone || "No phone"}</span>
               </div>
             </div>
-            <div className="flex min-w-0 flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-4 lg:items-stretch">
+            <div className="flex min-w-0 flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/5 p-4 lg:items-stretch">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
                 <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
@@ -333,7 +333,7 @@ export default function ClientDetailPage() {
                 { label: "Email", key: "email", value: client.email ?? "" },
                 { label: "Phone", key: "phone", value: client.phone ?? "" },
               ].map((field) => (
-                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
                   {field.label}
                   <input
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs md:text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
@@ -380,7 +380,7 @@ export default function ClientDetailPage() {
             { label: "Total spend", value: totalSpend > 0 ? `$${totalSpend.toLocaleString()}` : "$0" },
             { label: "Account status", value: client.status },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
+            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
               <p className="text-xs md:text-sm text-slate-500">{stat.label}</p>
               <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{stat.value}</p>
             </div>
@@ -388,7 +388,7 @@ export default function ClientDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Account details</h2>
@@ -409,14 +409,14 @@ export default function ClientDetailPage() {
                 { label: "Notes", value: client.notes || "No notes added yet." },
               ].map((field) => (
                 <div key={field.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{field.label}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{field.label}</p>
                   <p className="mt-2 text-xs md:text-sm font-semibold text-slate-950">{field.value}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Order history</h2>
@@ -438,7 +438,7 @@ export default function ClientDetailPage() {
                       {order.estimatedDeliveryDate || "TBD"} · {order.vendor || "No vendor"} · {formatCurrency(order.amount)}
                     </p>
                   </div>
-                  <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">{order.status}</span>
+                  <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-700">{order.status}</span>
                 </div>
               ))}
             </div>
@@ -446,7 +446,7 @@ export default function ClientDetailPage() {
         </section>
 
         {matchingLead && (
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-950 md:text-lg">Lead History</h2>
@@ -471,13 +471,13 @@ export default function ClientDetailPage() {
               </div>
               {matchingLead.notes && (
                 <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Lead notes</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Lead notes</p>
                   <p className="mt-1.5 text-xs text-slate-700 md:text-sm">{matchingLead.notes}</p>
                 </div>
               )}
               {leadCommHistory.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Activity from CRM</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Activity from CRM</p>
                   <div className="space-y-2">
                     {leadCommHistory.map((entry) => (
                       <div key={entry.id} className="rounded-2xl border border-slate-200 px-4 py-3">
@@ -495,7 +495,7 @@ export default function ClientDetailPage() {
           </section>
         )}
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <h2 className="text-base md:text-lg font-semibold text-slate-950">Activity log</h2>
           <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-3 md:p-4 lg:grid-cols-[160px_160px_1fr_auto]">
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
@@ -549,7 +549,7 @@ export default function ClientDetailPage() {
               <FieldError message={clientFormError} />
               <div className="flex gap-3">
                 <SaveButton state={clientSave.saveState} onClick={saveClientDraft} className="flex-1 py-3" />
-                <button type="button" onClick={() => { setClientDraft(null); clientSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100">Cancel</button>
+                <button type="button" onClick={() => { setClientDraft(null); clientSave.resetSaveState(); }} className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
               </div>
             </div>
           }

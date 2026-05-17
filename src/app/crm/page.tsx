@@ -301,19 +301,19 @@ export default function CRMPage() {
   if (loading) return <LoadingState label="Loading CRM..." />;
 
   return (
-    <div className="min-h-screen min-w-0 space-y-10 text-xs md:text-sm">
+    <div className="min-h-screen min-w-0 space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:overflow-x-visible">
         <div>
-          <p className="text-xs uppercase tracking-widest text-slate-600">CRM Pipeline</p>
-          <h1 className="text-2xl font-bold text-slate-950 md:text-4xl">Manage leads across every stage</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">CRM Pipeline</p>
+          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Manage leads across every stage</h1>
           <p className="text-slate-600 text-xs md:text-sm mt-2">
             Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
           </p>
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="hidden md:inline-flex mt-4 min-h-11 items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+            className="mt-4 hidden min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:inline-flex"
           >
             <Plus size={16} />
             Add lead
@@ -332,7 +332,7 @@ export default function CRMPage() {
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="md:hidden flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:hidden"
           >
             <Plus size={16} />
             Add lead
@@ -341,16 +341,16 @@ export default function CRMPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-500">Total leads</p>
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Total leads</p>
           <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.length}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-500">Pipeline value</p>
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Pipeline value</p>
           <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">${totalValue.toLocaleString()}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <p className="text-xs md:text-sm uppercase tracking-[0.24em] text-slate-500">Open approvals</p>
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Open approvals</p>
           <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => lead.stage === "Approved").length}</p>
         </div>
       </div>
@@ -366,7 +366,7 @@ export default function CRMPage() {
                   <p className="mt-1 text-xs text-slate-500">{stageLeads.length} lead{stageLeads.length === 1 ? "" : "s"}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">
+                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-700">
                     {stageLeads.length}
                   </div>
                   <button
@@ -396,7 +396,7 @@ export default function CRMPage() {
                 ) : (
                   <button
                     type="button"
-                    className="w-full rounded-[1.5rem] border border-dashed border-slate-200/60 bg-white px-4 py-3 md:py-6 text-center text-xs text-slate-500 hover:bg-slate-50"
+                    className="w-full rounded-[2rem] border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500 hover:bg-slate-50 md:text-sm"
                     onClick={() => openAddLeadModal(stage)}
                   >
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">

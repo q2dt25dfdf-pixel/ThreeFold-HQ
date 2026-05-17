@@ -108,7 +108,7 @@ export function SmartSearchInput({
               <button
                 key={record.id}
                 type="button"
-                className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-gray-100"
+                className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   if (onSelect) {

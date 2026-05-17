@@ -50,21 +50,21 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Company Name
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="e.g. POPS - Piranha Ops"
             value={form.name}
             onChange={(event) => setForm({ ...form, name: event.target.value })}
           />
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Contact Name
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="e.g. Ricky"
             value={form.contact}
             onChange={(event) => setForm({ ...form, contact: event.target.value })}
@@ -73,20 +73,20 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Email Address
           <input
             type="email"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.email}
             onChange={(event) => setForm({ ...form, email: event.target.value })}
           />
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Phone Number
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.phone}
             onChange={(event) => setForm({ ...form, phone: event.target.value })}
           />
@@ -94,10 +94,10 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Industry
           <select
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.industry}
             onChange={(event) => setForm({ ...form, industry: event.target.value })}
           >
@@ -116,10 +116,10 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
             <option>Other</option>
           </select>
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Address
           <AddressAutocomplete
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="Start typing an address..."
             value={form.address}
             onChange={(value) => setForm({ ...form, address: value })}
@@ -128,20 +128,20 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Website
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="https://yourwebsite.com"
             value={form.website}
             onChange={(event) => setForm({ ...form, website: event.target.value })}
           />
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Status
           <select
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.status}
             onChange={(event) => setForm({ ...form, status: event.target.value as Client["status"] })}
           >
@@ -154,11 +154,11 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
         </label>
       </div>
 
-      <label className="block space-y-2 text-sm text-slate-700">
+      <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
         Notes
         <textarea
           rows={5}
-          className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           value={form.notes}
           onChange={(event) => setForm({ ...form, notes: event.target.value })}
         />
@@ -260,8 +260,8 @@ export default function ClientsPage() {
             key={stat.label}
             type="button"
             onClick={() => setActiveFilter(stat.filter)}
-            className={`rounded-2xl bg-white p-4 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
-              activeFilter === stat.filter ? "border-2 border-slate-950" : "border border-slate-300"
+            className={`rounded-[2rem] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
+              activeFilter === stat.filter ? "border-2 border-slate-950" : "border border-slate-200"
             }`}
           >
             <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-4xl">{stat.value}</p>
@@ -270,7 +270,7 @@ export default function ClientsPage() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
         <div className="hidden bg-zinc-100 px-6 py-3 text-xs uppercase tracking-widest text-slate-400 md:grid md:grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem]">
           <div>Company</div>
           <div>Industry</div>
@@ -301,13 +301,13 @@ export default function ClientsPage() {
               <div className="text-xs md:text-sm text-slate-600">{client.contact}</div>
               <div className="text-xs md:text-sm text-slate-600">{orderCountForClient(client.name)}</div>
               <div>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${client.status === "Active" ? "bg-emerald-100 text-emerald-800" : client.status === "At Risk" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${client.status === "Active" ? "bg-emerald-100 text-emerald-800" : client.status === "At Risk" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
                   {client.status}
                 </span>
               </div>
               <button
                 type="button"
-                className="justify-self-start rounded-full p-1 text-rose-600 hover:bg-rose-50 md:justify-self-end"
+                className="flex min-h-11 min-w-11 items-center justify-center justify-self-start rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10 md:justify-self-end"
                 disabled={deletingId === client.id}
                 aria-label={`Delete ${client.name}`}
                 onClick={(event) => {
@@ -320,7 +320,7 @@ export default function ClientsPage() {
             </div>
           ))}
           {visible.length === 0 && (
-            <div className="bg-white px-3 md:px-6 py-10 text-center text-xs md:text-sm text-slate-600">
+            <div className="bg-white px-3 py-10 text-center text-xs text-slate-500 md:px-6 md:text-sm">
               No clients match your search.
             </div>
           )}

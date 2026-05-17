@@ -133,21 +133,21 @@ export default function VendorsPage() {
   const renderFields = () => (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Company Name
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="e.g. S&S Activewear"
             value={form.name}
             onChange={(event) => setForm({ ...form, name: event.target.value })}
           />
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Contact Name
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="Name or primary contact"
             value={form.contact}
             onChange={(event) => setForm({ ...form, contact: event.target.value })}
@@ -156,20 +156,20 @@ export default function VendorsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Email Address
           <input
             type="email"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.email}
             onChange={(event) => setForm({ ...form, email: event.target.value })}
           />
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Phone Number
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.phone}
             onChange={(event) => setForm({ ...form, phone: event.target.value })}
           />
@@ -177,10 +177,10 @@ export default function VendorsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Vendor Type
           <select
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.type}
             onChange={(event) => setForm({ ...form, type: event.target.value })}
           >
@@ -197,10 +197,10 @@ export default function VendorsPage() {
             <option>Other</option>
           </select>
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Address
           <AddressAutocomplete
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="Start typing an address..."
             value={form.address}
             onChange={(value) => setForm({ ...form, address: value })}
@@ -209,21 +209,21 @@ export default function VendorsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Website
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="https://yourwebsite.com"
             value={form.website}
             onChange={(event) => setForm({ ...form, website: event.target.value })}
           />
         </label>
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Turnaround Time
           <input
             type="text"
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="e.g. 3-5 days"
             value={form.turnaround}
             onChange={(event) => setForm({ ...form, turnaround: event.target.value })}
@@ -232,10 +232,10 @@ export default function VendorsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-slate-700">
+        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
           Status
           <select
-            className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.status}
             onChange={(event) => setForm({ ...form, status: event.target.value as Vendor["status"] })}
           >
@@ -247,11 +247,11 @@ export default function VendorsPage() {
         <div />
       </div>
 
-      <label className="block space-y-2 text-sm text-slate-700">
+      <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
         Notes
         <textarea
           rows={5}
-          className="w-full rounded-[1.5rem] border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Pricing notes, minimums, quality feedback..."
           value={form.notes}
           onChange={(event) => setForm({ ...form, notes: event.target.value })}
@@ -312,7 +312,7 @@ export default function VendorsPage() {
                         router.push(`/vendors/${vendor.id}`);
                       }
                     }}
-                    className={`rounded-[2rem] border border-slate-300 bg-white p-4 md:p-6 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-md ${
+                    className={`rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
                       vendor.status === "Active" ? "border-t-2 border-t-emerald-400" :
                       vendor.status === "Review" ? "border-t-2 border-t-amber-400" : "border-t-2 border-t-slate-300"
                     }`}
@@ -325,7 +325,7 @@ export default function VendorsPage() {
                         </span>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${
                           vendor.status === "Active" ? "bg-emerald-100 text-emerald-800" :
                           vendor.status === "Review" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"
                         }`}>
@@ -333,7 +333,7 @@ export default function VendorsPage() {
                         </span>
                         <button
                           type="button"
-                          className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                          className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"
                           disabled={deletingId === vendor.id}
                           aria-label={`Delete ${vendor.name}`}
                           onClick={(event) => {
@@ -360,7 +360,7 @@ export default function VendorsPage() {
                       </div>
                     </div>
                     {vendor.notes && (
-                      <div className="mt-3 rounded-xl bg-zinc-50 p-2 md:p-3">
+                      <div className="mt-3 rounded-2xl bg-slate-50 p-3">
                         <p className="text-xs text-slate-600">{vendor.notes}</p>
                       </div>
                     )}
@@ -371,7 +371,7 @@ export default function VendorsPage() {
           );
         })}
         {groupedVendors.length === 0 && (
-          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-xs md:text-sm text-slate-600">
+          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-xs text-slate-500 md:text-sm">
             No vendors match your search.
           </div>
         )}
