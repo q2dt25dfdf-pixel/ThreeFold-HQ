@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, ClipboardCopy, Edit2 } from "lucide-react";
+import { ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -30,6 +30,19 @@ type Order = {
   owner?: string;
   nextAction?: string;
   internalNotes?: string;
+  design_versions?: DesignVersion[];
+};
+
+type DesignVersionStatus = "In Review" | "Needs Revision" | "Approved" | "Production Ready";
+
+type DesignVersion = {
+  id: string;
+  version_number: number;
+  name: string;
+  drive_url: string;
+  status: DesignVersionStatus;
+  notes: string;
+  date_added: string;
 };
 
 type Invoice = {
@@ -81,6 +94,13 @@ const ALL_STATUS_OPTIONS = [
   "Quality Control",
   "Ready",
   "Fulfilled",
+];
+
+const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
+  "In Review",
+  "Needs Revision",
+  "Approved",
+  "Production Ready",
 ];
 
 function statusToStageIndex(status: string): number {
@@ -139,6 +159,41 @@ function invoiceStatusBadgeClass(status: string): string {
   return "bg-slate-100 text-slate-600";
 }
 
+function designVersionStatusBadgeClass(status: DesignVersionStatus): string {
+  const map: Record<DesignVersionStatus, string> = {
+    "In Review": "bg-slate-100 text-slate-700",
+    "Needs Revision": "bg-amber-100 text-amber-700",
+    "Approved": "bg-emerald-100 text-emerald-700",
+    "Production Ready": "bg-blue-100 text-blue-700",
+  };
+  return map[status];
+}
+
+function isDesignVersionStatus(value: string): value is DesignVersionStatus {
+  return DESIGN_VERSION_STATUSES.includes(value as DesignVersionStatus);
+}
+
+function normalizeDesignVersions(versions?: DesignVersion[] | null): DesignVersion[] {
+  if (!Array.isArray(versions)) return [];
+
+  return versions.map((version, index) => ({
+    id: version.id || `design-version-${version.version_number || index + 1}`,
+    version_number: Number(version.version_number || index + 1),
+    name: version.name ?? "",
+    drive_url: version.drive_url ?? "",
+    status: isDesignVersionStatus(version.status) ? version.status : "In Review",
+    notes: version.notes ?? "",
+    date_added: version.date_added ?? "",
+  }));
+}
+
+function formatDesignVersionDate(value: string): string {
+  if (!value) return "Not recorded";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function formatCurrency(value: string | number): string {
   const n = typeof value === "number" ? value : Number(String(value).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }) : "$0.00";
@@ -154,6 +209,7 @@ function normalizeOrder(order: Order): Order {
     nextAction: order.nextAction ?? "",
     internalNotes: order.internalNotes ?? "",
     owner: order.owner ?? "",
+    design_versions: normalizeDesignVersions(order.design_versions),
   };
 }
 
@@ -227,6 +283,7 @@ export default function OrderDetailPage() {
   const { data: invoices } = useSupabaseTable<Invoice>("finances", []);
 
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
+  const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
 
   const invoice = invoices.find((inv) => {
     if (!order) return false;
@@ -250,6 +307,19 @@ export default function OrderDetailPage() {
   const [internalNotes, setInternalNotes] = useState("");
   const notesSave = useSaveState();
 
+  // Design Versions
+  const [designVersionDrafts, setDesignVersionDrafts] = useState<DesignVersion[]>([]);
+  const [designVersionSource, setDesignVersionSource] = useState({ orderId: "", key: "[]" });
+  const [isAddVersionOpen, setIsAddVersionOpen] = useState(false);
+  const [newDesignVersion, setNewDesignVersion] = useState({
+    name: "",
+    drive_url: "",
+    status: "In Review" as DesignVersionStatus,
+    notes: "",
+  });
+  const designVersionsSave = useSaveState();
+  const addDesignVersionSave = useSaveState();
+
   // Timeline
   const [stageSaving, setStageSaving] = useState(false);
 
@@ -265,6 +335,11 @@ export default function OrderDetailPage() {
       setInitialized(true);
     }
   }, [order, initialized]);
+
+  if (order && (designVersionSource.orderId !== order.id || designVersionSource.key !== orderDesignVersionsKey)) {
+    setDesignVersionSource({ orderId: order.id, key: orderDesignVersionsKey });
+    setDesignVersionDrafts(normalizeDesignVersions(order.design_versions));
+  }
 
   // --- Handlers ---
 
@@ -320,6 +395,53 @@ export default function OrderDetailPage() {
     notesSave.runSave(() => upsertItem({ ...order, internalNotes }));
   };
 
+  const closeAddVersionModal = () => {
+    setIsAddVersionOpen(false);
+    setNewDesignVersion({ name: "", drive_url: "", status: "In Review", notes: "" });
+    addDesignVersionSave.resetSaveState();
+  };
+
+  const saveDesignVersions = (versions: DesignVersion[], onSuccess?: () => void) => {
+    if (!order) return;
+    designVersionsSave.runSave(
+      () => upsertItem({ ...order, design_versions: versions }),
+      onSuccess,
+    );
+  };
+
+  const saveNewDesignVersion = () => {
+    if (!order) return;
+    const existingVersions = designVersionDrafts;
+    const nextVersionNumber = existingVersions.reduce((max, version) => Math.max(max, version.version_number), 0) + 1;
+    const version: DesignVersion = {
+      id: crypto.randomUUID(),
+      version_number: nextVersionNumber,
+      name: newDesignVersion.name,
+      drive_url: newDesignVersion.drive_url,
+      status: newDesignVersion.status,
+      notes: newDesignVersion.notes,
+      date_added: new Date().toISOString(),
+    };
+    const versions = [...existingVersions, version];
+    setDesignVersionDrafts(versions);
+    addDesignVersionSave.runSave(
+      () => upsertItem({ ...order, design_versions: versions }),
+      closeAddVersionModal,
+    );
+  };
+
+  const updateDesignVersionDraft = (id: string, updates: Partial<DesignVersion>) => {
+    setDesignVersionDrafts((versions) => versions.map((version) => (
+      version.id === id ? { ...version, ...updates } : version
+    )));
+  };
+
+  const deleteDesignVersion = (id: string) => {
+    const versions = designVersionDrafts.filter((version) => version.id !== id);
+    setDesignVersionDrafts(versions);
+    saveDesignVersions(versions);
+  };
+
   const handleCopy = async (btn: CommButton) => {
     if (btn.disabled) return;
     try {
@@ -353,6 +475,15 @@ export default function OrderDetailPage() {
   const totalAmount = numericValue(invoice?.total_amount ?? 0);
   const depositAmount = numericValue(invoice?.deposit_amount ?? 0);
   const balanceRemaining = numericValue(invoice?.balance_remaining ?? 0);
+  const latestProductionReady = designVersionDrafts
+    .filter((version) => version.status === "Production Ready")
+    .sort((a, b) => new Date(b.date_added).getTime() - new Date(a.date_added).getTime())[0];
+  const displayedDesignVersions = latestProductionReady
+    ? [
+        latestProductionReady,
+        ...designVersionDrafts.filter((version) => version.id !== latestProductionReady.id),
+      ]
+    : designVersionDrafts;
 
   // --- Section JSX (rendered once per layout; both layouts share state) ---
 
@@ -402,6 +533,120 @@ export default function OrderDetailPage() {
         </div>
       </div>
       {stageSaving && <p className="mt-2 text-[10px] text-slate-400">Saving…</p>}
+    </div>
+  );
+
+  const DesignVersionsSection = (
+    <div className="w-full min-w-0 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Design Versions</h2>
+        <button
+          type="button"
+          onClick={() => {
+            addDesignVersionSave.resetSaveState();
+            setIsAddVersionOpen(true);
+          }}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-3xl bg-slate-950 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 lg:min-h-0 lg:w-auto"
+        >
+          Add Version
+        </button>
+      </div>
+
+      {displayedDesignVersions.length === 0 ? (
+        <p className="text-xs text-slate-400">No design versions added yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {displayedDesignVersions.map((version) => {
+            const isHighlighted = latestProductionReady?.id === version.id;
+            return (
+              <div
+                key={version.id}
+                className={`w-full min-w-0 rounded-2xl border p-3 ${
+                  isHighlighted ? "border-blue-200 bg-blue-50" : "border-slate-100 bg-slate-50"
+                }`}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-xs font-semibold text-slate-950">Version {version.version_number}</h3>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${designVersionStatusBadgeClass(version.status)}`}>
+                        {version.status === "Production Ready" && <Check className="h-3 w-3" />}
+                        {version.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-400">Added {formatDesignVersionDate(version.date_added)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteDesignVersion(version.id)}
+                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 lg:w-auto"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+
+                <div className="mt-3 space-y-3">
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none md:text-sm"
+                    placeholder="Version name"
+                    value={version.name}
+                    onChange={(e) => updateDesignVersionDraft(version.id, { name: e.target.value })}
+                  />
+                  <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-row">
+                    <input
+                      type="url"
+                      className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none md:text-sm"
+                      placeholder="Google Drive link"
+                      value={version.drive_url}
+                      onChange={(e) => updateDesignVersionDraft(version.id, { drive_url: e.target.value })}
+                    />
+                    <a
+                      href={version.drive_url || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-disabled={!version.drive_url}
+                      className={`inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-xs font-semibold lg:w-auto ${
+                        version.drive_url
+                          ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          : "pointer-events-none border-slate-100 bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open in Drive
+                    </a>
+                  </div>
+                  <select
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+                    value={version.status}
+                    onChange={(e) => updateDesignVersionDraft(version.id, { status: e.target.value as DesignVersionStatus })}
+                  >
+                    {DESIGN_VERSION_STATUSES.map((status) => (
+                      <option key={status}>{status}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none md:text-sm"
+                    placeholder="Revision notes"
+                    value={version.notes}
+                    onChange={(e) => updateDesignVersionDraft(version.id, { notes: e.target.value })}
+                  />
+                  <div className="flex justify-end">
+                    <SaveButton
+                      state={designVersionsSave.saveState}
+                      onClick={() => saveDesignVersions(designVersionDrafts)}
+                      mode="edit"
+                      className="w-full lg:w-auto"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 
@@ -619,6 +864,7 @@ export default function OrderDetailPage() {
       <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
         {TimelineSection}
         {NextActionSection}
+        {DesignVersionsSection}
         {PaymentStatusSection}
         {OrderDetailsSection}
         {CommunicationSection}
@@ -633,6 +879,7 @@ export default function OrderDetailPage() {
         </div>
         <div className="flex flex-col gap-6">
           {TimelineSection}
+          {DesignVersionsSection}
           {NextActionSection}
           {InternalNotesSection}
         </div>
@@ -640,6 +887,70 @@ export default function OrderDetailPage() {
           {CommunicationSection}
         </div>
       </div>
+
+      {/* Add design version modal */}
+      {isAddVersionOpen && (
+        <ModalShell
+          title="Add design version"
+          subtitle="Save a new design link and review status for this order."
+          onClose={closeAddVersionModal}
+          maxWidth="max-w-xl"
+          footer={
+            <div className="flex gap-3">
+              <SaveButton state={addDesignVersionSave.saveState} onClick={saveNewDesignVersion} mode="add" className="flex-1 py-3" />
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-gray-100 md:text-sm"
+                onClick={closeAddVersionModal}
+              >
+                Cancel
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Version name</label>
+              <input
+                type="text"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={newDesignVersion.name}
+                onChange={(e) => setNewDesignVersion({ ...newDesignVersion, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Google Drive link</label>
+              <input
+                type="url"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={newDesignVersion.drive_url}
+                onChange={(e) => setNewDesignVersion({ ...newDesignVersion, drive_url: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Status</label>
+              <select
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm"
+                value={newDesignVersion.status}
+                onChange={(e) => setNewDesignVersion({ ...newDesignVersion, status: e.target.value as DesignVersionStatus })}
+              >
+                {DESIGN_VERSION_STATUSES.map((status) => (
+                  <option key={status}>{status}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Revision notes</label>
+              <textarea
+                rows={4}
+                className="w-full resize-none rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={newDesignVersion.notes}
+                onChange={(e) => setNewDesignVersion({ ...newDesignVersion, notes: e.target.value })}
+              />
+            </div>
+          </div>
+        </ModalShell>
+      )}
 
       {/* Edit order modal (preserved exactly) */}
       {orderDraft && (
