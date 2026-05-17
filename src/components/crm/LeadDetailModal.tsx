@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -19,6 +18,17 @@ interface Props {
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
+const INDUSTRY_OPTIONS = [
+  "Amazon DSP",
+  "Dental",
+  "Gym / Fitness",
+  "Contractor",
+  "Restaurant",
+  "Retail",
+  "Corporate",
+  "Sports Team",
+  "Other",
+];
 const CONTACT_TYPES: CommunicationEntry["type"][] = [
   "Call", "Email", "Text", "Meeting", "In Person", "Other",
 ];
@@ -52,7 +62,7 @@ function InlineField({
   label: string;
   value: string;
   onSave: (v: string) => void;
-  type?: "text" | "select" | "date" | "address";
+  type?: "text" | "select" | "date";
   options?: string[];
 }) {
   const [editing, setEditing] = useState(false);
@@ -77,14 +87,6 @@ function InlineField({
           >
             {options.map((o) => <option key={o}>{o}</option>)}
           </select>
-        ) : type === "address" ? (
-          <AddressAutocomplete
-            autoFocus
-            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-64 sm:text-right md:text-sm"
-            value={draft}
-            onChange={setDraft}
-            onBlur={commit}
-          />
         ) : (
           <input
             autoFocus
@@ -245,15 +247,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
               <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
               <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
-              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} type="select" options={OWNERS} />
+              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} />
             </div>
           </div>
 
           <div className="rounded-[1.75rem] border border-slate-300/70 bg-gray-100/50 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Company profile</p>
             <div className="space-y-3">
-              <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} />
-              <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
+              <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
+              <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} />
               <InlineField label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
             </div>
           </div>

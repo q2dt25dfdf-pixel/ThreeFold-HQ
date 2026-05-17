@@ -133,7 +133,7 @@ const initialLeads: Lead[] = [
 export default function CRMPage() {
   const router = useRouter();
   const { data: leads, upsertItem, deleteItem, loading, error } = useSupabaseTable<Lead>("crm_leads", initialLeads);
-  const { data: clients, upsertItem: upsertClient } = useSupabaseTable<Client>("clients", []);
+  const { data: clients, upsertItem: upsertClient, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
@@ -223,10 +223,10 @@ export default function CRMPage() {
     ) ?? null;
   };
 
-  const syncClientFromLead = (lead: Lead) => {
+  const syncClientFromLead = async (lead: Lead) => {
     const match = findClientForLead(lead);
     if (!match) return;
-    upsertClient({
+    await upsertClient({
       ...match,
       name: lead.company || match.name,
       company: lead.company || match.company,
@@ -267,7 +267,8 @@ export default function CRMPage() {
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
-    syncClientFromLead(updated);
+    await syncClientFromLead(updated);
+    await reloadClients();
     setViewLead(updated);
   };
 
