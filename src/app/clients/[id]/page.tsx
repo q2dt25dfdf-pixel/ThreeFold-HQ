@@ -290,24 +290,24 @@ export default function ClientDetailPage() {
   }
 
   return (
-    <main className="min-h-screen text-xs md:text-sm">
+    <main className="min-h-screen min-w-0 overflow-x-hidden text-xs md:text-sm">
       <ErrorBanner message={clientsError || ordersError} />
-      <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-6 md:py-8 text-white">
-        <button type="button" onClick={() => router.push("/clients")} className="mb-6 flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-300 hover:text-white">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      <header className="-mx-4 overflow-hidden bg-slate-950 px-4 py-6 text-white sm:-mx-6 sm:px-6 md:py-8 lg:-mx-8 lg:px-8">
+        <button type="button" onClick={() => router.push("/clients")} className="mb-6 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
           Clients
         </button>
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+        <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">{client.industry}</span>
               <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">{client.status}</span>
             </div>
-            <h1 className="mt-4 text-2xl font-semibold tracking-tight md:text-5xl">{client.name}</h1>
-            <div className="mt-6 flex flex-wrap gap-4 text-xs md:text-sm text-slate-300">
-              <span className="flex items-center gap-2"><Building2 className="h-4 w-4" aria-hidden="true" />{client.contact || "No contact"}</span>
-              <span className="flex items-center gap-2"><Mail className="h-4 w-4" aria-hidden="true" />{client.email || "No email"}</span>
-              <span className="flex items-center gap-2"><Phone className="h-4 w-4" aria-hidden="true" />{client.phone || "No phone"}</span>
+            <h1 className="mt-4 break-words text-2xl font-semibold leading-tight tracking-tight md:text-5xl">{client.name}</h1>
+            <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
+              <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{client.contact || "No contact"}</span>
+              <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{client.email || "No email"}</span>
+              <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{client.phone || "No phone"}</span>
             </div>
           </div>
           <button
@@ -316,9 +316,9 @@ export default function ClientDetailPage() {
               contactSave.resetSaveState();
               setEditingHeader((value) => !value);
             }}
-            className="inline-flex min-h-11 items-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-white/10"
+            className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-3xl border border-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 sm:w-auto md:text-sm"
           >
-            <Edit2 className="h-4 w-4" aria-hidden="true" />
+            <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             Edit contact
           </button>
         </div>

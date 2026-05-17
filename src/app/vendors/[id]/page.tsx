@@ -149,38 +149,38 @@ export default function VendorDetailPage() {
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
-      <header className="-mx-4 sm:-mx-6 lg:-mx-8 bg-slate-950 px-4 sm:px-6 lg:px-8 py-5 md:py-6 text-white">
+      <header className="-mx-4 overflow-hidden bg-slate-950 px-4 py-5 text-white sm:-mx-6 sm:px-6 md:py-6 lg:-mx-8 lg:px-8">
         <button type="button" onClick={() => router.push("/vendors")} className="mb-4 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
           Vendors
         </button>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type}</span>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
             </div>
             <h1 className="mt-3 break-words text-2xl font-bold leading-tight tracking-tight text-white md:text-4xl">{vendor.name}</h1>
-            <p className="mt-2 flex items-center gap-2 text-xs text-slate-300 md:text-sm">
+            <p className="mt-2 flex min-w-0 items-center gap-2 break-words text-xs text-slate-300 md:text-sm">
               <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
               {vendor.contact || "No contact listed"}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center lg:shrink-0 lg:justify-end">
             <button
               type="button"
               onClick={openVendorEditor}
-              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 sm:w-auto md:text-sm"
             >
-              <Edit2 className="h-4 w-4" aria-hidden="true" />
+              <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
               Edit vendor
             </button>
             <button
               type="button"
               onClick={handleDeleteVendor}
-              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-rose-200 hover:bg-white/10 md:text-sm"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold text-rose-200 hover:bg-white/10 sm:w-auto md:text-sm"
             >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
               Delete
             </button>
           </div>
