@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -62,14 +63,20 @@ function InlineField({
   label: string;
   value: string;
   onSave: (v: string) => void;
-  type?: "text" | "select" | "date";
+  type?: "text" | "select" | "date" | "address";
   options?: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const draftRef = useRef(value);
+
+  const updateDraft = (next: string) => {
+    draftRef.current = next;
+    setDraft(next);
+  };
 
   const commit = () => {
-    onSave(draft);
+    onSave(draftRef.current);
     setEditing(false);
   };
 
@@ -82,18 +89,31 @@ function InlineField({
             autoFocus
             className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:text-right md:text-sm"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => updateDraft(e.target.value)}
             onBlur={commit}
           >
             {options.map((o) => <option key={o}>{o}</option>)}
           </select>
+        ) : type === "address" ? (
+          <AddressAutocomplete
+            autoFocus
+            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-64 sm:text-right md:text-sm"
+            value={draft}
+            onChange={updateDraft}
+            onSelect={(selected) => {
+              draftRef.current = selected;
+              onSave(selected);
+              setEditing(false);
+            }}
+            onBlur={commit}
+          />
         ) : (
           <input
             autoFocus
             type={type}
             className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-40 sm:text-right md:text-sm"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => updateDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => e.key === "Enter" && commit()}
           />
@@ -101,7 +121,7 @@ function InlineField({
       ) : (
         <button
           type="button"
-          onClick={() => { setDraft(value); setEditing(true); }}
+          onClick={() => { updateDraft(value); setEditing(true); }}
           className="group flex min-h-11 items-center gap-1.5 text-left text-sm font-semibold text-slate-950 hover:text-slate-600 sm:min-h-0 sm:text-right"
         >
           {value}
@@ -255,7 +275,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 mb-4">Company profile</p>
             <div className="space-y-3">
               <InlineField label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
-              <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} />
+              <InlineField label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
               <InlineField label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
             </div>
           </div>

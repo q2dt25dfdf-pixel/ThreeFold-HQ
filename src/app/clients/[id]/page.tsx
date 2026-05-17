@@ -30,7 +30,9 @@ type Client = {
   contact: string;
   email?: string;
   phone?: string;
+  owner?: string;
   address?: string;
+  website?: string;
   orders: number;
   notes: string;
   status: ClientStatus;
@@ -62,7 +64,15 @@ type ActivityEntry = {
 type CRMLead = {
   id: string;
   company: string;
+  contact: string;
   email: string;
+  phone: string;
+  owner: string;
+  companyProfile: {
+    industry: string;
+    address: string;
+    website: string;
+  };
   stage: string;
   status: string;
   notes: string;
@@ -77,7 +87,9 @@ const defaultClients: Client[] = [
     contact: "Ricky",
     email: "ricky@piranhaops.com",
     phone: "TBD",
+    owner: "Ricky",
     address: "Bay Area, CA",
+    website: "",
     orders: 1,
     notes:
       "First client. Station DSF7, Bay Area warehouse hub. Test order: POPS 2026 Collection — 4 designs, black oversized heavyweight tees. Hannah manages this DSP directly.",
@@ -100,6 +112,8 @@ function formatCurrency(amount: number | string) {
   return orderAmount(amount).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 }
 
+const normalizeMatchValue = (value: string | undefined) => (value ?? "").trim().toLowerCase();
+
 export default function ClientDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -108,7 +122,7 @@ export default function ClientDetailPage() {
   const { data: clients, upsertItem: upsertClient, loading: clientsLoading, error: clientsError } = useSupabaseTable<Client>("clients", defaultClients);
   const { data: orders, upsertItem: upsertOrder, loading: ordersLoading, error: ordersError, reload: reloadOrders } = useSupabaseTable<Order>("orders", []);
   const { data: activity, upsertItem: upsertActivity, loading: activityLoading } = useSupabaseTable<ActivityEntry>("client_activity", defaultActivity);
-  const { data: crmLeads } = useSupabaseTable<CRMLead>("crm_leads", []);
+  const { data: crmLeads, upsertItem: upsertLead } = useSupabaseTable<CRMLead>("crm_leads", []);
   const [editingHeader, setEditingHeader] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [clientDraft, setClientDraft] = useState<Client | null>(null);
@@ -149,15 +163,64 @@ export default function ClientDetailPage() {
     ? matchingLead.communicationHistory
     : [];
 
+  const findLeadForClient = (clientRecord: Client, previousClient?: Client | null) => {
+    const email = normalizeMatchValue(clientRecord.email);
+    const previousEmail = normalizeMatchValue(previousClient?.email);
+    const company = normalizeMatchValue(clientRecord.name);
+    const previousCompany = normalizeMatchValue(previousClient?.name);
+
+    if (email) {
+      const emailMatch = crmLeads.find((lead) => normalizeMatchValue(lead.email) === email);
+      if (emailMatch) return emailMatch;
+    }
+    if (previousEmail) {
+      const previousEmailMatch = crmLeads.find((lead) => normalizeMatchValue(lead.email) === previousEmail);
+      if (previousEmailMatch) return previousEmailMatch;
+    }
+
+    if (company) {
+      const companyMatch = crmLeads.find((lead) => normalizeMatchValue(lead.company) === company);
+      if (companyMatch) return companyMatch;
+    }
+    if (previousCompany) {
+      return crmLeads.find((lead) => normalizeMatchValue(lead.company) === previousCompany);
+    }
+
+    return undefined;
+  };
+
+  const syncClientProfileToLead = async (updatedClient: Client, previousClient?: Client | null) => {
+    const lead = findLeadForClient(updatedClient, previousClient);
+    if (!lead) return;
+
+    await upsertLead({
+      ...lead,
+      company: updatedClient.name,
+      contact: updatedClient.contact,
+      email: updatedClient.email ?? "",
+      phone: updatedClient.phone ?? "",
+      owner: updatedClient.owner ?? lead.owner,
+      companyProfile: {
+        ...lead.companyProfile,
+        industry: updatedClient.industry,
+        address: updatedClient.address ?? "",
+        website: updatedClient.website ?? "",
+      },
+    });
+  };
+
   const saveClient = (fields: Partial<Client>) => {
     if (!client) return;
-    upsertClient({ ...client, ...fields });
+    const updatedClient = { ...client, ...fields };
+    void upsertClient(updatedClient).then((response) => {
+      if (!response.error) void syncClientProfileToLead(updatedClient, client);
+    });
   };
 
   const openClientEditor = () => {
     if (!client) return;
     clientSave.resetSaveState();
-    setClientDraft({ ...client });
+    setClientDraft({ ...client, owner: client.owner ?? "" });
   };
 
   const saveClientDraft = async () => {
@@ -167,12 +230,21 @@ export default function ClientDetailPage() {
       return;
     }
     setClientFormError("");
-    await clientSave.runSave(() => upsertClient(clientDraft), () => { setClientDraft(null); setClientFormError(""); });
+    const previousClient = client;
+    await clientSave.runSave(async () => {
+      const response = await upsertClient(clientDraft);
+      if (!response.error) await syncClientProfileToLead(clientDraft, previousClient);
+      return response;
+    }, () => { setClientDraft(null); setClientFormError(""); });
   };
 
   const saveHeaderContact = async () => {
     if (!client) return;
-    await contactSave.runSave(() => upsertClient(client));
+    await contactSave.runSave(async () => {
+      const response = await upsertClient(client);
+      if (!response.error) await syncClientProfileToLead(client, client);
+      return response;
+    });
   };
 
   const addActivity = async () => {
@@ -327,7 +399,8 @@ export default function ClientDetailPage() {
               {[
                 { label: "Industry", value: client.industry },
                 { label: "Address", value: client.address ?? "Not set" },
-                { label: "Contact", value: client.contact || "Not set" },
+                { label: "Website", value: client.website || "Not set" },
+                { label: "Owner", value: client.owner || "Not set" },
                 { label: "Status", value: client.status },
                 { label: "Notes", value: client.notes || "No notes added yet." },
               ].map((field) => (
@@ -482,6 +555,8 @@ export default function ClientDetailPage() {
                 { label: "Name", key: "name" },
                 { label: "Industry", key: "industry" },
                 { label: "Address", key: "address" },
+                { label: "Website", key: "website" },
+                { label: "Owner", key: "owner" },
                 { label: "Contact", key: "contact" },
                 { label: "Email", key: "email" },
                 { label: "Phone", key: "phone" },

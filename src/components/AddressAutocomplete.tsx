@@ -13,10 +13,11 @@ type AddressAutocompleteProps = {
   className?: string;
   placeholder?: string;
   onBlur?: () => void;
+  onSelect?: (value: string) => void;
   autoFocus?: boolean;
 };
 
-export default function AddressAutocomplete({ value, onChange, className = "", placeholder, onBlur, autoFocus = false }: AddressAutocompleteProps) {
+export default function AddressAutocomplete({ value, onChange, className = "", placeholder, onBlur, onSelect, autoFocus = false }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [focused, setFocused] = useState(false);
   const touchOnSuggestion = useRef(false);
@@ -82,6 +83,7 @@ export default function AddressAutocomplete({ value, onChange, className = "", p
               onTouchCancel={() => { touchOnSuggestion.current = false; }}
               onClick={() => {
                 onChange(suggestion.display_name);
+                onSelect?.(suggestion.display_name);
                 setSuggestions([]);
                 setFocused(false);
                 touchOnSuggestion.current = false;

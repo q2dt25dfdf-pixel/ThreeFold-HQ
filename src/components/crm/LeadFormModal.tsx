@@ -131,7 +131,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       email: email.trim(),
       phone: phone.trim(),
       value,
-      owner: owner.trim() || "Unassigned",
+      owner: owner.trim(),
       stage,
       status,
       followUpDate: followUpDate || "TBD",

@@ -18,6 +18,9 @@ type Client = {
   contact: string;
   email: string;
   phone: string;
+  owner?: string;
+  address?: string;
+  website?: string;
   orders: number;
   notes: string;
   status: "Active" | "At Risk" | "Dormant" | "Lead";
@@ -41,6 +44,7 @@ type FollowUpTask = {
 const autoFollowUpTaskId = (leadId: string) => "crm-followup-" + leadId;
 const hasFollowUpDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
 const defaultFollowUpTaskNotes = "Auto-generated from CRM lead. Log interaction notes here after follow-up.";
+const normalizeMatchValue = (value: string | undefined) => (value ?? "").trim().toLowerCase();
 
 const initialLeads: Lead[] = [
   {
@@ -212,29 +216,53 @@ export default function CRMPage() {
     });
   };
 
-  const findClientForLead = (lead: Lead | null): Client | null => {
+  const findClientForLead = (lead: Lead | null, previousLead?: Lead | null): Client | null => {
     if (!lead) return null;
-    const email = lead.email?.trim().toLowerCase();
-    const company = lead.company?.trim().toLowerCase();
-    return clients.find((c) =>
-      c.id === `client-${lead.id}` ||
-      (email && c.email?.trim().toLowerCase() === email) ||
-      (company && c.name?.trim().toLowerCase() === company)
-    ) ?? null;
+    const email = normalizeMatchValue(lead.email);
+    const previousEmail = normalizeMatchValue(previousLead?.email);
+    const company = normalizeMatchValue(lead.company);
+    const previousCompany = normalizeMatchValue(previousLead?.company);
+
+    if (email) {
+      const emailMatch = clients.find((client) => normalizeMatchValue(client.email) === email);
+      if (emailMatch) return emailMatch;
+    }
+    if (previousEmail) {
+      const previousEmailMatch = clients.find((client) => normalizeMatchValue(client.email) === previousEmail);
+      if (previousEmailMatch) return previousEmailMatch;
+    }
+
+    if (company) {
+      const companyMatch = clients.find((client) => normalizeMatchValue(client.name || client.company) === company);
+      if (companyMatch) return companyMatch;
+    }
+    if (previousCompany) {
+      const previousCompanyMatch = clients.find((client) => normalizeMatchValue(client.name || client.company) === previousCompany);
+      if (previousCompanyMatch) return previousCompanyMatch;
+    }
+
+    return clients.find((client) => client.id === `client-${lead.id}`) ?? null;
   };
 
-  const syncClientFromLead = async (lead: Lead) => {
-    const match = findClientForLead(lead);
-    if (!match) return;
+  const syncClientFromLead = async (lead: Lead, previousLead?: Lead | null) => {
+    const match = findClientForLead(lead, previousLead);
+    const clientId = match?.id ?? `client-${lead.id}`;
+
     await upsertClient({
       ...match,
-      name: lead.company || match.name,
-      company: lead.company || match.company,
-      contact: lead.contact || match.contact,
-      email: lead.email || match.email,
-      phone: lead.phone || match.phone,
-      notes: lead.notes || match.notes,
-      industry: lead.companyProfile?.industry || match.industry,
+      id: clientId,
+      name: lead.company,
+      company: lead.company,
+      contact: lead.contact,
+      email: lead.email,
+      phone: lead.phone,
+      owner: lead.owner,
+      industry: lead.companyProfile.industry,
+      address: lead.companyProfile.address,
+      website: lead.companyProfile.website,
+      orders: match?.orders ?? 0,
+      notes: match?.notes ?? `Added from CRM. Initial inquiry: ${lead.notes}`,
+      status: match?.status ?? "Lead",
     });
   };
 
@@ -245,19 +273,7 @@ export default function CRMPage() {
     const leadResponse = await upsertItem(lead);
     if (leadResponse.error) return leadResponse;
 
-    const clientResponse = await upsertClient({
-      id: `client-${lead.id}`,
-      name: lead.company,
-      company: lead.company,
-      contact: lead.contact,
-      industry: lead.companyProfile.industry,
-      email: lead.email,
-      phone: lead.phone,
-      orders: 0,
-      notes: `Added from CRM. Initial inquiry: ${lead.notes}`,
-      status: "Lead",
-    });
-    if (clientResponse.error) return clientResponse;
+    await syncClientFromLead(lead);
 
     syncFollowUpTask(lead);
     setToastMessage("Lead added to pipeline and client account created.");
@@ -267,7 +283,7 @@ export default function CRMPage() {
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
-    await syncClientFromLead(updated);
+    await syncClientFromLead(updated, viewLead);
     await reloadClients();
     setViewLead(updated);
   };
