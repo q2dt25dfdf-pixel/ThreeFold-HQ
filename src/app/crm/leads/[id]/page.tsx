@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Globe, Building2, User, Package, Palette, MapPin } from 'lucide-react'
+import { ArrowLeft, Globe, Building2, User, Package, Palette } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { LoadingState } from '@/components/AppState'
 import type { Lead } from '@/components/crm/types'
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 md:p-6">
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 md:p-6 lg:p-7">
       <div className="mb-4 flex items-center gap-2">
         <span className="text-slate-400">{icon}</span>
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">{title}</p>
@@ -24,7 +24,7 @@ function Field({ label, value }: { label: string; value?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="text-sm text-slate-900">{value}</p>
+      <p className="text-sm text-slate-900 lg:text-base">{value}</p>
     </div>
   )
 }
@@ -58,8 +58,8 @@ export default function LeadQuestionnairePage() {
   const d = lead as Lead & Record<string, string>
 
   return (
-    <div className="min-h-screen bg-zinc-100 px-4 pb-16 pt-6 md:px-8">
-      <div className="mx-auto max-w-3xl">
+    <div className="min-h-screen bg-zinc-100 px-4 pb-16 pt-6 md:px-8 lg:px-12">
+      <div className="mx-auto max-w-6xl">
 
         <button
           onClick={() => router.push('/crm')}
@@ -69,16 +69,16 @@ export default function LeadQuestionnairePage() {
           Back to CRM
         </button>
 
-        <div className="mb-6 rounded-3xl bg-slate-950 px-6 py-5 text-white">
+        <div className="mb-6 rounded-3xl bg-slate-950 px-6 py-5 text-white lg:px-8 lg:py-7">
           <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-400">Website Questionnaire</p>
-          <h1 className="text-xl font-bold">{lead.company}</h1>
-          <p className="mt-1 text-sm text-slate-400">{lead.contact} · {lead.email} · {lead.phone}</p>
+          <h1 className="text-xl font-bold lg:text-2xl">{lead.company}</h1>
+          <p className="mt-1 text-sm text-slate-400 lg:text-base">{lead.contact} · {lead.email} · {lead.phone}</p>
           {d.created_at && (
             <p className="mt-2 text-xs text-slate-500">Submitted {new Date(d.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
           )}
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
           <Section icon={<Building2 size={15} />} title="01 — About Your Company">
             <Field label="Company Name" value={lead.company} />
@@ -124,15 +124,16 @@ export default function LeadQuestionnairePage() {
             <Field label="Additional Notes" value={lead.notes} />
           </Section>
 
-          <Section icon={<Globe size={15} />} title="Lead Info">
-            <Field label="Source" value={d.source} />
-            <Divider />
-            <Field label="Stage" value={lead.stage} />
-            <Divider />
-            <Field label="Status" value={lead.status} />
-            <Divider />
-            <Field label="Assigned To" value={lead.owner || 'Unassigned'} />
-          </Section>
+          <div className="lg:col-span-2">
+            <Section icon={<Globe size={15} />} title="Lead Info">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <Field label="Source" value={d.source} />
+                <Field label="Stage" value={lead.stage} />
+                <Field label="Status" value={lead.status} />
+                <Field label="Assigned To" value={lead.owner || 'Unassigned'} />
+              </div>
+            </Section>
+          </div>
 
         </div>
       </div>

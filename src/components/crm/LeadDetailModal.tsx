@@ -62,14 +62,14 @@ function InlineField({
   options,
 }: {
   label: string;
-  value: string;
+  value?: string;
   onSave: (v: string) => void;
   type?: "text" | "select" | "date" | "address";
   options?: string[];
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const draftRef = useRef(value);
+  const [draft, setDraft] = useState(value ?? "");
+  const draftRef = useRef(value ?? "");
 
   const updateDraft = (next: string) => {
     draftRef.current = next;
@@ -122,10 +122,10 @@ function InlineField({
       ) : (
         <button
           type="button"
-          onClick={() => { updateDraft(value); setEditing(true); }}
-          className="group flex min-h-11 items-center gap-1.5 text-left text-sm font-semibold text-slate-950 hover:text-slate-600 sm:min-h-0 sm:text-right"
+          onClick={() => { updateDraft(value ?? ""); setEditing(true); }}
+          className="group flex min-h-11 items-center gap-1.5 text-left text-sm font-semibold text-slate-950 hover:text-slate-600 sm:text-right"
         >
-          {value}
+          {value || <span className="font-normal text-slate-400 text-xs">Add…</span>}
           <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity" aria-hidden="true">
             <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
@@ -286,7 +286,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
               <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
               <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
-              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} />
+              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} type="select" options={OWNERS} />
             </div>
           </div>
 
