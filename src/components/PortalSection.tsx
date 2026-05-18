@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { ClipboardCopy, ExternalLink, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
-export default function PortalSection({ orderId }) {
-  const [token, setToken] = useState(null)
+export default function PortalSection({ orderId }: { orderId: string }) {
+  const [token, setToken] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [portalUrl, setPortalUrl] = useState('')
+  const [portalUrl, setPortalUrl] = useState<string>('')
 
   useEffect(() => {
     if (token) setPortalUrl(window.location.origin + '/portal/' + token)
