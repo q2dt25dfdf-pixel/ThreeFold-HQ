@@ -98,7 +98,7 @@ function InlineField({
         ) : type === "address" ? (
           <AddressAutocomplete
             autoFocus
-            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-64 sm:text-right md:text-sm"
+            className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none md:text-sm"
             value={draft}
             onChange={updateDraft}
             onSelect={(selected) => {
@@ -286,7 +286,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
               <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
               <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
-              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} type="select" options={OWNERS} />
+              <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} />
             </div>
           </div>
 
