@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
 export async function GET(
-  request,
-  { params }
+  _request: Request,
+  { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
 
