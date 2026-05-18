@@ -29,6 +29,34 @@ interface PortalData {
   clientNotes: string
 }
 
+
+function extractDriveId(url: string): string | null {
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)
+  return match ? match[1] : null
+}
+
+function DriveEmbed({ url }: { url: string }) {
+  const fileId = extractDriveId(url)
+  if (!fileId) return (
+    <a href={url} target="_blank" rel="noopener noreferrer" style={s.viewLink}>VIEW DESIGN →</a>
+  )
+  const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`
+  const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`
+  return (
+    <div style={{ marginTop: '12px' }}>
+      <img
+        src={thumbUrl}
+        alt="Design preview"
+        style={{ width: '100%', borderRadius: '2px', marginBottom: '10px', border: '1px solid #E5DDD2' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+      />
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' as const }}>
+        <a href={embedUrl} target="_blank" rel="noopener noreferrer" style={s.viewLink}>VIEW FULL DESIGN →</a>
+      </div>
+    </div>
+  )
+}
+
 const PHASES = ['Design Phase','Client Review','Design Approved','Production','Quality Check','Delivery']
 
 export default function PortalPage() {
@@ -173,9 +201,7 @@ export default function PortalPage() {
                   {v.status && <div style={s.designStatusLabel}>{v.status.toUpperCase()}</div>}
                   {v.notes && <div style={s.designNotes}>{v.notes}</div>}
                   {v.file_url && (
-                    <a href={v.file_url} target="_blank" rel="noopener noreferrer" style={s.viewLink}>
-                      VIEW DESIGN →
-                    </a>
+                    <DriveEmbed url={String(v.file_url)} />
                   )}
                 </div>
               ))}

@@ -26,9 +26,9 @@ export async function GET(
 
   const clientSafeData = {
     orderId: order.id,
-    clientName: d.client_name || d.client || d.company_name || '',
-    orderName: d.order_name || d.orderName || d.name || '',
-    collectionName: d.collection_name || d.orderName || '',
+    clientName: d.client || d.client_name || d.company_name || '',
+    orderName: d.orderName || d.order_name || d.name || '',
+    collectionName: d.collection_name || d.orderName || d.order_name || '',
     status: d.status || d.current_status || '',
     currentPhase: d.current_phase || d.phase || d.status || '',
     estimatedDelivery: d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
@@ -38,7 +38,7 @@ export async function GET(
     depositPaid: d.deposit_paid || '',
     balanceDue: d.balance_due || '',
     stripeInvoiceUrl: d.stripe_invoice_url || '',
-    designVersions: (d.design_versions || []).filter((v: Record<string, unknown>) => v.visible_to_client !== false),
+    designVersions: (d.design_versions || []).filter((v: Record<string, unknown>) => v.visible_to_client !== false).map((v: Record<string, unknown>) => ({ ...v, file_url: v.drive_url || v.file_url || '' })),
     clientNotes: d.client_notes || '',
   }
 
