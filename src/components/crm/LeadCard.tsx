@@ -65,6 +65,11 @@ export default function LeadCard({
             <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${stageBadgeStyles[lead.stage]}`}>
               {lead.stage}
             </span>
+            {(lead as Lead & { source?: string }).source === "Website" && (
+              <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                Web
+              </span>
+            )}
           </div>
           <div className="text-xs text-slate-600">{lead.contact}</div>
         </div>
