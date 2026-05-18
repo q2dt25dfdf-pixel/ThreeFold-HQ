@@ -70,12 +70,9 @@ type CommButton = {
 };
 
 const TIMELINE_STAGES = [
-  "Inquiry",
-  "Quote Sent",
-  "Deposit Paid",
   "Design Phase",
   "Client Review",
-  "Approved",
+  "Design Approved",
   "Production",
   "Quality Check",
   "Ready",
@@ -85,11 +82,9 @@ const TIMELINE_STAGES = [
 // All status values usable in the edit modal dropdown
 const ALL_STATUS_OPTIONS = [
   "Draft",
-  "Quote Sent",
-  "Deposit Paid",
   "Design Phase",
   "Client Review",
-  "Approved",
+  "Design Approved",
   "In Production",
   "Quality Control",
   "Ready",
@@ -122,12 +117,9 @@ function statusToStageIndex(status: string): number {
 
 function stageToStatus(stage: string): string {
   const map: Record<string, string> = {
-    "Inquiry": "Draft",
-    "Quote Sent": "Quote Sent",
-    "Deposit Paid": "Deposit Paid",
     "Design Phase": "Design Phase",
     "Client Review": "Client Review",
-    "Approved": "Approved",
+    "Design Approved": "Design Approved",
     "Production": "In Production",
     "Quality Check": "Quality Control",
     "Ready": "Ready",
