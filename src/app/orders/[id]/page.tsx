@@ -99,18 +99,15 @@ const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
 ];
 
 function statusToStageIndex(status: string): number {
-  const s = status.trim().toLowerCase();
+  const s = status?.trim().toLowerCase();
   const map: Record<string, number> = {
-    draft: 0, inquiry: 0,
-    "quote sent": 1,
-    "deposit paid": 2,
-    "design phase": 3,
-    "client review": 4,
-    approved: 5,
-    "in production": 6, production: 6,
-    "quality control": 7, "quality check": 7,
-    ready: 8,
-    fulfilled: 9, delivered: 9,
+    "design phase": 0,
+    "client review": 1,
+    "design approved": 2,
+    "production": 3,
+    "quality check": 4,
+    "ready": 5,
+    "delivered": 6,
   };
   return map[s] ?? 0;
 }
