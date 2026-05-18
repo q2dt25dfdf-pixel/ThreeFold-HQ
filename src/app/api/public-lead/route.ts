@@ -71,6 +71,7 @@ export async function POST(request: Request) {
       style: body.style?.trim() || '',
       colors: body.colors?.trim() || '',
       notes: body.notes?.trim() || '',
+      value: '0',
       source: 'Website',
       status: 'New Lead',
       owner: '',
