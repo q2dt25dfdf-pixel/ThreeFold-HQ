@@ -373,7 +373,7 @@ export default function OrderDetailPage() {
   const handleStageClick = async (stage: string) => {
     if (!order || stageSaving) return;
     setStageSaving(true);
-    await upsertItem({ ...order, status: stageToStatus(stage) });
+    await upsertItem({ ...order, status: stage });
     setStageSaving(false);
   };
 
