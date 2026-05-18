@@ -16,6 +16,7 @@ interface Props {
   onDelete: (lead: Lead) => void;
   matchingClientId?: string | null;
   onViewClient?: () => void;
+  onQuestionnaire?: () => void;
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
@@ -216,6 +217,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
       >
         {clientBtnLabel}
       </button>
+      {current.source === "Website" && onQuestionnaire && (
+        <button
+          type="button"
+          onClick={onQuestionnaire}
+          className="flex min-h-11 w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition lg:hidden"
+        >
+          Questionnaire
+        </button>
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <button
@@ -235,6 +245,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           >
             {clientBtnLabel}
           </button>
+          {current.source === "Website" && onQuestionnaire && (
+            <button
+              type="button"
+              onClick={onQuestionnaire}
+              className="hidden min-h-11 items-center rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition lg:inline-flex"
+            >
+              Questionnaire
+            </button>
+          )}
           <SaveButton state={saveState} onClick={handleSaveChanges} className="rounded-2xl py-2 text-sm" />
           <button
             type="button"

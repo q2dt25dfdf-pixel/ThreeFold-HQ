@@ -37,4 +37,18 @@ export type Lead = {
   followUpDate: string;
   status: LeadStatus;
   communicationHistory: CommunicationEntry[];
+  source?: string;
+  // Website questionnaire fields
+  contact_title?: string;
+  contact_method?: string;
+  company_description?: string;
+  quantity?: string;
+  target_date?: string;
+  budget?: string;
+  apparel_types?: string;
+  audience?: string;
+  station_code?: string;
+  meaning?: string;
+  style?: string;
+  colors?: string;
 };

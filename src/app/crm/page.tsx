@@ -433,6 +433,9 @@ export default function CRMPage() {
           const match = viewLead ? findClientForLead(viewLead) : null;
           if (match) { setViewLead(null); router.push(`/clients/${match.id}`); }
         }}
+        onQuestionnaire={() => {
+          if (viewLead) { setViewLead(null); router.push(`/crm/leads/${viewLead.id}`); }
+        }}
       />
 
       {toastMessage && (

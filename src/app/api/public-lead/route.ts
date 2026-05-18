@@ -33,19 +33,14 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
 
-    // Honeypot check
     if (body['bot-field']) {
       return NextResponse.json({ success: true }, { headers })
     }
 
-    // Required field validation
     const required = ['company_name', 'company_type', 'contact_name', 'contact_email', 'contact_phone', 'meaning']
     const missing = required.filter(f => !body[f]?.toString().trim())
     if (missing.length > 0) {
-      return NextResponse.json(
-        { error: 'Missing required fields', fields: missing },
-        { status: 400, headers }
-      )
+      return NextResponse.json({ error: 'Missing required fields', fields: missing }, { status: 400, headers })
     }
 
     const id = 'lead-' + randomUUID()
@@ -53,14 +48,28 @@ export async function POST(request: Request) {
 
     const leadData = {
       id,
-      company_name: body.company_name?.trim() || '',
-      company_type: body.company_type?.trim() || '',
-      company_description: body.company_description?.trim() || '',
-      contact_name: body.contact_name?.trim() || '',
+      // Core Lead type fields — these power the CRM kanban display
+      company: body.company_name?.trim() || '',
+      contact: body.contact_name?.trim() || '',
+      email: body.contact_email?.trim() || '',
+      phone: body.contact_phone?.trim() || '',
+      value: '0',
+      notes: body.notes?.trim() || '',
+      owner: '',
+      stage: 'New Lead',
+      status: 'Open',
+      followUpDate: '',
+      communicationHistory: [],
+      companyProfile: {
+        industry: body.company_type?.trim() || '',
+        address: '',
+        website: '',
+      },
+      // Source and questionnaire fields
+      source: 'Website',
       contact_title: body.contact_title?.trim() || '',
-      contact_phone: body.contact_phone?.trim() || '',
-      contact_email: body.contact_email?.trim() || '',
       contact_method: body.contact_method?.trim() || '',
+      company_description: body.company_description?.trim() || '',
       quantity: body.quantity?.trim() || '',
       target_date: body.target_date?.trim() || '',
       budget: body.budget?.trim() || '',
@@ -70,11 +79,6 @@ export async function POST(request: Request) {
       meaning: body.meaning?.trim() || '',
       style: body.style?.trim() || '',
       colors: body.colors?.trim() || '',
-      notes: body.notes?.trim() || '',
-      value: '0',
-      source: 'Website',
-      status: 'New Lead',
-      owner: '',
       created_at: now,
       updated_at: now,
     }
