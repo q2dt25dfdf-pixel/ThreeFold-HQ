@@ -219,13 +219,9 @@ export default function PortalPage() {
         <div style={s.rule} />
         <div className="p-footer-row">
           <div>
-            <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
-            <div style={s.footerTagline}>Made by three, worn by all.</div>
-            <div style={{ marginTop: '32px' }}>
-              <div style={s.eyebrow}>QUESTIONS?</div>
-              <div style={s.bodyText}>Reach out to your Threefold representative directly.</div>
-              <a href="mailto:hello@threefoldsupply.co" style={s.btnOutline}>CONTACT THREEFOLD →</a>
-            </div>
+            <div style={s.eyebrow}>QUESTIONS?</div>
+            <div style={s.bodyText}>Reach out to your Threefold representative directly.</div>
+            <a href="mailto:hello@threefoldsupply.co" style={s.btnOutline}>CONTACT THREEFOLD →</a>
           </div>
           <div />
         </div>
