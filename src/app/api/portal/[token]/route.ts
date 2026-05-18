@@ -38,7 +38,7 @@ export async function GET(
     depositPaid: d.deposit_paid || '',
     balanceDue: d.balance_due || '',
     stripeInvoiceUrl: d.stripe_invoice_url || '',
-    designVersions: (d.design_versions || []).filter((v) => v.visible_to_client !== false),
+    designVersions: (d.design_versions || []).filter((v: Record<string, unknown>) => v.visible_to_client !== false),
     clientNotes: d.client_notes || '',
   }
 
