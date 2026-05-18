@@ -870,11 +870,11 @@ export default function OrderDetailPage() {
         <div className="flex flex-col gap-6">
           {TimelineSection}
           {DesignVersionsSection}
-          {NextActionSection}
-          {InternalNotesSection}
         </div>
         <div className="flex flex-col gap-6">
           {CommunicationSection}
+          {NextActionSection}
+          {InternalNotesSection}
         </div>
       </div>
 
