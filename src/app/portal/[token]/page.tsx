@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { BUSINESS_EMAIL } from '@/lib/config'
 
 function extractDriveId(url: string): string | null {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)
@@ -221,7 +222,7 @@ export default function PortalPage() {
           <div>
             <div style={s.eyebrow}>QUESTIONS?</div>
             <div style={s.bodyText}>Reach out to your Threefold representative directly.</div>
-            <a href="mailto:hello@threefoldsupply.co" style={s.btnOutline}>CONTACT THREEFOLD →</a>
+            <a href={`mailto:${BUSINESS_EMAIL}`} style={s.btnOutline}>CONTACT THREEFOLD →</a>
           </div>
           <div />
         </div>
