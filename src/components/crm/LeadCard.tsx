@@ -16,8 +16,6 @@ const stageBadgeStyles: Record<Lead["stage"], string> = {
   Contacted: "bg-amber-100 text-amber-800",
   "Quote Sent": "bg-blue-100 text-blue-800",
   Approved: "bg-emerald-100 text-emerald-700",
-  "In Production": "bg-blue-100 text-blue-800",
-  Completed: "bg-emerald-100 text-emerald-700",
 };
 
 const statusBadgeStyles: Record<Lead["status"], string> = {

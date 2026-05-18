@@ -125,7 +125,7 @@ const initialLeads: Lead[] = [
     value: 12500,
     notes: "Project completed successfully. Preparing client handoff, documentation, and follow-up items.",
     owner: "Jordan",
-    stage: "In Production",
+    stage: "Approved",
     followUpDate: "2026-05-20",
     status: "Won",
     communicationHistory: [
