@@ -72,7 +72,7 @@ export default function PortalPage() {
   }, [])
 
   if (loading) return (
-    <div style={s.page}><div style={s.mobileWrap}>
+    <div style={s.page}><div style={s.singleCol}>
       <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
       <div style={s.rule} />
       <div style={s.mutedText}>Loading your order portal...</div>
@@ -80,7 +80,7 @@ export default function PortalPage() {
   )
 
   if (error || !data) return (
-    <div style={s.page}><div style={s.mobileWrap}>
+    <div style={s.page}><div style={s.singleCol}>
       <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
       <div style={s.tagline}>Made by three, worn by all.</div>
       <div style={s.rule} />
@@ -100,9 +100,11 @@ export default function PortalPage() {
       <style>{`
         .p-outer { max-width: 680px; margin: 0 auto; padding: 64px 32px 96px; }
         .p-grid { display: block; }
+        .p-footer-row { display: block; }
         @media (min-width: 1024px) {
           .p-outer { max-width: 1200px; padding: 64px 64px 96px; }
           .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
+          .p-footer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
         }
       `}</style>
 
@@ -117,13 +119,17 @@ export default function PortalPage() {
 
         <div className="p-grid">
 
+          {/* LEFT — information column */}
           <div>
+
             <div style={s.section}>
               <div style={s.eyebrow}>ORDER PORTAL</div>
               <div style={s.headline}>{(data.clientName || 'Your Order').toUpperCase()}</div>
               <div style={s.subheadline}>{data.collectionName || data.orderName}</div>
             </div>
+
             <div style={s.rule} />
+
             <div style={s.section}>
               <div style={s.eyebrow}>CURRENT STATUS</div>
               <div style={s.statusRow}>
@@ -131,7 +137,9 @@ export default function PortalPage() {
                 {data.estimatedDelivery && <span style={s.deliveryText}>Est. Delivery — {data.estimatedDelivery}</span>}
               </div>
             </div>
+
             <div style={s.rule} />
+
             <div style={s.section}>
               <div style={s.eyebrow}>ORDER TIMELINE</div>
               <div style={s.timeline}>
@@ -152,9 +160,9 @@ export default function PortalPage() {
                 })}
               </div>
             </div>
-          </div>
 
-          <div>
+            <div style={s.rule} />
+
             <div style={s.section}>
               <div style={s.eyebrow}>ORDER DETAILS</div>
               <div style={s.detailList}>
@@ -176,8 +184,12 @@ export default function PortalPage() {
               </div>
             </>)}
 
-            {data.designVersions?.length > 0 && (<>
-              <div style={s.rule} />
+          </div>
+
+          {/* RIGHT — visual column */}
+          <div>
+
+            {data.designVersions?.length > 0 && (
               <div style={s.section}>
                 <div style={s.eyebrow}>APPROVED DESIGNS</div>
                 {data.designVersions.map((v, i) => (
@@ -189,7 +201,7 @@ export default function PortalPage() {
                   </div>
                 ))}
               </div>
-            </>)}
+            )}
 
             {data.clientNotes && (<>
               <div style={s.rule} />
@@ -199,20 +211,23 @@ export default function PortalPage() {
               </div>
             </>)}
 
-            <div style={s.rule} />
-            <div style={s.section}>
+          </div>
+
+        </div>
+
+        {/* Footer row — branding + questions on left, empty right */}
+        <div style={s.rule} />
+        <div className="p-footer-row">
+          <div>
+            <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
+            <div style={s.footerTagline}>Made by three, worn by all.</div>
+            <div style={{ marginTop: '32px' }}>
               <div style={s.eyebrow}>QUESTIONS?</div>
               <div style={s.bodyText}>Reach out to your Threefold representative directly.</div>
               <a href="mailto:hello@threefoldsupply.co" style={s.btnOutline}>CONTACT THREEFOLD →</a>
             </div>
           </div>
-
-        </div>
-
-        <div style={s.rule} />
-        <div style={s.footer}>
-          <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
-          <div style={s.footerTagline}>Made by three, worn by all.</div>
+          <div />
         </div>
 
       </div>
@@ -222,7 +237,7 @@ export default function PortalPage() {
 
 const s: Record<string, React.CSSProperties> = {
   page: { backgroundColor: '#F7F3EC', minHeight: '100vh', fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif', color: '#0a0a0a' },
-  mobileWrap: { maxWidth: '660px', margin: '0 auto', padding: '64px 32px 96px' },
+  singleCol: { maxWidth: '660px', margin: '0 auto', padding: '64px 32px 96px' },
   headerBlock: { marginBottom: '8px' },
   logo: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.22em', color: '#0a0a0a', marginBottom: '4px' },
   tagline: { fontSize: '11px', letterSpacing: '0.08em', color: '#999' },
@@ -253,7 +268,6 @@ const s: Record<string, React.CSSProperties> = {
   notesBlock: { fontSize: '14px', color: '#444', lineHeight: 1.75, borderLeft: '2px solid #C49A2B', paddingLeft: '16px' },
   bodyText: { fontSize: '13px', color: '#666', lineHeight: 1.7, marginBottom: '4px' },
   mutedText: { fontSize: '12px', color: '#999', letterSpacing: '0.05em', marginTop: '16px' },
-  footer: { paddingTop: '8px' },
   footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: '#aaa', marginBottom: '4px' },
   footerTagline: { fontSize: '10px', color: '#bbb', letterSpacing: '0.06em' },
 }
