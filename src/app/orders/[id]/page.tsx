@@ -15,6 +15,7 @@ import {
   recordName,
   SmartSearchInput,
 } from "@/components/orders/OrderFormShared";
+import PortalSection from "@/components/PortalSection";
 
 type Order = {
   id: string;
@@ -940,6 +941,8 @@ export default function OrderDetailPage() {
           </div>
         </ModalShell>
       )}
+
+      {order && <PortalSection orderId={params.id} />}
 
       {/* Edit order modal (preserved exactly) */}
       {orderDraft && (
