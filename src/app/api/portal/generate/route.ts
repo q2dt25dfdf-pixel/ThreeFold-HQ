@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { supabase } from '@/lib/supabase'
 
-export async function POST(request) {
+export async function POST(request: NextRequest) {
   try {
     const { orderId } = await request.json()
     if (!orderId) return NextResponse.json({ error: 'Order ID required' }, { status: 400 })
