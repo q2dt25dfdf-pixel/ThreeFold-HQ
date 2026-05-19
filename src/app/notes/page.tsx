@@ -1,57 +1,31 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ImageIcon, Plus, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
-import { getSignedUrl } from "@/lib/getSignedUrl";
-import { supabase } from "@/lib/supabase";
 
 type Note = {
   id: string;
   title: string;
   body: string;
-  image_path?: string;
   created_at: string;
   updated_at: string;
 };
 
-function NoteImage({ path }: { path: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getSignedUrl(path).then((u) => { if (!cancelled) setUrl(u); });
-    return () => { cancelled = true; };
-  }, [path]);
-
-  if (!url) return <div className="h-40 w-full animate-pulse rounded-2xl bg-slate-100" />;
-  return <img src={url} alt="" className="h-40 w-full rounded-2xl object-cover" />;
-}
-
 function NoteFormFields({
   title,
   body,
-  imageFile,
-  imagePath,
   onTitleChange,
   onBodyChange,
-  onImageChange,
-  onImageRemove,
 }: {
   title: string;
   body: string;
-  imageFile: File | null;
-  imagePath?: string;
   onTitleChange: (v: string) => void;
   onBodyChange: (v: string) => void;
-  onImageChange: (f: File) => void;
-  onImageRemove: () => void;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-
   return (
     <div className="space-y-4">
       <div>
@@ -74,55 +48,8 @@ function NoteFormFields({
           onChange={(e) => onBodyChange(e.target.value)}
         />
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Image (optional)</label>
-        {(imageFile || imagePath) ? (
-          <div className="relative">
-            {imageFile ? (
-              <img src={URL.createObjectURL(imageFile)} alt="" className="h-40 w-full rounded-2xl object-cover" />
-            ) : imagePath ? (
-              <NoteImage path={imagePath} />
-            ) : null}
-            <button
-              type="button"
-              onClick={onImageRemove}
-              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow hover:bg-white"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 py-6 text-xs text-slate-500 hover:border-slate-400 hover:bg-slate-50 md:text-sm"
-          >
-            <ImageIcon className="h-4 w-4" aria-hidden="true" />
-            Click to attach image
-          </button>
-        )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/svg+xml"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onImageChange(file);
-            e.target.value = "";
-          }}
-        />
-      </div>
     </div>
   );
-}
-
-async function uploadNoteImage(noteId: string, file: File): Promise<string | null> {
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const path = `notes/${noteId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from("intake-files").upload(path, file, { upsert: true });
-  if (error) return null;
-  return path;
 }
 
 export default function NotesPage() {
@@ -135,18 +62,13 @@ export default function NotesPage() {
 
   const [addTitle, setAddTitle] = useState("");
   const [addBody, setAddBody] = useState("");
-  const [addImageFile, setAddImageFile] = useState<File | null>(null);
 
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
-  const [editImageFile, setEditImageFile] = useState<File | null>(null);
-  const [editImagePath, setEditImagePath] = useState<string | undefined>(undefined);
-  const [editImageRemoved, setEditImageRemoved] = useState(false);
 
   const resetAdd = () => {
     setAddTitle("");
     setAddBody("");
-    setAddImageFile(null);
     setFormError("");
   };
 
@@ -154,9 +76,6 @@ export default function NotesPage() {
     setEditNote(note);
     setEditTitle(note.title);
     setEditBody(note.body);
-    setEditImagePath(note.image_path);
-    setEditImageFile(null);
-    setEditImageRemoved(false);
     setFormError("");
     editSave.resetSaveState();
   };
@@ -164,30 +83,21 @@ export default function NotesPage() {
   const handleAdd = async () => {
     if (!addTitle.trim()) { setFormError("Title is required."); return; }
     setFormError("");
-    const id = `note-${Date.now()}`;
     const now = new Date().toISOString();
-    await addSave.runSave(async () => {
-      let image_path: string | undefined;
-      if (addImageFile) {
-        const uploaded = await uploadNoteImage(id, addImageFile);
-        if (uploaded) image_path = uploaded;
-      }
-      return upsertItem({ id, title: addTitle, body: addBody, image_path, created_at: now, updated_at: now });
-    }, () => { setShowAdd(false); resetAdd(); });
+    await addSave.runSave(
+      () => upsertItem({ id: `note-${Date.now()}`, title: addTitle, body: addBody, created_at: now, updated_at: now }),
+      () => { setShowAdd(false); resetAdd(); },
+    );
   };
 
   const handleSaveEdit = async () => {
     if (!editNote) return;
     if (!editTitle.trim()) { setFormError("Title is required."); return; }
     setFormError("");
-    await editSave.runSave(async () => {
-      let image_path = editImageRemoved ? undefined : editImagePath;
-      if (editImageFile) {
-        const uploaded = await uploadNoteImage(editNote.id, editImageFile);
-        if (uploaded) image_path = uploaded;
-      }
-      return upsertItem({ ...editNote, title: editTitle, body: editBody, image_path, updated_at: new Date().toISOString() });
-    }, () => { setEditNote(null); setFormError(""); });
+    await editSave.runSave(
+      () => upsertItem({ ...editNote, title: editTitle, body: editBody, updated_at: new Date().toISOString() }),
+      () => { setEditNote(null); setFormError(""); },
+    );
   };
 
   const handleDelete = async (id: string) => {
@@ -256,11 +166,6 @@ export default function NotesPage() {
                 if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEdit(note); }
               }}
             >
-              {note.image_path && (
-                <div className="mb-3">
-                  <NoteImage path={note.image_path} />
-                </div>
-              )}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="text-sm font-semibold text-slate-950">{note.title}</h2>
                 <button
@@ -284,11 +189,8 @@ export default function NotesPage() {
           <NoteFormFields
             title={addTitle}
             body={addBody}
-            imageFile={addImageFile}
             onTitleChange={(v) => { setAddTitle(v); if (formError) setFormError(""); }}
             onBodyChange={setAddBody}
-            onImageChange={setAddImageFile}
-            onImageRemove={() => setAddImageFile(null)}
           />
         </ModalShell>
       )}
@@ -298,12 +200,8 @@ export default function NotesPage() {
           <NoteFormFields
             title={editTitle}
             body={editBody}
-            imageFile={editImageFile}
-            imagePath={editImageRemoved ? undefined : editImagePath}
             onTitleChange={(v) => { setEditTitle(v); if (formError) setFormError(""); }}
             onBodyChange={setEditBody}
-            onImageChange={(f) => { setEditImageFile(f); setEditImageRemoved(false); }}
-            onImageRemove={() => { setEditImageFile(null); setEditImageRemoved(true); setEditImagePath(undefined); }}
           />
         </ModalShell>
       )}
