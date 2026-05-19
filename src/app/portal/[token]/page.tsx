@@ -137,10 +137,17 @@ export default function PortalPage() {
         .p-outer { max-width: 680px; margin: 0 auto; padding: 64px 32px 96px; }
         .p-grid { display: block; }
         .p-footer-row { display: block; }
+        .p-brief-group { display: flex; flex-direction: column; gap: 5px; }
+        .p-brief-label { font-size: 9px; font-weight: 700; letter-spacing: 0.24em; color: #9B9084; text-transform: uppercase; }
+        @media (min-width: 640px) {
+          .p-brief-group { flex-direction: row; align-items: baseline; gap: 0; }
+          .p-brief-label { min-width: 190px; flex-shrink: 0; padding-top: 3px; }
+        }
         @media (min-width: 1024px) {
           .p-outer { max-width: 1200px; padding: 64px 64px 96px; }
           .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
           .p-footer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
+          .p-brief-label { min-width: 220px; }
         }
       `}</style>
 
@@ -294,8 +301,8 @@ export default function PortalPage() {
                     <div style={s.intakeSubLabel}>ORDER NEEDS</div>
                     <div style={s.briefFieldList}>
                       {orderFields.map(([k, v]) => (
-                        <div key={k} style={s.briefFieldGroup}>
-                          <div style={s.briefFieldLabel}>{k}</div>
+                        <div key={k} className="p-brief-group">
+                          <div className="p-brief-label">{k}</div>
                           <div style={s.briefFieldAnswer}>{v}</div>
                         </div>
                       ))}
@@ -308,8 +315,8 @@ export default function PortalPage() {
                     <div style={s.intakeSubLabel}>DESIGN DIRECTION</div>
                     <div style={s.briefFieldList}>
                       {designFields.map(([k, v]) => (
-                        <div key={k} style={s.briefFieldGroup}>
-                          <div style={s.briefFieldLabel}>{k}</div>
+                        <div key={k} className="p-brief-group">
+                          <div className="p-brief-label">{k}</div>
                           <div style={s.briefFieldAnswer}>{v}</div>
                         </div>
                       ))}

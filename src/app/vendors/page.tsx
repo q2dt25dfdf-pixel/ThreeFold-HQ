@@ -282,7 +282,7 @@ export default function VendorsPage() {
             />
           </label>
           <button
-            className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
+            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
             onClick={() => { setFormError(""); addSave.resetSaveState(); setShowModal(true); }}
           >
             Add vendor

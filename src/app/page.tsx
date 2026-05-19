@@ -292,10 +292,10 @@ export default function Home() {
         <ErrorBanner message={loadError} />
 
         {/* Header */}
-        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] p-4 pt-24 text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[2rem] md:p-6">
+        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] p-4 pt-24 text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[2rem] md:px-10 md:py-10">
           <p className="text-xs font-medium text-[#94a3b8]">{todayLabel}</p>
-          <h1 className="mt-2 text-2xl font-semibold text-white md:text-4xl">Today at Threefold</h1>
-          <p className="mt-1 text-xs text-[#94a3b8]">Your operations at a glance.</p>
+          <h1 className="mt-2 text-2xl font-semibold text-white md:text-5xl">Today at Threefold</h1>
+          <p className="mt-1 text-xs text-[#94a3b8] md:mt-2 md:text-sm">Your operations at a glance.</p>
         </section>
 
         {/* Global search */}

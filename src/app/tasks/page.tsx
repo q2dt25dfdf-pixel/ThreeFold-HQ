@@ -138,7 +138,7 @@ function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onCom
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Due {task.dueDate}</span>
                   <button
                     type="button"
-                    className="min-h-11 rounded-2xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                    className="min-h-11 rounded-2xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                     onClick={(event) => {
                       event.stopPropagation();
                       onComplete(task.id);

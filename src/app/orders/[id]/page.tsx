@@ -582,7 +582,7 @@ export default function OrderDetailPage() {
             addDesignVersionSave.resetSaveState();
             setIsAddVersionOpen(true);
           }}
-          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-3xl bg-slate-950 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 lg:min-h-0 lg:w-auto"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-3xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 lg:min-h-0 lg:w-auto"
         >
           Add Version
         </button>

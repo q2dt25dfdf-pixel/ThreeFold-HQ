@@ -453,7 +453,7 @@ export default function ClientDetailPage() {
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Order history</h2>
                 <p className="mt-1 text-xs md:text-sm text-slate-500">Orders connected to this client.</p>
               </div>
-              <button type="button" onClick={() => setShowOrderModal(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-4 py-2 text-xs md:text-sm font-semibold text-white">
+              <button type="button" onClick={() => setShowOrderModal(true)} className="inline-flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-4 py-2 text-xs md:text-sm font-semibold text-white">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add order
               </button>
@@ -558,7 +558,7 @@ export default function ClientDetailPage() {
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => { setActivityForm((current) => ({ ...current, notes: event.target.value })); if (activityErrorText) setActivityErrorText(""); }} />
-            <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-950 px-4 py-3 text-xs md:text-sm font-semibold text-white">Log</button>
+            <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-900 px-4 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">Log</button>
           </div>
           <FieldError message={activityErrorText} />
 

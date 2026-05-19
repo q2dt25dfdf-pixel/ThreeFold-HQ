@@ -439,7 +439,7 @@ export default function CRMPage() {
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="mt-4 hidden min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:inline-flex"
+            className="mt-4 hidden min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:inline-flex"
           >
             <Plus size={16} />
             Add lead
@@ -458,7 +458,7 @@ export default function CRMPage() {
           <button
             type="button"
             onClick={() => openAddLeadModal()}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:hidden"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:hidden"
           >
             <Plus size={16} />
             Add lead

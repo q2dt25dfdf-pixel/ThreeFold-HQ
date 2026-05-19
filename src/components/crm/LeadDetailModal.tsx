@@ -360,7 +360,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 type="button"
                 onClick={addActivityEntry}
                 disabled={!logNote.trim()}
-                className="min-h-11 w-full rounded-3xl bg-slate-950 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
+                className="min-h-11 w-full rounded-3xl bg-slate-900 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
               >
                 Log activity · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </button>

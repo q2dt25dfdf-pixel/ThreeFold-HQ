@@ -75,7 +75,7 @@ export default function SaveButton({ state, onClick, type = "button", className 
       type={type}
       onClick={onClick}
       disabled={disabled || isSaving}
-      className={`min-h-11 min-w-0 max-w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 md:text-sm ${className}`}
+      className={`min-h-11 min-w-0 max-w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 md:text-sm ${className}`}
     >
       <span className="flex h-5 items-center justify-center gap-2 overflow-hidden whitespace-nowrap transition-opacity duration-200">
         {state === "saving" && <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />}

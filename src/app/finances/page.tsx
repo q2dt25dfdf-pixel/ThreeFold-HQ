@@ -692,7 +692,7 @@ export default function FinancesPage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={openAddModal}>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={openAddModal}>
             Add invoice
           </button>
         </div>
@@ -798,7 +798,7 @@ export default function FinancesPage() {
               <option>All</option>
               {invoiceStatusOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
-            <button className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
+            <button className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
               Add invoice
             </button>
           </div>
