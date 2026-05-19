@@ -59,12 +59,6 @@ function isCrmTask(task: Task) {
   return task.source === "CRM" || Boolean(task.crmLeadId || task.leadId);
 }
 
-function crmFollowUpDetails(task: Task) {
-  const fallback = task.title.replace(/^Follow up with\s+/i, "");
-  const [leadName = fallback, company = "Lead"] = fallback.split(/\s+—\s+/);
-  return { leadName, company };
-}
-
 function taskMatchesSearch(task: Task, query: string): boolean {
   if (!query.trim()) return true;
   const q = query.toLowerCase();
@@ -97,69 +91,6 @@ const COMPLETION_GROUP_LABELS: Record<CompletionGroup, string> = {
 
 const COMPLETION_GROUP_ORDER: CompletionGroup[] = ["today", "yesterday", "week", "older"];
 
-function PipelineFollowUps({ tasks, onComplete, onOpen }: { tasks: Task[]; onComplete: (id: string) => void; onOpen: (task: Task) => void }) {
-  const sortedTasks = [...tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-
-  return (
-    <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-4 shadow-sm md:p-5">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">CRM</p>
-          <h2 className="text-base font-bold text-slate-950 md:text-lg">Pipeline Follow-Ups</h2>
-        </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800 shadow-sm">
-          {sortedTasks.length} open
-        </span>
-      </div>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        {sortedTasks.map((task) => {
-          const { leadName, company } = crmFollowUpDetails(task);
-          return (
-            <article
-              key={task.id}
-              role="button"
-              tabIndex={0}
-              className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md"
-              onClick={() => onOpen(task)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpen(task);
-                }
-              }}
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-950">{leadName}</p>
-                  <p className="mt-1 truncate text-xs text-slate-600">{company}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Due {task.dueDate}</span>
-                  <button
-                    type="button"
-                    className="min-h-11 rounded-2xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onComplete(task.id);
-                    }}
-                  >
-                    Mark complete
-                  </button>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-        {sortedTasks.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-amber-200 bg-white/70 px-4 py-6 text-center text-xs text-slate-600 md:text-sm">
-            No pipeline follow-ups yet.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 
 function FormFields<T extends TaskFormData | Task>({ data, onChange }: { data: T; onChange: (f: T) => void }) {
   return (
@@ -242,6 +173,13 @@ export default function TasksPage() {
 
   const openAddForFounder = (founder: TaskColumn) => {
     setForm({ ...emptyForm, assignedTo: founder });
+    setFormError("");
+    addSave.resetSaveState();
+    setShowAdd(true);
+  };
+
+  const openAddForTeam = () => {
+    setForm({ ...emptyForm, assignedTo: "All" });
     setFormError("");
     addSave.resetSaveState();
     setShowAdd(true);
@@ -391,11 +329,41 @@ export default function TasksPage() {
         </div>
       </div>
 
-      <PipelineFollowUps
-        tasks={tasks.filter((t) => isCrmTask(t) && !t.completed && taskMatchesSearch(t, search))}
-        onComplete={toggle}
-        onOpen={(task) => { editSave.resetSaveState(); setEditTask({ ...task }); }}
-      />
+      {/* Team Board — shared workspace for All-assigned tasks */}
+      {(filterOwner === "All") && (
+        <section className="rounded-[2rem] border-t-2 border-slate-800 bg-slate-50 p-4 shadow-sm md:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Shared workspace</p>
+              <h2 className="mt-0.5 text-base font-bold text-slate-950 md:text-lg">Team Board</h2>
+            </div>
+            <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+              {tasks.filter((t) => !t.completed && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length} open
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {tasks
+              .filter((t) => !t.completed && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search))
+              .map((task) => <TaskCard key={task.id} task={task} />)}
+            {tasks.filter((t) => !t.completed && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-center text-xs text-slate-500 md:text-sm lg:col-span-2 xl:col-span-3">
+                {isSearching ? "No team tasks match your search." : "No shared team tasks yet."}
+              </div>
+            )}
+          </div>
+          {!isSearching && (
+            <div className="mt-4">
+              <button
+                type="button"
+                className="min-h-11 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 md:text-sm"
+                onClick={openAddForTeam}
+              >
+                Add team task
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Active Kanban board — completed tasks never appear here */}
       <div className="grid gap-5 xl:grid-cols-3">
@@ -404,9 +372,8 @@ export default function TasksPage() {
           .map((founder) => {
             const visibleTasks = tasks.filter(
               (task) =>
-                !isCrmTask(task) &&
                 !task.completed &&
-                (taskAssignee(task) === founder.name || taskAssignee(task) === "All") &&
+                taskAssignee(task) === founder.name &&
                 taskMatchesSearch(task, search),
             );
 

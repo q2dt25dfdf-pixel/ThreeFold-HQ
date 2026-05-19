@@ -57,3 +57,8 @@ create table if not exists public.production_vendor_info (
   id text primary key,
   data jsonb not null
 );
+
+create table if not exists public.notes (
+  id text primary key,
+  data jsonb not null
+);

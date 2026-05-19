@@ -14,6 +14,7 @@ const sections = [
   { label: "Finances", href: "/finances" },
   { label: "Tasks", href: "/tasks" },
   { label: "Calendar", href: "/calendar" },
+  { label: "Notes", href: "/notes" },
 ];
 
 export default function Sidebar({
