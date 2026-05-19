@@ -47,6 +47,7 @@ type IntakeSnapshot = {
   company_description?: string;
   quantity?: string;
   target_date?: string;
+  project_timeline?: string;
   budget?: string;
   apparel_types?: string;
   audience?: string;
@@ -372,6 +373,7 @@ export default function CRMPage() {
         company_description: lead.company_description ?? "",
         quantity: lead.quantity ?? "",
         target_date: lead.target_date ?? "",
+        project_timeline: lead.project_timeline ?? "",
         budget: lead.budget ?? "",
         apparel_types: lead.apparel_types ?? "",
         audience: lead.audience ?? "",

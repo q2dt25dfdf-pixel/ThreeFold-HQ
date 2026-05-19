@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
+import { formatPhoneNumber } from "@/lib/formatPhone";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
@@ -88,7 +89,7 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
             type="text"
             className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.phone}
-            onChange={(event) => setForm({ ...form, phone: event.target.value })}
+            onChange={(event) => setForm({ ...form, phone: formatPhoneNumber(event.target.value) })}
           />
         </label>
       </div>

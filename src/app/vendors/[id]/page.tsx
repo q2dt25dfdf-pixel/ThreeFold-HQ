@@ -6,6 +6,7 @@ import { ArrowLeft, Building2, Edit2, Mail, Phone, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
+import { formatPhoneNumber } from "@/lib/formatPhone";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type VendorStatus = "Active" | "Review" | "Paused";
@@ -226,7 +227,7 @@ export default function VendorDetailPage() {
                   <input
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
                     value={field.value}
-                    onChange={(event) => setVendorHeaderDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                    onChange={(event) => setVendorHeaderDraft((current) => ({ ...current, [field.key]: field.key === 'phone' ? formatPhoneNumber(event.target.value) : event.target.value }))}
                   />
                 </label>
               ))}

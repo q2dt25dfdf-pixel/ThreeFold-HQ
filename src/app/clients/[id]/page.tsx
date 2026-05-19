@@ -21,6 +21,7 @@ import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { formatPhoneNumber } from "@/lib/formatPhone";
 
 type ClientStatus = "Active" | "At Risk" | "Dormant" | "Lead";
 
@@ -368,7 +369,7 @@ export default function ClientDetailPage() {
                   <input
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs md:text-sm normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
                     value={field.value}
-                    onChange={(event) => saveClient({ [field.key]: event.target.value } as Partial<Client>)}
+                    onChange={(event) => saveClient({ [field.key]: field.key === 'phone' ? formatPhoneNumber(event.target.value) : event.target.value } as Partial<Client>)}
                   />
                 </label>
               ))}

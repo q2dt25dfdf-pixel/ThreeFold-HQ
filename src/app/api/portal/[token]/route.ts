@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getSignedUrls } from '@/lib/getSignedUrl'
 
 export async function GET(
   _request: Request,
@@ -42,5 +43,47 @@ export async function GET(
     clientNotes: d.client_notes || '',
   }
 
-  return NextResponse.json(clientSafeData)
+  // Intake summary — client-safe fields only, private files excluded
+  type RawFile = Record<string, unknown>
+  let intakeSummary: Record<string, unknown> | null = null
+  const snap = d.intake_snapshot as Record<string, unknown> | null | undefined
+  if (snap && typeof snap === 'object') {
+    const rawFiles: RawFile[] = Array.isArray(snap.files) ? (snap.files as RawFile[]) : []
+    const visibleFiles = rawFiles.filter(f => f.visible_to_client === true)
+
+    let files: Record<string, unknown>[] = []
+    if (visibleFiles.length > 0) {
+      const paths = visibleFiles.map(f => String(f.path || ''))
+      const urlMap = await getSignedUrls(paths)
+      files = visibleFiles.map(f => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        mime_type: f.mime_type,
+        category: f.category,
+        signed_url: urlMap[String(f.path)] ?? null,
+      }))
+    }
+
+    intakeSummary = {
+      contact_title: snap.contact_title || '',
+      contact_method: snap.contact_method || '',
+      company_description: snap.company_description || '',
+      quantity: snap.quantity || '',
+      target_date: snap.target_date || '',
+      project_timeline: snap.project_timeline || '',
+      budget: snap.budget || '',
+      apparel_types: snap.apparel_types || '',
+      audience: snap.audience || '',
+      station_code: snap.station_code || '',
+      meaning: snap.meaning || '',
+      style: snap.style || '',
+      colors: snap.colors || '',
+      notes: snap.notes || '',
+      submitted_at: String(d.created_at || ''),
+      files,
+    }
+  }
+
+  return NextResponse.json({ ...clientSafeData, intakeSummary })
 }

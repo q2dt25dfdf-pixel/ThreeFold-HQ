@@ -4,6 +4,7 @@ import { FieldError } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import type { CompanyProfile, Lead } from "./types";
+import { formatPhoneNumber } from "@/lib/formatPhone";
 import { pipelineStages, type LeadStatus, type PipelineStage } from "./types";
 
 interface LeadFormModalProps {
@@ -192,7 +193,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
           </label>
           <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Phone number
-            <input className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={phone} onChange={(event) => setPhone(event.target.value)} required />
+            <input className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={phone} onChange={(event) => setPhone(formatPhoneNumber(event.target.value))} required />
           </label>
         </div>
 

@@ -45,6 +45,7 @@ export type Lead = {
   company_description?: string;
   quantity?: string;
   target_date?: string;
+  project_timeline?: string;
   budget?: string;
   apparel_types?: string;
   audience?: string;
@@ -98,6 +99,7 @@ export type QuestionnaireSubmission = {
   contact_method?: string;
   quantity?: string;
   target_date?: string;
+  project_timeline?: string;
   budget?: string;
   apparel_types?: string;
   audience?: string;

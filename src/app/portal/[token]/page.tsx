@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react'
 import { BUSINESS_EMAIL } from '@/lib/config'
 
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1048576).toFixed(1)} MB`
+}
+
 function extractDriveId(url: string): string | null {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)
   return match ? match[1] : null
@@ -26,6 +32,34 @@ function DriveEmbed({ url }: { url: string }) {
       <a href={embedUrl} target="_blank" rel="noopener noreferrer" style={s.viewLink}>VIEW FULL DESIGN →</a>
     </div>
   )
+}
+
+interface IntakeFile {
+  id: string
+  name: string
+  size: number
+  mime_type: string
+  category: string
+  signed_url: string | null
+}
+
+interface IntakeSummary {
+  contact_title: string
+  contact_method: string
+  company_description: string
+  quantity: string
+  target_date: string
+  project_timeline: string
+  budget: string
+  apparel_types: string
+  audience: string
+  station_code: string
+  meaning: string
+  style: string
+  colors: string
+  notes: string
+  submitted_at: string
+  files: IntakeFile[]
 }
 
 interface DesignVersion {
@@ -53,6 +87,7 @@ interface PortalData {
   stripeInvoiceUrl: string
   designVersions: DesignVersion[]
   clientNotes: string
+  intakeSummary: IntakeSummary | null
 }
 
 const PHASES = ['Design Phase','Client Review','Design Approved','Production','Quality Check','Delivery']
@@ -216,6 +251,104 @@ export default function PortalPage() {
 
         </div>
 
+        {/* Intake summary — only when snapshot data exists */}
+        {(() => {
+          const snap = data.intakeSummary
+          if (!snap) return null
+          const orderFields: [string, string][] = [
+            ['APPAREL TYPE', snap.apparel_types],
+            ['QUANTITY', snap.quantity],
+            ['Project timeline', snap.project_timeline || snap.target_date],
+            ['BUDGET RANGE', snap.budget],
+            ['WHO IS IT FOR', snap.audience],
+            ['STATION CODE', snap.station_code],
+          ].filter(([, v]) => !!v) as [string, string][]
+          const designFields: [string, string][] = [
+            ['WHAT IT SHOULD REPRESENT', snap.meaning],
+            ['STYLE DIRECTION', snap.style],
+            ['COLOR PREFERENCES', snap.colors],
+          ].filter(([, v]) => !!v) as [string, string][]
+          const hasContent = snap.company_description || orderFields.length > 0 || designFields.length > 0 || snap.notes || snap.files.length > 0
+          if (!hasContent) return null
+          return (
+            <>
+              <div style={s.rule} />
+              <div style={s.section}>
+                <div style={s.eyebrow}>YOUR SUBMITTED BRIEF</div>
+
+                {snap.submitted_at && (
+                  <div style={s.intakeSubmittedDate}>
+                    Submitted {new Date(snap.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </div>
+                )}
+
+                {snap.company_description && (
+                  <div style={s.intakeBlock}>
+                    <div style={s.intakeSubLabel}>COMPANY OVERVIEW</div>
+                    <div style={s.intakeBody}>{snap.company_description}</div>
+                  </div>
+                )}
+
+                {orderFields.length > 0 && (
+                  <div style={s.intakeBlock}>
+                    <div style={s.intakeSubLabel}>ORDER NEEDS</div>
+                    <div style={s.detailList}>
+                      {orderFields.map(([k, v]) => (
+                        <div key={k} style={s.detailRow}>
+                          <span style={s.detailKey}>{k}</span>
+                          <span style={{ ...s.detailVal, maxWidth: '60%', textAlign: 'right' as const }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {designFields.length > 0 && (
+                  <div style={s.intakeBlock}>
+                    <div style={s.intakeSubLabel}>DESIGN DIRECTION</div>
+                    <div style={s.detailList}>
+                      {designFields.map(([k, v]) => (
+                        <div key={k} style={s.detailRow}>
+                          <span style={s.detailKey}>{k}</span>
+                          <span style={{ ...s.detailVal, maxWidth: '60%', textAlign: 'right' as const }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {snap.notes && (
+                  <div style={s.intakeBlock}>
+                    <div style={s.intakeSubLabel}>NOTES &amp; INSPIRATION</div>
+                    <div style={s.notesBlock}>{snap.notes}</div>
+                  </div>
+                )}
+
+                {snap.files.length > 0 && (
+                  <div style={s.intakeBlock}>
+                    <div style={s.intakeSubLabel}>SUBMITTED FILES</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {snap.files.map(f => (
+                        <div key={f.id} style={s.intakeFileRow}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={s.intakeFileName}>{f.name}</div>
+                            <div style={s.intakeFileMeta}>{f.category.toUpperCase()} · {fmtBytes(f.size)}</div>
+                          </div>
+                          {f.signed_url ? (
+                            <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewLink}>DOWNLOAD →</a>
+                          ) : (
+                            <span style={{ ...s.intakeFileMeta, flexShrink: 0 }}>Unavailable</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )
+        })()}
+
         {/* Footer row — branding + questions on left, empty right */}
         <div style={s.rule} />
         <div className="p-footer-row">
@@ -267,4 +400,11 @@ const s: Record<string, React.CSSProperties> = {
   mutedText: { fontSize: '12px', color: '#999', letterSpacing: '0.05em', marginTop: '16px' },
   footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: '#aaa', marginBottom: '4px' },
   footerTagline: { fontSize: '10px', color: '#bbb', letterSpacing: '0.06em' },
+  intakeSubmittedDate: { fontSize: '11px', color: '#999', letterSpacing: '0.06em', marginBottom: '28px' },
+  intakeBlock: { marginBottom: '28px' },
+  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: '#aaa', marginBottom: '12px', textTransform: 'uppercase' as const },
+  intakeBody: { fontSize: '14px', color: '#444', lineHeight: 1.75 },
+  intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: '1px solid #DDD6CB', padding: '12px 16px', backgroundColor: '#FAF7F2' },
+  intakeFileName: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a', letterSpacing: '0.02em', marginBottom: '2px' },
+  intakeFileMeta: { fontSize: '10px', color: '#999', letterSpacing: '0.12em' },
 }

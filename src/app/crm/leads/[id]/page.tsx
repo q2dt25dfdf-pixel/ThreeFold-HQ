@@ -130,6 +130,8 @@ export default function LeadQuestionnairePage() {
             <Divider />
             <Field label="Target Date" value={d.target_date} />
             <Divider />
+            <Field label="Project timeline" value={d.project_timeline} />
+            <Divider />
             <Field label="Budget Range" value={d.budget} />
             <Divider />
             <Field label="Apparel Types" value={d.apparel_types} />

@@ -25,6 +25,7 @@ type IntakeSnapshot = {
   company_description?: string;
   quantity?: string;
   target_date?: string;
+  project_timeline?: string;
   budget?: string;
   apparel_types?: string;
   audience?: string;
@@ -774,36 +775,63 @@ export default function OrderDetailPage() {
     </div>
   );
 
-  const intakeFields = [
-    { label: "Contact title", value: order.intake_snapshot?.contact_title },
-    { label: "Preferred contact", value: order.intake_snapshot?.contact_method },
-    { label: "Company description", value: order.intake_snapshot?.company_description },
-    { label: "Requested quantity", value: order.intake_snapshot?.quantity },
-    { label: "Target date", value: order.intake_snapshot?.target_date },
-    { label: "Budget", value: order.intake_snapshot?.budget },
-    { label: "Apparel types", value: order.intake_snapshot?.apparel_types },
-    { label: "Audience", value: order.intake_snapshot?.audience },
-    { label: "Station code", value: order.intake_snapshot?.station_code },
-    { label: "Meaning / brand story", value: order.intake_snapshot?.meaning },
-    { label: "Style preferences", value: order.intake_snapshot?.style },
-    { label: "Colors", value: order.intake_snapshot?.colors },
-    { label: "Original notes", value: order.intake_snapshot?.notes },
-  ].filter((f) => f.value?.trim());
+  const intakeGroups = [
+    {
+      title: "Contact",
+      fields: [
+        { label: "Contact title", value: order.intake_snapshot?.contact_title },
+        { label: "Preferred contact", value: order.intake_snapshot?.contact_method },
+      ],
+    },
+    {
+      title: "Project",
+      fields: [
+        { label: "Company description", value: order.intake_snapshot?.company_description },
+        { label: "Requested quantity", value: order.intake_snapshot?.quantity },
+        { label: "Project timeline", value: order.intake_snapshot?.project_timeline ?? order.intake_snapshot?.target_date },
+        { label: "Budget", value: order.intake_snapshot?.budget },
+      ],
+    },
+    {
+      title: "Audience",
+      fields: [
+        { label: "Apparel types", value: order.intake_snapshot?.apparel_types },
+        { label: "Audience", value: order.intake_snapshot?.audience },
+        { label: "Station code", value: order.intake_snapshot?.station_code },
+      ],
+    },
+    {
+      title: "Design direction",
+      fields: [
+        { label: "Meaning / brand story", value: order.intake_snapshot?.meaning },
+        { label: "Style preferences", value: order.intake_snapshot?.style },
+        { label: "Colors", value: order.intake_snapshot?.colors },
+        { label: "Original notes", value: order.intake_snapshot?.notes },
+      ],
+    },
+  ].map((group) => ({ ...group, fields: group.fields.filter((f) => f.value?.trim()) })).filter((group) => group.fields.length > 0);
 
   const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
 
-  const IntakeSection = (intakeFields.length > 0 || intakeFiles.length > 0) ? (
+  const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Intake / Questionnaire</h2>
-      <div className="space-y-2">
-        {intakeFields.map(({ label, value }) => (
-          <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-            <span className="shrink-0 text-xs text-slate-500">{label}</span>
-            <span className="min-w-0 max-w-[60%] break-words text-right text-xs font-medium text-slate-950">{value}</span>
+      <div className="grid gap-3 md:grid-cols-2">
+        {intakeGroups.map((group) => (
+          <div key={group.title} className="rounded-2xl bg-slate-50 p-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{group.title}</p>
+            <div className="space-y-2">
+              {group.fields.map(({ label, value }) => (
+                <div key={label} className="flex flex-wrap items-start justify-between gap-3">
+                  <span className="shrink-0 text-xs text-slate-500">{label}</span>
+                  <span className="min-w-0 max-w-[60%] break-words text-right text-xs font-medium text-slate-950">{value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
         {intakeFiles.length > 0 && (
-          <div className={intakeFields.length > 0 ? "border-t border-slate-100 pt-3 mt-1 space-y-2" : "space-y-2"}>
+          <div className={intakeGroups.length > 0 ? "space-y-2 rounded-2xl bg-slate-50 p-3 md:col-span-2" : "space-y-2 rounded-2xl bg-slate-50 p-3 md:col-span-2"}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Attached files</p>
             {intakeFiles.map((file) => {
               const url = fileUrls[file.path];
