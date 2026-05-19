@@ -140,14 +140,14 @@ export default function PortalPage() {
         .p-brief-group { display: flex; flex-direction: column; gap: 5px; }
         .p-brief-label { font-size: 9px; font-weight: 700; letter-spacing: 0.24em; color: #9B9084; text-transform: uppercase; }
         @media (min-width: 640px) {
-          .p-brief-group { flex-direction: row; align-items: baseline; gap: 0; }
-          .p-brief-label { min-width: 190px; flex-shrink: 0; padding-top: 3px; }
+          .p-brief-group { flex-direction: row; align-items: flex-start; gap: 0; }
+          .p-brief-label { min-width: 210px; flex-shrink: 0; padding-top: 4px; }
         }
         @media (min-width: 1024px) {
           .p-outer { max-width: 1200px; padding: 64px 64px 96px; }
           .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
           .p-footer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
-          .p-brief-label { min-width: 220px; }
+          .p-brief-label { min-width: 230px; }
         }
       `}</style>
 
