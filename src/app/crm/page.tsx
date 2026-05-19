@@ -7,7 +7,7 @@ import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
-import { pipelineStages, type Lead, type PipelineStage } from "../../components/crm/types";
+import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type Client = {
@@ -40,6 +40,81 @@ type FollowUpTask = {
   crmLeadId: string;
   leadId: string;
 };
+
+type IntakeSnapshot = {
+  contact_title?: string;
+  contact_method?: string;
+  company_description?: string;
+  quantity?: string;
+  target_date?: string;
+  budget?: string;
+  apparel_types?: string;
+  audience?: string;
+  station_code?: string;
+  meaning?: string;
+  style?: string;
+  colors?: string;
+  notes?: string;
+  files?: QuestionnaireFile[];
+};
+
+type Order = {
+  id: string;
+  orderName: string;
+  order_name?: string;
+  client: string;
+  client_id?: string;
+  client_name?: string;
+  vendor: string;
+  items: string[];
+  quantity: number;
+  amount: number;
+  status: string;
+  estimatedDeliveryDate: string;
+  notes: string;
+  source?: string;
+  lead_id?: string;
+  questionnaire_id?: string;
+  intake_snapshot?: IntakeSnapshot;
+};
+
+function normalizeForMatch(s: string): string {
+  return s.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function detectDuplicateMatch(lead: Lead, clients: Client[]): DuplicateMatch | null {
+  if (lead.stage === "Approved") return null;
+
+  const email = lead.email?.trim().toLowerCase();
+  const company = normalizeForMatch(lead.company);
+
+  if (email) {
+    const m = clients.find((c) => c.email?.trim().toLowerCase() === email);
+    if (m) return { matchType: "likely_existing", clientName: m.name, clientId: m.id };
+  }
+
+  if (company.length >= 2) {
+    const m = clients.find((c) => {
+      const cn = normalizeForMatch(c.name);
+      const cc = normalizeForMatch(c.company ?? "");
+      return cn === company || (cc.length > 0 && cc === company);
+    });
+    if (m) return { matchType: "likely_existing", clientName: m.name, clientId: m.id };
+  }
+
+  if (company.length >= 4) {
+    const m = clients.find((c) => {
+      const cn = normalizeForMatch(c.name);
+      const cc = normalizeForMatch(c.company ?? "");
+      return [cn, cc]
+        .filter((t) => t.length >= 4)
+        .some((t) => t.includes(company) || company.includes(t));
+    });
+    if (m) return { matchType: "possible_duplicate", clientName: m.name, clientId: m.id };
+  }
+
+  return null;
+}
 
 const autoFollowUpTaskId = (leadId: string) => "crm-followup-" + leadId;
 const hasFollowUpDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
@@ -139,6 +214,7 @@ export default function CRMPage() {
   const { data: leads, upsertItem, deleteItem, loading, error } = useSupabaseTable<Lead>("crm_leads", initialLeads);
   const { data: clients, upsertItem: upsertClient, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
+  const { upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
   const [viewLead, setViewLead] = useState<Lead | null>(null);
@@ -266,6 +342,51 @@ export default function CRMPage() {
     });
   };
 
+  const handleApproveLead = async (lead: Lead) => {
+    const existingClient = findClientForLead(lead);
+    const clientId = existingClient?.id ?? `client-${lead.id}`;
+    await syncClientFromLead(lead);
+    await reloadClients();
+
+    const orderName = `${lead.company} — Order #1`;
+    await upsertOrder({
+      id: `order-lead-${lead.id}`,
+      orderName,
+      order_name: orderName,
+      client: lead.company,
+      client_id: clientId,
+      client_name: lead.company,
+      vendor: "",
+      items: [],
+      quantity: 0,
+      amount: 0,
+      status: "Design Phase",
+      estimatedDeliveryDate: "",
+      notes: "",
+      source: lead.source === "Website" ? "Website Lead" : "CRM Lead",
+      lead_id: lead.id,
+      questionnaire_id: lead.questionnaire_id ?? "",
+      intake_snapshot: {
+        contact_title: lead.contact_title ?? "",
+        contact_method: lead.contact_method ?? "",
+        company_description: lead.company_description ?? "",
+        quantity: lead.quantity ?? "",
+        target_date: lead.target_date ?? "",
+        budget: lead.budget ?? "",
+        apparel_types: lead.apparel_types ?? "",
+        audience: lead.audience ?? "",
+        station_code: lead.station_code ?? "",
+        meaning: lead.meaning ?? "",
+        style: lead.style ?? "",
+        colors: lead.colors ?? "",
+        notes: lead.notes ?? "",
+        files: lead.questionnaire_files ?? [],
+      },
+    });
+
+    setToastMessage(`${lead.company} approved. Client record and Order #1 created.`);
+  };
+
   const handleAddLead = async (values: Omit<Lead, "id">) => {
     if (!values.company.trim()) return false;
     const lead = { id: createId(), ...values };
@@ -273,23 +394,26 @@ export default function CRMPage() {
     const leadResponse = await upsertItem(lead);
     if (leadResponse.error) return leadResponse;
 
-    await syncClientFromLead(lead);
-
     syncFollowUpTask(lead);
-    setToastMessage("Lead added to pipeline and client account created.");
+    setToastMessage("Lead added to pipeline.");
     return leadResponse;
   };
 
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
-    await syncClientFromLead(updated, viewLead);
-    await reloadClients();
+    if (updated.stage === "Approved" && viewLead?.stage !== "Approved") {
+      await handleApproveLead(updated);
+    }
     setViewLead(updated);
   };
 
-  const handleMoveLead = (lead: Lead, targetStage: PipelineStage) => {
-    upsertItem({ ...lead, stage: targetStage });
+  const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
+    const updated = { ...lead, stage: targetStage };
+    await upsertItem(updated);
+    if (targetStage === "Approved") {
+      await handleApproveLead(updated);
+    }
   };
 
   const handleDeleteLead = async (lead: Lead) => {
@@ -391,6 +515,7 @@ export default function CRMPage() {
                       onEdit={() => {}}
                       onMove={handleMoveLead}
                       onDelete={handleDeleteLead}
+                      duplicateMatch={detectDuplicateMatch(lead, clients)}
                     />
                   ))
                 ) : (
@@ -429,6 +554,7 @@ export default function CRMPage() {
         onSave={handleSaveDetailLead}
         onDelete={handleDeleteLead}
         matchingClientId={viewLead ? (findClientForLead(viewLead)?.id ?? null) : null}
+        duplicateMatch={viewLead ? detectDuplicateMatch(viewLead, clients) : null}
         onViewClient={() => {
           const match = viewLead ? findClientForLead(viewLead) : null;
           if (match) { setViewLead(null); router.push(`/clients/${match.id}`); }

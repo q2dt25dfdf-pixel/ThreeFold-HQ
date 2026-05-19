@@ -38,7 +38,8 @@ export type Lead = {
   status: LeadStatus;
   communicationHistory: CommunicationEntry[];
   source?: string;
-  // Website questionnaire fields
+  questionnaire_id?: string;
+  // Website questionnaire fields (flat, for backward compat with existing Supabase rows)
   contact_title?: string;
   contact_method?: string;
   company_description?: string;
@@ -51,4 +52,63 @@ export type Lead = {
   meaning?: string;
   style?: string;
   colors?: string;
+  questionnaire_files?: QuestionnaireFile[];
+};
+
+export type QuestionnaireFileCategory = "logo" | "inspiration" | "pdf" | "mockup" | "other";
+
+export type QuestionnaireFile = {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  mime_type: string;
+  category: QuestionnaireFileCategory;
+  visible_to_client: boolean;
+  uploaded_at: string;
+};
+
+export type DuplicateMatchType = "likely_existing" | "possible_duplicate";
+
+export type DuplicateMatch = {
+  matchType: DuplicateMatchType;
+  clientName: string;
+  clientId: string;
+};
+
+export type QuestionnaireSubmissionStatus =
+  | "pending"
+  | "linked_to_lead"
+  | "linked_to_order"
+  | "flagged_for_review"
+  | "dismissed";
+
+export type QuestionnaireSubmission = {
+  id: string;
+  status: QuestionnaireSubmissionStatus;
+  // Contact info
+  company: string;
+  contact: string;
+  email: string;
+  phone: string;
+  // Questionnaire fields
+  company_type?: string;
+  company_description?: string;
+  contact_title?: string;
+  contact_method?: string;
+  quantity?: string;
+  target_date?: string;
+  budget?: string;
+  apparel_types?: string;
+  audience?: string;
+  station_code?: string;
+  meaning?: string;
+  style?: string;
+  colors?: string;
+  notes?: string;
+  // Links — set after routing decision
+  linked_lead_id?: string;
+  linked_order_id?: string;
+  linked_client_id?: string;
+  created_at?: string;
 };

@@ -8,7 +8,14 @@ export type LookupRecord = {
   company?: string;
 };
 
-export type OrderStatus = "Draft" | "In Production" | "Quality Control" | "Fulfilled";
+export type OrderStatus =
+  | "Design Phase"
+  | "Client Review"
+  | "Design Approved"
+  | "Production"
+  | "Quality Check"
+  | "Ready"
+  | "Delivered";
 
 export const itemOptions = [
   "T-Shirts",
@@ -22,7 +29,15 @@ export const itemOptions = [
   "Other",
 ];
 
-export const statusOptions: OrderStatus[] = ["Draft", "In Production", "Quality Control", "Fulfilled"];
+export const statusOptions: OrderStatus[] = [
+  "Design Phase",
+  "Client Review",
+  "Design Approved",
+  "Production",
+  "Quality Check",
+  "Ready",
+  "Delivered",
+];
 
 export function centsToCurrency(cents: string): string {
   return (Number(cents || "0") / 100).toLocaleString("en-US", {

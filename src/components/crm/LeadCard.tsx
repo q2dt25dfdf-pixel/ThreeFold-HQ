@@ -1,5 +1,5 @@
-import type { Lead, PipelineStage } from "./types";
-import { Trash2 } from "lucide-react";
+import type { Lead, PipelineStage, DuplicateMatch } from "./types";
+import { AlertTriangle, Trash2 } from "lucide-react";
 
 interface LeadCardProps {
   lead: Lead;
@@ -9,6 +9,7 @@ interface LeadCardProps {
   onEdit: (lead: Lead) => void;
   onMove: (lead: Lead, targetStage: PipelineStage) => void;
   onDelete: (lead: Lead) => void;
+  duplicateMatch?: DuplicateMatch | null;
 }
 
 const stageBadgeStyles: Record<Lead["stage"], string> = {
@@ -41,6 +42,7 @@ export default function LeadCard({
   onEdit,
   onMove,
   onDelete,
+  duplicateMatch,
 }: LeadCardProps) {
   const canMoveBack = stageIndex > 0;
   const canMoveForward = stageIndex < totalStages - 1;
@@ -107,6 +109,18 @@ export default function LeadCard({
           </div>
         </div>
       </div>
+      {duplicateMatch && (
+        <div className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${
+          duplicateMatch.matchType === "likely_existing"
+            ? "bg-amber-100 text-amber-800"
+            : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+        }`}>
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 truncate">
+            {duplicateMatch.matchType === "likely_existing" ? "Likely existing client" : "Possible duplicate"}: {duplicateMatch.clientName}
+          </span>
+        </div>
+      )}
     </article>
   );
 }

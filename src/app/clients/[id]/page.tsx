@@ -15,6 +15,7 @@ import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Plus } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import type { QuestionnaireFile } from "@/components/crm/types";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
@@ -47,7 +48,7 @@ type Order = {
   items: string[];
   quantity: number;
   amount: number;
-  status: "Draft" | "In Production" | "Quality Control" | "Fulfilled";
+  status: string;
   estimatedDeliveryDate: string;
   notes: string;
 };
@@ -77,6 +78,20 @@ type CRMLead = {
   status: string;
   notes: string;
   communicationHistory: Array<{ id: string; type: string; date: string; owner: string; summary: string }>;
+  source?: string;
+  contact_title?: string;
+  contact_method?: string;
+  company_description?: string;
+  quantity?: string;
+  target_date?: string;
+  budget?: string;
+  apparel_types?: string;
+  audience?: string;
+  station_code?: string;
+  meaning?: string;
+  style?: string;
+  colors?: string;
+  questionnaire_files?: QuestionnaireFile[];
 };
 
 const defaultClients: Client[] = [
@@ -289,6 +304,21 @@ export default function ClientDetailPage() {
     );
   }
 
+  const leadQuestionnaireFields = [
+    { label: "Contact title", value: matchingLead?.contact_title },
+    { label: "Preferred contact", value: matchingLead?.contact_method },
+    { label: "Company description", value: matchingLead?.company_description },
+    { label: "Requested quantity", value: matchingLead?.quantity },
+    { label: "Target date", value: matchingLead?.target_date },
+    { label: "Budget", value: matchingLead?.budget },
+    { label: "Apparel types", value: matchingLead?.apparel_types },
+    { label: "Audience", value: matchingLead?.audience },
+    { label: "Station code", value: matchingLead?.station_code },
+    { label: "Meaning / brand story", value: matchingLead?.meaning },
+    { label: "Style preferences", value: matchingLead?.style },
+    { label: "Colors", value: matchingLead?.colors },
+  ].filter((f) => f.value?.trim());
+
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs md:text-sm">
       <ErrorBanner message={clientsError || ordersError} />
@@ -473,6 +503,28 @@ export default function ClientDetailPage() {
                 <div className="rounded-2xl bg-slate-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Lead notes</p>
                   <p className="mt-1.5 text-xs text-slate-700 md:text-sm">{matchingLead.notes}</p>
+                </div>
+              )}
+              {leadQuestionnaireFields.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-900">Questionnaire</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      {matchingLead.source && (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                          {matchingLead.source}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400">{matchingLead.company}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/crm/leads/${matchingLead.id}`)}
+                    className="shrink-0 rounded-2xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-slate-50"
+                  >
+                    View Questionnaire
+                  </button>
                 </div>
               )}
               {leadCommHistory.length > 0 && (

@@ -2,10 +2,28 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Globe, Building2, User, Package, Palette } from 'lucide-react'
+import { ArrowLeft, Globe, Building2, User, Package, Palette, Paperclip } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { LoadingState } from '@/components/AppState'
 import type { Lead } from '@/components/crm/types'
+import { getSignedUrls } from '@/lib/getSignedUrl'
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function categoryBadgeClass(category: string): string {
+  const map: Record<string, string> = {
+    logo: 'bg-blue-100 text-blue-700',
+    inspiration: 'bg-purple-100 text-purple-700',
+    pdf: 'bg-red-100 text-red-700',
+    mockup: 'bg-amber-100 text-amber-700',
+    other: 'bg-slate-100 text-slate-600',
+  }
+  return map[category] ?? 'bg-slate-100 text-slate-600'
+}
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
@@ -38,6 +56,7 @@ export default function LeadQuestionnairePage() {
   const router = useRouter()
   const [lead, setLead] = useState<Lead | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fileUrls, setFileUrls] = useState<Record<string, string>>({})
 
   useEffect(() => {
     supabase.from('crm_leads').select('data').eq('id', params.id).single()
@@ -46,6 +65,12 @@ export default function LeadQuestionnairePage() {
         setLoading(false)
       })
   }, [params.id])
+
+  useEffect(() => {
+    const files = lead?.questionnaire_files
+    if (!files?.length) return
+    getSignedUrls(files.map((f) => f.path)).then(setFileUrls)
+  }, [lead?.id])
 
   if (loading) return <LoadingState />
 
@@ -123,6 +148,38 @@ export default function LeadQuestionnairePage() {
             <Divider />
             <Field label="Additional Notes" value={lead.notes} />
           </Section>
+
+          {(lead.questionnaire_files?.length ?? 0) > 0 && (
+            <div className="lg:col-span-2">
+              <Section icon={<Paperclip size={15} />} title="05 — Uploaded Files">
+                <div className="flex flex-col gap-2">
+                  {lead.questionnaire_files!.map((file) => {
+                    const url = fileUrls[file.path]
+                    return (
+                      <div key={file.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-slate-900">{file.name}</p>
+                          <p className="text-[10px] text-slate-400">{formatFileSize(file.size)}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${categoryBadgeClass(file.category)}`}>
+                            {file.category}
+                          </span>
+                          {url ? (
+                            <a href={url} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-900 px-3 py-1 text-[10px] font-semibold text-white hover:bg-slate-700">
+                              Download
+                            </a>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Loading…</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Section>
+            </div>
+          )}
 
           <div className="lg:col-span-2">
             <Section icon={<Globe size={15} />} title="Lead Info">

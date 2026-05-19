@@ -7,7 +7,14 @@ import { ErrorBanner, LoadingState } from "@/components/AppState";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
-type OrderStatus = "Draft" | "In Production" | "Quality Control" | "Fulfilled";
+type OrderStatus =
+  | "Design Phase"
+  | "Client Review"
+  | "Design Approved"
+  | "Production"
+  | "Quality Check"
+  | "Ready"
+  | "Delivered";
 
 type Order = {
   id: string;
@@ -23,28 +30,43 @@ type Order = {
 };
 
 const statusColors: Record<OrderStatus, string> = {
-  Draft: "bg-slate-100 text-slate-700",
-  "In Production": "bg-blue-100 text-blue-800",
-  "Quality Control": "bg-amber-100 text-amber-800",
-  Fulfilled: "bg-emerald-100 text-emerald-800",
+  "Design Phase": "bg-indigo-100 text-indigo-800",
+  "Client Review": "bg-purple-100 text-purple-800",
+  "Design Approved": "bg-green-100 text-green-800",
+  Production: "bg-blue-100 text-blue-800",
+  "Quality Check": "bg-amber-100 text-amber-800",
+  Ready: "bg-teal-100 text-teal-800",
+  Delivered: "bg-emerald-100 text-emerald-800",
 };
 
 const statusOrder: Record<OrderStatus, number> = {
-  "In Production": 0,
-  "Quality Control": 1,
-  Draft: 2,
-  Fulfilled: 3,
+  Production: 0,
+  "Quality Check": 1,
+  "Client Review": 2,
+  "Design Approved": 3,
+  "Design Phase": 4,
+  Ready: 5,
+  Delivered: 6,
+};
+
+const legacyStatusMap: Record<string, OrderStatus> = {
+  draft: "Design Phase",
+  "in production": "Production",
+  "quality control": "Quality Check",
+  fulfilled: "Delivered",
 };
 
 const today = new Date(2026, 4, 13);
 
 function normalizeOrder(order: Order): Order {
+  const rawStatus = order.status ?? "Design Phase";
+  const status = (legacyStatusMap[rawStatus.trim().toLowerCase()] ?? rawStatus) as OrderStatus;
   return {
     ...order,
     items: Array.isArray(order.items) ? order.items : [],
     quantity: Number(order.quantity || 0),
     amount: Number(order.amount || 0),
-    status: order.status ?? "Draft",
+    status,
   };
 }
 
@@ -115,10 +137,13 @@ export default function OrdersPage() {
             onChange={(event) => setFilter(event.target.value as OrderStatus | "All")}
           >
             <option>All</option>
-            <option>Draft</option>
-            <option>In Production</option>
-            <option>Quality Control</option>
-            <option>Fulfilled</option>
+            <option>Design Phase</option>
+            <option>Client Review</option>
+            <option>Design Approved</option>
+            <option>Production</option>
+            <option>Quality Check</option>
+            <option>Ready</option>
+            <option>Delivered</option>
           </select>
         </div>
       </div>

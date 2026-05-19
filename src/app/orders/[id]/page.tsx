@@ -16,6 +16,25 @@ import {
   SmartSearchInput,
 } from "@/components/orders/OrderFormShared";
 import PortalSection from "@/components/PortalSection";
+import type { QuestionnaireFile } from "@/components/crm/types";
+import { getSignedUrls } from "@/lib/getSignedUrl";
+
+type IntakeSnapshot = {
+  contact_title?: string;
+  contact_method?: string;
+  company_description?: string;
+  quantity?: string;
+  target_date?: string;
+  budget?: string;
+  apparel_types?: string;
+  audience?: string;
+  station_code?: string;
+  meaning?: string;
+  style?: string;
+  colors?: string;
+  notes?: string;
+  files?: QuestionnaireFile[];
+};
 
 type Order = {
   id: string;
@@ -32,6 +51,9 @@ type Order = {
   nextAction?: string;
   internalNotes?: string;
   design_versions?: DesignVersion[];
+  source?: string;
+  lead_id?: string;
+  intake_snapshot?: IntakeSnapshot;
 };
 
 type DesignVersionStatus = "In Review" | "Needs Revision" | "Approved" | "Production Ready";
@@ -80,17 +102,7 @@ const TIMELINE_STAGES = [
   "Delivered",
 ] as const;
 
-// All status values usable in the edit modal dropdown
-const ALL_STATUS_OPTIONS = [
-  "Draft",
-  "Design Phase",
-  "Client Review",
-  "Design Approved",
-  "In Production",
-  "Quality Control",
-  "Ready",
-  "Fulfilled",
-];
+const ALL_STATUS_OPTIONS = [...TIMELINE_STAGES];
 
 const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
   "In Review",
@@ -105,25 +117,16 @@ function statusToStageIndex(status: string): number {
     "design phase": 0,
     "client review": 1,
     "design approved": 2,
-    "production": 3,
+    production: 3,
+    "in production": 3,
     "quality check": 4,
-    "ready": 5,
-    "delivered": 6,
+    "quality control": 4,
+    ready: 5,
+    delivered: 6,
+    fulfilled: 6,
+    draft: 0,
   };
   return map[s] ?? 0;
-}
-
-function stageToStatus(stage: string): string {
-  const map: Record<string, string> = {
-    "Design Phase": "Design Phase",
-    "Client Review": "Client Review",
-    "Design Approved": "Design Approved",
-    "Production": "In Production",
-    "Quality Check": "Quality Control",
-    "Ready": "Ready",
-    "Delivered": "Fulfilled",
-  };
-  return map[stage] ?? stage;
 }
 
 function statusBadgeClass(status: string): string {
@@ -263,6 +266,23 @@ function buildCommButtons(order: Order): CommButton[] {
   ];
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function categoryBadgeClass(category: string): string {
+  const map: Record<string, string> = {
+    logo: "bg-blue-100 text-blue-700",
+    inspiration: "bg-purple-100 text-purple-700",
+    pdf: "bg-red-100 text-red-700",
+    mockup: "bg-amber-100 text-amber-700",
+    other: "bg-slate-100 text-slate-600",
+  };
+  return map[category] ?? "bg-slate-100 text-slate-600";
+}
+
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -315,6 +335,14 @@ export default function OrderDetailPage() {
 
   // Clipboard
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Signed URLs for intake file attachments
+  const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const files = order?.intake_snapshot?.files;
+    if (!files?.length) return;
+    getSignedUrls(files.map((f) => f.path)).then(setFileUrls);
+  }, [order?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialize local text fields from order once
   const [initialized, setInitialized] = useState(false);
@@ -746,6 +774,71 @@ export default function OrderDetailPage() {
     </div>
   );
 
+  const intakeFields = [
+    { label: "Contact title", value: order.intake_snapshot?.contact_title },
+    { label: "Preferred contact", value: order.intake_snapshot?.contact_method },
+    { label: "Company description", value: order.intake_snapshot?.company_description },
+    { label: "Requested quantity", value: order.intake_snapshot?.quantity },
+    { label: "Target date", value: order.intake_snapshot?.target_date },
+    { label: "Budget", value: order.intake_snapshot?.budget },
+    { label: "Apparel types", value: order.intake_snapshot?.apparel_types },
+    { label: "Audience", value: order.intake_snapshot?.audience },
+    { label: "Station code", value: order.intake_snapshot?.station_code },
+    { label: "Meaning / brand story", value: order.intake_snapshot?.meaning },
+    { label: "Style preferences", value: order.intake_snapshot?.style },
+    { label: "Colors", value: order.intake_snapshot?.colors },
+    { label: "Original notes", value: order.intake_snapshot?.notes },
+  ].filter((f) => f.value?.trim());
+
+  const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
+
+  const IntakeSection = (intakeFields.length > 0 || intakeFiles.length > 0) ? (
+    <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Intake / Questionnaire</h2>
+      <div className="space-y-2">
+        {intakeFields.map(({ label, value }) => (
+          <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+            <span className="shrink-0 text-xs text-slate-500">{label}</span>
+            <span className="min-w-0 max-w-[60%] break-words text-right text-xs font-medium text-slate-950">{value}</span>
+          </div>
+        ))}
+        {intakeFiles.length > 0 && (
+          <div className={intakeFields.length > 0 ? "border-t border-slate-100 pt-3 mt-1 space-y-2" : "space-y-2"}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Attached files</p>
+            {intakeFiles.map((file) => {
+              const url = fileUrls[file.path];
+              return (
+                <div key={file.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-slate-900">{file.name}</p>
+                    <p className="text-[10px] text-slate-400">{formatFileSize(file.size)}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${categoryBadgeClass(file.category)}`}>
+                      {file.category}
+                    </span>
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-slate-50"
+                      >
+                        Download
+                      </a>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Loading…</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   const InternalNotesSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Internal Notes</h2>
@@ -836,6 +929,11 @@ export default function OrderDetailPage() {
                     Due {order.estimatedDeliveryDate}
                   </span>
                 )}
+                {order.source && (
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
+                    {order.source}
+                  </span>
+                )}
               </div>
             </div>
             <button
@@ -857,6 +955,7 @@ export default function OrderDetailPage() {
         {DesignVersionsSection}
         {PaymentStatusSection}
         {OrderDetailsSection}
+        {IntakeSection}
         {CommunicationSection}
         {InternalNotesSection}
       </div>
@@ -866,6 +965,7 @@ export default function OrderDetailPage() {
         <div className="flex flex-col gap-6">
           {PaymentStatusSection}
           {OrderDetailsSection}
+          {IntakeSection}
         </div>
         <div className="flex flex-col gap-6">
           {TimelineSection}

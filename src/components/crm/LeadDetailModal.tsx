@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
-import type { Lead, PipelineStage, CommunicationEntry } from "./types";
+import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch } from "./types";
 import { pipelineStages } from "./types";
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
   onSave: (lead: Lead) => void | Promise<void>;
   onDelete: (lead: Lead) => void;
   matchingClientId?: string | null;
+  duplicateMatch?: DuplicateMatch | null;
   onViewClient?: () => void;
   onQuestionnaire?: () => void;
 }
@@ -135,7 +137,7 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, onViewClient, onQuestionnaire }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
@@ -276,6 +278,24 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
       footer={footer}
     >
       <div className="flex flex-col gap-8">
+
+        {duplicateMatch && (
+          <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-xs ${
+            duplicateMatch.matchType === "likely_existing"
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : "border-yellow-200 bg-yellow-50 text-yellow-900"
+          }`}>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">
+                {duplicateMatch.matchType === "likely_existing" ? "Likely existing client" : "Possible duplicate"}
+              </p>
+              <p className="mt-0.5 text-xs opacity-80">
+                {duplicateMatch.clientName} is already in your client list. Review before approving.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Snapshot + Company Profile */}
         <div className="grid gap-6 sm:grid-cols-2">
