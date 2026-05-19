@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Edit2, Mail, Phone, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { formatPhoneNumber } from "@/lib/formatPhone";
@@ -182,7 +183,11 @@ export default function VendorDetailPage() {
           </button>
           <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
             <div className="min-w-0">
-              <h1 className="break-words text-2xl font-bold leading-tight tracking-tight text-white md:text-4xl">{vendor.name}</h1>
+              <InlineEditTitle
+                value={vendor.name}
+                onSave={name => upsertItem({ ...vendor, name })}
+                className="break-words text-2xl font-bold leading-tight tracking-tight text-white md:text-4xl"
+              />
               <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
                 <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.contact || "No contact"}</span>
                 <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.email || "No email"}</span>

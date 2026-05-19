@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
+import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch } from "./types";
@@ -271,7 +272,13 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
 
   return (
     <ModalShell
-      title={current.company}
+      title={
+        <InlineEditTitle
+          value={current.company}
+          onSave={v => patch({ company: v })}
+          as="span"
+        />
+      }
       subtitle={[current.contact, current.email, current.phone].filter(Boolean).join(" · ")}
       onClose={onClose}
       maxWidth="max-w-3xl"

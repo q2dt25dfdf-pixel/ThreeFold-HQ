@@ -6,6 +6,7 @@ import { ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Trash2 } from "lu
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import {
   centsToCurrency,
@@ -961,7 +962,11 @@ export default function OrderDetailPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Order</p>
-              <h1 className="mt-2 break-words text-2xl font-bold leading-tight text-white md:text-4xl">{order.orderName}</h1>
+              <InlineEditTitle
+                value={order.orderName}
+                onSave={orderName => upsertItem({ ...order, orderName })}
+                className="mt-2 break-words text-2xl font-bold leading-tight text-white md:text-4xl"
+              />
               <p className="mt-1.5 text-sm text-slate-300">{order.client || "No client assigned"}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClass(order.status)}`}>

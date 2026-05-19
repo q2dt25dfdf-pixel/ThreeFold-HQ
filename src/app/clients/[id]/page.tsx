@@ -18,6 +18,7 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import type { QuestionnaireFile } from "@/components/crm/types";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -331,7 +332,11 @@ export default function ClientDetailPage() {
           </button>
           <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
             <div className="min-w-0">
-              <h1 className="break-words text-2xl font-semibold leading-tight tracking-tight md:text-5xl">{client.name}</h1>
+              <InlineEditTitle
+                value={client.name}
+                onSave={name => saveClient({ name })}
+                className="break-words text-2xl font-semibold leading-tight tracking-tight text-white md:text-5xl"
+              />
               <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
                 <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{client.contact || "No contact"}</span>
                 <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{client.email || "No email"}</span>

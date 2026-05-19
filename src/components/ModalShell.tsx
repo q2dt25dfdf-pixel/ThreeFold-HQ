@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 
 type Props = {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   maxWidth?: string;
   onClose: () => void;
