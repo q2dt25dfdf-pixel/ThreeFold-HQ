@@ -2,37 +2,24 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { randomUUID } from 'crypto'
 
-const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:5500',
-  'https://three-fold-hq.vercel.app',
-]
-
 function normalizeForMatch(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
 }
 
-function corsHeaders(origin: string | null) {
-  const allowed = origin && (
-    ALLOWED_ORIGINS.includes(origin) ||
-    origin.endsWith('.netlify.app') ||
-    origin.endsWith('.netlify.com')
-  )
+function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   }
 }
 
-export async function OPTIONS(request: Request) {
-  const origin = request.headers.get('origin')
-  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders() })
 }
 
 export async function POST(request: Request) {
-  const origin = request.headers.get('origin')
-  const headers = corsHeaders(origin)
+  const headers = corsHeaders()
 
   try {
     const body = await request.json()

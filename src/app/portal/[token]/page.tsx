@@ -335,7 +335,7 @@ export default function PortalPage() {
                             <div style={s.intakeFileMeta}>{f.category.toUpperCase()} · {fmtBytes(f.size)}</div>
                           </div>
                           {f.signed_url ? (
-                            <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewLink}>DOWNLOAD →</a>
+                            <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewLink}>VIEW →</a>
                           ) : (
                             <span style={{ ...s.intakeFileMeta, flexShrink: 0 }}>Unavailable</span>
                           )}

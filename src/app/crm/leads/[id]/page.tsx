@@ -6,7 +6,6 @@ import { ArrowLeft, Globe, Building2, User, Package, Palette, Paperclip } from '
 import { supabase } from '@/lib/supabase'
 import { LoadingState } from '@/components/AppState'
 import type { Lead } from '@/components/crm/types'
-import { getSignedUrls } from '@/lib/getSignedUrl'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -72,14 +71,23 @@ export default function LeadQuestionnairePage() {
     setFileUrls({})
     setFileUrlsLoaded(false)
     if (!files?.length) return
-    getSignedUrls(files.map((f) => f.path).filter(Boolean)).then((urls) => {
-      setFileUrls(urls)
-      setFileUrlsLoaded(true)
-    }).catch(() => {
-      setFileUrls({})
-      setFileUrlsLoaded(true)
+    const paths = files.map((f) => f.path).filter(Boolean)
+    fetch('/api/internal/signed-urls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
     })
-  }, [lead?.id, lead?.questionnaire_files])
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((urls: Record<string, string>) => {
+        setFileUrls(urls)
+        setFileUrlsLoaded(true)
+      })
+      .catch(() => {
+        setFileUrls({})
+        setFileUrlsLoaded(true)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.id])
 
   if (loading) return <LoadingState />
 
@@ -178,7 +186,7 @@ export default function LeadQuestionnairePage() {
                           </span>
                           {url ? (
                             <a href={url} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-900 px-3 py-1 text-[10px] font-semibold text-white hover:bg-slate-700">
-                              Download
+                              View
                             </a>
                           ) : fileUrlsLoaded ? (
                             <span className="text-[10px] font-semibold text-rose-500">Unavailable</span>

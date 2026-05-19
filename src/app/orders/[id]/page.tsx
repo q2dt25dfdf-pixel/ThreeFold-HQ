@@ -17,7 +17,6 @@ import {
 } from "@/components/orders/OrderFormShared";
 import PortalSection from "@/components/PortalSection";
 import type { QuestionnaireFile } from "@/components/crm/types";
-import { getSignedUrls } from "@/lib/getSignedUrl";
 
 type IntakeSnapshot = {
   contact_title?: string;
@@ -337,7 +336,7 @@ export default function OrderDetailPage() {
   // Clipboard
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Signed URLs for intake file attachments
+  // Signed URLs for intake file attachments — generated server-side to avoid browser auth/RLS mismatch
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
   const [fileUrlsLoaded, setFileUrlsLoaded] = useState(false);
   useEffect(() => {
@@ -345,14 +344,23 @@ export default function OrderDetailPage() {
     setFileUrls({});
     setFileUrlsLoaded(false);
     if (!files?.length) return;
-    getSignedUrls(files.map((f) => f.path).filter(Boolean)).then((urls) => {
-      setFileUrls(urls);
-      setFileUrlsLoaded(true);
-    }).catch(() => {
-      setFileUrls({});
-      setFileUrlsLoaded(true);
-    });
-  }, [order?.id, order?.intake_snapshot?.files]);
+    const paths = files.map((f) => f.path).filter(Boolean);
+    fetch("/api/internal/signed-urls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    })
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((urls: Record<string, string>) => {
+        setFileUrls(urls);
+        setFileUrlsLoaded(true);
+      })
+      .catch(() => {
+        setFileUrls({});
+        setFileUrlsLoaded(true);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id]);
 
   // Initialize local text fields from order once
   const [initialized, setInitialized] = useState(false);
@@ -826,27 +834,27 @@ export default function OrderDetailPage() {
   const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Intake / Questionnaire</h2>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="flex flex-col gap-4">
         {intakeGroups.map((group) => (
-          <div key={group.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{group.title}</p>
+          <div key={group.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{group.title}</p>
             <div className="divide-y divide-slate-200/70">
               {group.fields.map(({ label, value }) => (
-                <div key={label} className={longIntakeLabels.has(label) ? "py-2.5" : "flex flex-wrap items-start gap-3 py-2.5"}>
+                <div key={label} className={longIntakeLabels.has(label) ? "py-3" : "flex flex-wrap items-start gap-3 py-3"}>
                   <span className="shrink-0 text-xs font-semibold text-slate-500">{label}</span>
-                  <span className={longIntakeLabels.has(label) ? "mt-1 block min-w-0 whitespace-pre-wrap break-words text-left text-xs font-medium leading-5 text-slate-900" : "min-w-0 flex-1 break-words text-left text-xs font-medium leading-5 text-slate-900"}>{value}</span>
+                  <span className={longIntakeLabels.has(label) ? "mt-1 block min-w-0 whitespace-pre-wrap break-words text-left text-xs font-medium leading-relaxed text-slate-900" : "min-w-0 flex-1 break-words text-left text-xs font-medium leading-relaxed text-slate-900"}>{value}</span>
                 </div>
               ))}
             </div>
           </div>
         ))}
         {intakeFiles.length > 0 && (
-          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Attached files</p>
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Attached files</p>
             {intakeFiles.map((file) => {
               const url = fileUrls[file.path];
               return (
-                <div key={file.id} className="flex flex-col gap-3 rounded-xl bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <div key={file.id} className="flex flex-col gap-3 rounded-xl bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium text-slate-900">{file.name}</p>
                     <p className="text-[10px] text-slate-400">{formatFileSize(file.size)}</p>
@@ -862,7 +870,7 @@ export default function OrderDetailPage() {
                         rel="noreferrer"
                         className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-slate-50"
                       >
-                        Open
+                        View
                       </a>
                     ) : fileUrlsLoaded ? (
                       <span className="text-[10px] font-semibold text-rose-500">Unavailable</span>
