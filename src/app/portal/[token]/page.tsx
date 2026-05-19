@@ -292,11 +292,11 @@ export default function PortalPage() {
                 {orderFields.length > 0 && (
                   <div style={s.intakeBlock}>
                     <div style={s.intakeSubLabel}>ORDER NEEDS</div>
-                    <div style={s.detailList}>
+                    <div style={s.briefFieldList}>
                       {orderFields.map(([k, v]) => (
-                        <div key={k} style={s.detailRow}>
-                          <span style={s.detailKey}>{k}</span>
-                          <span style={{ ...s.detailVal, maxWidth: '60%', textAlign: 'right' as const }}>{v}</span>
+                        <div key={k} style={s.briefFieldGroup}>
+                          <div style={s.briefFieldLabel}>{k}</div>
+                          <div style={s.briefFieldAnswer}>{v}</div>
                         </div>
                       ))}
                     </div>
@@ -306,11 +306,11 @@ export default function PortalPage() {
                 {designFields.length > 0 && (
                   <div style={s.intakeBlock}>
                     <div style={s.intakeSubLabel}>DESIGN DIRECTION</div>
-                    <div style={s.detailList}>
+                    <div style={s.briefFieldList}>
                       {designFields.map(([k, v]) => (
-                        <div key={k} style={s.detailRow}>
-                          <span style={s.detailKey}>{k}</span>
-                          <span style={{ ...s.detailVal, maxWidth: '60%', textAlign: 'right' as const }}>{v}</span>
+                        <div key={k} style={s.briefFieldGroup}>
+                          <div style={s.briefFieldLabel}>{k}</div>
+                          <div style={s.briefFieldAnswer}>{v}</div>
                         </div>
                       ))}
                     </div>
@@ -400,11 +400,15 @@ const s: Record<string, React.CSSProperties> = {
   mutedText: { fontSize: '12px', color: '#6F685D', letterSpacing: '0.05em', marginTop: '16px' },
   footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: '#756D62', marginBottom: '4px' },
   footerTagline: { fontSize: '10px', color: '#7F776B', letterSpacing: '0.06em' },
-  intakeSubmittedDate: { fontSize: '11px', color: '#6F685D', letterSpacing: '0.06em', marginBottom: '28px' },
-  intakeBlock: { marginBottom: '28px' },
-  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: '#756D62', marginBottom: '12px', textTransform: 'uppercase' as const },
-  intakeBody: { fontSize: '14px', color: '#332E28', lineHeight: 1.75 },
+  intakeSubmittedDate: { fontSize: '11px', color: '#6F685D', letterSpacing: '0.06em', marginBottom: '32px' },
+  intakeBlock: { marginBottom: '36px' },
+  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: '#C49A2B', marginBottom: '16px', textTransform: 'uppercase' as const },
+  intakeBody: { fontSize: '15px', color: '#1A1714', lineHeight: 1.75 },
   intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: '1px solid #DDD6CB', padding: '12px 16px', backgroundColor: '#FAF7F2' },
   intakeFileName: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a', letterSpacing: '0.02em', marginBottom: '2px' },
   intakeFileMeta: { fontSize: '10px', color: '#6F685D', letterSpacing: '0.12em' },
+  briefFieldList: { display: 'flex', flexDirection: 'column' as const, gap: '20px' },
+  briefFieldGroup: { display: 'flex', flexDirection: 'column' as const, gap: '5px' },
+  briefFieldLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const },
+  briefFieldAnswer: { fontSize: '15px', fontWeight: 500, color: '#1A1714', lineHeight: 1.65 },
 }
