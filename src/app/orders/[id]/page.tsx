@@ -339,11 +339,20 @@ export default function OrderDetailPage() {
 
   // Signed URLs for intake file attachments
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
+  const [fileUrlsLoaded, setFileUrlsLoaded] = useState(false);
   useEffect(() => {
     const files = order?.intake_snapshot?.files;
+    setFileUrls({});
+    setFileUrlsLoaded(false);
     if (!files?.length) return;
-    getSignedUrls(files.map((f) => f.path)).then(setFileUrls);
-  }, [order?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    getSignedUrls(files.map((f) => f.path).filter(Boolean)).then((urls) => {
+      setFileUrls(urls);
+      setFileUrlsLoaded(true);
+    }).catch(() => {
+      setFileUrls({});
+      setFileUrlsLoaded(true);
+    });
+  }, [order?.id, order?.intake_snapshot?.files]);
 
   // Initialize local text fields from order once
   const [initialized, setInitialized] = useState(false);
@@ -812,36 +821,37 @@ export default function OrderDetailPage() {
   ].map((group) => ({ ...group, fields: group.fields.filter((f) => f.value?.trim()) })).filter((group) => group.fields.length > 0);
 
   const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
+  const longIntakeLabels = new Set(["Company description", "Meaning / brand story", "Style preferences", "Original notes"]);
 
   const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Intake / Questionnaire</h2>
       <div className="grid gap-3 md:grid-cols-2">
         {intakeGroups.map((group) => (
-          <div key={group.title} className="rounded-2xl bg-slate-50 p-3">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{group.title}</p>
-            <div className="space-y-2">
+          <div key={group.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{group.title}</p>
+            <div className="divide-y divide-slate-200/70">
               {group.fields.map(({ label, value }) => (
-                <div key={label} className="flex flex-wrap items-start justify-between gap-3">
-                  <span className="shrink-0 text-xs text-slate-500">{label}</span>
-                  <span className="min-w-0 max-w-[60%] break-words text-right text-xs font-medium text-slate-950">{value}</span>
+                <div key={label} className={longIntakeLabels.has(label) ? "py-2.5" : "flex flex-wrap items-start gap-3 py-2.5"}>
+                  <span className="shrink-0 text-xs font-semibold text-slate-500">{label}</span>
+                  <span className={longIntakeLabels.has(label) ? "mt-1 block min-w-0 whitespace-pre-wrap break-words text-left text-xs font-medium leading-5 text-slate-900" : "min-w-0 flex-1 break-words text-left text-xs font-medium leading-5 text-slate-900"}>{value}</span>
                 </div>
               ))}
             </div>
           </div>
         ))}
         {intakeFiles.length > 0 && (
-          <div className={intakeGroups.length > 0 ? "space-y-2 rounded-2xl bg-slate-50 p-3 md:col-span-2" : "space-y-2 rounded-2xl bg-slate-50 p-3 md:col-span-2"}>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Attached files</p>
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Attached files</p>
             {intakeFiles.map((file) => {
               const url = fileUrls[file.path];
               return (
-                <div key={file.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                <div key={file.id} className="flex flex-col gap-3 rounded-xl bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium text-slate-900">{file.name}</p>
                     <p className="text-[10px] text-slate-400">{formatFileSize(file.size)}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${categoryBadgeClass(file.category)}`}>
                       {file.category}
                     </span>
@@ -852,8 +862,10 @@ export default function OrderDetailPage() {
                         rel="noreferrer"
                         className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-slate-50"
                       >
-                        Download
+                        Open
                       </a>
+                    ) : fileUrlsLoaded ? (
+                      <span className="text-[10px] font-semibold text-rose-500">Unavailable</span>
                     ) : (
                       <span className="text-[10px] text-slate-400">Loading…</span>
                     )}

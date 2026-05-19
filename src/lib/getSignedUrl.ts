@@ -34,8 +34,8 @@ export async function getSignedUrls(
   }
 
   return Object.fromEntries(
-    data
-      .filter((entry) => entry.signedUrl)
-      .map((entry) => [entry.path, entry.signedUrl]),
+    data.flatMap((entry, index) => (
+      entry.signedUrl ? [[entry.path || paths[index], entry.signedUrl] as const] : []
+    )),
   );
 }

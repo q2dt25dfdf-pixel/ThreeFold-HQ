@@ -57,6 +57,7 @@ export default function LeadQuestionnairePage() {
   const [lead, setLead] = useState<Lead | null>(null)
   const [loading, setLoading] = useState(true)
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({})
+  const [fileUrlsLoaded, setFileUrlsLoaded] = useState(false)
 
   useEffect(() => {
     supabase.from('crm_leads').select('data').eq('id', params.id).single()
@@ -68,9 +69,17 @@ export default function LeadQuestionnairePage() {
 
   useEffect(() => {
     const files = lead?.questionnaire_files
+    setFileUrls({})
+    setFileUrlsLoaded(false)
     if (!files?.length) return
-    getSignedUrls(files.map((f) => f.path)).then(setFileUrls)
-  }, [lead?.id])
+    getSignedUrls(files.map((f) => f.path).filter(Boolean)).then((urls) => {
+      setFileUrls(urls)
+      setFileUrlsLoaded(true)
+    }).catch(() => {
+      setFileUrls({})
+      setFileUrlsLoaded(true)
+    })
+  }, [lead?.id, lead?.questionnaire_files])
 
   if (loading) return <LoadingState />
 
@@ -171,6 +180,8 @@ export default function LeadQuestionnairePage() {
                             <a href={url} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-900 px-3 py-1 text-[10px] font-semibold text-white hover:bg-slate-700">
                               Download
                             </a>
+                          ) : fileUrlsLoaded ? (
+                            <span className="text-[10px] font-semibold text-rose-500">Unavailable</span>
                           ) : (
                             <span className="text-[10px] text-slate-400">Loading…</span>
                           )}

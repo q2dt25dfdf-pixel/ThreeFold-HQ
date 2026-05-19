@@ -184,10 +184,10 @@ export default function PortalPage() {
                   const current = i === currentPhaseIndex
                   return (
                     <div key={phase} style={s.timelineRow}>
-                      <span style={{ ...s.timelineNum, color: done || current ? '#C49A2B' : '#bbb' }}>
+                      <span style={{ ...s.timelineNum, color: done || current ? '#C49A2B' : '#7F776B' }}>
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span style={{ ...s.timelineLabel, color: done ? '#aaa' : current ? '#0a0a0a' : '#ccc', fontWeight: current ? 700 : 400, textDecoration: done ? 'line-through' : 'none' }}>
+                      <span style={{ ...s.timelineLabel, color: done ? '#756D62' : current ? '#0a0a0a' : '#8A8174', fontWeight: current ? 700 : 400, textDecoration: done ? 'line-through' : 'none' }}>
                         {phase.toUpperCase()}
                       </span>
                       <span style={s.timelineTick}>{done ? '✓' : current ? '←' : ''}</span>
@@ -370,15 +370,15 @@ const s: Record<string, React.CSSProperties> = {
   singleCol: { maxWidth: '660px', margin: '0 auto', padding: '64px 32px 96px' },
   headerBlock: { marginBottom: '8px' },
   logo: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.22em', color: '#0a0a0a', marginBottom: '4px' },
-  tagline: { fontSize: '11px', letterSpacing: '0.08em', color: '#999' },
+  tagline: { fontSize: '11px', letterSpacing: '0.08em', color: '#6F685D' },
   rule: { height: '1px', backgroundColor: '#DDD6CB', margin: '36px 0' },
   section: { marginBottom: '4px' },
   eyebrow: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.28em', color: '#C49A2B', marginBottom: '14px' },
   headline: { fontSize: '52px', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1, textTransform: 'uppercase', marginBottom: '10px' },
-  subheadline: { fontSize: '16px', fontWeight: 400, color: '#666', letterSpacing: '0.04em' },
+  subheadline: { fontSize: '16px', fontWeight: 400, color: '#3F3A33', letterSpacing: '0.04em' },
   statusRow: { display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' },
   badge: { backgroundColor: '#C49A2B', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em', padding: '6px 16px' },
-  deliveryText: { fontSize: '13px', color: '#666', letterSpacing: '0.04em' },
+  deliveryText: { fontSize: '13px', color: '#3F3A33', letterSpacing: '0.04em' },
   timeline: { display: 'flex', flexDirection: 'column', gap: '14px' },
   timelineRow: { display: 'flex', alignItems: 'center', gap: '16px' },
   timelineNum: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', width: '26px', flexShrink: 0 },
@@ -386,25 +386,25 @@ const s: Record<string, React.CSSProperties> = {
   timelineTick: { fontSize: '13px', color: '#C49A2B', width: '20px', textAlign: 'right' as const },
   detailList: { display: 'flex', flexDirection: 'column' },
   detailRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid #E5DDD2', padding: '12px 0' },
-  detailKey: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: '#999' },
+  detailKey: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: '#6F685D' },
   detailVal: { fontSize: '14px', fontWeight: 600, color: '#0a0a0a' },
   btnGold: { display: 'inline-block', marginTop: '24px', backgroundColor: '#C49A2B', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
   btnOutline: { display: 'inline-block', marginTop: '16px', border: '1.5px solid #0a0a0a', color: '#0a0a0a', fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
   designCard: { border: '1px solid #DDD6CB', padding: '20px', marginBottom: '12px', backgroundColor: '#FAF7F2' },
   designName: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' },
   designStatusLabel: { fontSize: '10px', letterSpacing: '0.2em', color: '#C49A2B', marginBottom: '8px' },
-  designNotes: { fontSize: '13px', color: '#666', lineHeight: 1.6, marginBottom: '12px' },
+  designNotes: { fontSize: '13px', color: '#3F3A33', lineHeight: 1.6, marginBottom: '12px' },
   viewLink: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: '#0a0a0a', textDecoration: 'none', borderBottom: '1px solid #0a0a0a', paddingBottom: '2px' },
-  notesBlock: { fontSize: '14px', color: '#444', lineHeight: 1.75, borderLeft: '2px solid #C49A2B', paddingLeft: '16px' },
-  bodyText: { fontSize: '13px', color: '#666', lineHeight: 1.7, marginBottom: '4px' },
-  mutedText: { fontSize: '12px', color: '#999', letterSpacing: '0.05em', marginTop: '16px' },
-  footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: '#aaa', marginBottom: '4px' },
-  footerTagline: { fontSize: '10px', color: '#bbb', letterSpacing: '0.06em' },
-  intakeSubmittedDate: { fontSize: '11px', color: '#999', letterSpacing: '0.06em', marginBottom: '28px' },
+  notesBlock: { fontSize: '14px', color: '#332E28', lineHeight: 1.75, borderLeft: '2px solid #C49A2B', paddingLeft: '16px' },
+  bodyText: { fontSize: '13px', color: '#3F3A33', lineHeight: 1.7, marginBottom: '4px' },
+  mutedText: { fontSize: '12px', color: '#6F685D', letterSpacing: '0.05em', marginTop: '16px' },
+  footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: '#756D62', marginBottom: '4px' },
+  footerTagline: { fontSize: '10px', color: '#7F776B', letterSpacing: '0.06em' },
+  intakeSubmittedDate: { fontSize: '11px', color: '#6F685D', letterSpacing: '0.06em', marginBottom: '28px' },
   intakeBlock: { marginBottom: '28px' },
-  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: '#aaa', marginBottom: '12px', textTransform: 'uppercase' as const },
-  intakeBody: { fontSize: '14px', color: '#444', lineHeight: 1.75 },
+  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: '#756D62', marginBottom: '12px', textTransform: 'uppercase' as const },
+  intakeBody: { fontSize: '14px', color: '#332E28', lineHeight: 1.75 },
   intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: '1px solid #DDD6CB', padding: '12px 16px', backgroundColor: '#FAF7F2' },
   intakeFileName: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a', letterSpacing: '0.02em', marginBottom: '2px' },
-  intakeFileMeta: { fontSize: '10px', color: '#999', letterSpacing: '0.12em' },
+  intakeFileMeta: { fontSize: '10px', color: '#6F685D', letterSpacing: '0.12em' },
 }
