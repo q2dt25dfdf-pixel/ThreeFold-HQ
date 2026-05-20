@@ -151,6 +151,7 @@ export default function ClientDetailPage() {
     type: "Call" as ActivityEntry["type"],
     owner: "Alliyah",
     notes: "",
+    date: new Date().toISOString().split("T")[0],
   });
   const [clientFormError, setClientFormError] = useState("");
   const [activityErrorText, setActivityErrorText] = useState("");
@@ -278,7 +279,7 @@ export default function ClientDetailPage() {
       type: activityForm.type,
       owner: activityForm.owner,
       notes: activityForm.notes.trim(),
-      date: new Date().toISOString().split("T")[0],
+      date: activityForm.date,
     };
     try {
       const response = await upsertActivity(entry);
@@ -286,7 +287,7 @@ export default function ClientDetailPage() {
         setActivityErrorText("Couldn't save activity. Please try again.");
         return;
       }
-      setActivityForm((current) => ({ ...current, notes: "" }));
+      setActivityForm((current) => ({ ...current, notes: "", date: new Date().toISOString().split("T")[0] }));
     } catch {
       setActivityErrorText("Couldn't save activity. Please try again.");
     }
@@ -565,14 +566,15 @@ export default function ClientDetailPage() {
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <h2 className="text-base md:text-lg font-semibold text-slate-950">Activity log</h2>
-          <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-3 md:p-4 lg:grid-cols-[160px_160px_1fr_auto]">
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
+          <div className="mt-5 grid gap-3 rounded-[2rem] bg-slate-50 p-3 md:p-4 lg:grid-cols-[120px_120px_140px_1fr_auto]">
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" value={activityForm.type} onChange={(event) => setActivityForm((current) => ({ ...current, type: event.target.value as ActivityEntry["type"] }))}>
               {activityTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
+            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => { setActivityForm((current) => ({ ...current, notes: event.target.value })); if (activityErrorText) setActivityErrorText(""); }} />
+            <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" value={activityForm.date} max={new Date().toISOString().split("T")[0]} onChange={(event) => setActivityForm((current) => ({ ...current, date: event.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => { setActivityForm((current) => ({ ...current, notes: event.target.value })); if (activityErrorText) setActivityErrorText(""); }} />
             <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-900 px-4 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">Log</button>
           </div>
           <FieldError message={activityErrorText} />

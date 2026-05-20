@@ -63,12 +63,14 @@ function InlineField({
   onSave,
   type = "text",
   options,
+  directEdit,
 }: {
   label: string;
   value?: string;
   onSave: (v: string) => void;
   type?: "text" | "select" | "date" | "address";
   options?: string[];
+  directEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
@@ -83,6 +85,21 @@ function InlineField({
     onSave(draftRef.current);
     setEditing(false);
   };
+
+  if (directEdit && type === "select" && options) {
+    return (
+      <div className="flex flex-col gap-2 rounded-2xl border border-slate-300/50 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-sm text-slate-600">{label}</span>
+        <select
+          className="w-full border-0 bg-transparent text-left text-base font-semibold text-slate-950 outline-none sm:w-auto sm:text-right md:text-sm"
+          value={value ?? ""}
+          onChange={(e) => onSave(e.target.value)}
+        >
+          {options.map((o) => <option key={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-slate-300/50 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -145,11 +162,13 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   // Activity log form state
   const [logType, setLogType] = useState<CommunicationEntry["type"]>("Call");
   const [logOwner, setLogOwner] = useState("Alliyah");
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [logNote, setLogNote] = useState("");
   const [logError, setLogError] = useState("");
 
   useEffect(() => {
     setData(null);
+    setLogDate(new Date().toISOString().split("T")[0]);
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
@@ -187,12 +206,13 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     const entry: CommunicationEntry = {
       id: `comm-${Date.now()}`,
       type: logType,
-      date: new Date().toISOString().split("T")[0],
+      date: logDate,
       owner: logOwner,
       summary: logNote.trim(),
     };
     patch({ communicationHistory: [entry, ...current.communicationHistory] });
     setLogNote("");
+    setLogDate(new Date().toISOString().split("T")[0]);
   };
 
   const typeColors: Record<CommunicationEntry["type"], string> = {
@@ -311,8 +331,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Snapshot — click any field to edit</p>
             <div className="space-y-3">
               <InlineField label="Estimated value" value={formatLeadValue(current.value)} onSave={(v) => patch({ value: parseLeadValue(v) })} />
-              <InlineField label="Status" value={current.status} onSave={(v) => patch({ status: v as Lead["status"] })} type="select" options={["Open", "Pending", "At Risk", "Won"]} />
-              <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} />
+              <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} directEdit />
               <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
               <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} />
             </div>
@@ -353,6 +372,13 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                   {OWNERS.map((o) => <option key={o}>{o}</option>)}
                 </select>
               </div>
+              <input
+                type="date"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-slate-400 md:text-sm"
+                value={logDate}
+                max={new Date().toISOString().split("T")[0]}
+                onChange={(e) => setLogDate(e.target.value)}
+              />
               <textarea
                 rows={2}
                 className="w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
@@ -370,7 +396,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 disabled={!logNote.trim()}
                 className="min-h-11 w-full rounded-3xl bg-slate-900 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
               >
-                Log activity · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                Log activity · {new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </button>
             </div>
 
