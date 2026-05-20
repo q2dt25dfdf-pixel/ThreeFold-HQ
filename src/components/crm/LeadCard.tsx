@@ -19,7 +19,7 @@ const stageBadgeStyles: Record<Lead["stage"], string> = {
   "Client Review": "bg-purple-100 text-purple-800",
   "Design Approved": "bg-green-100 text-green-800",
   "Quote Sent": "bg-blue-100 text-blue-800",
-  "Deposit Paid": "bg-emerald-100 text-emerald-700",
+  "Deposit Paid": "bg-teal-100 text-teal-800",
 };
 
 const statusBadgeStyles: Record<Lead["status"], string> = {
@@ -64,14 +64,14 @@ export default function LeadCard({
       className="group w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${stageBadgeStyles[lead.stage]}`}>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] ${stageBadgeStyles[lead.stage]}`}>
               {lead.stage}
             </span>
             {(lead as Lead & { source?: string }).source === "Website" && (
-              <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
                 Web
               </span>
             )}
