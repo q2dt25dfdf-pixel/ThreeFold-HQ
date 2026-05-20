@@ -543,7 +543,7 @@ export default function CRMPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:gap-4 lg:items-start lg:pr-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
-            <div key={stage} className="w-full lg:w-[260px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4">
+            <div key={stage} className="w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4">
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
