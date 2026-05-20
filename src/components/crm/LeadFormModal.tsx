@@ -233,15 +233,10 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
 
         <div className="grid gap-6 md:grid-cols-3">
           <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
-            Status
-            <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={status} onChange={(event) => setStatus(event.target.value as Lead["status"])}>
-              {leadStatuses.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-          <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
             Next Follow-Up Date
             <input type="date" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={followUpDate} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setFollowUpDate(event.target.value)} />
           </label>
+          <div />
           <div />
         </div>
 
