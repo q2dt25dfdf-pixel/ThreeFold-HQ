@@ -524,7 +524,7 @@ export default function OrderDetailPage() {
   const TimelineSection = (
     <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Timeline</h2>
-      <div className="w-full px-4">
+      <div className="w-full px-2">
         <div className="relative flex w-full items-start">
           {/* Background connector — runs between first and last circle centers */}
           <div
