@@ -67,7 +67,7 @@ export default function LeadCard({
         <div className="min-w-0 flex-1 space-y-1.5">
           <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.1em] ${stageBadgeStyles[lead.stage]}`}>
+            <span className={`inline-block whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.06em] ${stageBadgeStyles[lead.stage]}`}>
               {lead.stage}
             </span>
             {(lead as Lead & { source?: string }).source === "Website" && (
