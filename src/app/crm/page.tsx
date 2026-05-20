@@ -218,9 +218,11 @@ export default function CRMPage() {
   const { upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
-  const [viewLead, setViewLead] = useState<Lead | null>(null);
+  const [viewLeadId, setViewLeadId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [toastMessage, setToastMessage] = useState("");
+
+  const viewLead = leads.find((l) => l.id === viewLeadId) ?? null;
 
   const visibleLeads = useMemo(
     () =>
@@ -407,7 +409,6 @@ export default function CRMPage() {
     if (updated.stage === "Approved" && viewLead?.stage !== "Approved") {
       await handleApproveLead(updated);
     }
-    setViewLead(updated);
   };
 
   const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
@@ -421,7 +422,7 @@ export default function CRMPage() {
   const handleDeleteLead = async (lead: Lead) => {
     await deleteItem(lead.id);
     deleteTask(autoFollowUpTaskId(lead.id));
-    if (viewLead?.id === lead.id) setViewLead(null);
+    if (viewLeadId === lead.id) setViewLeadId(null);
   };
 
   if (loading) return <LoadingState label="Loading CRM..." />;
@@ -512,7 +513,7 @@ export default function CRMPage() {
                       <button
                         type="button"
                         className="min-h-11 rounded-2xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                        onClick={() => setViewLead(lead)}
+                        onClick={() => setViewLeadId(lead.id)}
                       >
                         View lead
                       </button>
@@ -557,7 +558,7 @@ export default function CRMPage() {
                       lead={lead}
                       stageIndex={stageIndex}
                       totalStages={pipelineStages.length}
-                      onOpen={setViewLead}
+                      onOpen={(lead) => setViewLeadId(lead.id)}
                       onEdit={() => {}}
                       onMove={handleMoveLead}
                       onDelete={handleDeleteLead}
@@ -596,17 +597,17 @@ export default function CRMPage() {
       <LeadDetailModal
         open={Boolean(viewLead)}
         lead={viewLead}
-        onClose={() => setViewLead(null)}
+        onClose={() => setViewLeadId(null)}
         onSave={handleSaveDetailLead}
         onDelete={handleDeleteLead}
         matchingClientId={viewLead ? (findClientForLead(viewLead)?.id ?? null) : null}
         duplicateMatch={viewLead ? detectDuplicateMatch(viewLead, clients) : null}
         onViewClient={() => {
           const match = viewLead ? findClientForLead(viewLead) : null;
-          if (match) { setViewLead(null); router.push(`/clients/${match.id}`); }
+          if (match) { setViewLeadId(null); router.push(`/clients/${match.id}`); }
         }}
         onQuestionnaire={() => {
-          if (viewLead) { setViewLead(null); router.push(`/crm/leads/${viewLead.id}`); }
+          if (viewLead) { setViewLeadId(null); router.push(`/crm/leads/${viewLead.id}`); }
         }}
       />
 

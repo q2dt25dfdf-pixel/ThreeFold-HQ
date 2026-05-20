@@ -149,6 +149,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const [logError, setLogError] = useState("");
 
   useEffect(() => {
+    setData(null);
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
