@@ -524,14 +524,14 @@ export default function OrderDetailPage() {
   const TimelineSection = (
     <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Timeline</h2>
-      <div className="w-full overflow-x-auto pb-2">
-        <div className="flex min-w-[600px] items-start">
+      <div className="w-full">
+        <div className="flex w-full items-start">
           {TIMELINE_STAGES.map((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
             const isCurrent = idx === currentStageIndex;
             const isLast = idx === TIMELINE_STAGES.length - 1;
             return (
-              <div key={stage} className="flex items-start">
+              <div key={stage} className={`flex items-start${isLast ? "" : " flex-1"}`}>
                 <button
                   type="button"
                   disabled={stageSaving}
@@ -552,14 +552,14 @@ export default function OrderDetailPage() {
                       <div className={`h-2 w-2 rounded-full ${isCurrent ? "bg-white" : "bg-slate-200 group-enabled:group-hover:bg-slate-400"}`} />
                     )}
                   </div>
-                  <span className={`max-w-[58px] text-center text-[10px] leading-tight ${
+                  <span className={`max-w-[72px] text-center text-[10px] leading-tight ${
                     isCurrent ? "font-bold text-blue-700" : isCompleted ? "font-medium text-emerald-600" : "text-slate-400"
                   }`}>
                     {stage}
                   </span>
                 </button>
                 {!isLast && (
-                  <div className={`mt-3 h-0.5 w-5 shrink-0 ${idx < currentStageIndex ? "bg-emerald-400" : "bg-slate-200"}`} />
+                  <div className={`mt-3 h-0.5 flex-1 min-w-[12px] ${idx < currentStageIndex ? "bg-emerald-400" : "bg-slate-200"}`} />
                 )}
               </div>
             );
