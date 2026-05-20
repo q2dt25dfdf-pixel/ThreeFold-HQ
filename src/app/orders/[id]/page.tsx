@@ -524,45 +524,49 @@ export default function OrderDetailPage() {
   const TimelineSection = (
     <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Timeline</h2>
-      <div className="w-full">
+      <div className="w-full px-4">
         <div className="flex w-full items-start">
-          {TIMELINE_STAGES.map((stage, idx) => {
+          {TIMELINE_STAGES.flatMap((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
             const isCurrent = idx === currentStageIndex;
             const isLast = idx === TIMELINE_STAGES.length - 1;
-            return (
-              <div key={stage} className={`flex items-start${isLast ? "" : " flex-1"}`}>
-                <button
-                  type="button"
-                  disabled={stageSaving}
-                  onClick={() => handleStageClick(stage)}
-                  title={`Set stage to ${stage}`}
-                  className="group flex flex-col items-center gap-1.5 px-1 disabled:cursor-wait"
-                >
-                  <div className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${
-                    isCompleted
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : isCurrent
-                      ? "border-blue-600 bg-blue-600 text-white shadow-md shadow-blue-200"
-                      : "border-slate-200 bg-white text-slate-300 group-hover:border-slate-400 group-enabled:hover:border-slate-400"
-                  }`}>
-                    {isCompleted ? (
-                      <Check className="h-3.5 w-3.5" />
-                    ) : (
-                      <div className={`h-2 w-2 rounded-full ${isCurrent ? "bg-white" : "bg-slate-200 group-enabled:group-hover:bg-slate-400"}`} />
-                    )}
-                  </div>
-                  <span className={`max-w-[72px] text-center text-[10px] leading-tight ${
-                    isCurrent ? "font-bold text-blue-700" : isCompleted ? "font-medium text-emerald-600" : "text-slate-400"
-                  }`}>
-                    {stage}
-                  </span>
-                </button>
-                {!isLast && (
-                  <div className={`mt-3 h-0.5 flex-1 min-w-[12px] ${idx < currentStageIndex ? "bg-emerald-400" : "bg-slate-200"}`} />
-                )}
-              </div>
+            const node = (
+              <button
+                key={stage}
+                type="button"
+                disabled={stageSaving}
+                onClick={() => handleStageClick(stage)}
+                title={`Set stage to ${stage}`}
+                className="group flex shrink-0 flex-col items-center gap-1.5 px-1 disabled:cursor-wait"
+              >
+                <div className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${
+                  isCompleted
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : isCurrent
+                    ? "border-blue-600 bg-blue-600 text-white shadow-md shadow-blue-200"
+                    : "border-slate-200 bg-white text-slate-300 group-hover:border-slate-400 group-enabled:hover:border-slate-400"
+                }`}>
+                  {isCompleted ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <div className={`h-2 w-2 rounded-full ${isCurrent ? "bg-white" : "bg-slate-200 group-enabled:group-hover:bg-slate-400"}`} />
+                  )}
+                </div>
+                <span className={`max-w-[72px] text-center text-[10px] leading-tight ${
+                  isCurrent ? "font-bold text-blue-700" : isCompleted ? "font-medium text-emerald-600" : "text-slate-400"
+                }`}>
+                  {stage}
+                </span>
+              </button>
             );
+            if (isLast) return [node];
+            return [
+              node,
+              <div
+                key={`${stage}-line`}
+                className={`mt-3 h-0.5 flex-1 min-w-[12px] ${idx < currentStageIndex ? "bg-emerald-400" : "bg-slate-200"}`}
+              />,
+            ];
           })}
         </div>
       </div>
