@@ -525,19 +525,34 @@ export default function OrderDetailPage() {
     <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Timeline</h2>
       <div className="w-full px-4">
-        <div className="flex w-full items-start">
-          {TIMELINE_STAGES.flatMap((stage, idx) => {
+        <div className="relative flex w-full items-start">
+          {/* Background connector — runs between first and last circle centers */}
+          <div
+            className="pointer-events-none absolute h-0.5 bg-slate-200"
+            style={{ top: '14px', left: '12.5%', right: '12.5%' }}
+          />
+          {/* Completed connector overlay */}
+          {currentStageIndex > 0 && (
+            <div
+              className="pointer-events-none absolute h-0.5 bg-emerald-400"
+              style={{
+                top: '14px',
+                left: '12.5%',
+                right: `${100 - (currentStageIndex + 0.5) * 25}%`,
+              }}
+            />
+          )}
+          {TIMELINE_STAGES.map((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
             const isCurrent = idx === currentStageIndex;
-            const isLast = idx === TIMELINE_STAGES.length - 1;
-            const node = (
+            return (
               <button
                 key={stage}
                 type="button"
                 disabled={stageSaving}
                 onClick={() => handleStageClick(stage)}
                 title={`Set stage to ${stage}`}
-                className="group flex shrink-0 flex-col items-center gap-1.5 px-1 disabled:cursor-wait"
+                className="group relative z-10 flex flex-1 flex-col items-center gap-1.5 disabled:cursor-wait"
               >
                 <div className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${
                   isCompleted
@@ -559,14 +574,6 @@ export default function OrderDetailPage() {
                 </span>
               </button>
             );
-            if (isLast) return [node];
-            return [
-              node,
-              <div
-                key={`${stage}-line`}
-                className={`mt-3 h-0.5 flex-1 min-w-[12px] ${idx < currentStageIndex ? "bg-emerald-400" : "bg-slate-200"}`}
-              />,
-            ];
           })}
         </div>
       </div>
