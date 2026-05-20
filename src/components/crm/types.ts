@@ -1,8 +1,11 @@
 export const pipelineStages = [
   "New Lead",
   "Contacted",
+  "Design Phase",
+  "Client Review",
+  "Design Approved",
   "Quote Sent",
-  "Approved",
+  "Deposit Paid",
 ] as const;
 
 export type PipelineStage = (typeof pipelineStages)[number];

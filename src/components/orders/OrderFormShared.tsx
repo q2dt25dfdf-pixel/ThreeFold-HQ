@@ -9,9 +9,6 @@ export type LookupRecord = {
 };
 
 export type OrderStatus =
-  | "Design Phase"
-  | "Client Review"
-  | "Design Approved"
   | "Production"
   | "Quality Check"
   | "Ready"
@@ -30,9 +27,6 @@ export const itemOptions = [
 ];
 
 export const statusOptions: OrderStatus[] = [
-  "Design Phase",
-  "Client Review",
-  "Design Approved",
   "Production",
   "Quality Check",
   "Ready",

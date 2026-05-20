@@ -94,9 +94,6 @@ type CommButton = {
 };
 
 const TIMELINE_STAGES = [
-  "Design Phase",
-  "Client Review",
-  "Design Approved",
   "Production",
   "Quality Check",
   "Ready",
@@ -115,17 +112,17 @@ const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
 function statusToStageIndex(status: string): number {
   const s = status?.trim().toLowerCase();
   const map: Record<string, number> = {
+    production: 0,
+    "in production": 0,
     "design phase": 0,
-    "client review": 1,
-    "design approved": 2,
-    production: 3,
-    "in production": 3,
-    "quality check": 4,
-    "quality control": 4,
-    ready: 5,
-    delivered: 6,
-    fulfilled: 6,
+    "client review": 0,
+    "design approved": 0,
     draft: 0,
+    "quality check": 1,
+    "quality control": 1,
+    ready: 2,
+    delivered: 3,
+    fulfilled: 3,
   };
   return map[s] ?? 0;
 }

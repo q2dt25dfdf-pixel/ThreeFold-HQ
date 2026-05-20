@@ -69,7 +69,7 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [quantity, setQuantity] = useState("");
   const [amountCents, setAmountCents] = useState("");
-  const [status, setStatus] = useState<OrderStatus>("Design Phase");
+  const [status, setStatus] = useState<OrderStatus>("Production");
   const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
   const { saveState, runSave } = useSaveState();

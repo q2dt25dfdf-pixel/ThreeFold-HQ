@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         items: [],
         quantity: 0,
         amount: 0,
-        status: 'Design Phase',
+        status: 'Production',
         estimatedDeliveryDate: '',
         notes: '',
         source: 'Repeat Client — Website',

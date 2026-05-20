@@ -15,8 +15,11 @@ interface LeadCardProps {
 const stageBadgeStyles: Record<Lead["stage"], string> = {
   "New Lead": "bg-slate-100 text-slate-700",
   Contacted: "bg-amber-100 text-amber-800",
+  "Design Phase": "bg-indigo-100 text-indigo-800",
+  "Client Review": "bg-purple-100 text-purple-800",
+  "Design Approved": "bg-green-100 text-green-800",
   "Quote Sent": "bg-blue-100 text-blue-800",
-  Approved: "bg-emerald-100 text-emerald-700",
+  "Deposit Paid": "bg-emerald-100 text-emerald-700",
 };
 
 const statusBadgeStyles: Record<Lead["status"], string> = {
@@ -128,8 +131,9 @@ export default function LeadCard({
 const pipelineStages = [
   "New Lead",
   "Contacted",
+  "Design Phase",
+  "Client Review",
+  "Design Approved",
   "Quote Sent",
-  "Approved",
-  "In Production",
-  "Completed",
+  "Deposit Paid",
 ] as const;

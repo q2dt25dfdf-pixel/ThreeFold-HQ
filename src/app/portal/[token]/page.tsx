@@ -90,7 +90,7 @@ interface PortalData {
   intakeSummary: IntakeSummary | null
 }
 
-const PHASES = ['Design Phase','Client Review','Design Approved','Production','Quality Check','Delivery']
+const PHASES = ['Production','Quality Check','Ready','Delivered']
 
 export default function PortalPage() {
   const [data, setData] = useState<PortalData | null>(null)

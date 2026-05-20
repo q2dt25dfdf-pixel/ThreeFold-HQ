@@ -8,9 +8,6 @@ import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
 type OrderStatus =
-  | "Design Phase"
-  | "Client Review"
-  | "Design Approved"
   | "Production"
   | "Quality Check"
   | "Ready"
@@ -30,9 +27,6 @@ type Order = {
 };
 
 const statusColors: Record<OrderStatus, string> = {
-  "Design Phase": "bg-indigo-100 text-indigo-800",
-  "Client Review": "bg-purple-100 text-purple-800",
-  "Design Approved": "bg-green-100 text-green-800",
   Production: "bg-blue-100 text-blue-800",
   "Quality Check": "bg-amber-100 text-amber-800",
   Ready: "bg-teal-100 text-teal-800",
@@ -42,24 +36,25 @@ const statusColors: Record<OrderStatus, string> = {
 const statusOrder: Record<OrderStatus, number> = {
   Production: 0,
   "Quality Check": 1,
-  "Client Review": 2,
-  "Design Approved": 3,
-  "Design Phase": 4,
-  Ready: 5,
-  Delivered: 6,
+  Ready: 2,
+  Delivered: 3,
 };
 
 const legacyStatusMap: Record<string, OrderStatus> = {
-  draft: "Design Phase",
+  draft: "Production",
   "in production": "Production",
   "quality control": "Quality Check",
   fulfilled: "Delivered",
+  // Old design stages from before the workflow change
+  "design phase": "Production",
+  "client review": "Production",
+  "design approved": "Production",
 };
 
 const today = new Date(2026, 4, 13);
 
 function normalizeOrder(order: Order): Order {
-  const rawStatus = order.status ?? "Design Phase";
+  const rawStatus = order.status ?? "Production";
   const status = (legacyStatusMap[rawStatus.trim().toLowerCase()] ?? rawStatus) as OrderStatus;
   return {
     ...order,
@@ -137,9 +132,6 @@ export default function OrdersPage() {
             onChange={(event) => setFilter(event.target.value as OrderStatus | "All")}
           >
             <option>All</option>
-            <option>Design Phase</option>
-            <option>Client Review</option>
-            <option>Design Approved</option>
             <option>Production</option>
             <option>Quality Check</option>
             <option>Ready</option>

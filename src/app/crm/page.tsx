@@ -84,7 +84,7 @@ function normalizeForMatch(s: string): string {
 }
 
 function detectDuplicateMatch(lead: Lead, clients: Client[]): DuplicateMatch | null {
-  if (lead.stage === "Approved") return null;
+  if (isDepositPaid(lead.stage as string)) return null;
 
   const email = lead.email?.trim().toLowerCase();
   const company = normalizeForMatch(lead.company);
@@ -119,6 +119,19 @@ function detectDuplicateMatch(lead: Lead, clients: Client[]): DuplicateMatch | n
 
 const autoFollowUpTaskId = (leadId: string) => "crm-followup-" + leadId;
 const hasFollowUpDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
+
+// "Approved" is the legacy final CRM stage name — treat it same as "Deposit Paid"
+function isDepositPaid(stage: string): boolean {
+  return stage === "Deposit Paid" || stage === "Approved";
+}
+
+// Map old stage names from existing Supabase records to the new pipeline
+const LEGACY_CRM_STAGES: Record<string, PipelineStage> = { Approved: "Deposit Paid" };
+function normalizeCRMStage(stage: string): PipelineStage {
+  if (LEGACY_CRM_STAGES[stage]) return LEGACY_CRM_STAGES[stage];
+  if ((pipelineStages as readonly string[]).includes(stage)) return stage as PipelineStage;
+  return "New Lead";
+}
 const defaultFollowUpTaskNotes = "Auto-generated from CRM lead. Log interaction notes here after follow-up.";
 const normalizeMatchValue = (value: string | undefined) => (value ?? "").trim().toLowerCase();
 
@@ -184,7 +197,7 @@ const initialLeads: Lead[] = [
     value: 41000,
     notes: "Production kickoff completed. Monitoring launch deliverables and weekly status reviews.",
     owner: "Hannah",
-    stage: "Approved",
+    stage: "Deposit Paid",
     followUpDate: "2026-05-19",
     status: "Open",
     communicationHistory: [
@@ -201,7 +214,7 @@ const initialLeads: Lead[] = [
     value: 12500,
     notes: "Project completed successfully. Preparing client handoff, documentation, and follow-up items.",
     owner: "Jordan",
-    stage: "Approved",
+    stage: "Deposit Paid",
     followUpDate: "2026-05-20",
     status: "Won",
     communicationHistory: [
@@ -236,7 +249,7 @@ export default function CRMPage() {
     () =>
       pipelineStages.map((stage) => ({
         stage,
-        leads: visibleLeads.filter((lead) => lead.stage === stage),
+        leads: visibleLeads.filter((lead) => normalizeCRMStage(lead.stage as string) === stage),
       })),
     [visibleLeads],
   );
@@ -363,7 +376,7 @@ export default function CRMPage() {
       items: [],
       quantity: 0,
       amount: 0,
-      status: "Design Phase",
+      status: "Production",
       estimatedDeliveryDate: "",
       notes: "",
       source: lead.source === "Website" ? "Website Lead" : "CRM Lead",
@@ -406,7 +419,7 @@ export default function CRMPage() {
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
-    if (updated.stage === "Approved" && viewLead?.stage !== "Approved") {
+    if (isDepositPaid(updated.stage as string) && !isDepositPaid(viewLead?.stage as string ?? "")) {
       await handleApproveLead(updated);
     }
   };
@@ -414,7 +427,7 @@ export default function CRMPage() {
   const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
     const updated = { ...lead, stage: targetStage };
     await upsertItem(updated);
-    if (targetStage === "Approved") {
+    if (targetStage === "Deposit Paid") {
       await handleApproveLead(updated);
     }
   };
@@ -477,14 +490,14 @@ export default function CRMPage() {
           <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">${totalValue.toLocaleString()}</p>
         </div>
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Open approvals</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => lead.stage === "Approved").length}</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Deposit paid</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => isDepositPaid(lead.stage as string)).length}</p>
         </div>
       </div>
 
       {(() => {
         const followUpLeads = leads
-          .filter((l) => hasFollowUpDate(l.followUpDate) && l.stage !== "Approved")
+          .filter((l) => hasFollowUpDate(l.followUpDate) && !isDepositPaid(l.stage as string))
           .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
         if (followUpLeads.length === 0) return null;
         return (
