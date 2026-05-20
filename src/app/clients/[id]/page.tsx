@@ -145,6 +145,8 @@ export default function ClientDetailPage() {
   const [clientDraft, setClientDraft] = useState<Client | null>(null);
   const clientSave = useSaveState();
   const contactSave = useSaveState();
+  const clientNotesSave = useSaveState();
+  const [clientNotesDraft, setClientNotesDraft] = useState<string | null>(null);
   const [activityForm, setActivityForm] = useState({
     type: "Call" as ActivityEntry["type"],
     owner: "Alliyah",
@@ -290,6 +292,15 @@ export default function ClientDetailPage() {
     }
   };
 
+  const handleSaveClientNotes = async () => {
+    if (!client) return;
+    const notes = clientNotesDraft ?? client.notes;
+    await clientNotesSave.runSave(
+      () => upsertClient({ ...client, notes }),
+      () => setClientNotesDraft(null),
+    );
+  };
+
   if (clientsLoading || ordersLoading) return <LoadingState label="Loading client..." />;
 
   if (!client) {
@@ -428,7 +439,7 @@ export default function ClientDetailPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base md:text-lg font-semibold text-slate-950">Account details</h2>
-                <p className="mt-1 text-xs md:text-sm text-slate-500">Review client profile and account notes.</p>
+                <p className="mt-1 text-xs md:text-sm text-slate-500">Review client profile and account details.</p>
               </div>
               <button type="button" onClick={openClientEditor} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50">
                 <Edit2 className="h-4 w-4" aria-hidden="true" />
@@ -442,7 +453,6 @@ export default function ClientDetailPage() {
                 { label: "Website", value: client.website || "Not set" },
                 { label: "Owner", value: client.owner || "Not set" },
                 { label: "Status", value: client.status },
-                { label: "Notes", value: client.notes || "No notes added yet." },
               ].map((field) => (
                 <div key={field.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{field.label}</p>
@@ -583,6 +593,20 @@ export default function ClientDetailPage() {
             ))}
           </div>
         </section>
+
+        <section className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Notes</h2>
+          <textarea
+            rows={6}
+            value={clientNotesDraft ?? client.notes ?? ""}
+            onChange={(event) => setClientNotesDraft(event.target.value)}
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+            placeholder="Add client notes..."
+          />
+          <div className="mt-3 flex justify-end">
+            <SaveButton state={clientNotesSave.saveState} onClick={handleSaveClientNotes} className="w-full lg:w-auto" />
+          </div>
+        </section>
       </div>
 
       <AddOrderModal
@@ -652,10 +676,6 @@ export default function ClientDetailPage() {
                     setClientDraft({ ...clientDraft, orders: raw === "" ? 0 : Number(raw) });
                   }}
                 />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</span>
-                <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.notes} onChange={(event) => setClientDraft({ ...clientDraft, notes: event.target.value })} />
               </label>
             </div>
         </ModalShell>

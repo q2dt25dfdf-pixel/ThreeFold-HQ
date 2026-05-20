@@ -100,6 +100,7 @@ export default function VendorDetailPage() {
   const headerContactSave = useSaveState();
   const notesSave = useSaveState();
   const [vendorFormError, setVendorFormError] = useState("");
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
 
   const vendor = vendors.find((item) => item.id === vendorId);
   const vendorOrders = orders.filter((order) => vendor && order.vendor.trim().toLowerCase() === vendor.name.trim().toLowerCase());
@@ -146,14 +147,13 @@ export default function VendorDetailPage() {
     router.push("/vendors");
   };
 
-  const saveVendorNotes = (notes: string) => {
-    if (!vendor) return;
-    upsertItem({ ...vendor, notes });
-  };
-
   const handleSaveVendorNotes = async () => {
     if (!vendor) return;
-    await notesSave.runSave(() => upsertItem(vendor));
+    const notes = notesDraft ?? vendor.notes;
+    await notesSave.runSave(
+      () => upsertItem({ ...vendor, notes }),
+      () => setNotesDraft(null),
+    );
   };
 
   if (vendorsLoading || ordersLoading) return <LoadingState label="Loading vendor..." />;
@@ -324,8 +324,8 @@ export default function VendorDetailPage() {
           <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Notes</h2>
           <textarea
             rows={6}
-            value={vendor.notes}
-            onChange={(event) => saveVendorNotes(event.target.value)}
+            value={notesDraft ?? vendor.notes}
+            onChange={(event) => setNotesDraft(event.target.value)}
             className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
             placeholder="Add vendor notes..."
           />
