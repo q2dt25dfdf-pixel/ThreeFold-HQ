@@ -1188,7 +1188,7 @@ export default function OrderDetailPage() {
         </div>
       </section>
 
-      {/* Mobile layout — single column */}
+      {/* Mobile layout — single column (InternalNotes appears full-width below PortalSection) */}
       <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
         {TimelineSection}
         {NextActionSection}
@@ -1197,11 +1197,11 @@ export default function OrderDetailPage() {
         {OrderDetailsSection}
         {IntakeSection}
         {CommunicationSection}
-        {InternalNotesSection}
         {ClientUpdatesSection}
       </div>
 
       {/* Desktop layout — 3 columns with intake data, 2 columns without */}
+      {/* InternalNotes is rendered full-width below PortalSection for all layouts */}
       {hasIntake ? (
         <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
           <div className="flex flex-col gap-6">
@@ -1216,7 +1216,6 @@ export default function OrderDetailPage() {
           <div className="flex flex-col gap-6">
             {CommunicationSection}
             {NextActionSection}
-            {InternalNotesSection}
             {ClientUpdatesSection}
           </div>
         </div>
@@ -1226,13 +1225,12 @@ export default function OrderDetailPage() {
             {PaymentStatusSection}
             {OrderDetailsSection}
             {CommunicationSection}
+            {ClientUpdatesSection}
           </div>
           <div className="flex flex-col gap-6">
             {TimelineSection}
             {DesignVersionsSection}
             {NextActionSection}
-            {InternalNotesSection}
-            {ClientUpdatesSection}
           </div>
         </div>
       )}
@@ -1302,6 +1300,9 @@ export default function OrderDetailPage() {
       )}
 
       {order && <PortalSection orderId={params.id} />}
+
+      {/* Internal Notes — full-width below Client Portal for all order types */}
+      {InternalNotesSection}
 
       {/* Edit order modal (preserved exactly) */}
       {orderDraft && (
