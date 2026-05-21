@@ -78,6 +78,7 @@ interface DesignVersion {
   status?: string
   notes?: string
   version_number?: number
+  is_final?: boolean
 }
 
 interface PortalData {
@@ -306,6 +307,11 @@ export default function PortalPage() {
                       />
                     )}
                     <div style={v.image_signed_url ? s.designCardBody : undefined}>
+                      {v.is_final && (
+                        <div style={{ display: 'inline-block', background: '#1a7a4a', color: '#fff', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '99px', marginBottom: '8px' }}>
+                          FINAL DESIGN
+                        </div>
+                      )}
                       <div style={s.designName}>{v.name || `Version ${v.version_number || i + 1}`}</div>
                       {v.status && <div style={s.designStatusLabel}>{v.status.toUpperCase()}</div>}
                       {v.notes && <div style={s.designNotes}>{v.notes}</div>}

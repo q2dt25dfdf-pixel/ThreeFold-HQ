@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Trash2 } from "lucide-react";
+import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, RotateCcw, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -76,6 +76,9 @@ type DesignVersion = {
   status: DesignVersionStatus;
   notes: string;
   date_added: string;
+  is_final?: boolean;
+  show_in_portal?: boolean;
+  archived?: boolean;
 };
 
 type Invoice = {
@@ -185,7 +188,15 @@ function normalizeDesignVersions(versions?: DesignVersion[] | null): DesignVersi
     status: isDesignVersionStatus(version.status) ? version.status : "In Review",
     notes: version.notes ?? "",
     date_added: version.date_added ?? "",
+    is_final: version.is_final ?? false,
+    show_in_portal: version.show_in_portal,
+    archived: version.archived ?? false,
   }));
+}
+
+function isVersionInPortal(v: DesignVersion): boolean {
+  if (v.show_in_portal !== undefined) return v.show_in_portal === true;
+  return true;
 }
 
 function formatDesignVersionDate(value: string): string {
@@ -332,6 +343,7 @@ export default function OrderDetailPage() {
   });
   const designVersionsSave = useSaveState();
   const addDesignVersionSave = useSaveState();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Timeline
   const [stageSaving, setStageSaving] = useState(false);
@@ -579,6 +591,39 @@ export default function OrderDetailPage() {
     clientUpdatesSave.runSave(() => upsertItem({ ...order, client_updates: updates }));
   };
 
+  const toggleFinalDesign = (id: string) => {
+    const versions = designVersionDrafts.map((v) => ({
+      ...v,
+      is_final: v.id === id ? !v.is_final : false,
+    }));
+    setDesignVersionDrafts(versions);
+    saveDesignVersions(versions);
+  };
+
+  const toggleShowInPortal = (id: string) => {
+    const versions = designVersionDrafts.map((v) =>
+      v.id === id ? { ...v, show_in_portal: !isVersionInPortal(v) } : v,
+    );
+    setDesignVersionDrafts(versions);
+    saveDesignVersions(versions);
+  };
+
+  const moveToHistory = (id: string) => {
+    const versions = designVersionDrafts.map((v) =>
+      v.id === id ? { ...v, archived: true, is_final: false, show_in_portal: false } : v,
+    );
+    setDesignVersionDrafts(versions);
+    saveDesignVersions(versions);
+  };
+
+  const restoreFromHistory = (id: string) => {
+    const versions = designVersionDrafts.map((v) =>
+      v.id === id ? { ...v, archived: false } : v,
+    );
+    setDesignVersionDrafts(versions);
+    saveDesignVersions(versions);
+  };
+
   if (loading) return <LoadingState label="Loading order..." />;
 
   if (!order) {
@@ -601,15 +646,14 @@ export default function OrderDetailPage() {
   const totalAmount = parseAmount(invoice?.total_amount);
   const depositAmount = parseAmount(invoice?.deposit_amount);
   const balanceRemaining = parseAmount(invoice?.balance_remaining);
-  const latestProductionReady = designVersionDrafts
-    .filter((version) => version.status === "Production Ready")
-    .sort((a, b) => new Date(b.date_added).getTime() - new Date(a.date_added).getTime())[0];
-  const displayedDesignVersions = latestProductionReady
-    ? [
-        latestProductionReady,
-        ...designVersionDrafts.filter((version) => version.id !== latestProductionReady.id),
-      ]
-    : designVersionDrafts;
+  const activeVersions = designVersionDrafts
+    .filter((v) => !v.archived)
+    .sort((a, b) => {
+      if (a.is_final && !b.is_final) return -1;
+      if (!a.is_final && b.is_final) return 1;
+      return new Date(b.date_added).getTime() - new Date(a.date_added).getTime();
+    });
+  const archivedVersions = designVersionDrafts.filter((v) => v.archived);
 
   // --- Section JSX (rendered once per layout; both layouts share state) ---
 
@@ -689,40 +733,82 @@ export default function OrderDetailPage() {
         </button>
       </div>
 
-      {displayedDesignVersions.length === 0 ? (
+      {activeVersions.length === 0 ? (
         <p className="text-xs text-slate-400">No design versions added yet.</p>
       ) : (
         <div className="space-y-3">
-          {displayedDesignVersions.map((version) => {
-            const isHighlighted = latestProductionReady?.id === version.id;
+          {activeVersions.map((version) => {
+            const inPortal = isVersionInPortal(version);
             return (
               <div
                 key={version.id}
                 className={`w-full min-w-0 rounded-2xl border p-3 ${
-                  isHighlighted ? "border-blue-200 bg-blue-50" : "border-slate-100 bg-slate-50"
+                  version.is_final ? "border-emerald-200 bg-emerald-50" : "border-slate-100 bg-slate-50"
                 }`}
               >
+                {/* Header row */}
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-xs font-semibold text-slate-950">Version {version.version_number}</h3>
+                      {version.is_final && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white">
+                          <Check className="h-3 w-3" />
+                          Final Design
+                        </span>
+                      )}
                       <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${designVersionStatusBadgeClass(version.status)}`}>
-                        {version.status === "Production Ready" && <Check className="h-3 w-3" />}
                         {version.status}
                       </span>
                     </div>
                     <p className="mt-1 text-[10px] text-slate-400">Added {formatDesignVersionDate(version.date_added)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => deleteDesignVersion(version.id)}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 lg:w-auto"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2 lg:shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleFinalDesign(version.id)}
+                      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition lg:min-h-0 ${
+                        version.is_final
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      {version.is_final ? "Unmark Final" : "Mark as Final Design"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleShowInPortal(version.id)}
+                      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition lg:min-h-0 ${
+                        inPortal
+                          ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          : "border-slate-200 bg-white text-slate-400 hover:bg-slate-100"
+                      }`}
+                    >
+                      {inPortal ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                      {inPortal ? "Shown in Portal" : "Hidden from Portal"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveToHistory(version.id)}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 lg:min-h-0"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                      Move to Version History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteDesignVersion(version.id)}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border border-red-100 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 lg:min-h-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
 
+                {/* Fields */}
                 <div className="mt-3 space-y-3">
                   <input
                     type="text"
@@ -823,6 +909,56 @@ export default function OrderDetailPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Version History */}
+      {archivedVersions.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400 hover:text-slate-600"
+          >
+            Version History ({archivedVersions.length})
+            <RotateCcw className={`h-3.5 w-3.5 transition-transform ${historyOpen ? "rotate-180" : ""}`} />
+          </button>
+          {historyOpen && (
+            <div className="mt-3 space-y-2">
+              {archivedVersions.map((version) => (
+                <div key={version.id} className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700">Version {version.version_number}</span>
+                      {version.name && <span className="text-xs text-slate-500">{version.name}</span>}
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${designVersionStatusBadgeClass(version.status)}`}>
+                        {version.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-400">Added {formatDesignVersionDate(version.date_added)}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => restoreFromHistory(version.id)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteDesignVersion(version.id)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-red-100 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

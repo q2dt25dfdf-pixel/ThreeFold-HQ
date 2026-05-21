@@ -28,7 +28,11 @@ export async function GET(
   // Collect image_path values from visible design versions to batch-sign in one call
   type RawDesignVersion = Record<string, unknown>
   const visibleDesignVersions: RawDesignVersion[] = (d.design_versions || [])
-    .filter((v: RawDesignVersion) => v.visible_to_client !== false)
+    .filter((v: RawDesignVersion) => {
+      if (v.archived === true) return false;
+      if (v.show_in_portal !== undefined) return v.show_in_portal === true;
+      return v.visible_to_client !== false;
+    })
 
   const designImagePaths = visibleDesignVersions
     .map((v) => (typeof v.image_path === 'string' && v.image_path ? v.image_path : null))
