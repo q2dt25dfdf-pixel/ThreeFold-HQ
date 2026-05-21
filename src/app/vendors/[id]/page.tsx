@@ -7,6 +7,12 @@ import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
+import {
+  VENDOR_PRODUCT_CATEGORIES,
+  VENDOR_SAMPLE_STATUSES,
+  type VendorProductCategory,
+  type VendorSampleStatus,
+} from "@/lib/constants";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -22,6 +28,12 @@ type Vendor = {
   phone?: string;
   address?: string;
   website?: string;
+  moq?: string;
+  pricingNotes?: string;
+  productCategories?: VendorProductCategory[];
+  sampleStatus?: VendorSampleStatus;
+  preferredVendor?: boolean;
+  approvedVendor?: boolean;
   notes: string;
   status: VendorStatus;
   jobs: number;
@@ -47,6 +59,12 @@ const defaultVendors: Vendor[] = [
     type: "Blank supplier",
     turnaround: "2-4 days",
     contact: "Online wholesale",
+    moq: "",
+    pricingNotes: "Wholesale pricing, wide SKU range.",
+    productCategories: ["T-Shirts"],
+    sampleStatus: "Not Requested",
+    preferredVendor: true,
+    approvedVendor: true,
     notes: "Primary blank supplier. Source heavyweight oversized tees and hoodies here. Wholesale pricing, wide SKU range.",
     status: "Active",
     jobs: 1,
@@ -57,6 +75,12 @@ const defaultVendors: Vendor[] = [
     type: "Screen print / DTG",
     turnaround: "5-7 days",
     contact: "TBD",
+    moq: "",
+    pricingNotes: "",
+    productCategories: ["Screen Print"],
+    sampleStatus: "Not Requested",
+    preferredVendor: false,
+    approvedVendor: false,
     notes: "Sourcing a local Bay Area print shop for POPS first order. Need to confirm pricing, min quantities, and turnaround.",
     status: "Review",
     jobs: 0,
@@ -158,6 +182,17 @@ export default function VendorDetailPage() {
     );
   };
 
+  const toggleVendorDraftCategory = (category: VendorProductCategory) => {
+    if (!vendorDraft) return;
+    const currentCategories = vendorDraft.productCategories ?? [];
+    setVendorDraft({
+      ...vendorDraft,
+      productCategories: currentCategories.includes(category)
+        ? currentCategories.filter((item) => item !== category)
+        : [...currentCategories, category],
+    });
+  };
+
   if (vendorsLoading || ordersLoading) return <LoadingState label="Loading vendor..." />;
 
   if (!vendor) {
@@ -198,8 +233,14 @@ export default function VendorDetailPage() {
             </div>
             <div className="flex min-w-0 flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/5 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type}</span>
+                <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type || "No type"}</span>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
+                {vendor.preferredVendor && (
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Preferred Vendor</span>
+                )}
+                {vendor.approvedVendor && (
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Approved Vendor</span>
+                )}
               </div>
               <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
@@ -261,7 +302,7 @@ export default function VendorDetailPage() {
           {[
             { label: "Total orders assigned", value: String(vendorOrders.length) },
             { label: "Turnaround time", value: vendor.turnaround || "Not set" },
-            { label: "Status", value: vendor.status },
+            { label: "Sample status", value: vendor.sampleStatus || "Not Requested" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
               <p className="text-xs text-slate-500 md:text-sm">{stat.label}</p>
@@ -290,6 +331,10 @@ export default function VendorDetailPage() {
                 { label: "Contact", value: vendor.contact },
                 { label: "Address", value: vendor.address ?? "" },
                 { label: "Website", value: vendor.website ?? "" },
+                { label: "MOQ", value: vendor.moq ?? "" },
+                { label: "Sample Status", value: vendor.sampleStatus ?? "Not Requested" },
+                { label: "Preferred Vendor", value: vendor.preferredVendor ? "Yes" : "No" },
+                { label: "Approved Vendor", value: vendor.approvedVendor ? "Yes" : "No" },
                 { label: "Status", value: vendor.status },
               ].map((field) => (
                 <div key={field.label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -297,6 +342,22 @@ export default function VendorDetailPage() {
                   <span className="min-w-0 break-words text-right text-xs font-medium text-slate-950">{field.value || "Not set"}</span>
                 </div>
               ))}
+              <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                <span className="text-xs text-slate-500">Product Categories</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(vendor.productCategories ?? []).length > 0 ? (
+                    (vendor.productCategories ?? []).map((category) => (
+                      <span key={category} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{category}</span>
+                    ))
+                  ) : (
+                    <span className="text-xs font-medium text-slate-950">Not set</span>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                <span className="text-xs text-slate-500">Pricing Notes</span>
+                <p className="mt-2 whitespace-pre-wrap break-words text-xs font-medium text-slate-950">{vendor.pricingNotes || "Not set"}</p>
+              </div>
             </div>
           </div>
 
@@ -344,7 +405,7 @@ export default function VendorDetailPage() {
           title="Edit vendor"
           subtitle="Update the vendor profile and save changes."
           onClose={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
-          maxWidth="max-w-lg"
+          maxWidth="max-w-3xl"
           footer={
             <div className="space-y-3">
               <FieldError message={vendorFormError} />
@@ -396,6 +457,58 @@ export default function VendorDetailPage() {
                   <option>Review</option>
                   <option>Inactive</option>
                 </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Sample Status</span>
+                <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.sampleStatus ?? "Not Requested"} onChange={(event) => setVendorDraft({ ...vendorDraft, sampleStatus: event.target.value as VendorSampleStatus })}>
+                  {VENDOR_SAMPLE_STATUSES.map((status) => <option key={status}>{status}</option>)}
+                </select>
+              </label>
+              <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-slate-700 md:text-sm">Product Categories</legend>
+                <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                  {VENDOR_PRODUCT_CATEGORIES.map((category) => (
+                    <label key={category} className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                        checked={(vendorDraft.productCategories ?? []).includes(category)}
+                        onChange={() => toggleVendorDraftCategory(category)}
+                      />
+                      {category}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">MOQ</span>
+                  <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.moq ?? ""} onChange={(event) => setVendorDraft({ ...vendorDraft, moq: event.target.value })} />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                      checked={Boolean(vendorDraft.preferredVendor)}
+                      onChange={(event) => setVendorDraft({ ...vendorDraft, preferredVendor: event.target.checked })}
+                    />
+                    Preferred Vendor
+                  </label>
+                  <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                      checked={Boolean(vendorDraft.approvedVendor)}
+                      onChange={(event) => setVendorDraft({ ...vendorDraft, approvedVendor: event.target.checked })}
+                    />
+                    Approved Vendor
+                  </label>
+                </div>
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Pricing Notes</span>
+                <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.pricingNotes ?? ""} onChange={(event) => setVendorDraft({ ...vendorDraft, pricingNotes: event.target.value })} />
               </label>
             </div>
         </ModalShell>
