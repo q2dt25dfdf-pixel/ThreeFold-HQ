@@ -449,7 +449,7 @@ export default function ClientDetailPage() {
             </div>
             <div className="mt-5 space-y-3">
               {[
-                { label: "Industry", value: client.industry },
+                { label: "Company", value: client.industry },
                 { label: "Address", value: client.address ?? "Not set" },
                 { label: "Website", value: client.website || "Not set" },
                 { label: "Owner", value: client.owner || "Not set" },
@@ -641,7 +641,7 @@ export default function ClientDetailPage() {
             <div className="space-y-4">
               {[
                 { label: "Name", key: "name" },
-                { label: "Industry", key: "industry" },
+                { label: "Company", key: "industry" },
                 { label: "Address", key: "address" },
                 { label: "Website", key: "website" },
                 { label: "Owner", key: "owner" },

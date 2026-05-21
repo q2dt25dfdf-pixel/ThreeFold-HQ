@@ -16,8 +16,10 @@ import {
 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
-import { FOUNDERS } from "@/lib/constants";
+import { FOUNDERS, INACTIVE_ORDER_STATUSES, INACTIVE_FINANCE_STATUSES, TASK_DONE_STATUSES } from "@/lib/constants";
 import { calcBalance, calcDeposit, calcTotal } from "@/lib/invoiceCalc";
+import { formatCurrency } from "@/lib/format";
+import { stringField, statusText, readField } from "@/lib/recordUtils";
 import { extractTextFromBody } from "@/lib/noteUtils";
 import GlobalSearch from "@/components/GlobalSearch";
 import SummaryCards, { type SummaryCard } from "@/components/dashboard/SummaryCards";
@@ -28,38 +30,14 @@ type Deadline = { title: string; date: Date; type: "Order" | "Event"; href: stri
 
 const defaultRows: StorageRecord[] = [];
 const founderNames = FOUNDERS;
-const taskDoneStatuses = new Set(["done", "complete", "completed"]);
-const inactiveOrderStatuses = new Set(["delivered", "cancelled", "fulfilled", "completed", "done"]);
-const inactiveFinanceStatuses = new Set(["draft", "cancelled"]);
-
-function formatCurrency(value: number) {
-  return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-}
-
-function stringField(record: StorageRecord, key: string, fallback = "") {
-  const value = record[key];
-  return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
-}
-
-function statusText(record: StorageRecord) {
-  return stringField(record, "status").trim().toLowerCase();
-}
 
 function isTaskDone(task: StorageRecord) {
-  return task.completed === true || taskDoneStatuses.has(statusText(task));
+  return task.completed === true || TASK_DONE_STATUSES.has(statusText(task));
 }
 
 function taskOwner(task: StorageRecord) {
   const owner = stringField(task, "owner").trim();
   return owner || stringField(task, "assignedTo").trim();
-}
-
-function invoiceTotal(record: StorageRecord) {
-  return calcTotal(record);
-}
-
-function invoiceDeposit(record: StorageRecord) {
-  return calcDeposit(record);
 }
 
 function parseRecordDate(rawDate: string): Date | null {
@@ -118,7 +96,7 @@ export default function Home() {
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const activeOrders = useMemo(
-    () => orders.filter((o) => !inactiveOrderStatuses.has(statusText(o))),
+    () => orders.filter((o) => !INACTIVE_ORDER_STATUSES.has(statusText(o))),
     [orders],
   );
 
@@ -128,13 +106,13 @@ export default function Home() {
   );
 
   const unpaidDeposits = useMemo(
-    () => finances.filter((f) => f.deposit_paid !== true && !inactiveFinanceStatuses.has(statusText(f))),
+    () => finances.filter((f) => f.deposit_paid !== true && !INACTIVE_FINANCE_STATUSES.has(statusText(f))),
     [finances],
   );
 
   const totalUnpaidBalance = useMemo(
     () => finances
-      .filter((f) => !inactiveFinanceStatuses.has(statusText(f)) && f.final_paid !== true)
+      .filter((f) => !INACTIVE_FINANCE_STATUSES.has(statusText(f)) && f.final_paid !== true)
       .reduce((sum, f) => sum + calcBalance(f), 0),
     [finances],
   );
@@ -148,12 +126,12 @@ export default function Home() {
   const followUpsDue = useMemo(
     () => crmLeads
       .filter((lead) => {
-        const date = stringField(lead, "followUpDate") || stringField(lead, "follow_up_date");
+        const date = readField(lead, "followUpDate", "follow_up_date");
         return date && date !== "TBD" && date <= sevenDaysAheadISO;
       })
       .sort((a, b) => {
-        const dateA = stringField(a, "followUpDate") || stringField(a, "follow_up_date");
-        const dateB = stringField(b, "followUpDate") || stringField(b, "follow_up_date");
+        const dateA = readField(a, "followUpDate", "follow_up_date");
+        const dateB = readField(b, "followUpDate", "follow_up_date");
         return dateA.localeCompare(dateB);
       }),
     [crmLeads, sevenDaysAheadISO],
@@ -161,7 +139,7 @@ export default function Home() {
 
   const overdueFollowUpsCount = useMemo(
     () => followUpsDue.filter((l) => {
-      const date = stringField(l, "followUpDate") || stringField(l, "follow_up_date");
+      const date = readField(l, "followUpDate", "follow_up_date");
       return date < todayISO;
     }).length,
     [followUpsDue, todayISO],
@@ -176,7 +154,7 @@ export default function Home() {
     const deadlines: Deadline[] = [];
 
     for (const o of orders) {
-      if (inactiveOrderStatuses.has(statusText(o))) continue;
+      if (INACTIVE_ORDER_STATUSES.has(statusText(o))) continue;
       const dateStr = stringField(o, "dueDate") || stringField(o, "estimatedDeliveryDate") || stringField(o, "final_due_date");
       if (!dateStr) continue;
       const date = parseRecordDate(dateStr);
@@ -372,7 +350,7 @@ export default function Home() {
                   {followUpsDue.slice(0, 5).map((lead) => {
                     const company = stringField(lead, "company", stringField(lead, "name", "Unnamed lead"));
                     const contact = stringField(lead, "contact");
-                    const dateStr = stringField(lead, "followUpDate") || stringField(lead, "follow_up_date");
+                    const dateStr = readField(lead, "followUpDate", "follow_up_date");
                     const isOverdue = dateStr < todayISO;
                     const isToday   = dateStr === todayISO;
                     const dateLabel = isToday ? "Today" : (parseRecordDate(dateStr) ? formatDateShort(parseRecordDate(dateStr)!) : dateStr);
@@ -425,8 +403,8 @@ export default function Home() {
                   {unpaidDeposits.slice(0, 5).map((invoice) => {
                     const name       = stringField(invoice, "orderName", stringField(invoice, "client", "Unnamed invoice"));
                     const client     = stringField(invoice, "client", stringField(invoice, "client_name"));
-                    const depositAmt = invoiceDeposit(invoice);
-                    const total      = invoiceTotal(invoice);
+                    const depositAmt = calcDeposit(invoice);
+                    const total      = calcTotal(invoice);
                     return (
                       <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                         <div className="min-w-0 flex-1">
@@ -518,7 +496,7 @@ export default function Home() {
                       <div className="space-y-1">
                         {ownerTasks.slice(0, 3).map((task) => {
                           const title      = stringField(task, "title", stringField(task, "task", "Untitled task"));
-                          const dueDateStr = stringField(task, "dueDate") || stringField(task, "due_date");
+                          const dueDateStr = readField(task, "dueDate", "due_date");
                           const due        = dueDateStr ? parseRecordDate(dueDateStr) : null;
                           return (
                             <div key={task.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">

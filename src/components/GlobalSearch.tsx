@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { stringField } from "@/lib/recordUtils";
 import { extractTextFromBody } from "@/lib/noteUtils";
 
 type Row = Record<string, unknown> & { id: string };
@@ -26,11 +27,6 @@ type Result = {
   subtitle: string;
   href: string;
 };
-
-function str(row: Row, key: string, fallback = ""): string {
-  const v = row[key];
-  return typeof v === "string" || typeof v === "number" ? String(v) : fallback;
-}
 
 function currency(value: unknown): string {
   const n = typeof value === "number" ? value : parseFloat(String(value ?? ""));
@@ -97,16 +93,16 @@ export default function GlobalSearch() {
     const orderResults: Result[] = orders
       .filter((o) =>
         hit(
-          [str(o, "orderName"), str(o, "client"), str(o, "vendor"), str(o, "status"), str(o, "notes")].join(" "),
+          [stringField(o, "orderName"), stringField(o, "client"), stringField(o, "vendor"), stringField(o, "status"), stringField(o, "notes")].join(" "),
         ),
       )
       .map((o) => {
-        const status = str(o, "status");
+        const status = stringField(o, "status");
         const amt = currency(o.amount ?? o.total_amount);
         return {
           id: o.id,
           category: "Orders",
-          title: str(o, "orderName", "Untitled Order"),
+          title: stringField(o, "orderName", "Untitled Order"),
           subtitle: [
             status && `Status: ${status}`,
             amt && `Total: ${amt}`,
@@ -121,16 +117,16 @@ export default function GlobalSearch() {
     const clientResults: Result[] = clients
       .filter((c) =>
         hit(
-          [str(c, "name"), str(c, "industry"), str(c, "contact"), str(c, "email"), str(c, "phone"), str(c, "notes")].join(" "),
+          [stringField(c, "name"), stringField(c, "industry"), stringField(c, "contact"), stringField(c, "email"), stringField(c, "phone"), stringField(c, "notes")].join(" "),
         ),
       )
       .map((c) => ({
         id: c.id,
         category: "Clients",
-        title: str(c, "name", "Untitled Client"),
+        title: stringField(c, "name", "Untitled Client"),
         subtitle: [
-          str(c, "industry") && `Company: ${str(c, "industry")}`,
-          str(c, "contact") && `Contact: ${str(c, "contact")}`,
+          stringField(c, "industry") && `Company: ${stringField(c, "industry")}`,
+          stringField(c, "contact") && `Contact: ${stringField(c, "contact")}`,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -141,16 +137,16 @@ export default function GlobalSearch() {
     const crmResults: Result[] = crmLeads
       .filter((l) =>
         hit(
-          [str(l, "contact"), str(l, "company"), str(l, "email"), str(l, "phone"), str(l, "notes"), str(l, "stage"), str(l, "status"), str(l, "source")].join(" "),
+          [stringField(l, "contact"), stringField(l, "company"), stringField(l, "email"), stringField(l, "phone"), stringField(l, "notes"), stringField(l, "stage"), stringField(l, "status"), stringField(l, "source")].join(" "),
         ),
       )
       .map((l) => ({
         id: l.id,
         category: "CRM Leads",
-        title: str(l, "company", str(l, "contact", "Untitled Lead")),
+        title: stringField(l, "company", stringField(l, "contact", "Untitled Lead")),
         subtitle: [
-          str(l, "source") && `Source: ${str(l, "source")}`,
-          str(l, "status") && `Status: ${str(l, "status")}`,
+          stringField(l, "source") && `Source: ${stringField(l, "source")}`,
+          stringField(l, "status") && `Status: ${stringField(l, "status")}`,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -161,16 +157,16 @@ export default function GlobalSearch() {
     const invoiceResults: Result[] = finances
       .filter((f) =>
         hit(
-          [str(f, "orderName"), str(f, "client"), str(f, "client_name"), str(f, "client_company"), str(f, "status"), str(f, "notes")].join(" "),
+          [stringField(f, "orderName"), stringField(f, "client"), stringField(f, "client_name"), stringField(f, "client_company"), stringField(f, "status"), stringField(f, "notes")].join(" "),
         ),
       )
       .map((f) => {
-        const client = str(f, "client_name") || str(f, "client");
+        const client = stringField(f, "client_name") || stringField(f, "client");
         const balance = currency(f.balance_remaining ?? f.amount ?? f.total_amount);
         return {
           id: f.id,
           category: "Invoices",
-          title: str(f, "orderName", client || "Untitled Invoice"),
+          title: stringField(f, "orderName", client || "Untitled Invoice"),
           subtitle: [
             client && `Client: ${client}`,
             balance && `Balance due: ${balance}`,
@@ -185,14 +181,14 @@ export default function GlobalSearch() {
     const vendorResults: Result[] = vendors
       .filter((v) =>
         hit(
-          [str(v, "name"), str(v, "type"), str(v, "contact"), str(v, "email"), str(v, "notes")].join(" "),
+          [stringField(v, "name"), stringField(v, "type"), stringField(v, "contact"), stringField(v, "email"), stringField(v, "notes")].join(" "),
         ),
       )
       .map((v) => ({
         id: v.id,
         category: "Vendors",
-        title: str(v, "name", "Untitled Vendor"),
-        subtitle: [str(v, "type"), str(v, "contact"), str(v, "status")]
+        title: stringField(v, "name", "Untitled Vendor"),
+        subtitle: [stringField(v, "type"), stringField(v, "contact"), stringField(v, "status")]
           .filter(Boolean)
           .join(" · "),
         href: `/vendors/${v.id}`,
@@ -203,25 +199,25 @@ export default function GlobalSearch() {
       .filter((n) => {
         let bodyText = "";
         try {
-          bodyText = extractTextFromBody(str(n, "body"));
+          bodyText = extractTextFromBody(stringField(n, "body"));
         } catch {
-          bodyText = str(n, "body");
+          bodyText = stringField(n, "body");
         }
         const tags = Array.isArray(n.tags) ? (n.tags as string[]).join(" ") : "";
-        return hit([str(n, "title"), bodyText, tags].join(" "));
+        return hit([stringField(n, "title"), bodyText, tags].join(" "));
       })
       .map((n) => {
         let bodyText = "";
         try {
-          bodyText = extractTextFromBody(str(n, "body"));
+          bodyText = extractTextFromBody(stringField(n, "body"));
         } catch {
-          bodyText = str(n, "body");
+          bodyText = stringField(n, "body");
         }
         const tags = Array.isArray(n.tags) ? (n.tags as string[]) : [];
         return {
           id: n.id,
           category: "Notes",
-          title: str(n, "title") || "Untitled",
+          title: stringField(n, "title") || "Untitled",
           subtitle: tags.length
             ? tags.map((t) => `#${t}`).join(" ")
             : bodyText.slice(0, 80) || "No content",
@@ -233,14 +229,14 @@ export default function GlobalSearch() {
     const taskResults: Result[] = tasks
       .filter((t) =>
         hit(
-          [str(t, "title"), str(t, "notes"), str(t, "assignedTo"), str(t, "owner"), str(t, "priority"), str(t, "status")].join(" "),
+          [stringField(t, "title"), stringField(t, "notes"), stringField(t, "assignedTo"), stringField(t, "owner"), stringField(t, "priority"), stringField(t, "status")].join(" "),
         ),
       )
       .map((t) => ({
         id: t.id,
         category: "Tasks",
-        title: str(t, "title", str(t, "task", "Untitled Task")),
-        subtitle: [str(t, "owner") || str(t, "assignedTo"), str(t, "priority"), str(t, "status")]
+        title: stringField(t, "title", stringField(t, "task", "Untitled Task")),
+        subtitle: [stringField(t, "owner") || stringField(t, "assignedTo"), stringField(t, "priority"), stringField(t, "status")]
           .filter(Boolean)
           .join(" · "),
         href: "/tasks",

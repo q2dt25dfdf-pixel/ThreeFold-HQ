@@ -96,13 +96,13 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
 
       <div className="grid gap-6 md:grid-cols-2">
         <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
-          Industry
+          Company
           <select
             className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.industry}
             onChange={(event) => setForm({ ...form, industry: event.target.value })}
           >
-            <option value="">Select industry</option>
+            <option value="">Select type</option>
             <option>Amazon DSP</option>
             <option>Dental Office</option>
             <option>Medical Practice</option>
