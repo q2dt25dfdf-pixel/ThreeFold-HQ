@@ -63,6 +63,12 @@ interface IntakeSummary {
   files: IntakeFile[]
 }
 
+interface ClientUpdate {
+  id: string
+  date: string
+  text: string
+}
+
 interface DesignVersion {
   name?: string
   file_url?: string
@@ -91,6 +97,8 @@ interface PortalData {
   designVersions: DesignVersion[]
   clientNotes: string
   intakeSummary: IntakeSummary | null
+  lastUpdated: string
+  clientUpdates: ClientUpdate[]
 }
 
 const PHASES = ['Production','Quality Check','Ready','Delivered']
@@ -172,6 +180,40 @@ export default function PortalPage() {
               <div style={s.eyebrow}>ORDER PORTAL</div>
               <div style={s.headline}>{(data.clientName || 'Your Order').toUpperCase()}</div>
               <div style={s.subheadline}>{data.collectionName || data.orderName}</div>
+              {(data.status || data.quantity || data.depositPaid || data.balanceDue || data.lastUpdated) && (
+                <div style={s.summaryStrip}>
+                  {data.status && (
+                    <div style={s.summaryChip}>
+                      <div style={s.summaryChipLabel}>STATUS</div>
+                      <div style={s.summaryChipValue}>{data.status.toUpperCase()}</div>
+                    </div>
+                  )}
+                  {data.quantity && (
+                    <div style={s.summaryChip}>
+                      <div style={s.summaryChipLabel}>QUANTITY</div>
+                      <div style={s.summaryChipValue}>{data.quantity}</div>
+                    </div>
+                  )}
+                  {data.depositPaid && (
+                    <div style={s.summaryChip}>
+                      <div style={s.summaryChipLabel}>DEPOSIT PAID</div>
+                      <div style={s.summaryChipValue}>${Number(data.depositPaid).toLocaleString()}</div>
+                    </div>
+                  )}
+                  {data.balanceDue && (
+                    <div style={s.summaryChip}>
+                      <div style={s.summaryChipLabel}>BALANCE DUE</div>
+                      <div style={s.summaryChipValue}>${Number(data.balanceDue).toLocaleString()}</div>
+                    </div>
+                  )}
+                  {data.lastUpdated && (
+                    <div style={s.summaryChip}>
+                      <div style={s.summaryChipLabel}>LAST UPDATED</div>
+                      <div style={s.summaryChipValue}>{new Date(data.lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={s.rule} />
@@ -207,16 +249,17 @@ export default function PortalPage() {
               </div>
             </div>
 
-            <div style={s.rule} />
-
-            <div style={s.section}>
-              <div style={s.eyebrow}>ORDER DETAILS</div>
-              <div style={s.detailList}>
-                {data.items && <div style={s.detailRow}><span style={s.detailKey}>ITEMS</span><span style={s.detailVal}>{data.items}</span></div>}
-                {data.quantity && <div style={s.detailRow}><span style={s.detailKey}>QUANTITY</span><span style={s.detailVal}>{data.quantity}</span></div>}
-                {data.invoiceTotal && <div style={s.detailRow}><span style={s.detailKey}>ORDER TOTAL</span><span style={s.detailVal}>${Number(data.invoiceTotal).toLocaleString()}</span></div>}
+            {(data.items || data.quantity || data.invoiceTotal) && (<>
+              <div style={s.rule} />
+              <div style={s.section}>
+                <div style={s.eyebrow}>ORDER DETAILS</div>
+                <div style={s.detailList}>
+                  {data.items && <div style={s.detailRow}><span style={s.detailKey}>ITEMS</span><span style={s.detailVal}>{data.items}</span></div>}
+                  {data.quantity && <div style={s.detailRow}><span style={s.detailKey}>QUANTITY</span><span style={s.detailVal}>{data.quantity}</span></div>}
+                  {data.invoiceTotal && <div style={s.detailRow}><span style={s.detailKey}>ORDER TOTAL</span><span style={s.detailVal}>${Number(data.invoiceTotal).toLocaleString()}</span></div>}
+                </div>
               </div>
-            </div>
+            </>)}
 
             {(data.depositPaid || data.balanceDue || data.stripeInvoiceUrl) && (<>
               <div style={s.rule} />
@@ -230,6 +273,19 @@ export default function PortalPage() {
               </div>
             </>)}
 
+            {data.clientUpdates?.length > 0 && (<>
+              <div style={s.rule} />
+              <div style={s.section}>
+                <div style={s.eyebrow}>UPDATES</div>
+                {[...data.clientUpdates].sort((a, b) => b.date.localeCompare(a.date)).map((u) => (
+                  <div key={u.id} style={s.updateRow}>
+                    <div style={s.updateDate}>{new Date(u.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                    <div style={s.updateText}>{u.text}</div>
+                  </div>
+                ))}
+              </div>
+            </>)}
+
           </div>
 
           {/* RIGHT — visual column */}
@@ -239,24 +295,26 @@ export default function PortalPage() {
               <div style={s.section}>
                 <div style={s.eyebrow}>APPROVED DESIGNS</div>
                 {data.designVersions.map((v, i) => (
-                  <div key={i} style={s.designCard}>
-                    {/* Uploaded image — shown first when available */}
+                  <div key={i} style={v.image_signed_url ? s.designCardGallery : s.designCard}>
+                    {/* Uploaded image — full-bleed when available */}
                     {v.image_signed_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={v.image_signed_url}
                         alt={`Design preview — ${v.name || `Version ${v.version_number || i + 1}`}`}
-                        style={{ display: 'block', width: '100%', borderRadius: '2px', marginBottom: '14px', border: '1px solid #E5DDD2' }}
+                        style={{ display: 'block', width: '100%', borderRadius: '2px 2px 0 0' }}
                       />
                     )}
-                    <div style={s.designName}>{v.name || `Version ${v.version_number || i + 1}`}</div>
-                    {v.status && <div style={s.designStatusLabel}>{v.status.toUpperCase()}</div>}
-                    {v.notes && <div style={s.designNotes}>{v.notes}</div>}
-                    {/* Drive link: shown as full embed when no uploaded image; as a plain link when uploaded image is present */}
-                    {v.image_signed_url
-                      ? fileUrl(v) && <a href={fileUrl(v)} target="_blank" rel="noopener noreferrer" style={{ ...s.viewLink, display: 'inline-block', marginTop: '10px' }}>VIEW FULL DESIGN →</a>
-                      : fileUrl(v) && <DriveEmbed url={fileUrl(v)} />
-                    }
+                    <div style={v.image_signed_url ? s.designCardBody : undefined}>
+                      <div style={s.designName}>{v.name || `Version ${v.version_number || i + 1}`}</div>
+                      {v.status && <div style={s.designStatusLabel}>{v.status.toUpperCase()}</div>}
+                      {v.notes && <div style={s.designNotes}>{v.notes}</div>}
+                      {/* Drive link: full embed when no uploaded image; plain link when uploaded image is present */}
+                      {v.image_signed_url
+                        ? fileUrl(v) && <a href={fileUrl(v)} target="_blank" rel="noopener noreferrer" style={{ ...s.viewLink, display: 'inline-block', marginTop: '10px' }}>VIEW FULL DESIGN →</a>
+                        : fileUrl(v) && <DriveEmbed url={fileUrl(v)} />
+                      }
+                    </div>
                   </div>
                 ))}
               </div>
@@ -414,6 +472,15 @@ const s: Record<string, React.CSSProperties> = {
   btnGold: { display: 'inline-block', marginTop: '24px', backgroundColor: '#C49A2B', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
   btnOutline: { display: 'inline-block', marginTop: '16px', border: '1.5px solid #0a0a0a', color: '#0a0a0a', fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
   designCard: { border: '1px solid #DDD6CB', padding: '20px', marginBottom: '12px', backgroundColor: '#FAF7F2' },
+  designCardGallery: { border: '1px solid #DDD6CB', marginBottom: '12px', backgroundColor: '#FAF7F2', overflow: 'hidden' },
+  designCardBody: { padding: '16px 20px' },
+  summaryStrip: { display: 'flex', flexWrap: 'wrap' as const, gap: '10px', marginTop: '18px' },
+  summaryChip: { border: '1px solid #DDD6CB', padding: '8px 14px', backgroundColor: '#FAF7F2' },
+  summaryChipLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const, marginBottom: '3px' },
+  summaryChipValue: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a' },
+  updateRow: { marginBottom: '16px' },
+  updateDate: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.16em', color: '#9B9084', marginBottom: '4px' },
+  updateText: { fontSize: '14px', color: '#332E28', lineHeight: 1.7 },
   designName: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' },
   designStatusLabel: { fontSize: '10px', letterSpacing: '0.2em', color: '#C49A2B', marginBottom: '8px' },
   designNotes: { fontSize: '13px', color: '#3F3A33', lineHeight: 1.6, marginBottom: '12px' },

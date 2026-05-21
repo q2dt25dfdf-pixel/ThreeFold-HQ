@@ -12,7 +12,7 @@ export async function GET(
 
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('id, data')
+    .select('id, data, updated_at')
     .eq('data->>portal_token', token)
     .limit(1)
 
@@ -38,6 +38,13 @@ export async function GET(
     ? await getDesignSignedUrls(designImagePaths)
     : {}
 
+  type RawClientUpdate = { id?: unknown; date?: unknown; text?: unknown }
+  const rawUpdates: RawClientUpdate[] = Array.isArray(d.client_updates) ? (d.client_updates as RawClientUpdate[]) : []
+  const clientUpdates = rawUpdates
+    .filter((u) => u.date && u.text)
+    .map((u) => ({ id: String(u.id ?? crypto.randomUUID()), date: String(u.date), text: String(u.text) }))
+    .sort((a, b) => b.date.localeCompare(a.date))
+
   const clientSafeData = {
     orderId: order.id,
     clientName: d.client || d.client_name || d.company_name || '',
@@ -62,6 +69,8 @@ export async function GET(
         : null,
     })),
     clientNotes: d.client_notes || '',
+    lastUpdated: String((order as Record<string, unknown>).updated_at ?? '') || '',
+    clientUpdates,
   }
 
   // Intake summary — client-safe fields only, private files excluded

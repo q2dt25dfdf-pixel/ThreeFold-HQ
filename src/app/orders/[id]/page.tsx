@@ -57,10 +57,13 @@ type Order = {
   nextAction?: string;
   internalNotes?: string;
   design_versions?: DesignVersion[];
+  client_updates?: ClientUpdate[];
   source?: string;
   lead_id?: string;
   intake_snapshot?: IntakeSnapshot;
 };
+
+type ClientUpdate = { id: string; date: string; text: string };
 
 type DesignVersionStatus = "In Review" | "Needs Revision" | "Approved" | "Production Ready";
 
@@ -336,6 +339,11 @@ export default function OrderDetailPage() {
   // Clipboard
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Client Updates
+  const [newUpdateDate, setNewUpdateDate] = useState('');
+  const [newUpdateText, setNewUpdateText] = useState('');
+  const clientUpdatesSave = useSaveState();
+
   // Design image uploads
   const [designImageUrls, setDesignImageUrls] = useState<Record<string, string>>({});
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
@@ -551,6 +559,24 @@ export default function OrderDetailPage() {
     setDesignVersionDrafts(updatedVersions);
     saveDesignVersions(updatedVersions);
     setUploadingVersionId(null);
+  };
+
+  const addClientUpdate = () => {
+    if (!order || !newUpdateDate.trim() || !newUpdateText.trim()) return;
+    const updates: ClientUpdate[] = [
+      ...(order.client_updates ?? []),
+      { id: crypto.randomUUID(), date: newUpdateDate.trim(), text: newUpdateText.trim() },
+    ];
+    clientUpdatesSave.runSave(
+      () => upsertItem({ ...order, client_updates: updates }),
+      () => { setNewUpdateDate(''); setNewUpdateText(''); },
+    );
+  };
+
+  const deleteClientUpdate = (updateId: string) => {
+    if (!order) return;
+    const updates = (order.client_updates ?? []).filter((u) => u.id !== updateId);
+    clientUpdatesSave.runSave(() => upsertItem({ ...order, client_updates: updates }));
   };
 
   if (loading) return <LoadingState label="Loading order..." />;
@@ -1019,6 +1045,51 @@ export default function OrderDetailPage() {
     </div>
   );
 
+  const ClientUpdatesSection = (
+    <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Client Updates</h2>
+      {(order.client_updates ?? []).length > 0 && (
+        <div className="mb-4 flex flex-col gap-2">
+          {[...(order.client_updates ?? [])].sort((a, b) => b.date.localeCompare(a.date)).map((u) => (
+            <div key={u.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400">{u.date}</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-700">{u.text}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => deleteClientUpdate(u.id)}
+                className="mt-0.5 shrink-0 text-slate-300 transition hover:text-red-500"
+                aria-label="Delete update"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="space-y-2">
+        <input
+          type="date"
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+          value={newUpdateDate}
+          onChange={(e) => setNewUpdateDate(e.target.value)}
+          onClick={(e) => e.currentTarget.showPicker?.()}
+        />
+        <textarea
+          rows={3}
+          className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none md:text-sm"
+          placeholder="Update text (visible to client on portal)"
+          value={newUpdateText}
+          onChange={(e) => setNewUpdateText(e.target.value)}
+        />
+        <div className="flex justify-end">
+          <SaveButton state={clientUpdatesSave.saveState} onClick={addClientUpdate} mode="add" className="w-full lg:w-auto" />
+        </div>
+      </div>
+    </div>
+  );
+
   const CommunicationSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Quick Communications</h2>
@@ -1126,6 +1197,7 @@ export default function OrderDetailPage() {
         {IntakeSection}
         {CommunicationSection}
         {InternalNotesSection}
+        {ClientUpdatesSection}
       </div>
 
       {/* Desktop layout — 3 columns */}
@@ -1143,6 +1215,7 @@ export default function OrderDetailPage() {
           {CommunicationSection}
           {NextActionSection}
           {InternalNotesSection}
+          {ClientUpdatesSection}
         </div>
       </div>
 
