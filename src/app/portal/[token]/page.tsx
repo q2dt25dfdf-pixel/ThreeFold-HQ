@@ -92,7 +92,7 @@ interface PortalData {
   quantity: string | number
   items: string
   invoiceTotal: string | number
-  depositPaid: string | number
+  depositPaid: string | number | boolean
   balanceDue: string | number
   stripeInvoiceUrl: string
   designVersions: DesignVersion[]
@@ -195,18 +195,6 @@ export default function PortalPage() {
                       <div style={s.summaryChipValue}>{data.quantity}</div>
                     </div>
                   )}
-                  {data.depositPaid && (
-                    <div style={s.summaryChip}>
-                      <div style={s.summaryChipLabel}>DEPOSIT PAID</div>
-                      <div style={s.summaryChipValue}>${Number(data.depositPaid).toLocaleString()}</div>
-                    </div>
-                  )}
-                  {data.balanceDue && (
-                    <div style={s.summaryChip}>
-                      <div style={s.summaryChipLabel}>BALANCE DUE</div>
-                      <div style={s.summaryChipValue}>${Number(data.balanceDue).toLocaleString()}</div>
-                    </div>
-                  )}
                   {data.lastUpdated && (
                     <div style={s.summaryChip}>
                       <div style={s.summaryChipLabel}>LAST UPDATED</div>
@@ -250,29 +238,60 @@ export default function PortalPage() {
               </div>
             </div>
 
-            {(data.items || data.quantity || data.invoiceTotal) && (<>
+            {(data.items || data.quantity) && (<>
               <div style={s.rule} />
               <div style={s.section}>
                 <div style={s.eyebrow}>ORDER DETAILS</div>
                 <div style={s.detailList}>
                   {data.items && <div style={s.detailRow}><span style={s.detailKey}>ITEMS</span><span style={s.detailVal}>{data.items}</span></div>}
                   {data.quantity && <div style={s.detailRow}><span style={s.detailKey}>QUANTITY</span><span style={s.detailVal}>{data.quantity}</span></div>}
-                  {data.invoiceTotal && <div style={s.detailRow}><span style={s.detailKey}>ORDER TOTAL</span><span style={s.detailVal}>${Number(data.invoiceTotal).toLocaleString()}</span></div>}
                 </div>
               </div>
             </>)}
 
-            {(data.depositPaid || data.balanceDue || data.stripeInvoiceUrl) && (<>
-              <div style={s.rule} />
-              <div style={s.section}>
-                <div style={s.eyebrow}>PAYMENT</div>
-                <div style={s.detailList}>
-                  {data.depositPaid && <div style={s.detailRow}><span style={s.detailKey}>DEPOSIT PAID</span><span style={s.detailVal}>${Number(data.depositPaid).toLocaleString()}</span></div>}
-                  {data.balanceDue && <div style={s.detailRow}><span style={s.detailKey}>BALANCE DUE</span><span style={s.detailVal}>${Number(data.balanceDue).toLocaleString()}</span></div>}
+            {(() => {
+              const totalVal = Number(data.invoiceTotal) || 0
+              if (!totalVal) return null
+              const balanceVal = Number(data.balanceDue) || 0
+              const depositIsPaid = data.depositPaid === true
+              const hasBalance = balanceVal > 0
+              const isPaidInFull = depositIsPaid && !hasBalance
+              return (<>
+                <div style={s.rule} />
+                <div style={s.section}>
+                  <div style={s.eyebrow}>PAYMENT</div>
+                  <div style={s.detailList}>
+                    <div style={s.detailRow}>
+                      <span style={s.detailKey}>TOTAL ORDER VALUE</span>
+                      <span style={s.detailVal}>${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    {depositIsPaid && (
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>DEPOSIT</span>
+                        <span style={{ ...s.detailVal, color: '#1a6644' }}>PAID ✓</span>
+                      </div>
+                    )}
+                  </div>
+                  {hasBalance && (
+                    <div style={s.paymentCalloutBalance}>
+                      <span style={{ ...s.paymentCalloutLabel, color: '#7A4A00' }}>BALANCE DUE</span>
+                      <span style={s.paymentCalloutAmountBalance}>${balanceVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {isPaidInFull && (
+                    <div style={s.paymentCalloutPaid}>
+                      <span style={{ ...s.paymentCalloutLabel, color: '#1a5c3a' }}>PAYMENT STATUS</span>
+                      <span style={s.paymentCalloutAmountPaid}>PAID IN FULL ✓</span>
+                    </div>
+                  )}
+                  {data.stripeInvoiceUrl && (
+                    <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
+                      VIEW INVOICE →
+                    </a>
+                  )}
                 </div>
-                {data.stripeInvoiceUrl && <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>PAY INVOICE →</a>}
-              </div>
-            </>)}
+              </>)
+            })()}
 
             {data.clientUpdates?.length > 0 && (<>
               <div style={s.rule} />
@@ -503,6 +522,11 @@ const s: Record<string, React.CSSProperties> = {
   intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: '1px solid #DDD6CB', padding: '12px 16px', backgroundColor: '#FAF7F2' },
   intakeFileName: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a', letterSpacing: '0.02em', marginBottom: '2px' },
   intakeFileMeta: { fontSize: '10px', color: '#6F685D', letterSpacing: '0.12em' },
+  paymentCalloutBalance: { marginTop: '12px', border: '1px solid #D4A96A', backgroundColor: '#FDF6EC', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  paymentCalloutPaid: { marginTop: '12px', border: '1px solid #8BC4A4', backgroundColor: '#EBF5EF', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  paymentCalloutLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em' },
+  paymentCalloutAmountBalance: { fontSize: '16px', fontWeight: 700, color: '#7A4A00', letterSpacing: '-0.01em' },
+  paymentCalloutAmountPaid: { fontSize: '12px', fontWeight: 700, letterSpacing: '0.14em', color: '#1a5c3a' },
   briefFieldList: { display: 'flex', flexDirection: 'column' as const, gap: '20px' },
   briefFieldGroup: { display: 'flex', flexDirection: 'column' as const, gap: '5px' },
   briefFieldLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const },
