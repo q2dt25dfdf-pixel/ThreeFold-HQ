@@ -87,6 +87,8 @@ type DesignVersion = {
 type Invoice = {
   id: string;
   client: string;
+  client_name?: string;
+  client_id?: string;
   orderName: string;
   order_id?: string;
   order_name?: string;
@@ -307,11 +309,14 @@ export default function OrderDetailPage() {
   const { data: orders, upsertItem, loading, error } = useSupabaseTable<Order>("orders", []);
   const { data: clients } = useSupabaseTable<LookupRecord>("clients", []);
   const { data: vendors } = useSupabaseTable<LookupRecord>("vendors", []);
-  const { data: invoices } = useSupabaseTable<Invoice>("finances", []);
+  const { data: invoices, upsertItem: upsertInvoice } = useSupabaseTable<Invoice>("finances", []);
 
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
   const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
 
+  // Prefer matching by order_id; fall back to name for older invoices that pre-date the id field.
+  // invoices are ordered by id DESC from Supabase (most recently created first), so .find() returns
+  // the newest when multiple invoices exist for the same order.
   const invoice = invoices.find((inv) => {
     if (!order) return false;
     const byId = inv.order_id && inv.order_id === order.id;
@@ -348,6 +353,7 @@ export default function OrderDetailPage() {
   const addDesignVersionSave = useSaveState();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [portalCopied, setPortalCopied] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
 
   // Timeline
   const [stageSaving, setStageSaving] = useState(false);
@@ -677,6 +683,39 @@ export default function OrderDetailPage() {
     ? (typeof window !== "undefined" ? window.location.origin : "") + `/portal/${portalToken}`
     : null;
 
+  const createAndOpenInvoice = async () => {
+    // If an invoice already exists, open it directly instead of creating a duplicate.
+    if (invoice) {
+      router.push(`/finances?invoice=${invoice.id}`);
+      return;
+    }
+    setCreatingInvoice(true);
+    const clientName = linkedClient?.name || order.client || "";
+    const total = Number(order.amount) || 0;
+    const deposit = total * 0.5;
+    const newInvoice: Invoice = {
+      id: `invoice-${Date.now()}`,
+      client: clientName,
+      client_name: clientName,
+      client_id: linkedClient?.id || order.client_id || "",
+      orderName: order.orderName,
+      order_name: order.orderName,
+      order_id: order.id,
+      total_amount: total,
+      deposit_amount: deposit,
+      deposit_paid: false,
+      balance_remaining: deposit,
+      final_paid: false,
+      status: "Draft",
+      notes: "",
+    };
+    const result = await upsertInvoice(newInvoice);
+    setCreatingInvoice(false);
+    if (!result.error) {
+      router.push(`/finances?invoice=${newInvoice.id}`);
+    }
+  };
+
   const QuickActionsSection = (
     <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Quick Actions</h2>
@@ -701,11 +740,16 @@ export default function OrderDetailPage() {
         {/* Create Invoice / Open Invoice */}
         <button
           type="button"
-          onClick={() => router.push("/finances")}
-          className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:min-h-0"
+          disabled={creatingInvoice}
+          onClick={() => void createAndOpenInvoice()}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold transition md:min-h-0 ${
+            creatingInvoice
+              ? "cursor-wait border-slate-100 bg-slate-50 text-slate-400"
+              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+          }`}
         >
           <FileText className="h-3.5 w-3.5 shrink-0" />
-          {invoice ? "Open Invoice" : "Create Invoice"}
+          {creatingInvoice ? "Creating…" : invoice ? "Open Invoice" : "Create Invoice"}
         </button>
 
         {/* Copy Portal Link */}

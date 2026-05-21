@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
@@ -292,6 +292,7 @@ function FinancesContent() {
     return "All";
   });
   const [query, setQuery] = useState("");
+  const invoiceParamId = searchParams.get("invoice");
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
   const addSave = useSaveState();
@@ -397,6 +398,18 @@ function FinancesContent() {
     editSave.resetSaveState();
     setEditInvoice(hydrateInvoiceLinks(invoice));
   };
+
+  // Auto-open invoice when navigated here with ?invoice=<id> (e.g. from the order page quick actions).
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenedRef.current || loading || !invoiceParamId || normalizedInvoices.length === 0) return;
+    const target = normalizedInvoices.find((inv) => inv.id === invoiceParamId);
+    if (!target) return;
+    autoOpenedRef.current = true;
+    openEditInvoice(target);
+    // openEditInvoice is stable for this purpose; invoiceParamId never changes during a session
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, normalizedInvoices]);
 
   useEffect(() => {
     if (!showModal || !form.client_id || form.order_id) return;
