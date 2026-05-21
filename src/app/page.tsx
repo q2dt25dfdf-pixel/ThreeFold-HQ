@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { FOUNDERS } from "@/lib/constants";
+import { calcDeposit, calcTotal } from "@/lib/invoiceCalc";
 
 type StorageRecord = Record<string, unknown> & { id: string };
 type SearchCategory = "Clients" | "Vendors" | "Orders" | "Finances" | "Tasks";
@@ -28,7 +30,7 @@ type SearchResult = {
 type Deadline = { title: string; date: Date; type: "Order" | "Event"; href: string };
 
 const defaultSearchRows: StorageRecord[] = [];
-const founderNames = ["Alliyah", "Hannah", "Jordan"] as const;
+const founderNames = FOUNDERS;
 const taskDoneStatuses = new Set(["done", "complete", "completed"]);
 const inactiveOrderStatuses = new Set(["delivered", "cancelled", "fulfilled", "completed", "done"]);
 const inactiveFinanceStatuses = new Set(["draft", "cancelled"]);
@@ -65,20 +67,12 @@ function taskOwner(task: StorageRecord) {
   return owner || stringField(task, "assignedTo").trim();
 }
 
-function numericAmount(value: unknown) {
-  if (typeof value === "number") return value;
-  if (typeof value !== "string") return 0;
-  const n = Number(value.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
-
 function invoiceTotal(record: StorageRecord) {
-  return numericAmount(record.total_amount ?? record.amount);
+  return calcTotal(record);
 }
 
 function invoiceDeposit(record: StorageRecord) {
-  const d = numericAmount(record.deposit_amount);
-  return d > 0 ? d : invoiceTotal(record) * 0.5;
+  return calcDeposit(record);
 }
 
 function parseRecordDate(rawDate: string): Date | null {

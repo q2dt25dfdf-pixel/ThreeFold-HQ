@@ -6,6 +6,8 @@ import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
+import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import {
   Area,
   AreaChart,
@@ -17,8 +19,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-type InvoiceStatus = "Draft" | "Sent" | "Deposit Due" | "Deposit Paid" | "In Progress" | "Final Payment Due" | "Paid in Full" | "Overdue" | "Cancelled";
 
 type Invoice = {
   id: string;
@@ -69,7 +69,7 @@ type Order = {
   notes: string;
 };
 
-const invoiceStatusOptions: InvoiceStatus[] = ["Draft", "Sent", "Deposit Due", "Deposit Paid", "In Progress", "Final Payment Due", "Paid in Full", "Overdue", "Cancelled"];
+const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
 const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
 
@@ -101,15 +101,8 @@ const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-function invoiceAmount(amount: unknown) {
-  if (typeof amount === "number") return amount;
-  if (typeof amount !== "string") return 0;
-  const n = parseFloat(amount.replace(/[^0-9.]/g, ""));
-  return isNaN(n) ? 0 : n;
-}
-
 function currencyInputValue(amount: unknown) {
-  return invoiceAmount(amount).toLocaleString("en-US", {
+  return parseAmount(amount).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
@@ -160,26 +153,24 @@ function invoiceOrderName(invoice: InvoiceFields) {
 }
 
 function invoiceTotal(invoice: InvoiceFields) {
-  return invoiceAmount(invoice.total_amount || invoice.amount);
+  return calcTotal(invoice);
 }
 
 function invoiceDeposit(invoice: InvoiceFields) {
-  const explicitDeposit = invoiceAmount(invoice.deposit_amount);
-  return explicitDeposit > 0 ? explicitDeposit : invoiceTotal(invoice) * 0.5;
+  return calcDeposit(invoice);
 }
 
 function invoiceBalance(invoice: InvoiceFields) {
-  const explicitBalance = invoiceAmount(invoice.balance_remaining);
-  return explicitBalance > 0 ? explicitBalance : Math.max(invoiceTotal(invoice) - invoiceDeposit(invoice), 0);
+  return calcBalance(invoice);
 }
 
 function invoiceCollected(invoice: InvoiceFields) {
-  return (invoice.deposit_paid ? invoiceDeposit(invoice) : 0) + (invoice.final_paid ? invoiceTotal(invoice) : 0);
+  return calcCollected({ ...invoice, deposit_paid: Boolean(invoice.deposit_paid), final_paid: Boolean(invoice.final_paid) });
 }
 
 function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
   const total = invoiceTotal(invoice);
-  const deposit = invoiceAmount(invoice.deposit_amount) > 0 ? invoiceAmount(invoice.deposit_amount) : total * 0.5;
+  const deposit = parseAmount(invoice.deposit_amount) > 0 ? parseAmount(invoice.deposit_amount) : total * 0.5;
   const balance = Math.max(total - deposit, 0);
 
   return {
@@ -259,7 +250,7 @@ function applyClientToInvoice<T extends InvoiceFields>(invoice: T, client: Clien
 function applyOrderToInvoice<T extends InvoiceFields>(invoice: T, order: Order): T {
   const orderName = orderDisplayName(order);
   const existingTotal = invoiceTotal(invoice);
-  const orderAmount = invoiceAmount(order.amount);
+  const orderAmount = parseAmount(order.amount);
   const total = existingTotal > 0 ? existingTotal : orderAmount;
 
   return normalizeInvoice({

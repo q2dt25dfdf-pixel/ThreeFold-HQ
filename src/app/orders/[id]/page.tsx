@@ -18,6 +18,7 @@ import {
 } from "@/components/orders/OrderFormShared";
 import PortalSection from "@/components/PortalSection";
 import type { QuestionnaireFile } from "@/components/crm/types";
+import { parseAmount } from "@/lib/invoiceCalc";
 
 type IntakeSnapshot = {
   contact_title?: string;
@@ -202,11 +203,6 @@ function normalizeOrder(order: Order): Order {
     owner: order.owner ?? "",
     design_versions: normalizeDesignVersions(order.design_versions),
   };
-}
-
-function numericValue(v: string | number): number {
-  const n = typeof v === "number" ? v : Number(String(v).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
 }
 
 function buildCommButtons(order: Order): CommButton[] {
@@ -506,9 +502,9 @@ export default function OrderDetailPage() {
 
   const currentStageIndex = statusToStageIndex(order.status);
   const commButtons = buildCommButtons(order);
-  const totalAmount = numericValue(invoice?.total_amount ?? 0);
-  const depositAmount = numericValue(invoice?.deposit_amount ?? 0);
-  const balanceRemaining = numericValue(invoice?.balance_remaining ?? 0);
+  const totalAmount = parseAmount(invoice?.total_amount);
+  const depositAmount = parseAmount(invoice?.deposit_amount);
+  const balanceRemaining = parseAmount(invoice?.balance_remaining);
   const latestProductionReady = designVersionDrafts
     .filter((version) => version.status === "Production Ready")
     .sort((a, b) => new Date(b.date_added).getTime() - new Date(a.date_added).getTime())[0];

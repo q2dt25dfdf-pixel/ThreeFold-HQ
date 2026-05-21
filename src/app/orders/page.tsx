@@ -51,7 +51,7 @@ const legacyStatusMap: Record<string, OrderStatus> = {
   "design approved": "Production",
 };
 
-const today = new Date(2026, 4, 13);
+const today = new Date();
 
 function normalizeOrder(order: Order): Order {
   const rawStatus = order.status ?? "Production";
