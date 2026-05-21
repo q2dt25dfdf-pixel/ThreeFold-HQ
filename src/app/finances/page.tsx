@@ -67,6 +67,9 @@ type Order = {
   status: "Draft" | "In Production" | "Quality Control" | "Fulfilled";
   estimatedDeliveryDate: string;
   notes: string;
+  invoice_total?: number;
+  deposit_paid?: boolean;
+  balance_due?: number;
 };
 
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
@@ -136,6 +139,20 @@ function normalizeInvoiceStatus(status: unknown): InvoiceStatus {
   return "Draft";
 }
 
+// Statuses that a deposit payment should advance — anything at or before "Deposit Paid" in the lifecycle.
+const PRE_DEPOSIT_STATUSES = new Set<InvoiceStatus>(["Draft", "Sent", "Deposit Due", "Deposit Paid"]);
+
+function deriveInvoiceStatus(invoice: { status: unknown; deposit_paid?: unknown; final_paid?: unknown }): InvoiceStatus {
+  const current = normalizeInvoiceStatus(invoice.status);
+  const depositPaid = Boolean(invoice.deposit_paid);
+  const finalPaid = Boolean(invoice.final_paid);
+  if (finalPaid) return "Paid in Full";
+  if (depositPaid && PRE_DEPOSIT_STATUSES.has(current)) return "Deposit Paid";
+  // If both flags are cleared but status is still payment-derived, revert to Sent.
+  if (!depositPaid && !finalPaid && (current === "Deposit Paid" || current === "Paid in Full")) return "Sent";
+  return current;
+}
+
 function clientDisplayName(client: Client) {
   return client.name || client.company || "Unnamed client";
 }
@@ -184,7 +201,7 @@ function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
     final_due_date: invoice.final_due_date || invoice.dueDate || "",
     final_paid: Boolean(invoice.final_paid),
     final_paid_date: invoice.final_paid_date || "",
-    status: normalizeInvoiceStatus(invoice.status),
+    status: deriveInvoiceStatus(invoice),
   } as T;
 }
 
@@ -199,11 +216,6 @@ function updateInvoiceDeposit<T extends InvoiceFields>(invoice: T, deposit: numb
 
 function todayDate() {
   return new Date().toISOString().split("T")[0];
-}
-
-function promptPaymentDate(label: string, currentValue?: string) {
-  const nextDate = window.prompt(label, currentValue || todayDate());
-  return nextDate === null ? currentValue || "" : nextDate;
 }
 
 function orderMatchesClient(order: Order, clientId: string | undefined, clientName: string | undefined) {
@@ -268,7 +280,7 @@ function applyOrderToInvoice<T extends InvoiceFields>(invoice: T, order: Order):
 export default function FinancesPage() {
   const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
-  const { data: orders } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const [filter, setFilter] = useState<InvoiceStatus | "All">("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -281,6 +293,19 @@ export default function FinancesPage() {
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const normalizedInvoices = useMemo(() => invoices.map((invoice) => normalizeInvoice(invoice)), [invoices]);
+
+  const syncInvoiceToOrder = async (invoice: InvoiceFields) => {
+    const orderId = invoice.order_id;
+    if (!orderId) return;
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+    await upsertOrder({
+      ...order,
+      invoice_total: calcTotal(invoice),
+      deposit_paid: Boolean(invoice.deposit_paid),
+      balance_due: calcBalance(invoice),
+    });
+  };
 
   const visible = (filter === "All" ? normalizedInvoices : normalizedInvoices.filter((invoice) => invoice.status === filter)).filter((invoice) =>
     Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()),
@@ -386,6 +411,7 @@ export default function FinancesPage() {
     await addSave.runSave(async () => {
       const response = await upsertItem(newInvoice);
       if (!response.error) {
+        await syncInvoiceToOrder(newInvoice);
         setForm(emptyForm);
         setClientDropdownOpen(false);
         setOrderDropdownOpen(false);
@@ -402,7 +428,11 @@ export default function FinancesPage() {
       return;
     }
     setFormError("");
-    await editSave.runSave(() => upsertItem(linkedInvoice), () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
+    await editSave.runSave(async () => {
+      const response = await upsertItem(linkedInvoice);
+      if (!response.error) await syncInvoiceToOrder(linkedInvoice);
+      return response;
+    }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
   };
 
   const handleDelete = async (id: string) => {
@@ -574,7 +604,7 @@ export default function FinancesPage() {
               onChange(normalizeInvoiceFinancials({
                 ...data,
                 deposit_paid: checked,
-                deposit_paid_date: checked ? promptPaymentDate("Deposit paid date", data.deposit_paid_date) : "",
+                deposit_paid_date: checked ? (data.deposit_paid_date || todayDate()) : "",
               }));
             }}
           />
@@ -621,7 +651,7 @@ export default function FinancesPage() {
               onChange(normalizeInvoiceFinancials({
                 ...data,
                 final_paid: checked,
-                final_paid_date: checked ? promptPaymentDate("Final paid date", data.final_paid_date) : "",
+                final_paid_date: checked ? (data.final_paid_date || todayDate()) : "",
               }));
             }}
           />
