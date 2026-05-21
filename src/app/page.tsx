@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
@@ -9,27 +9,18 @@ import {
   Clock,
   DollarSign,
   Package,
-  Search,
   Users,
 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { FOUNDERS } from "@/lib/constants";
 import { calcDeposit, calcTotal } from "@/lib/invoiceCalc";
+import GlobalSearch from "@/components/GlobalSearch";
 
 type StorageRecord = Record<string, unknown> & { id: string };
-type SearchCategory = "Clients" | "Vendors" | "Orders" | "Finances" | "Tasks";
-type SearchResult = {
-  id: string;
-  category: SearchCategory;
-  title: string;
-  context: string;
-  href: string;
-  searchText: string;
-};
 type Deadline = { title: string; date: Date; type: "Order" | "Event"; href: string };
 
-const defaultSearchRows: StorageRecord[] = [];
+const defaultRows: StorageRecord[] = [];
 const founderNames = FOUNDERS;
 const taskDoneStatuses = new Set(["done", "complete", "completed"]);
 const inactiveOrderStatuses = new Set(["delivered", "cancelled", "fulfilled", "completed", "done"]);
@@ -37,16 +28,6 @@ const inactiveFinanceStatuses = new Set(["draft", "cancelled"]);
 
 function formatCurrency(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-}
-
-function valueText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-function recordText(record: StorageRecord): string {
-  return Object.values(record).map(valueText).join(" ");
 }
 
 function stringField(record: StorageRecord, key: string, fallback = "") {
@@ -98,20 +79,15 @@ function statusBadgeClass(status: string) {
 
 export default function Home() {
   const router = useRouter();
-  const searchRef = useRef<HTMLDivElement | null>(null);
-  const [globalQuery, setGlobalQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
 
-  const { data: clients, loading: clientsLoading, error: clientsError } = useSupabaseTable<StorageRecord>("clients", defaultSearchRows);
-  const { data: vendors, loading: vendorsLoading, error: vendorsError } = useSupabaseTable<StorageRecord>("vendors", defaultSearchRows);
-  const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<StorageRecord>("orders", defaultSearchRows);
-  const { data: finances, loading: financesLoading, error: financesError } = useSupabaseTable<StorageRecord>("finances", defaultSearchRows);
-  const { data: tasks, loading: tasksLoading, error: tasksError } = useSupabaseTable<StorageRecord>("tasks", defaultSearchRows);
-  const { data: crmLeads, loading: crmLoading, error: crmError } = useSupabaseTable<StorageRecord>("crm_leads", defaultSearchRows);
-  const { data: calendarEvents, loading: calendarLoading, error: calendarError } = useSupabaseTable<StorageRecord>("calendar_events", defaultSearchRows);
+  const { data: orders, loading: ordersLoading, error: ordersError } = useSupabaseTable<StorageRecord>("orders", defaultRows);
+  const { data: finances, loading: financesLoading, error: financesError } = useSupabaseTable<StorageRecord>("finances", defaultRows);
+  const { data: tasks, loading: tasksLoading, error: tasksError } = useSupabaseTable<StorageRecord>("tasks", defaultRows);
+  const { data: crmLeads, loading: crmLoading, error: crmError } = useSupabaseTable<StorageRecord>("crm_leads", defaultRows);
+  const { data: calendarEvents, loading: calendarLoading, error: calendarError } = useSupabaseTable<StorageRecord>("calendar_events", defaultRows);
 
-  const loading = clientsLoading || vendorsLoading || ordersLoading || financesLoading || tasksLoading || crmLoading || calendarLoading;
-  const loadError = clientsError || vendorsError || ordersError || financesError || tasksError || crmError || calendarError;
+  const loading = ordersLoading || financesLoading || tasksLoading || crmLoading || calendarLoading;
+  const loadError = ordersError || financesError || tasksError || crmError || calendarError;
 
   const todayLabel = useMemo(
     () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
@@ -199,85 +175,6 @@ export default function Home() {
     [crmLeads, todayISO],
   );
 
-  // Search
-  const searchData = useMemo<Record<SearchCategory, StorageRecord[]>>(
-    () => ({ Clients: clients, Vendors: vendors, Orders: orders, Finances: finances, Tasks: tasks }),
-    [clients, finances, orders, tasks, vendors],
-  );
-
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!searchRef.current?.contains(event.target as Node)) setSearchOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSearchOpen(false);
-    };
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  const groupedResults = useMemo(() => {
-    const query = globalQuery.trim().toLowerCase();
-    const empty: Record<SearchCategory, SearchResult[]> = { Clients: [], Vendors: [], Orders: [], Finances: [], Tasks: [] };
-    if (query.length < 2) return empty;
-
-    const results: Record<SearchCategory, SearchResult[]> = {
-      Clients: searchData.Clients.map((client) => ({
-        id: stringField(client, "id", `client-${stringField(client, "name", "unknown")}`),
-        category: "Clients",
-        title: stringField(client, "name", "Untitled client"),
-        context: [stringField(client, "industry"), stringField(client, "contact"), stringField(client, "status")].filter(Boolean).join(" · "),
-        href: `/clients/${stringField(client, "id")}`,
-        searchText: recordText(client),
-      })),
-      Vendors: searchData.Vendors.map((vendor) => ({
-        id: stringField(vendor, "id", `vendor-${stringField(vendor, "name", "unknown")}`),
-        category: "Vendors",
-        title: stringField(vendor, "name", "Untitled vendor"),
-        context: [stringField(vendor, "type"), stringField(vendor, "contact"), stringField(vendor, "status")].filter(Boolean).join(" · "),
-        href: `/vendors/${stringField(vendor, "id")}`,
-        searchText: recordText(vendor),
-      })),
-      Orders: searchData.Orders.map((job) => ({
-        id: stringField(job, "id", `job-${stringField(job, "orderName", "unknown")}`),
-        category: "Orders",
-        title: stringField(job, "orderName", "Untitled order"),
-        context: [stringField(job, "client"), stringField(job, "vendor"), stringField(job, "status")].filter(Boolean).join(" · "),
-        href: `/orders/${stringField(job, "id")}`,
-        searchText: recordText(job),
-      })),
-      Finances: searchData.Finances.map((invoice) => ({
-        id: stringField(invoice, "id", `invoice-${stringField(invoice, "orderName", "unknown")}`),
-        category: "Finances",
-        title: stringField(invoice, "orderName", stringField(invoice, "client", "Untitled invoice")),
-        context: [stringField(invoice, "client_name", stringField(invoice, "client")), stringField(invoice, "total_amount", stringField(invoice, "amount")), stringField(invoice, "status")].filter(Boolean).join(" · "),
-        href: "/finances",
-        searchText: recordText(invoice),
-      })),
-      Tasks: searchData.Tasks.map((task) => ({
-        id: stringField(task, "id", `task-${stringField(task, "title", "unknown")}`),
-        category: "Tasks",
-        title: stringField(task, "title", stringField(task, "task", "Untitled task")),
-        context: [stringField(task, "owner"), stringField(task, "status"), stringField(task, "priority")].filter(Boolean).join(" · "),
-        href: "/tasks",
-        searchText: recordText(task),
-      })),
-    };
-
-    return Object.fromEntries(
-      Object.entries(results).map(([category, items]) => [
-        category,
-        items.filter((item) => item.searchText.toLowerCase().includes(query)),
-      ]),
-    ) as Record<SearchCategory, SearchResult[]>;
-  }, [globalQuery, searchData]);
-
-  const totalResults = Object.values(groupedResults).reduce((sum, items) => sum + items.length, 0);
-
   if (loading) return <LoadingState label="Loading dashboard..." />;
 
   return (
@@ -293,55 +190,8 @@ export default function Home() {
         </section>
 
         {/* Global search */}
-        <section ref={searchRef} className="relative">
-          <Search className="pointer-events-none absolute left-4 top-5 h-5 w-5 text-[#64748b]" aria-hidden="true" />
-          <input
-            className="w-full rounded-2xl border border-slate-300 bg-white py-4 pl-12 pr-4 text-xs text-slate-950 outline-none transition focus:border-[#3b82f6] focus:ring-4 focus:ring-blue-500/10 md:text-sm"
-            placeholder="Search clients, vendors, orders, finances, and tasks..."
-            value={globalQuery}
-            onChange={(event) => {
-              setGlobalQuery(event.target.value);
-              setSearchOpen(event.target.value.trim().length >= 2);
-            }}
-            onFocus={() => {
-              setSearchOpen(globalQuery.trim().length >= 2);
-            }}
-          />
-          {searchOpen && globalQuery.trim().length >= 2 && (
-            <div className="absolute left-0 right-0 z-30 mt-2 max-h-96 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
-              {totalResults === 0 ? (
-                <div className="px-4 py-6 text-sm text-slate-600">No results found</div>
-              ) : (
-                (Object.keys(groupedResults) as SearchCategory[]).map((category) => {
-                  const items = groupedResults[category];
-                  if (!items.length) return null;
-                  return (
-                    <div key={category}>
-                      <p className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-widest text-slate-700">{category}</p>
-                      {items.map((item) => (
-                        <button
-                          key={`${item.category}-${item.id}`}
-                          type="button"
-                          onClick={() => {
-                            setSearchOpen(false);
-                            setGlobalQuery("");
-                            router.push(item.href);
-                          }}
-                          className="block min-h-11 w-full cursor-pointer px-4 py-3 text-left hover:bg-slate-50"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-semibold text-slate-950 md:text-sm">{item.title}</p>
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{item.category}</span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-600">{item.context || "No additional context"}</p>
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
+        <section>
+          <GlobalSearch />
         </section>
 
         {/* 6 operational sections */}
