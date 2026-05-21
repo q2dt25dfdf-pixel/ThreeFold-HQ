@@ -67,7 +67,7 @@ type DesignVersion = {
   id: string;
   version_number: number;
   name: string;
-  drive_url: string;
+  drive_url?: string;
   image_path?: string;
   status: DesignVersionStatus;
   notes: string;
