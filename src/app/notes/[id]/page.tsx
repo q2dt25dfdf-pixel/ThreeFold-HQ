@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
+import NoteEditor from "@/components/notes/NoteEditor";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -20,7 +21,8 @@ export default function NoteDetailPage() {
   const params = useParams<{ id: string }>();
   const noteId = params.id;
 
-  const { data: notes, upsertItem, deleteItem, loading, error } = useSupabaseTable<Note>("notes", []);
+  const { data: notes, upsertItem, deleteItem, loading, error } =
+    useSupabaseTable<Note>("notes", []);
   const note = notes.find((n) => n.id === noteId);
 
   const [localNoteId, setLocalNoteId] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function NoteDetailPage() {
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      document.getElementById("note-body")?.focus();
+      document.querySelector<HTMLElement>(".note-editor-content")?.focus();
     }
   };
 
@@ -80,7 +82,9 @@ export default function NoteDetailPage() {
           Notes
         </button>
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <h1 className="text-base font-semibold text-slate-950 md:text-2xl">Note not found</h1>
+          <h1 className="text-base font-semibold text-slate-950 md:text-2xl">
+            Note not found
+          </h1>
           <p className="mt-2 text-xs text-slate-500 md:text-sm">
             This note may have been deleted or is no longer available.
           </p>
@@ -100,6 +104,7 @@ export default function NoteDetailPage() {
     <div className="mx-auto max-w-3xl space-y-4 text-xs md:text-sm">
       <ErrorBanner message={error} />
 
+      {/* Navigation bar */}
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -119,7 +124,9 @@ export default function NoteDetailPage() {
         </button>
       </div>
 
+      {/* Note editing card */}
       <div className="flex flex-col rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm md:p-10">
+        {/* Title */}
         <input
           type="text"
           value={title}
@@ -130,6 +137,7 @@ export default function NoteDetailPage() {
           className="w-full border-none bg-transparent text-2xl font-bold text-slate-950 placeholder-slate-300 outline-none md:text-4xl"
         />
 
+        {/* Timestamp */}
         <p className="mt-2 text-xs text-slate-400">
           Last edited{" "}
           {new Date(note.updated_at).toLocaleDateString("en-US", {
@@ -146,15 +154,14 @@ export default function NoteDetailPage() {
 
         <hr className="my-5 border-slate-100" />
 
-        <textarea
-          id="note-body"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Start writing…"
-          aria-label="Note body"
-          className="min-h-[50vh] w-full resize-none border-none bg-transparent text-sm leading-relaxed text-slate-800 placeholder-slate-300 outline-none md:text-base"
+        {/* Rich text editor — keyed to note ID so it reinitializes on navigation */}
+        <NoteEditor
+          key={note.id}
+          initialContent={note.body}
+          onUpdate={setBody}
         />
 
+        {/* Footer */}
         <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
           <SaveButton
             state={save.saveState}

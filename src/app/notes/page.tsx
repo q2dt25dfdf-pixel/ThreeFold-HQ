@@ -7,6 +7,7 @@ import ModalShell from "@/components/ModalShell";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { extractTextFromBody } from "@/lib/noteUtils";
 
 export type Note = {
   id: string;
@@ -32,7 +33,7 @@ export default function NotesPage() {
     return notes.filter(
       (n) =>
         n.title.toLowerCase().includes(q) ||
-        n.body.toLowerCase().includes(q),
+        extractTextFromBody(n.body).toLowerCase().includes(q),
     );
   }, [notes, search]);
 
@@ -140,7 +141,9 @@ export default function NotesPage() {
                 </button>
               </div>
               {note.body && (
-                <p className="mt-2 line-clamp-3 text-xs text-slate-600">{note.body}</p>
+                <p className="mt-2 line-clamp-3 text-xs text-slate-600">
+                  {extractTextFromBody(note.body)}
+                </p>
               )}
               <p className="mt-auto pt-3 text-xs text-slate-400">
                 {new Date(note.updated_at).toLocaleDateString("en-US", {
