@@ -971,6 +971,7 @@ export default function OrderDetailPage() {
   ].map((group) => ({ ...group, fields: group.fields.filter((f) => f.value?.trim()) })).filter((group) => group.fields.length > 0);
 
   const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
+  const hasIntake = intakeGroups.length > 0 || intakeFiles.length > 0;
   const longIntakeLabels = new Set(["Company description", "Meaning / brand story", "Style preferences", "Original notes"]);
 
   const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
@@ -1200,24 +1201,41 @@ export default function OrderDetailPage() {
         {ClientUpdatesSection}
       </div>
 
-      {/* Desktop layout — 3 columns */}
-      <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
-        <div className="flex flex-col gap-6">
-          {PaymentStatusSection}
-          {OrderDetailsSection}
-          {IntakeSection}
+      {/* Desktop layout — 3 columns with intake data, 2 columns without */}
+      {hasIntake ? (
+        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+          <div className="flex flex-col gap-6">
+            {PaymentStatusSection}
+            {OrderDetailsSection}
+            {IntakeSection}
+          </div>
+          <div className="flex flex-col gap-6">
+            {TimelineSection}
+            {DesignVersionsSection}
+          </div>
+          <div className="flex flex-col gap-6">
+            {CommunicationSection}
+            {NextActionSection}
+            {InternalNotesSection}
+            {ClientUpdatesSection}
+          </div>
         </div>
-        <div className="flex flex-col gap-6">
-          {TimelineSection}
-          {DesignVersionsSection}
+      ) : (
+        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-6">
+          <div className="flex flex-col gap-6">
+            {PaymentStatusSection}
+            {OrderDetailsSection}
+            {CommunicationSection}
+          </div>
+          <div className="flex flex-col gap-6">
+            {TimelineSection}
+            {DesignVersionsSection}
+            {NextActionSection}
+            {InternalNotesSection}
+            {ClientUpdatesSection}
+          </div>
         </div>
-        <div className="flex flex-col gap-6">
-          {CommunicationSection}
-          {NextActionSection}
-          {InternalNotesSection}
-          {ClientUpdatesSection}
-        </div>
-      </div>
+      )}
 
       {/* Add design version modal */}
       {isAddVersionOpen && (
