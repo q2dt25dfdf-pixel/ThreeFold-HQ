@@ -23,6 +23,7 @@ function DriveEmbed({ url }: { url: string }) {
   const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`
   return (
     <div style={{ marginTop: '12px' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={thumbUrl}
         alt="Design preview"
@@ -239,10 +240,23 @@ export default function PortalPage() {
                 <div style={s.eyebrow}>APPROVED DESIGNS</div>
                 {data.designVersions.map((v, i) => (
                   <div key={i} style={s.designCard}>
+                    {/* Uploaded image — shown first when available */}
+                    {v.image_signed_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={v.image_signed_url}
+                        alt={`Design preview — ${v.name || `Version ${v.version_number || i + 1}`}`}
+                        style={{ display: 'block', width: '100%', borderRadius: '2px', marginBottom: '14px', border: '1px solid #E5DDD2' }}
+                      />
+                    )}
                     <div style={s.designName}>{v.name || `Version ${v.version_number || i + 1}`}</div>
                     {v.status && <div style={s.designStatusLabel}>{v.status.toUpperCase()}</div>}
                     {v.notes && <div style={s.designNotes}>{v.notes}</div>}
-                    {fileUrl(v) && <DriveEmbed url={fileUrl(v)} />}
+                    {/* Drive link: shown as full embed when no uploaded image; as a plain link when uploaded image is present */}
+                    {v.image_signed_url
+                      ? fileUrl(v) && <a href={fileUrl(v)} target="_blank" rel="noopener noreferrer" style={{ ...s.viewLink, display: 'inline-block', marginTop: '10px' }}>VIEW FULL DESIGN →</a>
+                      : fileUrl(v) && <DriveEmbed url={fileUrl(v)} />
+                    }
                   </div>
                 ))}
               </div>

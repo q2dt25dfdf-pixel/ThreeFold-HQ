@@ -6,6 +6,7 @@ import { ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Trash2 } from "lu
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { supabase } from "@/lib/supabase";
 import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import {
@@ -177,6 +178,7 @@ function normalizeDesignVersions(versions?: DesignVersion[] | null): DesignVersi
     version_number: Number(version.version_number || index + 1),
     name: version.name ?? "",
     drive_url: version.drive_url ?? "",
+    image_path: version.image_path,
     status: isDesignVersionStatus(version.status) ? version.status : "In Review",
     notes: version.notes ?? "",
     date_added: version.date_added ?? "",
@@ -334,6 +336,11 @@ export default function OrderDetailPage() {
   // Clipboard
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Design image uploads
+  const [designImageUrls, setDesignImageUrls] = useState<Record<string, string>>({});
+  const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+
   // Signed URLs for intake file attachments — generated server-side to avoid browser auth/RLS mismatch
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
   const [fileUrlsLoaded, setFileUrlsLoaded] = useState(false);
@@ -369,6 +376,24 @@ export default function OrderDetailPage() {
       setInitialized(true);
     }
   }, [order, initialized]);
+
+  // Load signed preview URLs for any design versions that already have image_path.
+  // Depends on designVersionSource so it re-runs whenever saved design versions change.
+  useEffect(() => {
+    const paths = designVersionDrafts
+      .filter((v) => v.image_path)
+      .map((v) => v.image_path!);
+    if (!paths.length) return;
+    fetch('/api/internal/design-signed-urls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+    })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((urls: Record<string, string>) => setDesignImageUrls(urls))
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designVersionSource]);
 
   if (order && (designVersionSource.orderId !== order.id || designVersionSource.key !== orderDesignVersionsKey)) {
     setDesignVersionSource({ orderId: order.id, key: orderDesignVersionsKey });
@@ -485,6 +510,47 @@ export default function OrderDetailPage() {
     } catch {
       // clipboard unavailable
     }
+  };
+
+  const handleDesignImageUpload = async (versionId: string, file: File) => {
+    if (!order) return;
+    setUploadingVersionId(versionId);
+    setUploadErrors((prev) => { const n = { ...prev }; delete n[versionId]; return n; });
+
+    // Fixed path per version — upsert overwrites on replace, no accumulation
+    const path = `orders/${order.id}/${versionId}/design`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from('order-designs')
+      .upload(path, file, { upsert: true, contentType: file.type });
+
+    if (uploadErr) {
+      setUploadErrors((prev) => ({ ...prev, [versionId]: uploadErr.message }));
+      setUploadingVersionId(null);
+      return;
+    }
+
+    // Generate preview URL immediately so the thumbnail shows without waiting for re-render
+    try {
+      const res = await fetch('/api/internal/design-signed-urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths: [path] }),
+      });
+      if (res.ok) {
+        const urls: Record<string, string> = await res.json();
+        if (urls[path]) setDesignImageUrls((prev) => ({ ...prev, [path]: urls[path] }));
+      }
+    } catch {
+      // Non-fatal: preview will appear on next page load
+    }
+
+    const updatedVersions = designVersionDrafts.map((v) =>
+      v.id === versionId ? { ...v, image_path: path } : v,
+    );
+    setDesignVersionDrafts(updatedVersions);
+    saveDesignVersions(updatedVersions);
+    setUploadingVersionId(null);
   };
 
   if (loading) return <LoadingState label="Loading order..." />;
@@ -643,8 +709,8 @@ export default function OrderDetailPage() {
                     <input
                       type="url"
                       className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none md:text-sm"
-                      placeholder="Google Drive link"
-                      value={version.drive_url}
+                      placeholder="Google Drive link (optional)"
+                      value={version.drive_url ?? ""}
                       onChange={(e) => updateDesignVersionDraft(version.id, { drive_url: e.target.value })}
                     />
                     <a
@@ -661,6 +727,47 @@ export default function OrderDetailPage() {
                       <ExternalLink className="h-3.5 w-3.5" />
                       Open in Drive
                     </a>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-slate-700 md:text-sm">
+                      Design image <span className="font-normal text-slate-400">(portal thumbnail)</span>
+                    </p>
+                    {version.image_path && designImageUrls[version.image_path] && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={designImageUrls[version.image_path]}
+                        alt="Design preview"
+                        className="mb-2 w-full rounded-xl border border-slate-200 object-contain"
+                        style={{ maxHeight: '180px' }}
+                      />
+                    )}
+                    <label
+                      className={`inline-flex cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition md:text-sm ${
+                        uploadingVersionId === version.id
+                          ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="sr-only"
+                        disabled={uploadingVersionId === version.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleDesignImageUpload(version.id, file);
+                          e.target.value = '';
+                        }}
+                      />
+                      {uploadingVersionId === version.id
+                        ? 'Uploading…'
+                        : version.image_path
+                        ? 'Replace image'
+                        : 'Upload image'}
+                    </label>
+                    {uploadErrors[version.id] && (
+                      <p className="mt-1.5 text-xs text-rose-600">{uploadErrors[version.id]}</p>
+                    )}
                   </div>
                   <select
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
