@@ -38,22 +38,28 @@ export default function NoteDetailPage() {
   const save = useSaveState();
 
   useEffect(() => {
-    if (note && note.id !== localNoteId) {
+    if (!note || note.id === localNoteId) return;
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
       setTitle(note.title);
       setBody(note.body);
       setTags(note.tags ?? []);
       setLocalNoteId(note.id);
-    }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [note, localNoteId]);
 
   const handleSave = async () => {
     if (!note) return;
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) return;
     await save.runSave(() =>
       upsertItem({
         ...note,
-        title: trimmedTitle,
+        title: title.trim(),
         body,
         tags,
         updated_at: new Date().toISOString(),
@@ -203,6 +209,7 @@ export default function NoteDetailPage() {
           onKeyDown={handleTitleKeyDown}
           placeholder="Untitled"
           aria-label="Note title"
+          autoFocus
           className="w-full border-none bg-transparent text-2xl font-bold text-slate-950 placeholder-slate-300 outline-none md:text-4xl"
         />
 

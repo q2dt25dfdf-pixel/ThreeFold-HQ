@@ -3,9 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Pin, Plus, Search, Tag, Trash2 } from "lucide-react";
-import ModalShell from "@/components/ModalShell";
-import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
-import SaveButton, { useSaveState } from "@/components/SaveButton";
+import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { extractTextFromBody } from "@/lib/noteUtils";
 
@@ -26,11 +24,8 @@ export default function NotesPage() {
   const router = useRouter();
   const { data: notes, upsertItem, deleteItem, loading, error } = useSupabaseTable<Note>("notes", []);
 
-  const [showAdd, setShowAdd] = useState(false);
-  const addSave = useSaveState();
-  const [formError, setFormError] = useState("");
-  const [addTitle, setAddTitle] = useState("");
-  const [addBody, setAddBody] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
   const [search, setSearch] = useState("");
 
   const [sort, setSort] = useState<SortOption>("newest");
@@ -83,28 +78,27 @@ export default function NotesPage() {
     });
   }, [notes, showArchived, search, selectedTag, sort]);
 
-  const resetAdd = () => {
-    setAddTitle("");
-    setAddBody("");
-    setFormError("");
-  };
-
-  const handleAdd = async () => {
-    if (!addTitle.trim()) {
-      setFormError("Title is required.");
-      return;
-    }
-    setFormError("");
+  const handleCreateNote = async () => {
+    setCreateError("");
+    setCreating(true);
     const now = new Date().toISOString();
     const id = `note-${Date.now()}`;
-    const success = await addSave.runSave(() =>
-      upsertItem({ id, title: addTitle, body: addBody, created_at: now, updated_at: now }),
-    );
-    if (success) {
-      setShowAdd(false);
-      resetAdd();
+    const response = await upsertItem({
+      id,
+      title: "",
+      body: "",
+      created_at: now,
+      updated_at: now,
+      pinned: false,
+      archived: false,
+      tags: [],
+    });
+    setCreating(false);
+    if (!response.error) {
       router.push(`/notes/${id}`);
+      return;
     }
+    setCreateError("Couldn't create a new note. Please try again.");
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -142,7 +136,7 @@ export default function NotesPage() {
 
   return (
     <div className="space-y-5 text-xs md:text-sm">
-      <ErrorBanner message={error} />
+      <ErrorBanner message={error || createError} />
 
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -153,14 +147,11 @@ export default function NotesPage() {
         <button
           type="button"
           className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
-          onClick={() => {
-            resetAdd();
-            addSave.resetSaveState();
-            setShowAdd(true);
-          }}
+          onClick={handleCreateNote}
+          disabled={creating}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-          New note
+          {creating ? "Creating..." : "New note"}
         </button>
       </div>
 
@@ -265,13 +256,13 @@ export default function NotesPage() {
                       aria-hidden="true"
                     />
                   )}
-                  {note.title}
+                  {note.title || "Untitled"}
                 </h2>
                 <div className="flex shrink-0 items-center gap-0.5">
                   {!showArchived && (
                     <button
                       type="button"
-                      aria-label={note.pinned ? `Unpin ${note.title}` : `Pin ${note.title}`}
+                      aria-label={note.pinned ? `Unpin ${note.title || "Untitled"}` : `Pin ${note.title || "Untitled"}`}
                       title={note.pinned ? "Unpin" : "Pin to top"}
                       onClick={(e) => handlePin(note, e)}
                       className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
@@ -288,7 +279,7 @@ export default function NotesPage() {
                   )}
                   <button
                     type="button"
-                    aria-label={note.archived ? `Restore ${note.title}` : `Archive ${note.title}`}
+                    aria-label={note.archived ? `Restore ${note.title || "Untitled"}` : `Archive ${note.title || "Untitled"}`}
                     title={note.archived ? "Restore from archive" : "Archive"}
                     onClick={(e) => handleArchive(note, e)}
                     className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -302,7 +293,7 @@ export default function NotesPage() {
                   <button
                     type="button"
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-                    aria-label={`Delete ${note.title}`}
+                    aria-label={`Delete ${note.title || "Untitled"}`}
                     onClick={(e) => handleDelete(note.id, e)}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -342,72 +333,6 @@ export default function NotesPage() {
             </article>
           ))}
         </div>
-      )}
-
-      {/* New note modal */}
-      {showAdd && (
-        <ModalShell
-          title="New note"
-          onClose={() => {
-            setShowAdd(false);
-            resetAdd();
-          }}
-          maxWidth="max-w-2xl"
-          footer={
-            <div className="space-y-3">
-              {formError && <FieldError message={formError} />}
-              <div className="flex gap-3">
-                <SaveButton
-                  state={addSave.saveState}
-                  mode="add"
-                  className="flex-1 py-3"
-                  onClick={handleAdd}
-                />
-                <button
-                  type="button"
-                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
-                  onClick={() => {
-                    setShowAdd(false);
-                    resetAdd();
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">
-                Title
-              </label>
-              <input
-                type="text"
-                autoFocus
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none"
-                placeholder="Note title"
-                value={addTitle}
-                onChange={(e) => {
-                  setAddTitle(e.target.value);
-                  if (formError) setFormError("");
-                }}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">
-                Body
-              </label>
-              <textarea
-                rows={4}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:outline-none"
-                placeholder="Write your note here..."
-                value={addBody}
-                onChange={(e) => setAddBody(e.target.value)}
-              />
-            </div>
-          </div>
-        </ModalShell>
       )}
     </div>
   );
