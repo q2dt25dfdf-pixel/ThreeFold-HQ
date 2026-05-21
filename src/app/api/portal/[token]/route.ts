@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { getSignedUrls } from '@/lib/getSignedUrl'
+import { getSignedUrls, getDesignSignedUrls } from '@/lib/getSignedUrl'
 
 export async function GET(
   _request: Request,
@@ -25,6 +25,19 @@ export async function GET(
   if (!d.portal_enabled)
     return NextResponse.json({ error: 'Portal is disabled' }, { status: 403 })
 
+  // Collect image_path values from visible design versions to batch-sign in one call
+  type RawDesignVersion = Record<string, unknown>
+  const visibleDesignVersions: RawDesignVersion[] = (d.design_versions || [])
+    .filter((v: RawDesignVersion) => v.visible_to_client !== false)
+
+  const designImagePaths = visibleDesignVersions
+    .map((v) => (typeof v.image_path === 'string' && v.image_path ? v.image_path : null))
+    .filter((p): p is string => p !== null)
+
+  const designImageUrls = designImagePaths.length > 0
+    ? await getDesignSignedUrls(designImagePaths)
+    : {}
+
   const clientSafeData = {
     orderId: order.id,
     clientName: d.client || d.client_name || d.company_name || '',
@@ -39,7 +52,15 @@ export async function GET(
     depositPaid: d.deposit_paid || '',
     balanceDue: d.balance_due || '',
     stripeInvoiceUrl: d.stripe_invoice_url || '',
-    designVersions: (d.design_versions || []).filter((v: Record<string, unknown>) => v.visible_to_client !== false).map((v: Record<string, unknown>) => ({ ...v, file_url: v.drive_url || v.file_url || '' })),
+    designVersions: visibleDesignVersions.map((v) => ({
+      ...v,
+      // Drive fallback preserved exactly as before
+      file_url: v.drive_url || v.file_url || '',
+      // Signed URL for directly uploaded image (null when image_path absent)
+      image_signed_url: (typeof v.image_path === 'string' && v.image_path)
+        ? (designImageUrls[v.image_path] ?? null)
+        : null,
+    })),
     clientNotes: d.client_notes || '',
   }
 

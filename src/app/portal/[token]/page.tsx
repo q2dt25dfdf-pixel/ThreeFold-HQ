@@ -66,6 +66,8 @@ interface DesignVersion {
   name?: string
   file_url?: string
   drive_url?: string
+  image_path?: string
+  image_signed_url?: string | null
   status?: string
   notes?: string
   version_number?: number
