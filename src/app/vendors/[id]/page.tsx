@@ -10,7 +10,7 @@ import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
-type VendorStatus = "Active" | "Review" | "Paused";
+type VendorStatus = "Active" | "Review" | "Inactive";
 
 type Vendor = {
   id: string;
@@ -20,6 +20,8 @@ type Vendor = {
   contact: string;
   email?: string;
   phone?: string;
+  address?: string;
+  website?: string;
   notes: string;
   status: VendorStatus;
   jobs: number;
@@ -64,7 +66,7 @@ const defaultVendors: Vendor[] = [
 const statusStyles: Record<VendorStatus, string> = {
   Active: "bg-emerald-100 text-emerald-800",
   Review: "bg-amber-100 text-amber-800",
-  Paused: "bg-slate-100 text-slate-700",
+  Inactive: "bg-slate-100 text-slate-700",
 };
 
 const vendorTypeOptions = [
@@ -286,6 +288,8 @@ export default function VendorDetailPage() {
                 { label: "Type", value: vendor.type },
                 { label: "Turnaround", value: vendor.turnaround },
                 { label: "Contact", value: vendor.contact },
+                { label: "Address", value: vendor.address ?? "" },
+                { label: "Website", value: vendor.website ?? "" },
                 { label: "Status", value: vendor.status },
               ].map((field) => (
                 <div key={field.label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -378,27 +382,20 @@ export default function VendorDetailPage() {
                 <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.contact} onChange={(event) => setVendorDraft({ ...vendorDraft, contact: event.target.value })} />
               </label>
               <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Address</span>
+                <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.address ?? ""} onChange={(event) => setVendorDraft({ ...vendorDraft, address: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Website</span>
+                <input type="url" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="https://" value={vendorDraft.website ?? ""} onChange={(event) => setVendorDraft({ ...vendorDraft, website: event.target.value })} />
+              </label>
+              <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</span>
                 <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={vendorDraft.status} onChange={(event) => setVendorDraft({ ...vendorDraft, status: event.target.value as VendorStatus })}>
                   <option>Active</option>
                   <option>Review</option>
-                  <option>Paused</option>
+                  <option>Inactive</option>
                 </select>
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Orders</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                  value={vendorDraft.jobs === 0 ? "" : vendorDraft.jobs}
-                  placeholder="0"
-                  onChange={(event) => {
-                    const raw = event.target.value.replace(/^0+(?=\d)/, "");
-                    setVendorDraft({ ...vendorDraft, jobs: raw === "" ? 0 : Number(raw) });
-                  }}
-                />
               </label>
             </div>
         </ModalShell>
