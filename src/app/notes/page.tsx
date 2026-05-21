@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Pin, Plus, Search, Tag, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
+import { supabase } from "@/lib/supabase";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { extractTextFromBody } from "@/lib/noteUtils";
 
@@ -79,25 +80,29 @@ export default function NotesPage() {
   }, [notes, showArchived, search, selectedTag, sort]);
 
   const handleCreateNote = async () => {
+    if (creating) return;
     setCreateError("");
     setCreating(true);
     const now = new Date().toISOString();
     const id = `note-${Date.now()}`;
-    const response = await upsertItem({
+    const { error } = await supabase.from("notes").upsert({
       id,
-      title: "",
-      body: "",
-      created_at: now,
-      updated_at: now,
-      pinned: false,
-      archived: false,
-      tags: [],
+      data: {
+        id,
+        title: "",
+        body: "",
+        created_at: now,
+        updated_at: now,
+        pinned: false,
+        archived: false,
+        tags: [],
+      },
     });
-    setCreating(false);
-    if (!response.error) {
+    if (!error) {
       router.push(`/notes/${id}`);
       return;
     }
+    setCreating(false);
     setCreateError("Couldn't create a new note. Please try again.");
   };
 
