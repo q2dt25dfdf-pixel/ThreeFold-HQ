@@ -11,7 +11,8 @@ type OrderStatus =
   | "Production"
   | "Quality Check"
   | "Ready"
-  | "Delivered";
+  | "Delivered"
+  | "Cancelled";
 
 type Order = {
   id: string;
@@ -31,6 +32,7 @@ const statusColors: Record<OrderStatus, string> = {
   "Quality Check": "bg-amber-100 text-amber-800",
   Ready: "bg-teal-100 text-teal-800",
   Delivered: "bg-emerald-100 text-emerald-800",
+  Cancelled: "bg-slate-200 text-slate-600",
 };
 
 const statusOrder: Record<OrderStatus, number> = {
@@ -38,6 +40,7 @@ const statusOrder: Record<OrderStatus, number> = {
   "Quality Check": 1,
   Ready: 2,
   Delivered: 3,
+  Cancelled: 4,
 };
 
 const legacyStatusMap: Record<string, OrderStatus> = {
@@ -136,6 +139,7 @@ export default function OrdersPage() {
             <option>Quality Check</option>
             <option>Ready</option>
             <option>Delivered</option>
+            <option>Cancelled</option>
           </select>
         </div>
       </div>

@@ -12,7 +12,8 @@ export type OrderStatus =
   | "Production"
   | "Quality Check"
   | "Ready"
-  | "Delivered";
+  | "Delivered"
+  | "Cancelled";
 
 export const itemOptions = [
   "T-Shirts",
@@ -31,6 +32,7 @@ export const statusOptions: OrderStatus[] = [
   "Quality Check",
   "Ready",
   "Delivered",
+  "Cancelled",
 ];
 
 export function centsToCurrency(cents: string): string {

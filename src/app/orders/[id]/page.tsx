@@ -41,8 +41,11 @@ type IntakeSnapshot = {
 type Order = {
   id: string;
   orderName: string;
+  order_name?: string;
   client: string;
   vendor: string;
+  vendor_id?: string;
+  vendor_name?: string;
   items: string[];
   quantity: number;
   amount: number;
@@ -101,7 +104,7 @@ const TIMELINE_STAGES = [
   "Delivered",
 ] as const;
 
-const ALL_STATUS_OPTIONS = [...TIMELINE_STAGES];
+const ALL_STATUS_OPTIONS = [...TIMELINE_STAGES, "Cancelled"] as const;
 
 const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
   "In Review",
@@ -403,7 +406,7 @@ export default function OrderDetailPage() {
     if (!editQuantityStr.trim() || qty <= 0) { setFormError("Quantity must be greater than 0."); return; }
     setFormError("");
     await orderSave.runSave(
-      () => upsertItem(normalizeOrder({ ...orderDraft, quantity: qty, amount: Number(editAmountCents || "0") / 100 })),
+      () => upsertItem(normalizeOrder({ ...orderDraft, order_name: orderDraft.orderName, quantity: qty, amount: Number(editAmountCents || "0") / 100 })),
       closeOrderEditor,
     );
   };
@@ -968,7 +971,7 @@ export default function OrderDetailPage() {
               <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Order</p>
               <InlineEditTitle
                 value={order.orderName}
-                onSave={orderName => upsertItem({ ...order, orderName })}
+                onSave={orderName => upsertItem({ ...order, orderName, order_name: orderName })}
                 className="mt-2 break-words text-2xl font-bold leading-tight text-white md:text-4xl"
               />
               <p className="mt-1.5 text-sm text-slate-300">{order.client || "No client assigned"}</p>
@@ -1147,7 +1150,7 @@ export default function OrderDetailPage() {
                 label="Vendor"
                 value={orderDraft.vendor}
                 onChange={(v) => setOrderDraft({ ...orderDraft, vendor: v })}
-                onSelect={(r) => setOrderDraft({ ...orderDraft, vendor: recordName(r) })}
+                onSelect={(r) => setOrderDraft({ ...orderDraft, vendor: recordName(r), vendor_name: recordName(r), vendor_id: r.id })}
                 records={vendors}
                 placeholder="Type to search vendors..."
               />
