@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, RotateCcw, Trash2, User } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -61,6 +61,9 @@ type Order = {
   source?: string;
   lead_id?: string;
   intake_snapshot?: IntakeSnapshot;
+  client_id?: string;
+  portal_token?: string;
+  portal_enabled?: boolean;
 };
 
 type ClientUpdate = { id: string; date: string; text: string };
@@ -344,6 +347,7 @@ export default function OrderDetailPage() {
   const designVersionsSave = useSaveState();
   const addDesignVersionSave = useSaveState();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [portalCopied, setPortalCopied] = useState(false);
 
   // Timeline
   const [stageSaving, setStageSaving] = useState(false);
@@ -591,6 +595,14 @@ export default function OrderDetailPage() {
     clientUpdatesSave.runSave(() => upsertItem({ ...order, client_updates: updates }));
   };
 
+  const copyPortalLink = async () => {
+    if (!order?.portal_token) return;
+    const url = `${window.location.origin}/portal/${order.portal_token}`;
+    await navigator.clipboard.writeText(url);
+    setPortalCopied(true);
+    window.setTimeout(() => setPortalCopied(false), 2000);
+  };
+
   const toggleFinalDesign = (id: string) => {
     const versions = designVersionDrafts.map((v) => ({
       ...v,
@@ -654,6 +666,96 @@ export default function OrderDetailPage() {
       return new Date(b.date_added).getTime() - new Date(a.date_added).getTime();
     });
   const archivedVersions = designVersionDrafts.filter((v) => v.archived);
+
+  const linkedClient = clients.find(
+    (c) =>
+      (order.client_id && c.id === order.client_id) ||
+      (c.name?.trim().toLowerCase() === order.client?.trim().toLowerCase()),
+  );
+  const portalToken = order.portal_token;
+  const portalUrl = portalToken
+    ? (typeof window !== "undefined" ? window.location.origin : "") + `/portal/${portalToken}`
+    : null;
+
+  const QuickActionsSection = (
+    <div className="w-full overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Quick Actions</h2>
+      <div className="flex flex-wrap gap-2">
+
+        {/* Open Client */}
+        <button
+          type="button"
+          disabled={!linkedClient}
+          title={linkedClient ? `Open ${linkedClient.name}` : "No linked client found"}
+          onClick={() => linkedClient && router.push(`/clients/${linkedClient.id}`)}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold transition md:min-h-0 ${
+            linkedClient
+              ? "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+          }`}
+        >
+          <User className="h-3.5 w-3.5 shrink-0" />
+          Open Client
+        </button>
+
+        {/* Create Invoice / Open Invoice */}
+        <button
+          type="button"
+          onClick={() => router.push("/finances")}
+          className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:min-h-0"
+        >
+          <FileText className="h-3.5 w-3.5 shrink-0" />
+          {invoice ? "Open Invoice" : "Create Invoice"}
+        </button>
+
+        {/* Copy Portal Link */}
+        <button
+          type="button"
+          disabled={!portalToken}
+          title={portalToken ? "Copy portal link to clipboard" : "Generate a portal link first"}
+          onClick={() => void copyPortalLink()}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold transition md:min-h-0 ${
+            portalCopied
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : portalToken
+              ? "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+          }`}
+        >
+          {portalCopied ? (
+            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          ) : (
+            <ClipboardCopy className="h-3.5 w-3.5 shrink-0" />
+          )}
+          {portalCopied ? "Portal link copied" : "Copy Portal Link"}
+        </button>
+
+        {/* Open Portal */}
+        {portalUrl ? (
+          <a
+            href={portalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:min-h-0"
+          >
+            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+            Open Portal
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="Generate a portal link first"
+            className="inline-flex min-h-11 cursor-not-allowed items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-400 md:min-h-0"
+          >
+            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+            Open Portal
+          </button>
+        )}
+
+      </div>
+    </div>
+  );
 
   // --- Section JSX (rendered once per layout; both layouts share state) ---
 
@@ -1323,6 +1425,9 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </section>
+
+      {/* Quick Actions */}
+      {QuickActionsSection}
 
       {/* Mobile layout — single column (InternalNotes appears full-width below PortalSection) */}
       <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
