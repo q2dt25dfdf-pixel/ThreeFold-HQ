@@ -43,6 +43,7 @@ type Invoice = {
   dueDate?: string;
   status: InvoiceStatus;
   notes: string;
+  stripe_invoice_url?: string;
 };
 
 type Client = {
@@ -71,10 +72,11 @@ type Order = {
   invoice_total?: number;
   deposit_paid?: boolean;
   balance_due?: number;
+  stripe_invoice_url?: string;
 };
 
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
-const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "" };
+const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
 
 const statusColors: Record<InvoiceStatus, string> = {
@@ -311,6 +313,7 @@ function FinancesContent() {
       invoice_total: calcTotal(invoice),
       deposit_paid: Boolean(invoice.deposit_paid),
       balance_due: calcBalance(invoice),
+      stripe_invoice_url: invoice.stripe_invoice_url ?? order.stripe_invoice_url ?? "",
     });
   };
 
@@ -497,11 +500,12 @@ function FinancesContent() {
 
     return (
     <div className="space-y-4">
+      {/* Client */}
       <div className="relative">
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Client</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Client</label>
         <input
           type="text"
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Search clients..."
           value={invoiceClientName(data)}
           onFocus={() => {
@@ -525,13 +529,16 @@ function FinancesContent() {
             setClientDropdownOpen(true);
           }}
         />
+        {data.client_id && (
+          <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">✓ Connected to client record</p>
+        )}
         {clientDropdownOpen && clientSuggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
             {clientSuggestions.map((client) => (
               <button
                 key={client.id}
                 type="button"
-                className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   selectClient(client);
@@ -545,12 +552,13 @@ function FinancesContent() {
         )}
       </div>
 
+      {/* Order */}
       <div className="relative">
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Order name</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Order</label>
         <input
           type="text"
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
-          placeholder={orderDisabled ? "Select a client first" : "Search client orders..."}
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
+          placeholder={orderDisabled ? "Select a client first" : "Search orders for this client..."}
           value={invoiceOrderName(data)}
           disabled={orderDisabled}
           onFocus={() => setOrderDropdownOpen(true)}
@@ -561,6 +569,9 @@ function FinancesContent() {
             setOrderDropdownOpen(true);
           }}
         />
+        {data.order_id && (
+          <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">✓ Linked to order — payment data syncs to client portal</p>
+        )}
         {orderDropdownOpen && !orderDisabled && (
           <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
             {orderSuggestions.length > 0 ? (
@@ -568,7 +579,7 @@ function FinancesContent() {
                 <button
                   key={order.id}
                   type="button"
-                  className="block w-full px-4 py-3 text-left text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
                   onMouseDown={(event) => {
                     event.preventDefault();
                     selectOrder(order);
@@ -579,34 +590,45 @@ function FinancesContent() {
                 </button>
               ))
             ) : (
-              <div className="px-4 py-3 text-xs md:text-sm text-slate-500">No orders found for this client.</div>
+              <div className="px-4 py-3 text-xs text-slate-500 md:text-sm">No orders found for this client.</div>
             )}
           </div>
         )}
       </div>
 
+      {/* Amounts */}
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Total amount</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Order total</label>
         <input
           type="text"
           inputMode="numeric"
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           value={currencyInputValue(data.total_amount)}
           onChange={(event) => onChange(updateInvoiceTotal(data, currencyInputNumber(event.target.value)))}
         />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Deposit amount</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Deposit</label>
         <input
           type="text"
           inputMode="numeric"
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           value={currencyInputValue(data.deposit_amount)}
           onChange={(event) => onChange(updateInvoiceDeposit(data, currencyInputNumber(event.target.value)))}
         />
       </div>
+
+      {/* Balance due — computed, not editable */}
+      <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-xs md:text-sm">
+        <span className="font-semibold text-slate-600">Balance due</span>
+        <span className={`font-semibold ${invoiceBalance(data) > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+          {currencyInputValue(data.balance_remaining)}
+        </span>
+      </div>
+
+      {/* Deposit received */}
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm font-semibold text-slate-700">
+        <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 text-xs font-semibold text-slate-700 md:text-sm">
           <input
             type="checkbox"
             checked={Boolean(data.deposit_paid)}
@@ -619,13 +641,13 @@ function FinancesContent() {
               }));
             }}
           />
-          Deposit paid
+          Deposit received
         </label>
         <div>
-          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Deposit paid date</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date received</label>
           <input
             type="date"
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
             value={data.deposit_paid_date || ""}
             disabled={!data.deposit_paid}
             onClick={(event) => event.currentTarget.showPicker?.()}
@@ -633,27 +655,22 @@ function FinancesContent() {
           />
         </div>
       </div>
+
+      {/* Final payment due date */}
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Balance remaining</label>
-        <input
-          type="text"
-          className="w-full rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-xs md:text-sm text-slate-700 md:text-sm"
-          value={currencyInputValue(data.balance_remaining)}
-          readOnly
-        />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Final due date</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Final payment due</label>
         <input
           type="date"
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           value={data.final_due_date || ""}
           onClick={(event) => event.currentTarget.showPicker?.()}
           onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, final_due_date: event.target.value, dueDate: event.target.value }))}
         />
       </div>
+
+      {/* Paid in full */}
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm font-semibold text-slate-700">
+        <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 text-xs font-semibold text-slate-700 md:text-sm">
           <input
             type="checkbox"
             checked={Boolean(data.final_paid)}
@@ -666,13 +683,13 @@ function FinancesContent() {
               }));
             }}
           />
-          Final paid
+          Paid in full
         </label>
         <div>
-          <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Final paid date</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date paid</label>
           <input
             type="date"
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
             value={data.final_paid_date || ""}
             disabled={!data.final_paid}
             onClick={(event) => event.currentTarget.showPicker?.()}
@@ -680,21 +697,39 @@ function FinancesContent() {
           />
         </div>
       </div>
+
+      {/* Invoice status */}
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Invoice status</label>
         <select
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm"
           value={normalizeInvoiceStatus(data.status)}
           onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, status: event.target.value as InvoiceStatus }))}
         >
           {invoiceStatusOptions.map((option) => <option key={option}>{option}</option>)}
         </select>
       </div>
+
+      {/* Invoice / Payment Link */}
       <div>
-        <label className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Notes</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">
+          Invoice / Payment Link <span className="font-normal text-slate-400">(optional)</span>
+        </label>
+        <input
+          type="url"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+          placeholder="https://..."
+          value={data.stripe_invoice_url ?? ""}
+          onChange={(e) => onChange({ ...data, stripe_invoice_url: e.target.value })}
+        />
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
         <textarea
           rows={3}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
           placeholder="Payment details, notes, reminders..."
           value={data.notes}
           onChange={(e) => onChange({ ...data, notes: e.target.value })}
@@ -842,7 +877,7 @@ function FinancesContent() {
               key={invoice.id}
               role="button"
               tabIndex={0}
-              className="rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md md:p-5"
+              className={`rounded-[2rem] border bg-white p-4 text-left shadow-sm transition hover:shadow-md md:p-5 ${invoice.final_paid ? "border-emerald-200 hover:border-emerald-300" : "border-slate-200 hover:border-slate-300"}`}
               onClick={() => openEditInvoice(invoice)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -861,31 +896,36 @@ function FinancesContent() {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-2 text-xs text-slate-600 md:text-sm">
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                  <span>Total amount</span>
-                  <span className="font-semibold text-slate-950">{currencyInputValue(invoice.total_amount)}</span>
-                </div>
+              <div className="mt-4 space-y-2 text-xs text-slate-600 md:text-sm">
+                {invoice.final_paid ? (
+                  <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-2.5">
+                    <span className="font-semibold text-emerald-700">Paid in full</span>
+                    <span className="font-semibold text-emerald-700">{currencyInputValue(invoice.total_amount)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
+                      <span>Order total</span>
+                      <span className="font-semibold text-slate-950">{currencyInputValue(invoice.total_amount)}</span>
+                    </div>
+                    {invoiceBalance(invoice) > 0 && (
+                      <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-2">
+                        <span className="text-amber-700">Balance due</span>
+                        <span className="font-semibold text-amber-700">{currencyInputValue(invoice.balance_remaining)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
                   <span>Deposit</span>
                   <span className={invoice.deposit_paid ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
-                    {invoice.deposit_paid ? "Paid" : "Due"} · {currencyInputValue(invoice.deposit_amount)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                  <span>Balance remaining</span>
-                  <span className="font-semibold text-slate-950">{currencyInputValue(invoice.balance_remaining)}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                  <span>Final payment</span>
-                  <span className={invoice.final_paid ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
-                    {invoice.final_paid ? "Paid" : "Open"}
+                    {invoice.deposit_paid ? "Received" : "Due"} · {currencyInputValue(invoice.deposit_amount)}
                   </span>
                 </div>
               </div>
 
               <div className="mt-4 flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-slate-500">{invoice.final_due_date ? "Due " + invoice.final_due_date : "No final due date"}</span>
+                <span className="text-xs font-semibold text-slate-500">{invoice.final_due_date ? "Due " + invoice.final_due_date : "No due date set"}</span>
                 <button
                   type="button"
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"
