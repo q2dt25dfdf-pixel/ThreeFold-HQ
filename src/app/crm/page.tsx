@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
@@ -223,8 +223,9 @@ const initialLeads: Lead[] = [
   },
 ];
 
-export default function CRMPage() {
+function CRMContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: leads, upsertItem, deleteItem, loading, error } = useSupabaseTable<Lead>("crm_leads", initialLeads);
   const { data: clients, upsertItem: upsertClient, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
@@ -235,15 +236,33 @@ export default function CRMPage() {
   const [search, setSearch] = useState("");
   const [toastMessage, setToastMessage] = useState("");
 
+  const viewParam = searchParams.get("view");
+  const [viewMode, setViewMode] = useState<"open" | "followups" | null>(
+    viewParam === "open" ? "open" : viewParam === "followups" ? "followups" : null,
+  );
+
+  const sevenDaysAheadISO = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0] ?? "";
+  }, []);
+
   const viewLead = leads.find((l) => l.id === viewLeadId) ?? null;
 
-  const visibleLeads = useMemo(
-    () =>
-      leads.filter((lead) =>
-        JSON.stringify(lead).toLowerCase().includes(search.toLowerCase()),
-      ),
-    [leads, search],
-  );
+  const visibleLeads = useMemo(() => {
+    let list = leads.filter((lead) =>
+      JSON.stringify(lead).toLowerCase().includes(search.toLowerCase()),
+    );
+    if (viewMode === "open") {
+      list = list.filter((lead) => !isDepositPaid(lead.stage as string));
+    } else if (viewMode === "followups") {
+      list = list.filter((lead) => {
+        const date = (lead.followUpDate as string) || "";
+        return hasFollowUpDate(date) && date <= sevenDaysAheadISO;
+      });
+    }
+    return list;
+  }, [leads, search, viewMode, sevenDaysAheadISO]);
 
   const leadsByStage = useMemo(
     () =>
@@ -460,6 +479,21 @@ export default function CRMPage() {
           </button>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto md:flex-row md:items-center">
+          {viewMode && (
+            <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5">
+              <span className="text-xs font-semibold text-blue-700">
+                {viewMode === "open" ? "Open leads" : "Follow-ups due"}
+              </span>
+              <button
+                type="button"
+                aria-label="Clear filter"
+                onClick={() => setViewMode(null)}
+                className="ml-0.5 text-blue-400 hover:text-blue-700"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
@@ -630,5 +664,13 @@ export default function CRMPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CRMPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading CRM..." />}>
+      <CRMContent />
+    </Suspense>
   );
 }

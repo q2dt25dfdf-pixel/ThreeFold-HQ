@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
@@ -277,11 +278,17 @@ function applyOrderToInvoice<T extends InvoiceFields>(invoice: T, order: Order):
   } as T);
 }
 
-export default function FinancesPage() {
+function FinancesContent() {
+  const searchParams = useSearchParams();
   const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
-  const [filter, setFilter] = useState<InvoiceStatus | "All">("All");
+  const [filter, setFilter] = useState<InvoiceStatus | "All" | "Unpaid">(() => {
+    const p = searchParams.get("filter") ?? "";
+    if (p.toLowerCase() === "unpaid") return "Unpaid";
+    if ((invoiceStatusOptions as string[]).includes(p)) return p as InvoiceStatus;
+    return "All";
+  });
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
@@ -307,9 +314,13 @@ export default function FinancesPage() {
     });
   };
 
-  const visible = (filter === "All" ? normalizedInvoices : normalizedInvoices.filter((invoice) => invoice.status === filter)).filter((invoice) =>
-    Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()),
-  );
+  const visible = normalizedInvoices
+    .filter((invoice) => {
+      if (filter === "All") return true;
+      if (filter === "Unpaid") return invoice.status !== "Paid in Full" && invoice.status !== "Cancelled";
+      return invoice.status === filter;
+    })
+    .filter((invoice) => Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()));
 
   const revenueCollected = normalizedInvoices.reduce((sum, invoice) => sum + invoiceCollected(invoice), 0);
   const outstandingBalance = normalizedInvoices
@@ -814,9 +825,10 @@ export default function FinancesPage() {
             <select
               className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
               value={filter}
-              onChange={(e) => setFilter(e.target.value as InvoiceStatus | "All")}
+              onChange={(e) => setFilter(e.target.value as InvoiceStatus | "All" | "Unpaid")}
             >
-              <option>All</option>
+              <option value="All">All</option>
+              <option value="Unpaid">Unpaid</option>
               {invoiceStatusOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
             <button className="min-h-11 rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800" onClick={openAddModal}>
@@ -958,5 +970,13 @@ export default function FinancesPage() {
         </ModalShell>
       )}
     </div>
+  );
+}
+
+export default function FinancesPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading finances..." />}>
+      <FinancesContent />
+    </Suspense>
   );
 }

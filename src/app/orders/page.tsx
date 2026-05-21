@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import AddOrderModal from "@/components/orders/AddOrderModal";
@@ -79,17 +79,31 @@ function formatCurrency(amount: number) {
   return amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 }
 
-export default function OrdersPage() {
+function OrdersContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: orders, deleteItem, loading, error, reload } = useSupabaseTable<Order>("orders", []);
   const [deletingId, setDeletingId] = useState("");
-  const [filter, setFilter] = useState<OrderStatus | "All">("All");
+  const [filter, setFilter] = useState<OrderStatus | "All" | "Active">(() => {
+    const p = searchParams.get("filter") ?? searchParams.get("status") ?? "";
+    if (p === "Active") return "Active";
+    if (p === "Production") return "Production";
+    if (p === "Quality Check") return "Quality Check";
+    if (p === "Ready") return "Ready";
+    if (p === "Delivered") return "Delivered";
+    if (p === "Cancelled") return "Cancelled";
+    return "All";
+  });
   const [query, setQuery] = useState("");
   const [showAddOrder, setShowAddOrder] = useState(false);
 
   const visible = orders
     .map(normalizeOrder)
-    .filter((order) => filter === "All" || order.status === filter)
+    .filter((order) => {
+      if (filter === "All") return true;
+      if (filter === "Active") return order.status !== "Delivered" && order.status !== "Cancelled";
+      return order.status === filter;
+    })
     .filter((order) => Object.values(order).join(" ").toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => {
       if (statusOrder[a.status] !== statusOrder[b.status]) return statusOrder[a.status] - statusOrder[b.status];
@@ -132,9 +146,10 @@ export default function OrdersPage() {
           <select
             className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
             value={filter}
-            onChange={(event) => setFilter(event.target.value as OrderStatus | "All")}
+            onChange={(event) => setFilter(event.target.value as OrderStatus | "All" | "Active")}
           >
-            <option>All</option>
+            <option value="All">All</option>
+            <option value="Active">Active</option>
             <option>Production</option>
             <option>Quality Check</option>
             <option>Ready</option>
@@ -221,5 +236,13 @@ export default function OrdersPage() {
         onSaved={() => reload()}
       />
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading orders..." />}>
+      <OrdersContent />
+    </Suspense>
   );
 }
