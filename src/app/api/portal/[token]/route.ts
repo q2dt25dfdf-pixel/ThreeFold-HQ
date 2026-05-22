@@ -12,7 +12,7 @@ export async function GET(
 
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('id, data, updated_at')
+    .select('id, data')
     .eq('data->>portal_token', token)
     .limit(1)
 
@@ -73,7 +73,7 @@ export async function GET(
         : null,
     })),
     clientNotes: d.client_notes || '',
-    lastUpdated: String((order as Record<string, unknown>).updated_at ?? '') || '',
+    lastUpdated: String(d.portal_generated_at ?? '') || '',
     clientUpdates,
   }
 

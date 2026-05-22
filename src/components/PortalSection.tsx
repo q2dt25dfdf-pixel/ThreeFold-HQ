@@ -46,7 +46,6 @@ export default function PortalSection({ orderId }: { orderId: string }) {
     if (row) {
       await supabase.from('orders').update({
         data: { ...row.data, portal_enabled: next },
-        updated_at: new Date().toISOString(),
       }).eq('id', orderId)
     }
     setEnabled(next)
