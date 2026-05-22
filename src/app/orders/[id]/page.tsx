@@ -555,6 +555,13 @@ export default function OrderDetailPage() {
       .upload(path, file, { upsert: true, contentType: file.type });
 
     if (uploadErr) {
+      // TEMP: log full error to confirm which storage operation is failing
+      console.error('[upload] storage error:', {
+        message: uploadErr.message,
+        name: uploadErr.name,
+        status: (uploadErr as { status?: number }).status,
+        statusCode: (uploadErr as { statusCode?: string }).statusCode,
+      });
       setUploadErrors((prev) => ({ ...prev, [versionId]: uploadErr.message }));
       setUploadingVersionId(null);
       return;
