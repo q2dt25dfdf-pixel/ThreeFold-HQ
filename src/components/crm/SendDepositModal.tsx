@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
-import { BUSINESS_EMAIL } from "@/lib/config";
 import { openEmailCompose } from "@/lib/emailCompose";
 import type { Lead } from "./types";
 
@@ -58,6 +57,12 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   const [emailBody, setEmailBody] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState<CopyTarget | "">("");
+  const depositFieldsInvalid =
+    !Number.isFinite(totalAmount) ||
+    totalAmount <= 0 ||
+    !Number.isFinite(depositPercent) ||
+    depositPercent <= 0 ||
+    depositPercent > 100;
 
   useEffect(() => {
     if (!open || !lead) return;
@@ -106,7 +111,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         `Your Deposit Request — ${data.depositRequestNumber} | Threefold Supply Co.`,
       );
       setEmailBody(
-        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.\n\nDeposit Request #: ${data.depositRequestNumber}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nView your full deposit request here:\n${data.publicLink}\n\n${paymentInstructions}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\nWarm regards,\nThreefold Supply Co.\n${BUSINESS_EMAIL}`,
+        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.\n\nDeposit Request #: ${data.depositRequestNumber}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nView your full deposit request here:\n${data.publicLink}\n\n${paymentInstructions}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\nBest,`,
       );
       setStep("preview");
     } catch (err: unknown) {
@@ -154,10 +159,10 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={totalAmount <= 0 || depositAmount <= 0}
+          disabled={depositFieldsInvalid}
           className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
         >
-          Preview Email →
+          Send Email
         </button>
       </div>
     ) : step === "preview" ? (

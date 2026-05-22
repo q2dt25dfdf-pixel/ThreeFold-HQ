@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
-import { BUSINESS_EMAIL } from "@/lib/config";
 import { openEmailCompose } from "@/lib/emailCompose";
 import type { Lead } from "./types";
 
@@ -97,7 +96,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           `Your Custom Quote — ${data.quoteNumber} | Threefold Supply Co.`,
         );
         setEmailBody(
-          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${totalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nWarm regards,\nThreefold Supply Co.\n${BUSINESS_EMAIL}`,
+          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${totalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
         );
         setStep("preview");
       })
