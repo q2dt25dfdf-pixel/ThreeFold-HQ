@@ -8,7 +8,6 @@ import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { businessTodayISO } from "@/lib/businessDate";
-import { hasFollowUpDate } from "@/lib/followUps";
 import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch } from "./types";
 import { pipelineStages } from "./types";
 
@@ -25,7 +24,7 @@ interface Props {
   onSendQuote?: (lead: Lead) => void;
   onSendDepositRequest?: (lead: Lead) => void;
   onCompleteFollowUp?: (lead: Lead) => void;
-  followUpComplete?: boolean;
+  canCompleteFollowUp?: boolean;
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
@@ -161,7 +160,7 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendQuote, onSendDepositRequest, onCompleteFollowUp, followUpComplete = false }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
@@ -238,7 +237,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
 
   const showSendQuote = current.stage === "Design Approved" && onSendQuote;
   const showSendDeposit = current.stage === "Quote Sent" && onSendDepositRequest;
-  const showCompleteFollowUp = hasFollowUpDate(current.followUpDate) && !followUpComplete && onCompleteFollowUp;
+  const showCompleteFollowUp = canCompleteFollowUp && onCompleteFollowUp;
 
   const footer = (
     <div className="flex flex-col gap-3">

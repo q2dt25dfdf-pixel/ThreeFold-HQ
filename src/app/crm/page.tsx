@@ -15,10 +15,11 @@ import { supabase } from "@/lib/supabase";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 import {
   autoFollowUpTaskId,
+  canCompleteLeadFollowUp,
   findFollowUpTaskForLead,
   hasFollowUpDate,
-  isLeadFollowUpComplete,
   isLeadFollowUpDueWithin,
+  leadFollowUpDate,
 } from "@/lib/followUps";
 
 type Client = {
@@ -725,11 +726,10 @@ function CRMContent() {
       {(() => {
         const followUpLeads = leads
           .filter((l) => (
-            hasFollowUpDate(l.followUpDate) &&
             !isDepositPaid(l.stage as string) &&
-            !isLeadFollowUpComplete(l, tasks)
+            canCompleteLeadFollowUp(l, tasks)
           ))
-          .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+          .sort((a, b) => leadFollowUpDate(a).localeCompare(leadFollowUpDate(b)));
         if (followUpLeads.length === 0) return null;
         return (
           <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-4 shadow-sm md:p-5">
@@ -752,7 +752,7 @@ function CRMContent() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                        Due {lead.followUpDate}
+                        Due {leadFollowUpDate(lead)}
                       </span>
                       <button
                         type="button"
@@ -814,7 +814,7 @@ function CRMContent() {
                       onMove={handleMoveLead}
                       onDelete={handleDeleteLead}
                       onCompleteFollowUp={completeFollowUp}
-                      followUpComplete={isLeadFollowUpComplete(lead, tasks)}
+                      canCompleteFollowUp={canCompleteLeadFollowUp(lead, tasks)}
                       duplicateMatch={detectDuplicateMatch(lead, clients)}
                     />
                   ))
@@ -855,7 +855,7 @@ function CRMContent() {
         onDelete={handleDeleteLead}
         matchingClientId={viewLead ? (findClientForLead(viewLead)?.id ?? null) : null}
         duplicateMatch={viewLead ? detectDuplicateMatch(viewLead, clients) : null}
-        followUpComplete={viewLead ? isLeadFollowUpComplete(viewLead, tasks) : false}
+        canCompleteFollowUp={viewLead ? canCompleteLeadFollowUp(viewLead, tasks) : false}
         onCompleteFollowUp={completeFollowUp}
         onViewClient={() => {
           const match = viewLead ? findClientForLead(viewLead) : null;

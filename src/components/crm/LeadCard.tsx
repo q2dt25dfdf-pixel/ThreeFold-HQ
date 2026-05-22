@@ -10,7 +10,7 @@ interface LeadCardProps {
   onMove: (lead: Lead, targetStage: PipelineStage) => void;
   onDelete: (lead: Lead) => void;
   onCompleteFollowUp?: (lead: Lead) => void;
-  followUpComplete?: boolean;
+  canCompleteFollowUp?: boolean;
   duplicateMatch?: DuplicateMatch | null;
 }
 
@@ -48,7 +48,7 @@ export default function LeadCard({
   onMove,
   onDelete,
   onCompleteFollowUp,
-  followUpComplete = false,
+  canCompleteFollowUp = false,
   duplicateMatch,
 }: LeadCardProps) {
   const canMoveBack = stageIndex > 0;
@@ -116,7 +116,7 @@ export default function LeadCard({
           </div>
         </div>
       </div>
-      {lead.followUpDate && !followUpComplete && onCompleteFollowUp && (
+      {canCompleteFollowUp && onCompleteFollowUp && (
         <button
           type="button"
           className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"

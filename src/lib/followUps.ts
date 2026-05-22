@@ -53,8 +53,23 @@ export function isLeadFollowUpComplete(
   return Boolean(task && isCrmFollowUpTask(task) && isTaskDone(task));
 }
 
+export function hasActiveFollowUpTask(
+  lead: FollowUpLeadRecord,
+  tasks: FollowUpTaskRecord[],
+): boolean {
+  const task = findFollowUpTaskForLead(tasks, lead.id);
+  return Boolean(task && isCrmFollowUpTask(task) && !isTaskDone(task));
+}
+
 export function leadFollowUpDate(lead: FollowUpLeadRecord): string {
   return readField(lead, "followUpDate", "follow_up_date");
+}
+
+export function canCompleteLeadFollowUp(
+  lead: FollowUpLeadRecord,
+  tasks: FollowUpTaskRecord[],
+): boolean {
+  return hasFollowUpDate(leadFollowUpDate(lead)) && hasActiveFollowUpTask(lead, tasks);
 }
 
 export function isLeadFollowUpDueWithin(
@@ -63,5 +78,5 @@ export function isLeadFollowUpDueWithin(
   throughISO: string,
 ): boolean {
   const date = leadFollowUpDate(lead);
-  return hasFollowUpDate(date) && date <= throughISO && !isLeadFollowUpComplete(lead, tasks);
+  return hasFollowUpDate(date) && date <= throughISO && hasActiveFollowUpTask(lead, tasks);
 }
