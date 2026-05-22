@@ -18,7 +18,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/quote") || pathname.startsWith("/deposit");
 
   useEffect(() => {
-    if (isLoginPage) {
+    if (isLoginPage || isPublicClientPage) {
       return;
     }
 
@@ -45,7 +45,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [isLoginPage, router]);
+  }, [isLoginPage, isPublicClientPage, router]);
 
   if (isLoginPage) {
     return <div className="min-h-dvh bg-zinc-100">{children}</div>;
