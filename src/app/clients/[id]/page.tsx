@@ -22,6 +22,7 @@ import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { businessTodayISO } from "@/lib/businessDate";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 
 type ClientStatus = "Active" | "At Risk" | "Dormant" | "Lead";
@@ -151,7 +152,7 @@ export default function ClientDetailPage() {
     type: "Call" as ActivityEntry["type"],
     owner: "Alliyah",
     notes: "",
-    date: new Date().toISOString().split("T")[0],
+    date: businessTodayISO(),
   });
   const [clientFormError, setClientFormError] = useState("");
   const [activityErrorText, setActivityErrorText] = useState("");
@@ -287,7 +288,7 @@ export default function ClientDetailPage() {
         setActivityErrorText("Couldn't save activity. Please try again.");
         return;
       }
-      setActivityForm((current) => ({ ...current, notes: "", date: new Date().toISOString().split("T")[0] }));
+      setActivityForm((current) => ({ ...current, notes: "", date: businessTodayISO() }));
     } catch {
       setActivityErrorText("Couldn't save activity. Please try again.");
     }
@@ -573,7 +574,7 @@ export default function ClientDetailPage() {
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" value={activityForm.owner} onChange={(event) => setActivityForm((current) => ({ ...current, owner: event.target.value }))}>
               {owners.map((owner) => <option key={owner}>{owner}</option>)}
             </select>
-            <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" value={activityForm.date} max={new Date().toISOString().split("T")[0]} onChange={(event) => setActivityForm((current) => ({ ...current, date: event.target.value }))} />
+            <input type="date" className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" value={activityForm.date} max={businessTodayISO()} onChange={(event) => setActivityForm((current) => ({ ...current, date: event.target.value }))} />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-xs md:text-sm" placeholder="Notes" value={activityForm.notes} onChange={(event) => { setActivityForm((current) => ({ ...current, notes: event.target.value })); if (activityErrorText) setActivityErrorText(""); }} />
             <button type="button" onClick={addActivity} className="min-h-11 rounded-2xl bg-slate-900 px-4 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800">Log</button>
           </div>

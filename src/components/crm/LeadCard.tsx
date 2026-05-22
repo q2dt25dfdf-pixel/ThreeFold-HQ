@@ -1,5 +1,5 @@
 import type { Lead, PipelineStage, DuplicateMatch } from "./types";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, Trash2 } from "lucide-react";
 
 interface LeadCardProps {
   lead: Lead;
@@ -9,6 +9,8 @@ interface LeadCardProps {
   onEdit: (lead: Lead) => void;
   onMove: (lead: Lead, targetStage: PipelineStage) => void;
   onDelete: (lead: Lead) => void;
+  onCompleteFollowUp?: (lead: Lead) => void;
+  followUpComplete?: boolean;
   duplicateMatch?: DuplicateMatch | null;
 }
 
@@ -45,6 +47,8 @@ export default function LeadCard({
   onEdit,
   onMove,
   onDelete,
+  onCompleteFollowUp,
+  followUpComplete = false,
   duplicateMatch,
 }: LeadCardProps) {
   const canMoveBack = stageIndex > 0;
@@ -112,6 +116,19 @@ export default function LeadCard({
           </div>
         </div>
       </div>
+      {lead.followUpDate && !followUpComplete && onCompleteFollowUp && (
+        <button
+          type="button"
+          className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+          onClick={(event) => {
+            event.stopPropagation();
+            onCompleteFollowUp(lead);
+          }}
+        >
+          <CheckCircle className="h-4 w-4" aria-hidden="true" />
+          Complete Follow-Up
+        </button>
+      )}
       {duplicateMatch && (
         <div className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${
           duplicateMatch.matchType === "likely_existing"

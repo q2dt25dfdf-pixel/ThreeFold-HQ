@@ -7,6 +7,8 @@ import { FieldError } from "@/components/AppState";
 import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
+import { businessTodayISO } from "@/lib/businessDate";
+import { hasFollowUpDate } from "@/lib/followUps";
 import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch } from "./types";
 import { pipelineStages } from "./types";
 
@@ -22,6 +24,8 @@ interface Props {
   onQuestionnaire?: () => void;
   onSendQuote?: (lead: Lead) => void;
   onSendDepositRequest?: (lead: Lead) => void;
+  onCompleteFollowUp?: (lead: Lead) => void;
+  followUpComplete?: boolean;
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
@@ -157,20 +161,20 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendQuote, onSendDepositRequest }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendQuote, onSendDepositRequest, onCompleteFollowUp, followUpComplete = false }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
   // Activity log form state
   const [logType, setLogType] = useState<CommunicationEntry["type"]>("Call");
   const [logOwner, setLogOwner] = useState("Alliyah");
-  const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [logDate, setLogDate] = useState(() => businessTodayISO());
   const [logNote, setLogNote] = useState("");
   const [logError, setLogError] = useState("");
 
   useEffect(() => {
     setData(null);
-    setLogDate(new Date().toISOString().split("T")[0]);
+    setLogDate(businessTodayISO());
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
@@ -214,7 +218,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     };
     patch({ communicationHistory: [entry, ...current.communicationHistory] });
     setLogNote("");
-    setLogDate(new Date().toISOString().split("T")[0]);
+    setLogDate(businessTodayISO());
   };
 
   const typeColors: Record<CommunicationEntry["type"], string> = {
@@ -234,6 +238,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
 
   const showSendQuote = current.stage === "Design Approved" && onSendQuote;
   const showSendDeposit = current.stage === "Quote Sent" && onSendDepositRequest;
+  const showCompleteFollowUp = hasFollowUpDate(current.followUpDate) && !followUpComplete && onCompleteFollowUp;
 
   const footer = (
     <div className="flex flex-col gap-3">
@@ -254,6 +259,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-amber-600 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100 transition lg:hidden"
         >
           Send Deposit Request
+        </button>
+      )}
+      {showCompleteFollowUp && (
+        <button
+          type="button"
+          onClick={() => onCompleteFollowUp(current)}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition lg:hidden"
+        >
+          Complete Follow-Up
         </button>
       )}
 
@@ -302,6 +316,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               className="hidden min-h-11 items-center rounded-3xl border border-amber-600 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 transition lg:inline-flex"
             >
               Send Deposit Request
+            </button>
+          )}
+          {showCompleteFollowUp && (
+            <button
+              type="button"
+              onClick={() => onCompleteFollowUp(current)}
+              className="hidden min-h-11 items-center rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition lg:inline-flex"
+            >
+              Complete Follow-Up
             </button>
           )}
           {/* Desktop: inline client button */}
@@ -420,7 +443,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 type="date"
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-slate-400 md:text-sm"
                 value={logDate}
-                max={new Date().toISOString().split("T")[0]}
+                max={businessTodayISO()}
                 onChange={(e) => setLogDate(e.target.value)}
               />
               <textarea

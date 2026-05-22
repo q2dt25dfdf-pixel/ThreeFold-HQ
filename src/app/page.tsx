@@ -21,6 +21,8 @@ import { calcBalance, calcDeposit, calcTotal } from "@/lib/invoiceCalc";
 import { formatCurrency } from "@/lib/format";
 import { stringField, statusText, readField } from "@/lib/recordUtils";
 import { extractTextFromBody } from "@/lib/noteUtils";
+import { addDaysToISODate, businessTodayISO, businessTodayLabel, dateOnlyToDate } from "@/lib/businessDate";
+import { isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
 import GlobalSearch from "@/components/GlobalSearch";
 import SummaryCards, { type SummaryCard } from "@/components/dashboard/SummaryCards";
 import QuickActions from "@/components/dashboard/QuickActions";
@@ -42,10 +44,11 @@ function taskOwner(task: StorageRecord) {
 
 function parseRecordDate(rawDate: string): Date | null {
   if (!rawDate) return null;
+  const dateOnly = dateOnlyToDate(rawDate);
+  if (dateOnly) return dateOnly;
   const date = new Date(rawDate);
   if (!Number.isNaN(date.getTime())) return date;
-  const dateOnly = new Date(`${rawDate}T00:00:00`);
-  return Number.isNaN(dateOnly.getTime()) ? null : dateOnly;
+  return null;
 }
 
 function formatDateShort(date: Date): string {
@@ -83,15 +86,11 @@ export default function Home() {
   const loadError = ordersError   || financesError   || tasksError   || crmError   || calendarError   || notesError;
 
   const todayLabel = useMemo(
-    () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+    () => businessTodayLabel(),
     [],
   );
-  const todayISO = useMemo(() => new Date().toISOString().split("T")[0] ?? "", []);
-  const sevenDaysAheadISO = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().split("T")[0] ?? "";
-  }, []);
+  const todayISO = useMemo(() => businessTodayISO(), []);
+  const sevenDaysAheadISO = useMemo(() => addDaysToISODate(todayISO, 7), [todayISO]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -125,21 +124,18 @@ export default function Home() {
   // CRM follow-ups: overdue + due within the next 7 days
   const followUpsDue = useMemo(
     () => crmLeads
-      .filter((lead) => {
-        const date = readField(lead, "followUpDate", "follow_up_date");
-        return date && date !== "TBD" && date <= sevenDaysAheadISO;
-      })
+      .filter((lead) => isLeadFollowUpDueWithin(lead, tasks, sevenDaysAheadISO))
       .sort((a, b) => {
-        const dateA = readField(a, "followUpDate", "follow_up_date");
-        const dateB = readField(b, "followUpDate", "follow_up_date");
+        const dateA = leadFollowUpDate(a);
+        const dateB = leadFollowUpDate(b);
         return dateA.localeCompare(dateB);
       }),
-    [crmLeads, sevenDaysAheadISO],
+    [crmLeads, tasks, sevenDaysAheadISO],
   );
 
   const overdueFollowUpsCount = useMemo(
     () => followUpsDue.filter((l) => {
-      const date = readField(l, "followUpDate", "follow_up_date");
+      const date = leadFollowUpDate(l);
       return date < todayISO;
     }).length,
     [followUpsDue, todayISO],
@@ -147,10 +143,9 @@ export default function Home() {
 
   // Upcoming Deadlines (next 7 days)
   const upcomingDeadlines = useMemo<Deadline[]>(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const limit = new Date(today);
-    limit.setDate(today.getDate() + 7);
+    const today = dateOnlyToDate(todayISO);
+    const limit = dateOnlyToDate(sevenDaysAheadISO);
+    if (!today || !limit) return [];
     const deadlines: Deadline[] = [];
 
     for (const o of orders) {
@@ -159,7 +154,6 @@ export default function Home() {
       if (!dateStr) continue;
       const date = parseRecordDate(dateStr);
       if (!date) continue;
-      date.setHours(0, 0, 0, 0);
       if (date >= today && date <= limit)
         deadlines.push({ title: stringField(o, "orderName", "Unnamed order"), date, type: "Order", href: `/orders/${o.id}` });
     }
@@ -169,13 +163,12 @@ export default function Home() {
       if (!dateStr) continue;
       const date = parseRecordDate(dateStr);
       if (!date) continue;
-      date.setHours(0, 0, 0, 0);
       if (date >= today && date <= limit)
         deadlines.push({ title: stringField(e, "title", "Unnamed event"), date, type: "Event", href: "/calendar" });
     }
 
     return deadlines.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [orders, calendarEvents]);
+  }, [orders, calendarEvents, todayISO, sevenDaysAheadISO]);
 
   const openTasks = useMemo(() => tasks.filter((t) => !isTaskDone(t)), [tasks]);
   const tasksByOwner = useMemo(
@@ -350,7 +343,7 @@ export default function Home() {
                   {followUpsDue.slice(0, 5).map((lead) => {
                     const company = stringField(lead, "company", stringField(lead, "name", "Unnamed lead"));
                     const contact = stringField(lead, "contact");
-                    const dateStr = readField(lead, "followUpDate", "follow_up_date");
+                    const dateStr = leadFollowUpDate(lead);
                     const isOverdue = dateStr < todayISO;
                     const isToday   = dateStr === todayISO;
                     const dateLabel = isToday ? "Today" : (parseRecordDate(dateStr) ? formatDateShort(parseRecordDate(dateStr)!) : dateStr);

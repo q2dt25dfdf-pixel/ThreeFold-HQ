@@ -6,6 +6,7 @@ import ModalShell from "@/components/ModalShell";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { businessTodayISO, dateToBusinessISO } from "@/lib/businessDate";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
 type TaskAssignee = TaskOwner | "All" | "";
@@ -22,9 +23,12 @@ type Task = {
   notes: string;
   completed: boolean;
   completedAt?: string;
+  completed_at?: string;
   source?: "CRM" | string;
   crmLeadId?: string;
   leadId?: string;
+  crm_lead_id?: string;
+  lead_id?: string;
 };
 
 const defaultTasks: Task[] = [
@@ -71,11 +75,13 @@ type CompletionGroup = "today" | "yesterday" | "week" | "older";
 
 function getCompletionGroup(completedAt: string | undefined): CompletionGroup {
   if (!completedAt) return "older";
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const d = new Date(completedAt);
-  const completedStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diffDays = Math.round((todayStart - completedStart) / 86400000);
+  if (Number.isNaN(d.getTime())) return "older";
+  const today = businessTodayISO();
+  const completed = dateToBusinessISO(d);
+  const diffDays = Math.round(
+    (new Date(`${today}T00:00:00`).getTime() - new Date(`${completed}T00:00:00`).getTime()) / 86400000,
+  );
   if (diffDays === 0) return "today";
   if (diffDays === 1) return "yesterday";
   if (diffDays <= 6) return "week";
@@ -162,11 +168,13 @@ export default function TasksPage() {
     const task = tasks.find((current) => current.id === id);
     if (task) {
       const completed = !task.completed;
+      const completedAt = completed ? new Date().toISOString() : undefined;
       upsertItem({
         ...task,
         completed,
         status: completed ? "Done" : "Open",
-        completedAt: completed ? new Date().toISOString() : undefined,
+        completedAt,
+        completed_at: completedAt,
       });
     }
   };
@@ -229,7 +237,7 @@ export default function TasksPage() {
       COMPLETION_GROUP_ORDER.map((key) => ({
         key,
         label: COMPLETION_GROUP_LABELS[key],
-        tasks: completedTasks.filter((t) => getCompletionGroup(t.completedAt) === key),
+        tasks: completedTasks.filter((t) => getCompletionGroup(t.completedAt ?? t.completed_at) === key),
       })).filter((g) => g.tasks.length > 0),
     [completedTasks],
   );

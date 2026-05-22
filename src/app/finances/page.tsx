@@ -7,6 +7,7 @@ import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import {
@@ -218,7 +219,7 @@ function updateInvoiceDeposit<T extends InvoiceFields>(invoice: T, deposit: numb
 }
 
 function todayDate() {
-  return new Date().toISOString().split("T")[0];
+  return businessTodayISO();
 }
 
 function orderMatchesClient(order: Order, clientId: string | undefined, clientName: string | undefined) {

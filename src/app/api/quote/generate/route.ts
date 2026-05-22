@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,9 +30,7 @@ export async function POST(request: NextRequest) {
     const origin = request.nextUrl.origin;
     const publicLink = `${origin}/quote/${token}`;
 
-    const expirationDate = new Date();
-    expirationDate.setDate(expirationDate.getDate() + 30);
-    const expirationDateStr = expirationDate.toISOString().split("T")[0]!;
+    const expirationDateStr = addDaysToISODate(businessTodayISO(), 30);
 
     const quoteId = `quote-${leadId}-${Date.now()}`;
     const quoteData = {

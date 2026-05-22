@@ -12,6 +12,14 @@ import SendDepositModal from "../../components/crm/SendDepositModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
+import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
+import {
+  autoFollowUpTaskId,
+  findFollowUpTaskForLead,
+  hasFollowUpDate,
+  isLeadFollowUpComplete,
+  isLeadFollowUpDueWithin,
+} from "@/lib/followUps";
 
 type Client = {
   id: string;
@@ -33,15 +41,20 @@ type FollowUpTask = {
   id: string;
   title: string;
   dueDate: string;
-  assignedTo: "";
-  owner: "";
-  status: "Open" | "Done" | "Complete";
+  due_date?: string;
+  assignedTo: string;
+  owner: string;
+  status: "Open" | "Done" | "Complete" | string;
   priority: "High" | "Medium" | "Low";
   notes: string;
   completed: boolean;
+  completedAt?: string;
+  completed_at?: string;
   source: "CRM";
   crmLeadId: string;
   leadId: string;
+  crm_lead_id?: string;
+  lead_id?: string;
 };
 
 type IntakeSnapshot = {
@@ -145,9 +158,6 @@ function detectDuplicateMatch(lead: Lead, clients: Client[]): DuplicateMatch | n
 
   return null;
 }
-
-const autoFollowUpTaskId = (leadId: string) => "crm-followup-" + leadId;
-const hasFollowUpDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
 
 // "Approved" is the legacy final CRM stage name — treat it same as "Deposit Paid"
 function isDepositPaid(stage: string): boolean {
@@ -273,11 +283,8 @@ function CRMContent() {
     viewParam === "open" ? "open" : viewParam === "followups" ? "followups" : null,
   );
 
-  const sevenDaysAheadISO = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().split("T")[0] ?? "";
-  }, []);
+  const todayISO = useMemo(() => businessTodayISO(), []);
+  const sevenDaysAheadISO = useMemo(() => addDaysToISODate(todayISO, 7), [todayISO]);
 
   const viewLead = leads.find((l) => l.id === viewLeadId) ?? null;
 
@@ -288,13 +295,10 @@ function CRMContent() {
     if (viewMode === "open") {
       list = list.filter((lead) => !isDepositPaid(lead.stage as string));
     } else if (viewMode === "followups") {
-      list = list.filter((lead) => {
-        const date = (lead.followUpDate as string) || "";
-        return hasFollowUpDate(date) && date <= sevenDaysAheadISO;
-      });
+      list = list.filter((lead) => isLeadFollowUpDueWithin(lead, tasks, sevenDaysAheadISO));
     }
     return list;
-  }, [leads, search, viewMode, sevenDaysAheadISO]);
+  }, [leads, search, viewMode, tasks, sevenDaysAheadISO]);
 
   const leadsByStage = useMemo(
     () =>
@@ -340,23 +344,58 @@ function CRMContent() {
       return;
     }
 
-    const existingTask = tasks.find((task) => task.id === taskId || task.crmLeadId === lead.id || task.leadId === lead.id);
+    const existingTask = findFollowUpTaskForLead(tasks, lead.id) as FollowUpTask | undefined;
+    const existingDueDate = existingTask?.dueDate ?? existingTask?.due_date;
+    const dateChanged = Boolean(existingTask && existingDueDate !== lead.followUpDate);
 
     upsertTask({
       ...existingTask,
       id: taskId,
       title: `Follow up with ${lead.contact || "lead"} — ${lead.company}`,
       dueDate: lead.followUpDate,
+      due_date: lead.followUpDate,
       assignedTo: "",
       owner: "",
-      status: existingTask?.status ?? "Open",
+      status: dateChanged ? "Open" : (existingTask?.status ?? "Open"),
       notes: existingTask?.notes || defaultFollowUpTaskNotes,
       priority: existingTask?.priority ?? "Medium",
-      completed: existingTask?.completed ?? false,
+      completed: dateChanged ? false : (existingTask?.completed ?? false),
+      completedAt: dateChanged ? undefined : existingTask?.completedAt,
+      completed_at: dateChanged ? undefined : existingTask?.completed_at,
       source: "CRM",
       crmLeadId: lead.id,
       leadId: lead.id,
+      crm_lead_id: lead.id,
+      lead_id: lead.id,
     });
+  };
+
+  const completeFollowUp = async (lead: Lead) => {
+    const existingTask = findFollowUpTaskForLead(tasks, lead.id) as FollowUpTask | undefined;
+    if (!hasFollowUpDate(lead.followUpDate)) return;
+    const completedAt = new Date().toISOString();
+
+    await upsertTask({
+      ...existingTask,
+      id: autoFollowUpTaskId(lead.id),
+      title: existingTask?.title ?? `Follow up with ${lead.contact || "lead"} — ${lead.company}`,
+      dueDate: existingTask?.dueDate ?? lead.followUpDate,
+      due_date: existingTask?.due_date ?? lead.followUpDate,
+      assignedTo: existingTask?.assignedTo ?? "",
+      owner: existingTask?.owner ?? "",
+      status: "Done",
+      notes: existingTask?.notes || defaultFollowUpTaskNotes,
+      priority: existingTask?.priority ?? "Medium",
+      completed: true,
+      completedAt,
+      completed_at: completedAt,
+      source: "CRM",
+      crmLeadId: lead.id,
+      leadId: lead.id,
+      crm_lead_id: lead.id,
+      lead_id: lead.id,
+    });
+    setToastMessage(`Follow-up completed for ${lead.company}.`);
   };
 
   const findClientForLead = (lead: Lead | null, previousLead?: Lead | null): Client | null => {
@@ -440,7 +479,7 @@ function CRMContent() {
         : Number(String(rawValue).replace(/[^0-9.-]/g, "")) || 0;
     const depositAmount = depositData?.deposit_amount ?? Math.round(totalAmount * 0.5 * 100) / 100;
     const balanceRemaining = depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0);
-    const today = new Date().toISOString().split("T")[0]!;
+    const today = businessTodayISO();
 
     // Create the order
     await upsertOrder({
@@ -574,7 +613,7 @@ function CRMContent() {
         {
           id: `comm-quote-${Date.now()}`,
           type: "Email",
-          date: new Date().toISOString().split("T")[0]!,
+          date: businessTodayISO(),
           owner: lead.owner || "Alliyah",
           summary: `Quote sent. Quote #${result.quoteNumber}. View: ${result.publicLink}`,
         },
@@ -600,7 +639,7 @@ function CRMContent() {
         {
           id: `comm-deposit-${Date.now()}`,
           type: "Email",
-          date: new Date().toISOString().split("T")[0]!,
+          date: businessTodayISO(),
           owner: lead.owner || "Alliyah",
           summary: `Deposit request sent. Request #${result.depositRequestNumber}. View: ${result.publicLink}`,
         },
@@ -685,7 +724,11 @@ function CRMContent() {
 
       {(() => {
         const followUpLeads = leads
-          .filter((l) => hasFollowUpDate(l.followUpDate) && !isDepositPaid(l.stage as string))
+          .filter((l) => (
+            hasFollowUpDate(l.followUpDate) &&
+            !isDepositPaid(l.stage as string) &&
+            !isLeadFollowUpComplete(l, tasks)
+          ))
           .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
         if (followUpLeads.length === 0) return null;
         return (
@@ -717,6 +760,13 @@ function CRMContent() {
                         onClick={() => setViewLeadId(lead.id)}
                       >
                         View lead
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                        onClick={() => void completeFollowUp(lead)}
+                      >
+                        Complete Follow-Up
                       </button>
                     </div>
                   </div>
@@ -763,6 +813,8 @@ function CRMContent() {
                       onEdit={() => {}}
                       onMove={handleMoveLead}
                       onDelete={handleDeleteLead}
+                      onCompleteFollowUp={completeFollowUp}
+                      followUpComplete={isLeadFollowUpComplete(lead, tasks)}
                       duplicateMatch={detectDuplicateMatch(lead, clients)}
                     />
                   ))
@@ -803,6 +855,8 @@ function CRMContent() {
         onDelete={handleDeleteLead}
         matchingClientId={viewLead ? (findClientForLead(viewLead)?.id ?? null) : null}
         duplicateMatch={viewLead ? detectDuplicateMatch(viewLead, clients) : null}
+        followUpComplete={viewLead ? isLeadFollowUpComplete(viewLead, tasks) : false}
+        onCompleteFollowUp={completeFollowUp}
         onViewClient={() => {
           const match = viewLead ? findClientForLead(viewLead) : null;
           if (match) { setViewLeadId(null); router.push(`/clients/${match.id}`); }
