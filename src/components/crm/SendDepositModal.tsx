@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, Loader2, Send } from "lucide-react";
+import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { BUSINESS_EMAIL } from "@/lib/config";
+import { openEmailCompose } from "@/lib/emailCompose";
 import type { Lead } from "./types";
 
 interface DepositResult {
@@ -23,6 +24,7 @@ interface Props {
 }
 
 type Step = "configure" | "generating" | "preview" | "sending" | "sent" | "error";
+type CopyTarget = "subject" | "body" | "link";
 
 function parseLeadValue(value: Lead["value"]): number {
   if (typeof value === "number") return value;
@@ -55,12 +57,14 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [copied, setCopied] = useState<CopyTarget | "">("");
 
   useEffect(() => {
     if (!open || !lead) return;
     setStep("configure");
     setDepositResult(null);
     setErrorMsg("");
+    setCopied("");
     setEmailTo(lead.email ?? "");
     setTotalAmount(parseLeadValue(lead.value));
     setDepositPercent(50);
@@ -116,34 +120,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
     setStep("sending");
 
     try {
-      const res = await fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: emailTo,
-          subject: emailSubject,
-          body: emailBody,
-          recordId: depositResult.depositRequestId,
-          recordType: "deposit",
-        }),
-      });
-
-      const data = (await res.json()) as {
-        sent?: boolean;
-        fallback?: boolean;
-        mailto_url?: string;
-        error?: string;
-      };
-
-      if (data.error) {
-        setStep("error");
-        setErrorMsg(data.error);
-        return;
-      }
-
-      if (data.fallback && data.mailto_url) {
-        window.open(data.mailto_url, "_blank");
-      }
+      openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
 
       setStep("sent");
       setTimeout(() => {
@@ -154,6 +131,12 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
       setStep("error");
       setErrorMsg(String(err));
     }
+  };
+
+  const copyToClipboard = async (target: CopyTarget, value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopied(target);
+    window.setTimeout(() => setCopied(""), 1800);
   };
 
   if (!open || !lead) return null;
@@ -386,9 +369,37 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
 
           {/* Email preview */}
           <div className="flex flex-col gap-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Email Preview — edit before sending
-            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Email Preview — edit before sending
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyToClipboard("subject", emailSubject)}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copied === "subject" ? "Copied" : "Copy Subject"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyToClipboard("body", emailBody)}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copied === "body" ? "Copied" : "Copy Body"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyToClipboard("link", depositResult.publicLink)}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copied === "link" ? "Copied" : "Copy Link"}
+                </button>
+              </div>
+            </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-slate-600">To</label>
