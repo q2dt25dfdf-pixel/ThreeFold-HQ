@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(
   _request: NextRequest,
@@ -7,8 +7,7 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
-
-    const { data: rows, error } = await supabaseAdmin
+    const { data: rows, error } = await getSupabaseAdmin()
       .from("deposit_requests")
       .select("id,data")
       .eq("data->>public_token", token)

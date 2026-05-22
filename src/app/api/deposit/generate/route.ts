@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,8 +28,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
     }
 
+    const db = getSupabaseAdmin();
     const year = new Date().getFullYear();
-    const { count } = await supabaseAdmin
+    const { count } = await db
       .from("deposit_requests")
       .select("*", { count: "exact", head: true });
 
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     };
 
-    const { error } = await supabaseAdmin
+    const { error } = await db
       .from("deposit_requests")
       .upsert({ id: depositRequestId, data: depositData });
 

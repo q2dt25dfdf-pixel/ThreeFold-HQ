@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 function toHtml(text: string): string {
   return text
@@ -38,8 +38,9 @@ async function updateRecordSent(
 ) {
   if (!recordId || !recordType) return;
   const tableName = recordType === "quote" ? "quotes" : "deposit_requests";
+  const db = getSupabaseAdmin();
 
-  const { data: rows } = await supabaseAdmin
+  const { data: rows } = await db
     .from(tableName)
     .select("id,data")
     .eq("id", recordId)
@@ -47,7 +48,7 @@ async function updateRecordSent(
 
   if (!rows || rows.length === 0) return;
 
-  await supabaseAdmin
+  await db
     .from(tableName)
     .update({
       data: {
