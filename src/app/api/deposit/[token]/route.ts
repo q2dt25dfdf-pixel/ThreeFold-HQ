@@ -20,7 +20,19 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(rows[0].data);
+    const raw = rows[0].data as Record<string, unknown>;
+    const clientSafe = {
+      deposit_request_number: raw.deposit_request_number,
+      client_name: raw.client_name,
+      total_amount: raw.total_amount,
+      deposit_amount: raw.deposit_amount,
+      balance_remaining: raw.balance_remaining,
+      payment_instructions: raw.payment_instructions,
+      notes: raw.notes,
+      status: raw.status,
+      created_at: raw.created_at,
+    };
+    return NextResponse.json(clientSafe);
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -14,6 +14,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isLoginPage = pathname === "/login";
   const isPortalPage = pathname.startsWith("/portal");
+  const isPublicClientPage =
+    pathname.startsWith("/quote") || pathname.startsWith("/deposit");
 
   useEffect(() => {
     if (isLoginPage) {
@@ -49,7 +51,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <div className="min-h-dvh bg-zinc-100">{children}</div>;
   }
 
-  if (isPortalPage) {
+  if (isPortalPage || isPublicClientPage) {
     return <>{children}</>;
   }
 

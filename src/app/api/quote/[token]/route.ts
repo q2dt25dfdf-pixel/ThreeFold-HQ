@@ -17,7 +17,18 @@ export async function GET(
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
-    return NextResponse.json(rows[0].data);
+    const raw = rows[0].data as Record<string, unknown>;
+    const clientSafe = {
+      quote_number: raw.quote_number,
+      client_name: raw.client_name,
+      items: raw.items,
+      total_amount: raw.total_amount,
+      expiration_date: raw.expiration_date,
+      notes: raw.notes,
+      status: raw.status,
+      created_at: raw.created_at,
+    };
+    return NextResponse.json(clientSafe);
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
