@@ -9,7 +9,8 @@ import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
 import SendQuoteModal from "../../components/crm/SendQuoteModal";
 import SendDepositModal from "../../components/crm/SendDepositModal";
-import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile } from "../../components/crm/types";
+import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
+import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile, type CommunicationEntry } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
@@ -276,6 +277,7 @@ function CRMContent() {
   const [viewLeadId, setViewLeadId] = useState<string | null>(null);
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
   const [depositLead, setDepositLead] = useState<Lead | null>(null);
+  const [completingLead, setCompletingLead] = useState<Lead | null>(null);
   const [search, setSearch] = useState("");
   const [toastMessage, setToastMessage] = useState("");
 
@@ -397,6 +399,16 @@ function CRMContent() {
       lead_id: lead.id,
     });
     setToastMessage(`Follow-up completed for ${lead.company}.`);
+  };
+
+  const handleCompleteFollowUpWithLog = async (lead: Lead, entry: CommunicationEntry) => {
+    const updated: Lead = {
+      ...lead,
+      communicationHistory: [entry, ...lead.communicationHistory],
+    };
+    await upsertItem(updated);
+    await completeFollowUp(lead);
+    setCompletingLead(null);
   };
 
   const findClientForLead = (lead: Lead | null, previousLead?: Lead | null): Client | null => {
@@ -764,7 +776,7 @@ function CRMContent() {
                       <button
                         type="button"
                         className="min-h-11 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                        onClick={() => void completeFollowUp(lead)}
+                        onClick={() => setCompletingLead(lead)}
                       >
                         Complete Follow-Up
                       </button>
@@ -813,7 +825,7 @@ function CRMContent() {
                       onEdit={() => {}}
                       onMove={handleMoveLead}
                       onDelete={handleDeleteLead}
-                      onCompleteFollowUp={completeFollowUp}
+                      onCompleteFollowUp={(l) => setCompletingLead(l)}
                       canCompleteFollowUp={canCompleteLeadFollowUp(lead, tasks)}
                       duplicateMatch={detectDuplicateMatch(lead, clients)}
                     />
@@ -856,7 +868,7 @@ function CRMContent() {
         matchingClientId={viewLead ? (findClientForLead(viewLead)?.id ?? null) : null}
         duplicateMatch={viewLead ? detectDuplicateMatch(viewLead, clients) : null}
         canCompleteFollowUp={viewLead ? canCompleteLeadFollowUp(viewLead, tasks) : false}
-        onCompleteFollowUp={completeFollowUp}
+        onCompleteFollowUp={(l) => setCompletingLead(l)}
         onViewClient={() => {
           const match = viewLead ? findClientForLead(viewLead) : null;
           if (match) { setViewLeadId(null); router.push(`/clients/${match.id}`); }
@@ -887,6 +899,14 @@ function CRMContent() {
           setDepositLead(null);
         }}
       />
+
+      {completingLead && (
+        <CompleteFollowUpModal
+          lead={completingLead}
+          onSubmit={(entry) => handleCompleteFollowUpWithLog(completingLead, entry)}
+          onClose={() => setCompletingLead(null)}
+        />
+      )}
 
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 rounded-2xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white shadow-xl">
