@@ -322,7 +322,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif',
     color: "#0a0a0a",
   },
-  outer: { maxWidth: "680px", margin: "0 auto", padding: "64px 32px 96px" },
+  outer: { maxWidth: "860px", margin: "0 auto", padding: "64px 40px 96px" },
   headerBlock: { marginBottom: "8px" },
   logo: {
     fontSize: "12px",
@@ -342,7 +342,7 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: "14px",
   },
   headline: {
-    fontSize: "48px",
+    fontSize: "56px",
     fontWeight: 900,
     letterSpacing: "-0.02em",
     lineHeight: 1,
@@ -368,7 +368,7 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: "uppercase" as const,
     marginBottom: "4px",
   },
-  chipValue: { fontSize: "14px", fontWeight: 600, color: "#0a0a0a" },
+  chipValue: { fontSize: "15px", fontWeight: 600, color: "#0a0a0a" },
   detailList: { display: "flex", flexDirection: "column" as const },
   detailRow: {
     display: "flex",
@@ -383,7 +383,7 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: "0.22em",
     color: "#6F685D",
   },
-  detailVal: { fontSize: "14px", fontWeight: 600, color: "#0a0a0a" },
+  detailVal: { fontSize: "15px", fontWeight: 600, color: "#0a0a0a" },
   calloutPending: {
     marginTop: "14px",
     border: "1px solid #D4A96A",
@@ -421,7 +421,7 @@ const s: Record<string, React.CSSProperties> = {
     color: "#1a5c3a",
   },
   bodyText: {
-    fontSize: "14px",
+    fontSize: "15px",
     color: "#3F3A33",
     lineHeight: 1.75,
     marginBottom: "12px",

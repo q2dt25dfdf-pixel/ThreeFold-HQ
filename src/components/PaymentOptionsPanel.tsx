@@ -33,8 +33,9 @@ export default function PaymentOptionsPanel({
         <div style={s.optionBody}>
           Pay securely by card or bank account through Stripe.
         </div>
-        <div style={s.feeNote}>
-          Card payments include a 3% processing fee. Bank account payments do not.
+        <div style={s.feeNotice}>
+          <strong>Important: Card payments include a 3% processing fee.</strong>{" "}
+          Bank account payments through Stripe do not.
         </div>
         {checkoutError && (
           <div style={s.errorText}>{checkoutError}</div>
@@ -106,13 +107,14 @@ const s: Record<string, React.CSSProperties> = {
     lineHeight: 1.65,
     marginBottom: "6px",
   },
-  feeNote: {
-    fontSize: "11px",
-    color: "#6F685D",
-    lineHeight: 1.6,
+  feeNotice: {
+    fontSize: "12px",
+    color: "#4a3200",
+    lineHeight: 1.65,
     marginTop: "4px",
     marginBottom: "16px",
-    fontStyle: "italic",
+    paddingTop: "10px",
+    borderTop: "1px solid #e0c98a",
   },
   errorText: {
     fontSize: "12px",
