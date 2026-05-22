@@ -1,7 +1,5 @@
 "use client";
 
-import { ZELLE_CONTACT } from "@/lib/config";
-
 interface PaymentOptionsPanelProps {
   amount: number;
   onPayStripe: () => void;
@@ -25,13 +23,11 @@ export default function PaymentOptionsPanel({
   checkoutError,
   paymentInstructions,
 }: PaymentOptionsPanelProps) {
-  const hasZelle = Boolean(ZELLE_CONTACT);
-
   return (
     <div>
       <div style={s.eyebrow}>PAY YOUR DEPOSIT</div>
 
-      {/* Option 1: Stripe */}
+      {/* Stripe */}
       <div style={s.stripeBlock}>
         <div style={s.optionLabel}>PAY ONLINE — STRIPE</div>
         <div style={s.optionBody}>
@@ -58,29 +54,8 @@ export default function PaymentOptionsPanel({
         </button>
       </div>
 
-      {/* Other options header */}
+      {/* Check */}
       <div style={s.altHeader}>OTHER PAYMENT OPTIONS</div>
-
-      {/* Option 2: Zelle */}
-      <div style={s.altBlock}>
-        <div style={s.altLabel}>ZELLE</div>
-        {hasZelle ? (
-          <>
-            <div style={s.optionBody}>
-              Pay by Zelle using the payment information below.
-            </div>
-            <div style={s.detailValue}>{ZELLE_CONTACT}</div>
-          </>
-        ) : (
-          <div style={s.optionBody}>
-            Contact ThreeFold for Zelle payment details.
-          </div>
-        )}
-      </div>
-
-      <div style={s.altDivider} />
-
-      {/* Option 3: Check */}
       <div style={s.altBlock}>
         <div style={s.altLabel}>CHECK</div>
         <div style={s.optionBody}>
@@ -178,17 +153,6 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: "0.22em",
     color: "#332E28",
     marginBottom: "6px",
-  },
-  altDivider: {
-    height: "1px",
-    backgroundColor: "#E5DDD2",
-    margin: "4px 0 20px",
-  },
-  detailValue: {
-    fontSize: "13px",
-    fontWeight: 600,
-    color: "#1a1a1a",
-    marginTop: "4px",
   },
   notesBlock: {
     fontSize: "14px",
