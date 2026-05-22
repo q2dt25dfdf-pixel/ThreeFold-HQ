@@ -26,7 +26,7 @@ type CalendarEvent = {
 type CalendarView = "today" | "week" | "month";
 
 const ASSIGNEES: Assignee[] = ["Alliyah", "Hannah", "Jordan"];
-const eventTypes: EventType[] = ["Client Meeting", "Demo", "Video Call", "Delivery", "Deadline", "Internal Meeting", "Other"];
+const eventTypes: EventType[] = ["Client Meeting", "Delivery", "Deadline", "Internal Meeting", "Other"];
 const filterOptions: FilterOption[] = ["All Events", "Alliyah", "Hannah", "Jordan", "Shared"];
 
 const eventTypeColors: Record<EventType, string> = {
@@ -549,8 +549,6 @@ export default function CalendarPage() {
       <div className="flex flex-wrap gap-2">
         {[
           { label: "Client Meeting", className: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
-          { label: "Demo", className: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-500" },
-          { label: "Video Call", className: "bg-cyan-100 text-cyan-700", dot: "bg-cyan-500" },
           { label: "Delivery", className: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
           { label: "Deadline", className: "bg-rose-100 text-rose-700", dot: "bg-rose-500" },
           { label: "Internal Meeting", className: "bg-violet-100 text-violet-700", dot: "bg-violet-500" },

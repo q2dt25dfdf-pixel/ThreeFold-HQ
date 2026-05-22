@@ -24,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" style={{ backgroundColor: "#f4f4f5" }}>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=0.8, maximum-scale=1, viewport-fit=cover" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

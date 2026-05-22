@@ -226,7 +226,7 @@ export default function TasksPage() {
   };
 
   const completedTasks = useMemo(
-    () => tasks.filter((t) => t.completed && taskMatchesSearch(t, search)),
+    () => tasks.filter((t) => t.completed && !isCrmTask(t) && taskMatchesSearch(t, search)),
     [tasks, search],
   );
 
@@ -346,14 +346,14 @@ export default function TasksPage() {
               <h2 className="mt-0.5 text-base font-bold text-slate-950 md:text-lg">Team Board</h2>
             </div>
             <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
-              {tasks.filter((t) => !t.completed && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length} open
+              {tasks.filter((t) => !t.completed && !isCrmTask(t) && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length} open
             </span>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
             {tasks
-              .filter((t) => !t.completed && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search))
+              .filter((t) => !t.completed && !isCrmTask(t) && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search))
               .map((task) => <TaskCard key={task.id} task={task} />)}
-            {tasks.filter((t) => !t.completed && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length === 0 && (
+            {tasks.filter((t) => !t.completed && !isCrmTask(t) && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-center text-xs text-slate-500 md:text-sm lg:col-span-2 xl:col-span-3">
                 {isSearching ? "No team tasks match your search." : "No shared team tasks yet."}
               </div>
@@ -381,6 +381,7 @@ export default function TasksPage() {
             const visibleTasks = tasks.filter(
               (task) =>
                 !task.completed &&
+                !isCrmTask(task) &&
                 taskAssignee(task) === founder.name &&
                 taskMatchesSearch(task, search),
             );

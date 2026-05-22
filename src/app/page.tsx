@@ -242,7 +242,7 @@ export default function Home() {
   if (loading) return <LoadingState label="Loading dashboard..." />;
 
   return (
-    <main className="min-h-screen text-xs text-[#0f172a] md:text-sm">
+    <main className="min-h-screen w-full overflow-x-hidden text-xs text-[#0f172a] md:text-sm">
       <div className="space-y-5">
         <ErrorBanner message={loadError} />
 
@@ -266,7 +266,7 @@ export default function Home() {
         <div className="grid gap-5 lg:grid-cols-2">
 
           {/* 1 — Active Orders */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -319,7 +319,7 @@ export default function Home() {
           </div>
 
           {/* 2 — CRM Follow-ups (overdue + next 7 days) */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -375,7 +375,7 @@ export default function Home() {
           </div>
 
           {/* 3 — Unpaid Deposits */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -422,7 +422,7 @@ export default function Home() {
           </div>
 
           {/* 4 — Upcoming Deadlines */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -460,7 +460,7 @@ export default function Home() {
           </div>
 
           {/* 5 — Open Tasks */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -510,7 +510,7 @@ export default function Home() {
           </div>
 
           {/* 6 — Recent Notes */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-[#3b82f6]" aria-hidden="true" />
@@ -563,7 +563,7 @@ export default function Home() {
           });
           if (pendingApprovals.length === 0) return null;
           return (
-            <div className="rounded-[2rem] border border-amber-200 bg-white p-4 shadow-sm md:p-5">
+            <div className="min-w-0 rounded-[2rem] border border-amber-200 bg-white p-4 shadow-sm md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-amber-500" aria-hidden="true" />
