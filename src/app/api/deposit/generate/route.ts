@@ -4,6 +4,14 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: NextRequest) {
   try {
+    type LineItem = {
+      name: string;
+      description: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+    };
+
     const {
       leadId,
       quoteId,
@@ -11,6 +19,7 @@ export async function POST(request: NextRequest) {
       clientEmail,
       totalAmount,
       depositAmount,
+      lineItems,
       paymentInstructions,
       notes,
     } = await request.json() as {
@@ -20,6 +29,7 @@ export async function POST(request: NextRequest) {
       clientEmail: string;
       totalAmount: number;
       depositAmount: number;
+      lineItems?: LineItem[] | null;
       paymentInstructions?: string;
       notes?: string;
     };
@@ -52,6 +62,7 @@ export async function POST(request: NextRequest) {
       total_amount: totalAmount ?? 0,
       deposit_amount: depositAmount ?? 0,
       balance_remaining: balanceRemaining,
+      line_items: lineItems ?? null,
       payment_instructions: paymentInstructions ?? "",
       public_token: token,
       public_link: publicLink,

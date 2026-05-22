@@ -3,6 +3,14 @@
 import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
 
+interface LineItem {
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 interface DepositData {
   id: string;
   deposit_request_number: string;
@@ -11,6 +19,7 @@ interface DepositData {
   total_amount: number;
   deposit_amount: number;
   balance_remaining: number;
+  line_items?: LineItem[] | null;
   payment_instructions: string;
   notes: string;
   status: string;
@@ -106,6 +115,36 @@ export default function DepositPage() {
         </div>
 
         <div style={s.rule} />
+
+        {/* Itemized pricing — only shown when line items were saved with this deposit request */}
+        {data.line_items && data.line_items.length > 0 && (
+          <>
+            <div style={s.section}>
+              <div style={s.eyebrow}>WHAT&apos;S INCLUDED</div>
+              <div style={s.detailList}>
+                {data.line_items.map((item, i) => (
+                  <div key={i} style={s.detailRow}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                      {item.description && (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                          {item.description}
+                        </div>
+                      )}
+                      <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                        {item.quantity} × {fmt(item.unitPrice)}
+                      </div>
+                    </div>
+                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                      {fmt(item.lineTotal)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={s.rule} />
+          </>
+        )}
 
         {/* Payment breakdown */}
         <div style={s.section}>

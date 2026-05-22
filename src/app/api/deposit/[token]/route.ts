@@ -27,6 +27,7 @@ export async function GET(
       total_amount: raw.total_amount,
       deposit_amount: raw.deposit_amount,
       balance_remaining: raw.balance_remaining,
+      line_items: raw.line_items ?? null,
       payment_instructions: raw.payment_instructions,
       notes: raw.notes,
       status: raw.status,
