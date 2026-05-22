@@ -95,132 +95,153 @@ export default function QuotePage() {
     : false;
 
   return (
-    <div style={s.page}>
-      <div style={s.outer}>
-        <div style={s.headerBlock}>
-          <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
-          <div style={s.tagline}>Made by three, worn by all.</div>
-        </div>
+    <>
+      <style>{`
+        .col-rule { height: 1px; background-color: #DDD6CB; margin: 36px 0; }
+        @media (max-width: 767px) {
+          .portal-col-side { border-top: 1px solid #DDD6CB; margin-top: 36px; padding-top: 36px; }
+        }
+        @media (min-width: 768px) {
+          .portal-columns { display: grid; grid-template-columns: 1fr 320px; gap: 0 64px; align-items: start; }
+        }
+      `}</style>
+      <div style={s.page}>
+        <div style={s.outer}>
 
-        <div style={s.rule} />
-
-        <div style={s.eyebrow}>CUSTOM QUOTE</div>
-        <div style={s.headline}>{data.client_name.toUpperCase()}</div>
-
-        <div style={s.summaryStrip}>
-          <div style={s.chip}>
-            <div style={s.chipLabel}>QUOTE NUMBER</div>
-            <div style={s.chipValue}>{data.quote_number}</div>
+          {/* Full-width header */}
+          <div style={s.headerBlock}>
+            <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+            <div style={s.tagline}>Made by three, worn by all.</div>
           </div>
-          <div style={s.chip}>
-            <div style={s.chipLabel}>TOTAL</div>
-            <div style={s.chipValue}>{fmt(data.total_amount)}</div>
-          </div>
-          {data.expiration_date && (
+
+          <div style={s.rule} />
+
+          <div style={s.eyebrow}>CUSTOM QUOTE</div>
+          <div style={s.headline}>{data.client_name.toUpperCase()}</div>
+
+          <div style={s.summaryStrip}>
             <div style={s.chip}>
-              <div style={s.chipLabel}>VALID THROUGH</div>
-              <div style={{ ...s.chipValue, color: isExpired ? "#b91c1c" : "#0a0a0a" }}>
-                {fmtDate(data.expiration_date)}
-                {isExpired ? " — EXPIRED" : ""}
-              </div>
+              <div style={s.chipLabel}>QUOTE NUMBER</div>
+              <div style={s.chipValue}>{data.quote_number}</div>
             </div>
-          )}
-        </div>
-
-        <div style={s.rule} />
-
-        {/* Pricing */}
-        <div style={s.section}>
-          <div style={s.eyebrow}>PRICING SUMMARY</div>
-          <div style={s.detailList}>
-            {data.line_items && data.line_items.length > 0 ? (
-              <>
-                {data.line_items.map((item, i) => (
-                  <div key={i} style={s.detailRow}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={s.detailKey}>{item.name.toUpperCase()}</div>
-                      {item.description && (
-                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
-                          {item.description}
-                        </div>
-                      )}
-                      <div style={{ ...s.detailKey, marginTop: "4px" }}>
-                        {item.quantity} × {fmt(item.unitPrice)}
-                      </div>
-                    </div>
-                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
-                      {fmt(item.lineTotal)}
-                    </span>
-                  </div>
-                ))}
-                <div style={{ ...s.detailRow, marginTop: "4px" }}>
-                  <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
-                    TOTAL PROJECT VALUE
-                  </span>
-                  <span style={{ ...s.detailVal, fontSize: "18px" }}>
-                    {fmt(data.total_amount)}
-                  </span>
+            <div style={s.chip}>
+              <div style={s.chipLabel}>TOTAL</div>
+              <div style={s.chipValue}>{fmt(data.total_amount)}</div>
+            </div>
+            {data.expiration_date && (
+              <div style={s.chip}>
+                <div style={s.chipLabel}>VALID THROUGH</div>
+                <div style={{ ...s.chipValue, color: isExpired ? "#b91c1c" : "#0a0a0a" }}>
+                  {fmtDate(data.expiration_date)}
+                  {isExpired ? " — EXPIRED" : ""}
                 </div>
-              </>
-            ) : (
-              <>
-                {data.items.length > 0 &&
-                  data.items.map((item, i) => (
-                    <div key={i} style={s.detailRow}>
-                      <span style={s.detailKey}>{item.toUpperCase()}</span>
-                      <span style={s.detailVal}>—</span>
-                    </div>
-                  ))}
-                <div style={{ ...s.detailRow, marginTop: "4px" }}>
-                  <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
-                    TOTAL PROJECT VALUE
-                  </span>
-                  <span style={{ ...s.detailVal, fontSize: "18px" }}>
-                    {fmt(data.total_amount)}
-                  </span>
-                </div>
-              </>
+              </div>
             )}
           </div>
 
-          <div style={s.paymentCallout}>
-            <span style={s.paymentCalloutLabel}>QUOTE TOTAL</span>
-            <span style={s.paymentCalloutAmount}>{fmt(data.total_amount)}</span>
-          </div>
-        </div>
+          <div style={s.rule} />
 
-        <div style={s.rule} />
+          {/* Two-column body */}
+          <div className="portal-columns">
 
-        {/* What's next */}
-        <div style={s.section}>
-          <div style={s.eyebrow}>NEXT STEPS</div>
-          <div style={s.bodyText}>
-            Review this quote and reach out to approve it. Once approved, we
-            will send a deposit request to get your project into production.
-          </div>
-          {data.notes && (
-            <div style={s.notesBlock}>
-              {data.notes}
+            {/* Left column: pricing summary */}
+            <div className="portal-col-main">
+              <div style={s.section}>
+                <div style={s.eyebrow}>PRICING SUMMARY</div>
+                <div style={s.detailList}>
+                  {data.line_items && data.line_items.length > 0 ? (
+                    <>
+                      {data.line_items.map((item, i) => (
+                        <div key={i} style={s.detailRow}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                            {item.description && (
+                              <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                                {item.description}
+                              </div>
+                            )}
+                            <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                              {item.quantity} × {fmt(item.unitPrice)}
+                            </div>
+                          </div>
+                          <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                            {fmt(item.lineTotal)}
+                          </span>
+                        </div>
+                      ))}
+                      <div style={{ ...s.detailRow, marginTop: "4px" }}>
+                        <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
+                          TOTAL PROJECT VALUE
+                        </span>
+                        <span style={{ ...s.detailVal, fontSize: "18px" }}>
+                          {fmt(data.total_amount)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {data.items.length > 0 &&
+                        data.items.map((item, i) => (
+                          <div key={i} style={s.detailRow}>
+                            <span style={s.detailKey}>{item.toUpperCase()}</span>
+                            <span style={s.detailVal}>—</span>
+                          </div>
+                        ))}
+                      <div style={{ ...s.detailRow, marginTop: "4px" }}>
+                        <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
+                          TOTAL PROJECT VALUE
+                        </span>
+                        <span style={{ ...s.detailVal, fontSize: "18px" }}>
+                          {fmt(data.total_amount)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div style={s.paymentCallout}>
+                  <span style={s.paymentCalloutLabel}>QUOTE TOTAL</span>
+                  <span style={s.paymentCalloutAmount}>{fmt(data.total_amount)}</span>
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Right column: next steps + CTA */}
+            <div className="portal-col-side">
+              <div style={s.section}>
+                <div style={s.eyebrow}>NEXT STEPS</div>
+                <div style={s.bodyText}>
+                  Review this quote and reach out to approve it. Once approved, we
+                  will send a deposit request to get your project into production.
+                </div>
+                {data.notes && (
+                  <div style={s.notesBlock}>
+                    {data.notes}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-rule" />
+
+              <div style={s.eyebrow}>READY TO MOVE FORWARD?</div>
+              <div style={s.bodyText}>
+                Reply to the email you received or contact your Threefold
+                representative directly.
+              </div>
+              <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
+                CONTACT THREEFOLD →
+              </a>
+            </div>
+          </div>
+
+          {/* Full-width footer */}
+          <div style={s.rule} />
+          <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
+          <div style={s.footerTagline}>Made by three, worn by all.</div>
+
         </div>
-
-        <div style={s.rule} />
-
-        <div style={s.eyebrow}>READY TO MOVE FORWARD?</div>
-        <div style={s.bodyText}>
-          Reply to the email you received or contact your Threefold
-          representative directly.
-        </div>
-        <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
-          CONTACT THREEFOLD →
-        </a>
-
-        <div style={s.rule} />
-        <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
-        <div style={s.footerTagline}>Made by three, worn by all.</div>
       </div>
-    </div>
+    </>
   );
 }
 

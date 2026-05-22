@@ -126,192 +126,211 @@ export default function DepositPage() {
     : 50;
 
   return (
-    <div style={s.page}>
-      <div style={s.outer}>
-        <div style={s.headerBlock}>
-          <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
-          <div style={s.tagline}>Made by three, worn by all.</div>
-        </div>
+    <>
+      <style>{`
+        .col-rule { height: 1px; background-color: #DDD6CB; margin: 36px 0; }
+        @media (max-width: 767px) {
+          .portal-col-side { border-top: 1px solid #DDD6CB; margin-top: 36px; padding-top: 36px; }
+        }
+        @media (min-width: 768px) {
+          .portal-columns { display: grid; grid-template-columns: 1fr 360px; gap: 0 64px; align-items: start; }
+        }
+      `}</style>
+      <div style={s.page}>
+        <div style={s.outer}>
 
-        <div style={s.rule} />
-
-        <div style={s.eyebrow}>DEPOSIT REQUEST</div>
-        <div style={s.headline}>{data.client_name.toUpperCase()}</div>
-
-        <div style={s.summaryStrip}>
-          <div style={s.chip}>
-            <div style={s.chipLabel}>REQUEST NUMBER</div>
-            <div style={s.chipValue}>{data.deposit_request_number}</div>
+          {/* Full-width header */}
+          <div style={s.headerBlock}>
+            <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+            <div style={s.tagline}>Made by three, worn by all.</div>
           </div>
-          <div style={s.chip}>
-            <div style={s.chipLabel}>STATUS</div>
-            <div style={{ ...s.chipValue, color: isPaid ? "#1a6644" : isPending ? "#1a4a7a" : "#7A4A00" }}>
-              {isPaid ? "PAID ✓" : isPending ? "PROCESSING" : "AWAITING PAYMENT"}
+
+          <div style={s.rule} />
+
+          <div style={s.eyebrow}>DEPOSIT REQUEST</div>
+          <div style={s.headline}>{data.client_name.toUpperCase()}</div>
+
+          <div style={s.summaryStrip}>
+            <div style={s.chip}>
+              <div style={s.chipLabel}>REQUEST NUMBER</div>
+              <div style={s.chipValue}>{data.deposit_request_number}</div>
+            </div>
+            <div style={s.chip}>
+              <div style={s.chipLabel}>STATUS</div>
+              <div style={{ ...s.chipValue, color: isPaid ? "#1a6644" : isPending ? "#1a4a7a" : "#7A4A00" }}>
+                {isPaid ? "PAID ✓" : isPending ? "PROCESSING" : "AWAITING PAYMENT"}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div style={s.rule} />
+          <div style={s.rule} />
 
-        {/* Itemized pricing — only shown when line items were saved with this deposit request */}
-        {data.line_items && data.line_items.length > 0 && (
-          <>
-            <div style={s.section}>
-              <div style={s.eyebrow}>WHAT&apos;S INCLUDED</div>
-              <div style={s.detailList}>
-                {data.line_items.map((item, i) => (
-                  <div key={i} style={s.detailRow}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={s.detailKey}>{item.name.toUpperCase()}</div>
-                      {item.description && (
-                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
-                          {item.description}
+          {/* Two-column body */}
+          <div className="portal-columns">
+
+            {/* Left column: project details + payment breakdown */}
+            <div className="portal-col-main">
+              {data.line_items && data.line_items.length > 0 && (
+                <>
+                  <div style={s.section}>
+                    <div style={s.eyebrow}>WHAT&apos;S INCLUDED</div>
+                    <div style={s.detailList}>
+                      {data.line_items.map((item, i) => (
+                        <div key={i} style={s.detailRow}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                            {item.description && (
+                              <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                                {item.description}
+                              </div>
+                            )}
+                            <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                              {item.quantity} × {fmt(item.unitPrice)}
+                            </div>
+                          </div>
+                          <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                            {fmt(item.lineTotal)}
+                          </span>
                         </div>
-                      )}
-                      <div style={{ ...s.detailKey, marginTop: "4px" }}>
-                        {item.quantity} × {fmt(item.unitPrice)}
-                      </div>
+                      ))}
                     </div>
-                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
-                      {fmt(item.lineTotal)}
-                    </span>
                   </div>
-                ))}
+                  <div className="col-rule" />
+                </>
+              )}
+
+              <div style={s.section}>
+                <div style={s.eyebrow}>PAYMENT BREAKDOWN</div>
+                <div style={s.detailList}>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
+                    <span style={s.detailVal}>{fmt(data.total_amount)}</span>
+                  </div>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>
+                      DEPOSIT REQUIRED ({depositPercent}%)
+                    </span>
+                    <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
+                  </div>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
+                    <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
+                  </div>
+                </div>
+
+                {!isPaid ? (
+                  <div style={s.calloutPending}>
+                    <span style={s.calloutLabel}>DEPOSIT DUE</span>
+                    <span style={s.calloutAmountPending}>{fmt(data.deposit_amount)}</span>
+                  </div>
+                ) : (
+                  <div style={s.calloutPaid}>
+                    <span style={{ ...s.calloutLabel, color: "#1a5c3a" }}>DEPOSIT</span>
+                    <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
+                  </div>
+                )}
               </div>
             </div>
-            <div style={s.rule} />
-          </>
-        )}
 
-        {/* Payment breakdown */}
-        <div style={s.section}>
-          <div style={s.eyebrow}>PAYMENT BREAKDOWN</div>
-          <div style={s.detailList}>
-            <div style={s.detailRow}>
-              <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
-              <span style={s.detailVal}>{fmt(data.total_amount)}</span>
-            </div>
-            <div style={s.detailRow}>
-              <span style={s.detailKey}>
-                DEPOSIT REQUIRED ({depositPercent}%)
-              </span>
-              <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
-            </div>
-            <div style={s.detailRow}>
-              <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
-              <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
-            </div>
-          </div>
+            {/* Right column: payment action + notes + questions */}
+            <div className="portal-col-side">
+              {isPaid && (
+                <div style={s.section}>
+                  <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+                  <div style={s.bodyText}>
+                    Your deposit has been received and confirmed. Threefold Supply Co. will
+                    be in touch with next steps for your project.
+                  </div>
+                </div>
+              )}
 
-          {!isPaid ? (
-            <div style={s.calloutPending}>
-              <span style={s.calloutLabel}>DEPOSIT DUE</span>
-              <span style={s.calloutAmountPending}>{fmt(data.deposit_amount)}</span>
-            </div>
-          ) : (
-            <div style={s.calloutPaid}>
-              <span style={{ ...s.calloutLabel, color: "#1a5c3a" }}>DEPOSIT</span>
-              <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
-            </div>
-          )}
-        </div>
+              {isPending && !isPaid && (
+                <div style={s.section}>
+                  <div style={s.eyebrow}>PAYMENT IN PROGRESS</div>
+                  <div style={s.bodyText}>
+                    Your bank transfer is being processed. ACH payments typically settle
+                    within 3–5 business days. You will receive confirmation once the
+                    payment clears.
+                  </div>
+                </div>
+              )}
 
-        <div style={s.rule} />
+              {!isPaid && !isPending && paymentParam === "success" && (
+                <div style={s.section}>
+                  <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+                  <div style={s.bodyText}>
+                    Your payment is being confirmed. Bank transfers may take a moment to
+                    process — this page will reflect the updated status once confirmed.
+                    No further action is needed.
+                  </div>
+                </div>
+              )}
 
-        {/* Payment action section */}
-        {isPaid && (
-          <div style={s.section}>
-            <div style={s.eyebrow}>PAYMENT RECEIVED</div>
-            <div style={s.bodyText}>
-              Your deposit has been received and confirmed. Threefold Supply Co. will
-              be in touch with next steps for your project.
-            </div>
-          </div>
-        )}
+              {!isPaid && !isPending && paymentParam === "cancelled" && (
+                <div style={s.section}>
+                  <div style={s.eyebrow}>PAYMENT CANCELLED</div>
+                  <div style={s.bodyText}>
+                    Your payment was not completed. You can try again whenever you are ready.
+                  </div>
+                  {checkoutError && (
+                    <div style={{ ...s.bodyText, color: "#b91c1c", marginTop: "8px" }}>
+                      {checkoutError}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => void handlePayDeposit()}
+                    disabled={checkoutLoading}
+                    style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
+                  >
+                    {checkoutLoading ? "REDIRECTING TO CHECKOUT…" : `PAY DEPOSIT — ${fmt(data.deposit_amount)} →`}
+                  </button>
+                </div>
+              )}
 
-        {isPending && !isPaid && (
-          <div style={s.section}>
-            <div style={s.eyebrow}>PAYMENT IN PROGRESS</div>
-            <div style={s.bodyText}>
-              Your bank transfer is being processed. ACH payments typically settle
-              within 3–5 business days. You will receive confirmation once the
-              payment clears.
-            </div>
-          </div>
-        )}
+              {!isPaid && !isPending && paymentParam === null && (
+                <div style={s.section}>
+                  <PaymentOptionsPanel
+                    amount={data.deposit_amount}
+                    onPayStripe={() => void handlePayDeposit()}
+                    checkoutLoading={checkoutLoading}
+                    checkoutError={checkoutError || undefined}
+                    paymentInstructions={data.payment_instructions || undefined}
+                  />
+                </div>
+              )}
 
-        {!isPaid && !isPending && paymentParam === "success" && (
-          <div style={s.section}>
-            <div style={s.eyebrow}>PAYMENT RECEIVED</div>
-            <div style={s.bodyText}>
-              Your payment is being confirmed. Bank transfers may take a moment to
-              process — this page will reflect the updated status once confirmed.
-              No further action is needed.
-            </div>
-          </div>
-        )}
+              {data.notes && (
+                <>
+                  <div className="col-rule" />
+                  <div style={s.section}>
+                    <div style={s.eyebrow}>NOTES</div>
+                    <div style={s.notesBlock}>{data.notes}</div>
+                  </div>
+                </>
+              )}
 
-        {!isPaid && !isPending && paymentParam === "cancelled" && (
-          <div style={s.section}>
-            <div style={s.eyebrow}>PAYMENT CANCELLED</div>
-            <div style={s.bodyText}>
-              Your payment was not completed. You can try again whenever you are ready.
-            </div>
-            {checkoutError && (
-              <div style={{ ...s.bodyText, color: "#b91c1c", marginTop: "8px" }}>
-                {checkoutError}
+              <div className="col-rule" />
+              <div style={s.eyebrow}>QUESTIONS?</div>
+              <div style={s.bodyText}>
+                Reach out to your Threefold representative directly.
               </div>
-            )}
-            <button
-              onClick={() => void handlePayDeposit()}
-              disabled={checkoutLoading}
-              style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
-            >
-              {checkoutLoading ? "REDIRECTING TO CHECKOUT…" : `PAY DEPOSIT — ${fmt(data.deposit_amount)} →`}
-            </button>
-          </div>
-        )}
-
-        {!isPaid && !isPending && paymentParam === null && (
-          <div style={s.section}>
-            <PaymentOptionsPanel
-              amount={data.deposit_amount}
-              onPayStripe={() => void handlePayDeposit()}
-              checkoutLoading={checkoutLoading}
-              checkoutError={checkoutError || undefined}
-              paymentInstructions={data.payment_instructions || undefined}
-            />
-          </div>
-        )}
-
-        {data.notes && (
-          <>
-            <div style={s.rule} />
-            <div style={s.section}>
-              <div style={s.eyebrow}>NOTES</div>
-              <div style={s.notesBlock}>{data.notes}</div>
+              <a
+                href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
+                style={s.btnOutline}
+              >
+                CONTACT THREEFOLD →
+              </a>
             </div>
-          </>
-        )}
+          </div>
 
-        <div style={s.rule} />
+          {/* Full-width footer */}
+          <div style={s.rule} />
+          <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
+          <div style={s.footerTagline}>Made by three, worn by all.</div>
 
-        <div style={s.eyebrow}>QUESTIONS?</div>
-        <div style={s.bodyText}>
-          Reach out to your Threefold representative directly.
         </div>
-        <a
-          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
-          style={s.btnOutline}
-        >
-          CONTACT THREEFOLD →
-        </a>
-
-        <div style={s.rule} />
-        <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
-        <div style={s.footerTagline}>Made by three, worn by all.</div>
       </div>
-    </div>
+    </>
   );
 }
 
