@@ -20,6 +20,8 @@ interface Props {
   duplicateMatch?: DuplicateMatch | null;
   onViewClient?: () => void;
   onQuestionnaire?: () => void;
+  onSendQuote?: (lead: Lead) => void;
+  onSendDepositRequest?: (lead: Lead) => void;
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
@@ -155,7 +157,7 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendQuote, onSendDepositRequest }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
@@ -230,9 +232,32 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400";
   const clientBtnLabel = hasClient ? "View Client Record" : "Client record pending";
 
+  const showSendQuote = current.stage === "Design Approved" && onSendQuote;
+  const showSendDeposit = current.stage === "Quote Sent" && onSendDepositRequest;
+
   const footer = (
     <div className="flex flex-col gap-3">
-      {/* Mobile: full-width button */}
+      {/* Mobile: workflow action buttons */}
+      {showSendQuote && (
+        <button
+          type="button"
+          onClick={() => onSendQuote(current)}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-900 bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition lg:hidden"
+        >
+          Send Quote
+        </button>
+      )}
+      {showSendDeposit && (
+        <button
+          type="button"
+          onClick={() => onSendDepositRequest(current)}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-amber-600 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100 transition lg:hidden"
+        >
+          Send Deposit Request
+        </button>
+      )}
+
+      {/* Mobile: full-width client button */}
       <button
         type="button"
         disabled={!hasClient}
@@ -260,7 +285,26 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           Delete
         </button>
         <div className="flex items-center gap-3">
-          {/* Desktop: inline button */}
+          {/* Desktop: workflow action buttons */}
+          {showSendQuote && (
+            <button
+              type="button"
+              onClick={() => onSendQuote(current)}
+              className="hidden min-h-11 items-center rounded-3xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition lg:inline-flex"
+            >
+              Send Quote
+            </button>
+          )}
+          {showSendDeposit && (
+            <button
+              type="button"
+              onClick={() => onSendDepositRequest(current)}
+              className="hidden min-h-11 items-center rounded-3xl border border-amber-600 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 transition lg:inline-flex"
+            >
+              Send Deposit Request
+            </button>
+          )}
+          {/* Desktop: inline client button */}
           <button
             type="button"
             disabled={!hasClient}

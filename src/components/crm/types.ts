@@ -57,6 +57,11 @@ export type Lead = {
   style?: string;
   colors?: string;
   questionnaire_files?: QuestionnaireFile[];
+  // Quote & deposit tracking — set after each workflow step
+  quote_id?: string;
+  quote_number?: string;
+  deposit_request_id?: string;
+  deposit_request_number?: string;
 };
 
 export type QuestionnaireFileCategory = "logo" | "inspiration" | "pdf" | "mockup" | "other";

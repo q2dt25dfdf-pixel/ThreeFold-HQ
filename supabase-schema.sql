@@ -62,3 +62,19 @@ create table if not exists public.notes (
   id text primary key,
   data jsonb not null
 );
+
+-- Quote + Deposit workflow tables (added for Send Quote / Send Deposit Request flow)
+create table if not exists public.quotes (
+  id text primary key,
+  data jsonb not null
+);
+
+create table if not exists public.deposit_requests (
+  id text primary key,
+  data jsonb not null
+);
+
+-- Recommended indexes for token lookups on public pages
+create index if not exists quotes_public_token_idx on public.quotes ((data->>'public_token'));
+create index if not exists deposit_requests_public_token_idx on public.deposit_requests ((data->>'public_token'));
+create index if not exists deposit_requests_lead_id_idx on public.deposit_requests ((data->>'lead_id'));

@@ -7,8 +7,11 @@ import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
+import SendQuoteModal from "../../components/crm/SendQuoteModal";
+import SendDepositModal from "../../components/crm/SendDepositModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { supabase } from "@/lib/supabase";
 
 type Client = {
   id: string;
@@ -63,6 +66,7 @@ type Order = {
   id: string;
   orderName: string;
   order_name?: string;
+  order_number?: string;
   client: string;
   client_id?: string;
   client_name?: string;
@@ -76,7 +80,32 @@ type Order = {
   source?: string;
   lead_id?: string;
   questionnaire_id?: string;
+  quote_id?: string;
+  deposit_request_id?: string;
   intake_snapshot?: IntakeSnapshot;
+};
+
+type InvoiceRecord = {
+  id: string;
+  client: string;
+  client_id?: string;
+  client_name?: string;
+  orderName: string;
+  order_name?: string;
+  order_id?: string;
+  lead_id?: string;
+  quote_id?: string;
+  deposit_request_id?: string;
+  total_amount: number;
+  amount?: number;
+  deposit_amount: number;
+  deposit_paid: boolean;
+  deposit_paid_date?: string;
+  balance_remaining: number;
+  final_due_date?: string;
+  final_paid: boolean;
+  status: string;
+  notes: string;
 };
 
 function normalizeForMatch(s: string): string {
@@ -230,9 +259,12 @@ function CRMContent() {
   const { data: clients, upsertItem: upsertClient, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
   const { upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
+  const { upsertItem: upsertFinance } = useSupabaseTable<InvoiceRecord>("finances", []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
   const [viewLeadId, setViewLeadId] = useState<string | null>(null);
+  const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
+  const [depositLead, setDepositLead] = useState<Lead | null>(null);
   const [search, setSearch] = useState("");
   const [toastMessage, setToastMessage] = useState("");
 
@@ -383,24 +415,54 @@ function CRMContent() {
     await syncClientFromLead(lead);
     await reloadClients();
 
-    const orderName = `${lead.company} — Order #1`;
+    // Generate a sequential order number
+    const year = new Date().getFullYear();
+    const { count: orderCount } = await supabase
+      .from("orders")
+      .select("*", { count: "exact", head: true });
+    const orderNumber = `TF-ORD-${year}-${String((orderCount ?? 0) + 1).padStart(4, "0")}`;
+    const orderId = `order-lead-${lead.id}`;
+    const orderName = `${lead.company} — ${orderNumber}`;
+
+    // Look up any deposit request for this lead to get the confirmed amounts
+    const { data: depositRows } = await supabase
+      .from("deposit_requests")
+      .select("id,data")
+      .eq("data->>lead_id", lead.id)
+      .limit(1);
+    type DepositRow = { total_amount: number; deposit_amount: number; balance_remaining: number };
+    const depositData = depositRows?.[0]?.data as DepositRow | undefined;
+
+    const rawValue = lead.value;
+    const totalAmount =
+      typeof rawValue === "number"
+        ? rawValue
+        : Number(String(rawValue).replace(/[^0-9.-]/g, "")) || 0;
+    const depositAmount = depositData?.deposit_amount ?? Math.round(totalAmount * 0.5 * 100) / 100;
+    const balanceRemaining = depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0);
+    const today = new Date().toISOString().split("T")[0]!;
+
+    // Create the order
     await upsertOrder({
-      id: `order-lead-${lead.id}`,
+      id: orderId,
       orderName,
       order_name: orderName,
+      order_number: orderNumber,
       client: lead.company,
       client_id: clientId,
       client_name: lead.company,
       vendor: "",
       items: [],
       quantity: 0,
-      amount: 0,
+      amount: totalAmount,
       status: "Production",
       estimatedDeliveryDate: "",
       notes: "",
       source: lead.source === "Website" ? "Website Lead" : "CRM Lead",
       lead_id: lead.id,
       questionnaire_id: lead.questionnaire_id ?? "",
+      quote_id: lead.quote_id ?? "",
+      deposit_request_id: lead.deposit_request_id ?? "",
       intake_snapshot: {
         contact_title: lead.contact_title ?? "",
         contact_method: lead.contact_method ?? "",
@@ -420,7 +482,47 @@ function CRMContent() {
       },
     });
 
-    setToastMessage(`${lead.company} approved. Client record and Order #1 created.`);
+    // Generate client portal token for the order
+    void fetch("/api/portal/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    });
+
+    // Create invoice record
+    const invoiceId = `invoice-${orderId}`;
+    const invoiceNotes = [
+      "Created automatically when lead reached Deposit Paid.",
+      lead.quote_number ? `Quote: ${lead.quote_number}.` : "",
+      lead.deposit_request_number ? `Deposit Request: ${lead.deposit_request_number}.` : "",
+    ].filter(Boolean).join(" ");
+
+    await upsertFinance({
+      id: invoiceId,
+      client: lead.company,
+      client_id: clientId,
+      client_name: lead.company,
+      orderName,
+      order_name: orderName,
+      order_id: orderId,
+      lead_id: lead.id,
+      quote_id: lead.quote_id ?? "",
+      deposit_request_id: lead.deposit_request_id ?? "",
+      total_amount: totalAmount,
+      amount: totalAmount,
+      deposit_amount: depositAmount,
+      deposit_paid: true,
+      deposit_paid_date: today,
+      balance_remaining: balanceRemaining,
+      final_due_date: "",
+      final_paid: false,
+      status: "Deposit Paid",
+      notes: invoiceNotes,
+    });
+
+    setToastMessage(
+      `${lead.company} moved to Deposit Paid. Order ${orderNumber}, Invoice, and Client Portal created.`,
+    );
   };
 
   const handleAddLead = async (values: Omit<Lead, "id">) => {
@@ -455,6 +557,58 @@ function CRMContent() {
     await deleteItem(lead.id);
     deleteTask(autoFollowUpTaskId(lead.id));
     if (viewLeadId === lead.id) setViewLeadId(null);
+  };
+
+  const handleOpenSendQuote = (lead: Lead) => {
+    setViewLeadId(null);
+    setQuoteLead(lead);
+  };
+
+  const handleQuoteSent = async (lead: Lead, result: { quoteId: string; quoteNumber: string; publicLink: string }) => {
+    const updated: Lead = {
+      ...lead,
+      stage: "Quote Sent",
+      quote_id: result.quoteId,
+      quote_number: result.quoteNumber,
+      communicationHistory: [
+        {
+          id: `comm-quote-${Date.now()}`,
+          type: "Email",
+          date: new Date().toISOString().split("T")[0]!,
+          owner: lead.owner || "Alliyah",
+          summary: `Quote sent. Quote #${result.quoteNumber}. View: ${result.publicLink}`,
+        },
+        ...lead.communicationHistory,
+      ],
+    };
+    await upsertItem(updated);
+    syncFollowUpTask(updated);
+    setToastMessage(`Quote ${result.quoteNumber} sent to ${lead.email}. Lead moved to Quote Sent.`);
+  };
+
+  const handleOpenSendDeposit = (lead: Lead) => {
+    setViewLeadId(null);
+    setDepositLead(lead);
+  };
+
+  const handleDepositSent = async (lead: Lead, result: { depositRequestId: string; depositRequestNumber: string; publicLink: string }) => {
+    const updated: Lead = {
+      ...lead,
+      deposit_request_id: result.depositRequestId,
+      deposit_request_number: result.depositRequestNumber,
+      communicationHistory: [
+        {
+          id: `comm-deposit-${Date.now()}`,
+          type: "Email",
+          date: new Date().toISOString().split("T")[0]!,
+          owner: lead.owner || "Alliyah",
+          summary: `Deposit request sent. Request #${result.depositRequestNumber}. View: ${result.publicLink}`,
+        },
+        ...lead.communicationHistory,
+      ],
+    };
+    await upsertItem(updated);
+    setToastMessage(`Deposit request ${result.depositRequestNumber} sent to ${lead.email}.`);
   };
 
   if (loading) return <LoadingState label="Loading CRM..." />;
@@ -655,6 +809,28 @@ function CRMContent() {
         }}
         onQuestionnaire={() => {
           if (viewLead) { setViewLeadId(null); router.push(`/crm/leads/${viewLead.id}`); }
+        }}
+        onSendQuote={handleOpenSendQuote}
+        onSendDepositRequest={handleOpenSendDeposit}
+      />
+
+      <SendQuoteModal
+        open={Boolean(quoteLead)}
+        lead={quoteLead}
+        onClose={() => setQuoteLead(null)}
+        onSent={(result) => {
+          if (quoteLead) void handleQuoteSent(quoteLead, result);
+          setQuoteLead(null);
+        }}
+      />
+
+      <SendDepositModal
+        open={Boolean(depositLead)}
+        lead={depositLead}
+        onClose={() => setDepositLead(null)}
+        onSent={(result) => {
+          if (depositLead) void handleDepositSent(depositLead, result);
+          setDepositLead(null);
         }}
       />
 
