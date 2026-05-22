@@ -38,9 +38,20 @@ export default function DepositPage() {
   const [data, setData] = useState<DepositData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [depositToken, setDepositToken] = useState("");
+  const [paymentParam, setPaymentParam] = useState<"success" | "cancelled" | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
 
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
+    setDepositToken(token);
+
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get("payment");
+    if (p === "success") setPaymentParam("success");
+    if (p === "cancelled") setPaymentParam("cancelled");
+
     if (!token) return;
 
     fetch(`/api/deposit/${token}`)
@@ -52,6 +63,30 @@ export default function DepositPage() {
       .catch(() => setError("Failed to load deposit request"))
       .finally(() => setLoading(false));
   }, []);
+
+  const handlePayDeposit = async () => {
+    if (!depositToken || checkoutLoading) return;
+    setCheckoutLoading(true);
+    setCheckoutError("");
+
+    try {
+      const res = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ depositToken }),
+      });
+      const d = await res.json() as { url?: string; error?: string };
+      if (d.error) {
+        setCheckoutError(d.error);
+      } else if (d.url) {
+        window.location.href = d.url;
+      }
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -84,6 +119,7 @@ export default function DepositPage() {
   }
 
   const isPaid = data.status === "paid";
+  const isPending = data.status === "pending";
   const depositPercent = data.total_amount > 0
     ? Math.round((data.deposit_amount / data.total_amount) * 100)
     : 50;
@@ -108,8 +144,8 @@ export default function DepositPage() {
           </div>
           <div style={s.chip}>
             <div style={s.chipLabel}>STATUS</div>
-            <div style={{ ...s.chipValue, color: isPaid ? "#1a6644" : "#7A4A00" }}>
-              {isPaid ? "PAID ✓" : "AWAITING PAYMENT"}
+            <div style={{ ...s.chipValue, color: isPaid ? "#1a6644" : isPending ? "#1a4a7a" : "#7A4A00" }}>
+              {isPaid ? "PAID ✓" : isPending ? "PROCESSING" : "AWAITING PAYMENT"}
             </div>
           </div>
         </div>
@@ -181,21 +217,87 @@ export default function DepositPage() {
 
         <div style={s.rule} />
 
-        {/* Payment instructions */}
-        <div style={s.section}>
-          <div style={s.eyebrow}>HOW TO PAY</div>
-          {data.payment_instructions ? (
-            <div style={s.notesBlock}>{data.payment_instructions}</div>
-          ) : (
+        {/* Payment action section */}
+        {isPaid && (
+          <div style={s.section}>
+            <div style={s.eyebrow}>PAYMENT RECEIVED</div>
             <div style={s.bodyText}>
-              Please contact your Threefold representative to arrange payment.
-              We accept Venmo, Zelle, check, and bank transfer.
+              Your deposit has been received and confirmed. Threefold Supply Co. will
+              be in touch with next steps for your project.
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Future Stripe integration anchor */}
-        {/* TODO: replace this section with <StripePaymentButton amount={data.deposit_amount} /> */}
+        {isPending && !isPaid && (
+          <div style={s.section}>
+            <div style={s.eyebrow}>PAYMENT IN PROGRESS</div>
+            <div style={s.bodyText}>
+              Your bank transfer is being processed. ACH payments typically settle
+              within 3–5 business days. You will receive confirmation once the
+              payment clears.
+            </div>
+          </div>
+        )}
+
+        {!isPaid && !isPending && paymentParam === "success" && (
+          <div style={s.section}>
+            <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+            <div style={s.bodyText}>
+              Your payment is being confirmed. Bank transfers may take a moment to
+              process — this page will reflect the updated status once confirmed.
+              No further action is needed.
+            </div>
+          </div>
+        )}
+
+        {!isPaid && !isPending && paymentParam === "cancelled" && (
+          <div style={s.section}>
+            <div style={s.eyebrow}>PAYMENT CANCELLED</div>
+            <div style={s.bodyText}>
+              Your payment was not completed. You can try again whenever you are ready.
+            </div>
+            {checkoutError && (
+              <div style={{ ...s.bodyText, color: "#b91c1c", marginTop: "8px" }}>
+                {checkoutError}
+              </div>
+            )}
+            <button
+              onClick={() => void handlePayDeposit()}
+              disabled={checkoutLoading}
+              style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
+            >
+              {checkoutLoading ? "REDIRECTING TO CHECKOUT…" : `PAY DEPOSIT — ${fmt(data.deposit_amount)} →`}
+            </button>
+          </div>
+        )}
+
+        {!isPaid && !isPending && paymentParam === null && (
+          <div style={s.section}>
+            <div style={s.eyebrow}>PAY YOUR DEPOSIT</div>
+            <div style={s.bodyText}>
+              Secure payment powered by Stripe. We accept all major credit cards
+              and US bank account (ACH) transfers.
+            </div>
+            {checkoutError && (
+              <div style={{ ...s.bodyText, color: "#b91c1c", marginTop: "8px" }}>
+                {checkoutError}
+              </div>
+            )}
+            <button
+              onClick={() => void handlePayDeposit()}
+              disabled={checkoutLoading}
+              style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
+            >
+              {checkoutLoading ? "REDIRECTING TO CHECKOUT…" : `PAY DEPOSIT — ${fmt(data.deposit_amount)} →`}
+            </button>
+            {data.payment_instructions && (
+              <div style={{ ...s.bodyText, marginTop: "20px" }}>
+                <div style={{ ...s.eyebrow, marginBottom: "8px" }}>PAYMENT NOTES</div>
+                <div style={s.notesBlock}>{data.payment_instructions}</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {data.notes && (
           <>
@@ -363,6 +465,20 @@ const s: Record<string, React.CSSProperties> = {
     color: "#6F685D",
     letterSpacing: "0.05em",
     marginTop: "16px",
+  },
+  btnPay: {
+    display: "block",
+    width: "100%",
+    marginTop: "20px",
+    backgroundColor: "#C49A2B",
+    color: "#fff",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.22em",
+    padding: "16px 32px",
+    border: "none",
+    cursor: "pointer",
+    textAlign: "center" as const,
   },
   footerLogo: {
     fontSize: "10px",
