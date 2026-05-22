@@ -1,13 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import {
-  ZELLE_CONTACT,
-  BANK_NAME,
-  BANK_ROUTING_NUMBER,
-  BANK_ACCOUNT_NUMBER,
-  BANK_ACCOUNT_TYPE,
-} from "@/lib/config";
+import { ZELLE_CONTACT } from "@/lib/config";
 
 interface PaymentOptionsPanelProps {
   amount: number;
@@ -32,13 +25,7 @@ export default function PaymentOptionsPanel({
   checkoutError,
   paymentInstructions,
 }: PaymentOptionsPanelProps) {
-  const [bankExpanded, setBankExpanded] = useState(false);
-
   const hasZelle = Boolean(ZELLE_CONTACT);
-  const hasBankDetails =
-    Boolean(BANK_NAME) &&
-    Boolean(BANK_ROUTING_NUMBER) &&
-    Boolean(BANK_ACCOUNT_NUMBER);
 
   return (
     <div>
@@ -93,54 +80,13 @@ export default function PaymentOptionsPanel({
 
       <div style={s.altDivider} />
 
-      {/* Option 3: Bank Transfer */}
-      <div style={s.altBlock}>
-        <div style={s.altLabel}>BANK TRANSFER</div>
-        <button
-          onClick={() => setBankExpanded((v) => !v)}
-          style={s.revealBtn}
-        >
-          {bankExpanded ? "HIDE DETAILS ↑" : "VIEW BANK TRANSFER DETAILS ↓"}
-        </button>
-        {bankExpanded && (
-          <div style={s.bankBlock}>
-            {hasBankDetails ? (
-              <>
-                <div style={s.bankRow}>
-                  <span style={s.bankKey}>BANK</span>
-                  <span style={s.bankVal}>{BANK_NAME}</span>
-                </div>
-                <div style={s.bankRow}>
-                  <span style={s.bankKey}>ROUTING</span>
-                  <span style={s.bankVal}>{BANK_ROUTING_NUMBER}</span>
-                </div>
-                <div style={s.bankRow}>
-                  <span style={s.bankKey}>ACCOUNT</span>
-                  <span style={s.bankVal}>{BANK_ACCOUNT_NUMBER}</span>
-                </div>
-                <div style={s.bankRow}>
-                  <span style={s.bankKey}>TYPE</span>
-                  <span style={s.bankVal}>{BANK_ACCOUNT_TYPE}</span>
-                </div>
-              </>
-            ) : (
-              <div style={s.optionBody}>
-                Contact ThreeFold for bank transfer details.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div style={s.altDivider} />
-
-      {/* Option 4: Check */}
+      {/* Option 3: Check */}
       <div style={s.altBlock}>
         <div style={s.altLabel}>CHECK</div>
         <div style={s.optionBody}>
           Make checks payable to{" "}
           <span style={{ fontWeight: 600, color: "#1a1a1a" }}>
-            Threefold Supply Co.
+            ThreeFold Supply Co.
           </span>
         </div>
         <div style={s.optionBody}>
@@ -243,46 +189,6 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "#1a1a1a",
     marginTop: "4px",
-  },
-  revealBtn: {
-    background: "none",
-    border: "none",
-    padding: 0,
-    cursor: "pointer",
-    fontSize: "9px",
-    fontWeight: 700,
-    letterSpacing: "0.2em",
-    color: "#C49A2B",
-    textDecoration: "underline",
-    textUnderlineOffset: "3px",
-    marginBottom: "12px",
-    display: "block",
-  },
-  bankBlock: {
-    border: "1px solid #DDD6CB",
-    backgroundColor: "#FAF7F2",
-    padding: "14px 16px",
-    marginBottom: "4px",
-  },
-  bankRow: {
-    display: "flex",
-    gap: "16px",
-    padding: "6px 0",
-    borderBottom: "1px solid #EEE8E0",
-  },
-  bankKey: {
-    fontSize: "9px",
-    fontWeight: 700,
-    letterSpacing: "0.2em",
-    color: "#9B9084",
-    width: "72px",
-    flexShrink: 0,
-    paddingTop: "2px",
-  },
-  bankVal: {
-    fontSize: "13px",
-    fontWeight: 500,
-    color: "#1a1a1a",
   },
   notesBlock: {
     fontSize: "14px",
