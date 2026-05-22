@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
+import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 
 interface LineItem {
   name: string;
@@ -273,29 +274,13 @@ export default function DepositPage() {
 
         {!isPaid && !isPending && paymentParam === null && (
           <div style={s.section}>
-            <div style={s.eyebrow}>PAY YOUR DEPOSIT</div>
-            <div style={s.bodyText}>
-              Secure payment powered by Stripe. We accept all major credit cards
-              and US bank account (ACH) transfers.
-            </div>
-            {checkoutError && (
-              <div style={{ ...s.bodyText, color: "#b91c1c", marginTop: "8px" }}>
-                {checkoutError}
-              </div>
-            )}
-            <button
-              onClick={() => void handlePayDeposit()}
-              disabled={checkoutLoading}
-              style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
-            >
-              {checkoutLoading ? "REDIRECTING TO CHECKOUT…" : `PAY DEPOSIT — ${fmt(data.deposit_amount)} →`}
-            </button>
-            {data.payment_instructions && (
-              <div style={{ ...s.bodyText, marginTop: "20px" }}>
-                <div style={{ ...s.eyebrow, marginBottom: "8px" }}>PAYMENT NOTES</div>
-                <div style={s.notesBlock}>{data.payment_instructions}</div>
-              </div>
-            )}
+            <PaymentOptionsPanel
+              amount={data.deposit_amount}
+              onPayStripe={() => void handlePayDeposit()}
+              checkoutLoading={checkoutLoading}
+              checkoutError={checkoutError || undefined}
+              paymentInstructions={data.payment_instructions || undefined}
+            />
           </div>
         )}
 
