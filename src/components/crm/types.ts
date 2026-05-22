@@ -77,6 +77,14 @@ export type QuestionnaireFile = {
   uploaded_at: string;
 };
 
+export type QuoteItem = {
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
 export type DuplicateMatchType = "likely_existing" | "possible_duplicate";
 
 export type DuplicateMatch = {

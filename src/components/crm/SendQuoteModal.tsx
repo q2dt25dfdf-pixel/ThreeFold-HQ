@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
+import { CheckCircle, Copy, Loader2, Plus, Send, X } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { openEmailCompose } from "@/lib/emailCompose";
-import type { Lead } from "./types";
+import type { Lead, QuoteItem } from "./types";
 
 interface QuoteResult {
   quoteId: string;
@@ -20,13 +20,11 @@ interface Props {
   onSent: (result: QuoteResult) => void;
 }
 
-type Step = "generating" | "preview" | "sending" | "sent" | "error";
+type Step = "details" | "generating" | "preview" | "sending" | "sent" | "error";
 type CopyTarget = "subject" | "body" | "link";
 
-function parseLeadValue(value: Lead["value"]): number {
-  if (typeof value === "number") return value;
-  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
+function newItem(): QuoteItem {
+  return { name: "", description: "", quantity: 1, unitPrice: 0, lineTotal: 0 };
 }
 
 function fmtCurrency(n: number) {
@@ -46,7 +44,8 @@ function fmtDate(iso: string) {
 }
 
 export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
-  const [step, setStep] = useState<Step>("generating");
+  const [step, setStep] = useState<Step>("details");
+  const [lineItems, setLineItems] = useState<QuoteItem[]>([newItem()]);
   const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
@@ -56,15 +55,38 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
 
   useEffect(() => {
     if (!open || !lead) return;
-
-    setStep("generating");
+    setStep("details");
+    setLineItems([newItem()]);
     setQuoteResult(null);
     setErrorMsg("");
     setCopied("");
     setEmailTo(lead.email ?? "");
+  }, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const totalAmount = parseLeadValue(lead.value);
-    const items: string[] = [lead.apparel_types].filter(Boolean) as string[];
+  const updateItem = (idx: number, field: keyof QuoteItem, value: string | number) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        const updated = { ...item, [field]: value };
+        updated.lineTotal = updated.quantity * updated.unitPrice;
+        return updated;
+      }),
+    );
+  };
+
+  const addItem = () => setLineItems((prev) => [...prev, newItem()]);
+  const removeItem = (idx: number) => setLineItems((prev) => prev.filter((_, i) => i !== idx));
+
+  const subTotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const hasValidItems = lineItems.some((i) => i.name.trim() && i.quantity > 0);
+
+  const handlePreviewEmail = () => {
+    if (!lead || !hasValidItems) return;
+
+    const validItems = lineItems.filter((i) => i.name.trim());
+    const totalAmount = validItems.reduce((sum, i) => sum + i.lineTotal, 0);
+
+    setStep("generating");
 
     fetch("/api/quote/generate", {
       method: "POST",
@@ -74,7 +96,8 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         clientName: lead.company,
         clientEmail: lead.email,
         totalAmount,
-        items,
+        lineItems: validItems,
+        items: validItems.map((i) => i.name),
         notes: lead.notes ?? "",
       }),
     })
@@ -91,12 +114,13 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         const contactName = lead.contact || lead.company;
         const totalFormatted = fmtCurrency(totalAmount);
         const expFormatted = fmtDate(data.expirationDate);
+        const itemSummary = validItems
+          .map((i) => `• ${i.name} (×${i.quantity})`)
+          .join("\n");
 
-        setEmailSubject(
-          `Your Custom Quote — ${data.quoteNumber} | Threefold Supply Co.`,
-        );
+        setEmailSubject(`Your Custom Quote — ${data.quoteNumber} | Threefold Supply Co.`);
         setEmailBody(
-          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${totalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
+          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nItems included:\n${itemSummary}\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${totalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
         );
         setStep("preview");
       })
@@ -104,15 +128,13 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         setStep("error");
         setErrorMsg(String(err));
       });
-  }, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
   const handleSend = async () => {
     if (!quoteResult) return;
     setStep("sending");
-
     try {
       openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
-
       setStep("sent");
       setTimeout(() => {
         onSent(quoteResult);
@@ -132,23 +154,44 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
 
   if (!open || !lead) return null;
 
+  const modalTitle =
+    step === "details" ? "Quote Details" : step === "preview" ? "Email Preview" : "Send Quote";
+
   const footer =
-    step === "preview" ? (
+    step === "details" ? (
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onClose}
-          className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           Cancel
         </button>
         <button
           type="button"
-          onClick={handleSend}
+          onClick={handlePreviewEmail}
+          disabled={!hasValidItems}
+          className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+        >
+          Preview Email
+        </button>
+      </div>
+    ) : step === "preview" ? (
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSend()}
           className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >
           <Send size={14} />
-          Send Quote
+          Send Email
         </button>
       </div>
     ) : step === "error" ? (
@@ -156,28 +199,123 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         <button
           type="button"
           onClick={onClose}
-          className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           Close
         </button>
         <button
           type="button"
-          onClick={() => { setStep("generating"); }}
+          onClick={() => setStep("details")}
           className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >
-          Retry
+          Back to details
         </button>
       </div>
     ) : null;
 
   return (
     <ModalShell
-      title="Send Quote"
+      title={modalTitle}
       subtitle={`${lead.company} · ${lead.email}`}
       onClose={onClose}
       maxWidth="max-w-2xl"
       footer={footer}
     >
+      {/* ── Step: details ────────────────────────────────────── */}
+      {step === "details" && (
+        <div className="flex flex-col gap-5">
+          <div className="space-y-3">
+            {lineItems.map((item, idx) => (
+              <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                {/* Name + Description */}
+                <div className="grid gap-2 sm:grid-cols-[5fr_7fr]">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Item name</label>
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => updateItem(idx, "name", e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                      placeholder="e.g. Premium Heavyweight Tee"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Description</label>
+                    <input
+                      type="text"
+                      value={item.description}
+                      onChange={(e) => updateItem(idx, "description", e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                      placeholder="e.g. Black oversized tee with front/back print"
+                    />
+                  </div>
+                </div>
+                {/* Qty + Unit price + Line total + Delete */}
+                <div className="mt-2 flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Qty</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={item.quantity === 0 ? "" : item.quantity}
+                      onChange={(e) => updateItem(idx, "quantity", Number(e.target.value) || 0)}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Unit price</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={item.unitPrice === 0 ? "" : item.unitPrice}
+                      onChange={(e) => updateItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="mb-1 text-xs font-semibold text-slate-500">Line total</p>
+                    <p className="py-2.5 text-xs font-semibold text-slate-950 md:text-sm">
+                      {fmtCurrency(item.lineTotal)}
+                    </p>
+                  </div>
+                  {lineItems.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(idx)}
+                      aria-label="Remove item"
+                      className="mb-1.5 shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addItem}
+            className="flex w-fit items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add item
+          </button>
+
+          {/* Totals */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total</span>
+              <span className="text-xl font-bold text-slate-950">{fmtCurrency(subTotal)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step: generating ─────────────────────────────────── */}
       {step === "generating" && (
         <div className="flex flex-col items-center justify-center gap-4 py-16">
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
@@ -185,13 +323,15 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         </div>
       )}
 
+      {/* ── Step: sending ────────────────────────────────────── */}
       {step === "sending" && (
         <div className="flex flex-col items-center justify-center gap-4 py-16">
           <Loader2 className="h-8 w-8 animate-spin text-slate-900" />
-          <p className="text-sm text-slate-600">Sending quote email...</p>
+          <p className="text-sm text-slate-600">Opening Gmail...</p>
         </div>
       )}
 
+      {/* ── Step: sent ───────────────────────────────────────── */}
       {step === "sent" && (
         <div className="flex flex-col items-center justify-center gap-4 py-16">
           <CheckCircle className="h-10 w-10 text-emerald-500" />
@@ -202,39 +342,29 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         </div>
       )}
 
+      {/* ── Step: error ──────────────────────────────────────── */}
       {step === "error" && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-6 text-center">
-          <p className="text-sm font-semibold text-rose-700">
-            Something went wrong
-          </p>
+          <p className="text-sm font-semibold text-rose-700">Something went wrong</p>
           <p className="mt-1 text-xs text-rose-600">{errorMsg}</p>
         </div>
       )}
 
+      {/* ── Step: preview ────────────────────────────────────── */}
       {step === "preview" && quoteResult && (
         <div className="flex flex-col gap-6">
           {/* Quote info strip */}
           <div className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Quote #
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-950">
-                {quoteResult.quoteNumber}
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Quote #</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">{quoteResult.quoteNumber}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Expires
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-950">
-                {fmtDate(quoteResult.expirationDate)}
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expires</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">{fmtDate(quoteResult.expirationDate)}</p>
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Public link
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Public link</p>
               <a
                 href={quoteResult.publicLink}
                 target="_blank"
@@ -258,7 +388,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                   onClick={() => void copyToClipboard("subject", emailSubject)}
                   className="inline-flex min-h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Copy className="h-3.5 w-3.5" />
                   {copied === "subject" ? "Copied" : "Copy Subject"}
                 </button>
                 <button
@@ -266,7 +396,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                   onClick={() => void copyToClipboard("body", emailBody)}
                   className="inline-flex min-h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Copy className="h-3.5 w-3.5" />
                   {copied === "body" ? "Copied" : "Copy Body"}
                 </button>
                 <button
@@ -274,7 +404,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                   onClick={() => void copyToClipboard("link", quoteResult.publicLink)}
                   className="inline-flex min-h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Copy className="h-3.5 w-3.5" />
                   {copied === "link" ? "Copied" : "Copy Link"}
                 </button>
               </div>
@@ -291,9 +421,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">
-                Subject
-              </label>
+              <label className="text-xs font-semibold text-slate-600">Subject</label>
               <input
                 type="text"
                 value={emailSubject}
@@ -303,9 +431,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">
-                Message
-              </label>
+              <label className="text-xs font-semibold text-slate-600">Message</label>
               <textarea
                 rows={10}
                 value={emailBody}

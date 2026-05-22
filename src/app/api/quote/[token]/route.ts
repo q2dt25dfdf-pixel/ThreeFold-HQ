@@ -22,6 +22,7 @@ export async function GET(
       quote_number: raw.quote_number,
       client_name: raw.client_name,
       items: raw.items,
+      line_items: raw.line_items ?? null,
       total_amount: raw.total_amount,
       expiration_date: raw.expiration_date,
       notes: raw.notes,

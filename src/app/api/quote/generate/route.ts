@@ -3,14 +3,23 @@ import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 
+type LineItem = {
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
 export async function POST(request: NextRequest) {
   try {
-    const { leadId, clientName, clientEmail, totalAmount, items, notes } =
+    const { leadId, clientName, clientEmail, totalAmount, lineItems, items, notes } =
       await request.json() as {
         leadId: string;
         clientName: string;
         clientEmail: string;
         totalAmount: number;
+        lineItems?: LineItem[];
         items: string[];
         notes: string;
       };
@@ -32,6 +41,12 @@ export async function POST(request: NextRequest) {
 
     const expirationDateStr = addDaysToISODate(businessTodayISO(), 30);
 
+    // Derive total from line items when provided; fall back to caller-supplied value
+    const computedTotal =
+      lineItems && lineItems.length > 0
+        ? lineItems.reduce((sum, item) => sum + item.lineTotal, 0)
+        : (totalAmount ?? 0);
+
     const quoteId = `quote-${leadId}-${Date.now()}`;
     const quoteData = {
       id: quoteId,
@@ -40,7 +55,8 @@ export async function POST(request: NextRequest) {
       client_name: clientName ?? "",
       client_email: clientEmail ?? "",
       items: items ?? [],
-      total_amount: totalAmount ?? 0,
+      line_items: lineItems ?? null,
+      total_amount: computedTotal,
       expiration_date: expirationDateStr,
       public_token: token,
       public_link: publicLink,

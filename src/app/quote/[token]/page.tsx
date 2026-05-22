@@ -3,12 +3,21 @@
 import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
 
+interface LineItem {
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 interface QuoteData {
   id: string;
   quote_number: string;
   client_name: string;
   client_email: string;
   items: string[];
+  line_items?: LineItem[] | null;
   total_amount: number;
   expiration_date: string;
   notes: string;
@@ -124,21 +133,54 @@ export default function QuotePage() {
         <div style={s.section}>
           <div style={s.eyebrow}>PRICING SUMMARY</div>
           <div style={s.detailList}>
-            {data.items.length > 0 &&
-              data.items.map((item, i) => (
-                <div key={i} style={s.detailRow}>
-                  <span style={s.detailKey}>{item.toUpperCase()}</span>
-                  <span style={s.detailVal}>—</span>
+            {data.line_items && data.line_items.length > 0 ? (
+              <>
+                {data.line_items.map((item, i) => (
+                  <div key={i} style={s.detailRow}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                      {item.description && (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                          {item.description}
+                        </div>
+                      )}
+                      <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                        {item.quantity} × {fmt(item.unitPrice)}
+                      </div>
+                    </div>
+                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                      {fmt(item.lineTotal)}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ ...s.detailRow, marginTop: "4px" }}>
+                  <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
+                    TOTAL PROJECT VALUE
+                  </span>
+                  <span style={{ ...s.detailVal, fontSize: "18px" }}>
+                    {fmt(data.total_amount)}
+                  </span>
                 </div>
-              ))}
-            <div style={{ ...s.detailRow, marginTop: "4px" }}>
-              <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
-                TOTAL PROJECT VALUE
-              </span>
-              <span style={{ ...s.detailVal, fontSize: "18px" }}>
-                {fmt(data.total_amount)}
-              </span>
-            </div>
+              </>
+            ) : (
+              <>
+                {data.items.length > 0 &&
+                  data.items.map((item, i) => (
+                    <div key={i} style={s.detailRow}>
+                      <span style={s.detailKey}>{item.toUpperCase()}</span>
+                      <span style={s.detailVal}>—</span>
+                    </div>
+                  ))}
+                <div style={{ ...s.detailRow, marginTop: "4px" }}>
+                  <span style={{ ...s.detailKey, color: "#0a0a0a", fontWeight: 700 }}>
+                    TOTAL PROJECT VALUE
+                  </span>
+                  <span style={{ ...s.detailVal, fontSize: "18px" }}>
+                    {fmt(data.total_amount)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           <div style={s.paymentCallout}>
