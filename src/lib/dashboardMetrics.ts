@@ -9,6 +9,8 @@ export type DashboardRecord = Record<string, unknown> & { id: string };
 
 export type RevenueProgressMetric = {
   collected: number;
+  previousCollected: number;
+  delta: number;
   goal: number;
   percent: number;
 };
@@ -39,7 +41,7 @@ export type AttentionItem = {
   tone: "red" | "amber" | "blue" | "slate";
 };
 
-const DEFAULT_MONTHLY_REVENUE_GOAL = 5_000;
+const DEFAULT_MONTHLY_REVENUE_GOAL = 15_000;
 
 const LEGACY_CRM_STAGES: Record<string, PipelineStage> = { Approved: "Deposit Paid" };
 const ORDER_STATUS_MAP: Record<string, string> = {
@@ -81,7 +83,8 @@ export function monthlyRevenueGoal(): number {
 export function monthlyRevenueProgress(finances: DashboardRecord[], todayISO: string): RevenueProgressMetric {
   const today = parseDashboardDate(todayISO) ?? new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 12);
-  const collected = finances
+  const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1, 12);
+  const collectedForMonth = (targetMonth: Date) => finances
     .filter((invoice) => !INACTIVE_FINANCE_STATUSES.has(statusText(invoice)))
     .reduce((sum, invoice) => {
       const total = calcTotal(invoice);
@@ -89,20 +92,22 @@ export function monthlyRevenueProgress(finances: DashboardRecord[], todayISO: st
       const balance = calcBalance(invoice);
       let invoiceCollected = 0;
 
-      if (invoice.deposit_paid === true && isSameMonth(stringField(invoice, "deposit_paid_date"), monthStart)) {
+      if (invoice.deposit_paid === true && isSameMonth(stringField(invoice, "deposit_paid_date"), targetMonth)) {
         invoiceCollected += deposit;
       }
 
-      if (invoice.final_paid === true && isSameMonth(stringField(invoice, "final_paid_date"), monthStart)) {
+      if (invoice.final_paid === true && isSameMonth(stringField(invoice, "final_paid_date"), targetMonth)) {
         invoiceCollected += invoice.deposit_paid === true ? balance : total;
       }
 
       return sum + invoiceCollected;
     }, 0);
 
+  const collected = collectedForMonth(monthStart);
+  const previousCollected = collectedForMonth(previousMonthStart);
   const goal = monthlyRevenueGoal();
   const percent = goal > 0 ? Math.min(100, Math.round((collected / goal) * 100)) : 0;
-  return { collected, goal, percent };
+  return { collected, previousCollected, delta: collected - previousCollected, goal, percent };
 }
 
 export function normalizeCRMStage(stage: string): PipelineStage {
@@ -112,8 +117,9 @@ export function normalizeCRMStage(stage: string): PipelineStage {
 }
 
 export function pipelineOverview(leads: DashboardRecord[]): ChartDatum[] {
+  const openLeads = leads.filter((lead) => statusText(lead) !== "won");
   return pipelineStages.map((stage) => {
-    const matchingLeads = leads.filter((lead) => normalizeCRMStage(stringField(lead, "stage")) === stage);
+    const matchingLeads = openLeads.filter((lead) => normalizeCRMStage(stringField(lead, "stage")) === stage);
     return {
       name: stage,
       value: matchingLeads.length,
