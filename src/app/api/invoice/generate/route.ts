@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { parseAmount } from "@/lib/invoiceCalc";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,11 +23,50 @@ export async function POST(request: NextRequest) {
 
     const raw = rows[0].data as Record<string, unknown>;
 
+    // Cross-reference deposit request for authoritative amounts
+    let totalAmount = parseAmount(raw.total_amount ?? raw.amount);
+    let depositAmount = parseAmount(raw.deposit_amount) > 0
+      ? parseAmount(raw.deposit_amount)
+      : totalAmount * 0.5;
+
+    if (raw.deposit_request_id) {
+      const { data: depRows } = await db
+        .from("deposit_requests")
+        .select("data")
+        .eq("id", raw.deposit_request_id as string)
+        .limit(1);
+      if (depRows && depRows.length > 0) {
+        const dep = depRows[0].data as Record<string, unknown>;
+        const t = parseAmount(dep.total_amount);
+        const d = parseAmount(dep.deposit_amount);
+        if (t > 0) totalAmount = t;
+        if (d > 0) depositAmount = d;
+      }
+    }
+
+    const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
+
+    // Get best available client email from finance record, then lead
+    let clientEmail = (raw.client_email ?? "") as string;
+    if (!clientEmail && raw.lead_id) {
+      const { data: leadRows } = await db
+        .from("leads")
+        .select("data")
+        .eq("id", raw.lead_id as string)
+        .limit(1);
+      if (leadRows && leadRows.length > 0) {
+        const ld = leadRows[0].data as Record<string, unknown>;
+        clientEmail = (ld.email ?? "") as string;
+      }
+    }
+
     // Return existing link if already generated
     if (typeof raw.public_token === "string" && raw.public_token) {
       return NextResponse.json({
         publicToken: raw.public_token,
         publicLink: raw.public_link,
+        clientEmail,
+        balanceRemaining,
       });
     }
 
@@ -43,7 +83,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ publicToken: token, publicLink });
+    return NextResponse.json({ publicToken: token, publicLink, clientEmail, balanceRemaining });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -48,11 +48,9 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
     setPublicLink("");
     setErrorMsg("");
     setCopied("");
-    setEmailTo(invoice.client_email ?? "");
 
     const clientName = invoice.client_name || invoice.client || "there";
     const projectName = invoice.order_name || invoice.orderName || "your order";
-    const balance = parseAmount(invoice.balance_remaining);
 
     fetch("/api/invoice/generate", {
       method: "POST",
@@ -60,13 +58,18 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
       body: JSON.stringify({ invoiceId: invoice.id }),
     })
       .then((r) => r.json())
-      .then((d: { publicLink?: string; error?: string }) => {
+      .then((d: { publicLink?: string; clientEmail?: string; balanceRemaining?: number; error?: string }) => {
         if (d.error || !d.publicLink) {
           setErrorMsg(d.error ?? "Failed to generate invoice link.");
           setStep("error");
           return;
         }
+        // Use API-returned email as primary; fall back to invoice prop
+        const bestEmail = d.clientEmail || invoice.client_email || "";
+        setEmailTo(bestEmail);
         setPublicLink(d.publicLink);
+        // Use API-returned balance (cross-referenced with deposit request) for accuracy
+        const balance = d.balanceRemaining ?? parseAmount(invoice.balance_remaining);
         setEmailSubject(`Final Invoice – ${projectName}`);
         setEmailBody(
           `Hello ${clientName},\n\nYour order is complete and the remaining balance is now ready for payment.\n\nRemaining Balance:\n${fmtCurrency(balance)}\n\nView and pay your invoice here:\n${d.publicLink}\n\nPlease note:\nCard payments include a 3% processing fee.\nBank account payments through Stripe do not.\n\nChecks may be made payable to:\nThreeFold Supply Co.\n\nMail checks to:\n1957 California St Apt 6\nMountain View, CA 94040\n\nIf you have any questions, please reply to this email.\n\nBest,\nThreeFold Supply Co.`,

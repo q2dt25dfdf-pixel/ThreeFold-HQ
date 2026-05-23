@@ -408,6 +408,16 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               </div>
             </div>
 
+            {/* Contact Info */}
+            <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Contact info — click to edit</p>
+              <div className="space-y-3">
+                <InlineField label="Contact name" value={current.contact} onSave={(v) => patch({ contact: v })} />
+                <InlineField label="Email" value={current.email} onSave={(v) => patch({ email: v })} type="text" />
+                <InlineField label="Phone" value={current.phone} onSave={(v) => patch({ phone: v })} />
+              </div>
+            </div>
+
             {/* Company Profile */}
             <div className="min-w-0 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
               <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Company profile</p>
