@@ -42,7 +42,7 @@ export default function DepositPage() {
   const [error, setError] = useState("");
   const [depositToken, setDepositToken] = useState("");
   const [paymentParam, setPaymentParam] = useState<"success" | "cancelled" | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
 
   useEffect(() => {
@@ -66,16 +66,16 @@ export default function DepositPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handlePayDeposit = async () => {
+  const handlePay = async (method: "card" | "bank") => {
     if (!depositToken || checkoutLoading) return;
-    setCheckoutLoading(true);
+    setCheckoutLoading(method);
     setCheckoutError("");
 
     try {
       const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ depositToken }),
+        body: JSON.stringify({ depositToken, method }),
       });
       const d = await res.json() as { url?: string; error?: string };
       if (d.error) {
@@ -86,7 +86,7 @@ export default function DepositPage() {
     } catch {
       setCheckoutError("Something went wrong. Please try again.");
     } finally {
-      setCheckoutLoading(false);
+      setCheckoutLoading(null);
     }
   };
 
@@ -255,18 +255,15 @@ export default function DepositPage() {
               <div style={s.bodyText}>
                 Your payment was not completed. You can try again whenever you are ready.
               </div>
-              {checkoutError && (
-                <div style={{ ...s.bodyText, color: "#b91c1c", marginTop: "8px" }}>
-                  {checkoutError}
-                </div>
-              )}
-              <button
-                onClick={() => void handlePayDeposit()}
-                disabled={checkoutLoading}
-                style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
-              >
-                {checkoutLoading ? "REDIRECTING TO CHECKOUT…" : `PAY DEPOSIT — ${fmt(data.deposit_amount)} →`}
-              </button>
+              <PaymentOptionsPanel
+                amount={data.deposit_amount}
+                label="DEPOSIT AMOUNT"
+                eyebrow=""
+                onPayCard={() => void handlePay("card")}
+                onPayBank={() => void handlePay("bank")}
+                checkoutLoading={checkoutLoading}
+                checkoutError={checkoutError || undefined}
+              />
             </div>
           )}
 
@@ -274,7 +271,9 @@ export default function DepositPage() {
             <div style={s.section}>
               <PaymentOptionsPanel
                 amount={data.deposit_amount}
-                onPayStripe={() => void handlePayDeposit()}
+                label="DEPOSIT AMOUNT"
+                onPayCard={() => void handlePay("card")}
+                onPayBank={() => void handlePay("bank")}
                 checkoutLoading={checkoutLoading}
                 checkoutError={checkoutError || undefined}
               />
@@ -441,20 +440,6 @@ const s: Record<string, React.CSSProperties> = {
     color: "#6F685D",
     letterSpacing: "0.05em",
     marginTop: "16px",
-  },
-  btnPay: {
-    display: "block",
-    width: "100%",
-    marginTop: "20px",
-    backgroundColor: "#C49A2B",
-    color: "#fff",
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "0.22em",
-    padding: "16px 32px",
-    border: "none",
-    cursor: "pointer",
-    textAlign: "center" as const,
   },
   footerLogo: {
     fontSize: "10px",

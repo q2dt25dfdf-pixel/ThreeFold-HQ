@@ -4,10 +4,16 @@ import { getStripe } from "@/lib/stripe";
 
 export async function POST(request: NextRequest) {
   try {
-    const { depositToken } = await request.json() as { depositToken: string };
+    const { depositToken, method } = await request.json() as {
+      depositToken: string;
+      method: "card" | "bank";
+    };
 
     if (!depositToken) {
       return NextResponse.json({ error: "Deposit token required" }, { status: 400 });
+    }
+    if (method !== "card" && method !== "bank") {
+      return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
     }
 
     // Look up deposit request server-side by public token only
@@ -39,21 +45,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid deposit amount" }, { status: 400 });
     }
 
+    // Card adds a 3% processing surcharge; bank account pays the base amount
+    const surcharge = method === "card" ? Math.round(depositAmount * 0.03 * 100) / 100 : 0;
+    const chargeAmount = depositAmount + surcharge;
+    const paymentMethodTypes = (method === "card" ? ["card"] : ["us_bank_account"]) as ("card" | "us_bank_account")[];
+
     const origin = request.nextUrl.origin;
     const stripe = getStripe();
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card", "us_bank_account"],
+      payment_method_types: paymentMethodTypes,
       line_items: [
         {
           price_data: {
             currency: "usd",
             product_data: {
               name: `Deposit — ${raw.client_name as string}`,
-              description: `Deposit Request ${raw.deposit_request_number as string}`,
+              description:
+                method === "card"
+                  ? `Deposit Request ${raw.deposit_request_number as string} (incl. 3% card processing fee)`
+                  : `Deposit Request ${raw.deposit_request_number as string}`,
             },
-            unit_amount: Math.round(depositAmount * 100),
+            unit_amount: Math.round(chargeAmount * 100),
           },
           quantity: 1,
         },
@@ -62,6 +76,7 @@ export async function POST(request: NextRequest) {
         deposit_request_id: row.id,
         lead_id: (raw.lead_id as string) ?? "",
         deposit_token: depositToken,
+        payment_method: method,
       },
       success_url: `${origin}/deposit/${depositToken}?payment=success`,
       cancel_url: `${origin}/deposit/${depositToken}?payment=cancelled`,

@@ -5,10 +5,16 @@ import { calcBalance } from "@/lib/invoiceCalc";
 
 export async function POST(request: NextRequest) {
   try {
-    const { invoiceToken } = await request.json() as { invoiceToken: string };
+    const { invoiceToken, method } = await request.json() as {
+      invoiceToken: string;
+      method: "card" | "bank";
+    };
 
     if (!invoiceToken) {
       return NextResponse.json({ error: "Invoice token required" }, { status: 400 });
+    }
+    if (method !== "card" && method !== "bank") {
+      return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -34,6 +40,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No balance remaining on this invoice" }, { status: 400 });
     }
 
+    // Card adds a 3% processing surcharge; bank account pays the base amount
+    const surcharge = method === "card" ? Math.round(balanceRemaining * 0.03 * 100) / 100 : 0;
+    const chargeAmount = balanceRemaining + surcharge;
+    const paymentMethodTypes = (method === "card" ? ["card"] : ["us_bank_account"]) as ("card" | "us_bank_account")[];
+
     const clientName = (raw.client_name ?? raw.client ?? "") as string;
     const orderName = (raw.order_name ?? raw.orderName ?? "") as string;
     const origin = request.nextUrl.origin;
@@ -41,16 +52,19 @@ export async function POST(request: NextRequest) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card", "us_bank_account"],
+      payment_method_types: paymentMethodTypes,
       line_items: [
         {
           price_data: {
             currency: "usd",
             product_data: {
               name: `Final Balance — ${clientName}`,
-              description: orderName || undefined,
+              description:
+                method === "card"
+                  ? `${orderName ? orderName + " — " : ""}incl. 3% card processing fee`
+                  : orderName || undefined,
             },
-            unit_amount: Math.round(balanceRemaining * 100),
+            unit_amount: Math.round(chargeAmount * 100),
           },
           quantity: 1,
         },
@@ -58,6 +72,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         finance_id: row.id,
         invoice_token: invoiceToken,
+        payment_method: method,
       },
       success_url: `${origin}/invoice/${invoiceToken}?payment=success`,
       cancel_url: `${origin}/invoice/${invoiceToken}?payment=cancelled`,

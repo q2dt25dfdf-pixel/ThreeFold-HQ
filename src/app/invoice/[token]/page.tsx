@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
+import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 
 interface InvoiceData {
   id: string;
@@ -41,7 +42,7 @@ export default function InvoicePage() {
   const [error, setError] = useState("");
   const [invoiceToken, setInvoiceToken] = useState("");
   const [paymentParam, setPaymentParam] = useState<"success" | "cancelled" | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
 
   useEffect(() => {
@@ -65,27 +66,27 @@ export default function InvoicePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handlePayInvoice = async () => {
+  const handlePay = async (method: "card" | "bank") => {
     if (!invoiceToken || checkoutLoading) return;
-    setCheckoutLoading(true);
+    setCheckoutLoading(method);
     setCheckoutError("");
 
     try {
       const res = await fetch("/api/stripe/create-invoice-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceToken }),
+        body: JSON.stringify({ invoiceToken, method }),
       });
       const d = await res.json() as { url?: string; error?: string };
       if (d.error || !d.url) {
         setCheckoutError(d.error ?? "Could not start checkout. Please try again.");
-        setCheckoutLoading(false);
+        setCheckoutLoading(null);
         return;
       }
       window.location.href = d.url;
     } catch {
       setCheckoutError("Could not connect to payment. Please try again.");
-      setCheckoutLoading(false);
+      setCheckoutLoading(null);
     }
   };
 
@@ -252,47 +253,20 @@ export default function InvoicePage() {
             </div>
           ) : (
             <div style={s.section}>
-              <div style={s.eyebrow}>HOW TO PAY</div>
-
-              {/* Stripe */}
-              <div style={s.stripeBlock}>
-                <div style={s.altLabel}>PAY ONLINE — STRIPE</div>
-                <div style={s.bodyText}>
-                  Pay securely by card or bank account through Stripe.
-                </div>
-                <div style={s.feeNotice}>
-                  <strong>Important: Card payments include a 3% processing fee.</strong>{" "}
-                  Bank account payments through Stripe do not.
-                </div>
-                {checkoutError && (
-                  <div style={s.errorText}>{checkoutError}</div>
-                )}
-                {paymentParam === "cancelled" && !checkoutError && (
-                  <div style={s.errorText}>Payment was not completed. You can try again below.</div>
-                )}
-                <button
-                  onClick={() => void handlePayInvoice()}
-                  disabled={checkoutLoading}
-                  style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
-                >
-                  {checkoutLoading
-                    ? "REDIRECTING TO CHECKOUT…"
-                    : `PAY REMAINING BALANCE — ${fmt(data.balance_remaining)} →`}
-                </button>
-              </div>
-
-              {/* Check */}
-              <div style={s.altHeader}>OTHER PAYMENT OPTIONS</div>
-              <div style={s.checkBlock}>
-                <div style={s.altLabel}>CHECK</div>
-                <div style={s.bodyText}>Make checks payable to:</div>
-                <div style={s.checkPayee}>ThreeFold Supply Co.</div>
-                <div style={{ ...s.bodyText, marginTop: "16px" }}>Mail checks to:</div>
-                <div style={s.checkAddress}>
-                  1957 California St Apt 6<br />
-                  Mountain View, CA 94040
-                </div>
-              </div>
+              <PaymentOptionsPanel
+                amount={data.balance_remaining}
+                label="REMAINING BALANCE"
+                eyebrow="HOW TO PAY"
+                onPayCard={() => void handlePay("card")}
+                onPayBank={() => void handlePay("bank")}
+                checkoutLoading={checkoutLoading}
+                checkoutError={
+                  checkoutError ||
+                  (paymentParam === "cancelled"
+                    ? "Payment was not completed. You can try again below."
+                    : undefined)
+                }
+              />
             </div>
           )}
         </div>
@@ -416,73 +390,6 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     letterSpacing: "0.14em",
     color: "#1a5c3a",
-  },
-  stripeBlock: {
-    border: "1px solid #D4A96A",
-    backgroundColor: "#FDF6EC",
-    padding: "20px 20px 24px",
-    marginBottom: "24px",
-  },
-  feeNotice: {
-    fontSize: "12px",
-    color: "#4a3200",
-    lineHeight: 1.65,
-    marginTop: "4px",
-    marginBottom: "16px",
-    paddingTop: "10px",
-    borderTop: "1px solid #e0c98a",
-  },
-  errorText: {
-    fontSize: "12px",
-    color: "#b91c1c",
-    marginBottom: "10px",
-  },
-  btnPay: {
-    display: "block",
-    width: "100%",
-    backgroundColor: "#C49A2B",
-    color: "#fff",
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "0.22em",
-    padding: "16px 32px",
-    border: "none",
-    cursor: "pointer",
-    textAlign: "center" as const,
-    marginTop: "4px",
-  },
-  altHeader: {
-    fontSize: "9px",
-    fontWeight: 700,
-    letterSpacing: "0.24em",
-    color: "#9B9084",
-    marginBottom: "16px",
-    marginTop: "32px",
-    textTransform: "uppercase" as const,
-  },
-  checkBlock: {
-    border: "1px solid #DDD6CB",
-    backgroundColor: "#FAF7F2",
-    padding: "20px 20px 24px",
-  },
-  altLabel: {
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "0.22em",
-    color: "#332E28",
-    marginBottom: "6px",
-  },
-  checkPayee: {
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#1a1a1a",
-    letterSpacing: "0.02em",
-    marginBottom: "4px",
-  },
-  checkAddress: {
-    fontSize: "13px",
-    color: "#3F3A33",
-    lineHeight: 1.75,
   },
   bodyText: {
     fontSize: "15px",
