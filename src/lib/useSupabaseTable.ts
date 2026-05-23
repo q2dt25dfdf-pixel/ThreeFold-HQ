@@ -10,6 +10,12 @@ type SupabaseRow<T> = {
 
 type MutationResponse = Awaited<ReturnType<ReturnType<typeof supabase.from>["upsert"]>>;
 
+// How often to poll as a fallback when the realtime subscription has not fired.
+// The postgres_changes subscription fires immediately when Supabase Realtime is
+// enabled for a table (see supabase/enable-realtime.sql). Polling ensures the
+// page is always fresh even if realtime is not configured or the websocket drops.
+const POLL_INTERVAL_MS = 30_000;
+
 export function useSupabaseTable<T extends { id: string }>(
   tableName: string,
   defaultData: T[],
@@ -17,6 +23,7 @@ export function useSupabaseTable<T extends { id: string }>(
   const mountedRef = useRef(false);
   const reloadTimeoutRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
   const hasLoadedRef = useRef(false);
   const [subscriptionCycle, setSubscriptionCycle] = useState(0);
   const [data, setDataState] = useState<T[]>(defaultData);
@@ -71,6 +78,10 @@ export function useSupabaseTable<T extends { id: string }>(
     mountedRef.current = true;
     scheduleReload();
 
+    // ── Realtime subscription ─────────────────────────────────────────────────
+    // Fires immediately when the table is in the supabase_realtime publication.
+    // Run the SQL in supabase/enable-realtime.sql once to activate this for all
+    // HQ tables. Until then, the poll interval below keeps data fresh.
     const channelName = `live-${tableName}-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
       .channel(channelName)
@@ -98,10 +109,20 @@ export function useSupabaseTable<T extends { id: string }>(
         }
       });
 
+    // ── Polling fallback ──────────────────────────────────────────────────────
+    // Keeps pages fresh every 30 s when the realtime subscription does not fire
+    // (e.g. tables not yet in the publication, or websocket silently dropped).
+    // Uses scheduleReload so the debounce prevents a collision with a near-
+    // simultaneous realtime event.
+    if (pollIntervalRef.current) window.clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = window.setInterval(() => {
+      if (document.visibilityState === "visible") scheduleReload();
+    }, POLL_INTERVAL_MS);
+
+    // ── Browser-level refresh triggers ───────────────────────────────────────
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") scheduleReload();
     };
-
     const handleOnline = () => scheduleReload();
     const handleFocus = () => scheduleReload();
 
@@ -113,6 +134,10 @@ export function useSupabaseTable<T extends { id: string }>(
       mountedRef.current = false;
       if (reloadTimeoutRef.current) window.clearTimeout(reloadTimeoutRef.current);
       if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
+      if (pollIntervalRef.current) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleFocus);
