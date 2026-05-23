@@ -1,5 +1,7 @@
 "use client";
 
+import { C } from "@/lib/clientTheme";
+
 interface PaymentOptionsPanelProps {
   amount: number;
   label?: string;
@@ -43,15 +45,15 @@ export default function PaymentOptionsPanel({
         </div>
         <div style={s.breakdownRow}>
           <span style={s.breakdownKey}>CARD FEE (3%)</span>
-          <span style={s.breakdownVal}>{fmt(cardFee)}</span>
+          <span style={{ ...s.breakdownVal, color: C.amber }}>{fmt(cardFee)}</span>
         </div>
         <div style={{ ...s.breakdownRow, borderBottom: "none", paddingBottom: 0 }}>
-          <span style={{ ...s.breakdownKey, color: "#7A4A00" }}>TOTAL IF PAYING BY CARD</span>
-          <span style={{ ...s.breakdownVal, color: "#7A4A00" }}>{fmt(cardTotal)}</span>
+          <span style={{ ...s.breakdownKey, color: C.amber }}>TOTAL IF PAYING BY CARD</span>
+          <span style={{ ...s.breakdownVal, color: C.amber }}>{fmt(cardTotal)}</span>
         </div>
         <div style={s.bankRow}>
           <span style={s.breakdownKey}>BANK ACCOUNT PAYMENT</span>
-          <span style={{ ...s.breakdownVal, color: "#1a6644" }}>{fmt(amount)}</span>
+          <span style={{ ...s.breakdownVal, color: C.green }}>{fmt(amount)}</span>
         </div>
       </div>
 
@@ -64,7 +66,7 @@ export default function PaymentOptionsPanel({
       <button
         onClick={onPayCard}
         disabled={isLoading}
-        style={isLoading ? { ...s.btnCard, opacity: 0.6, cursor: "not-allowed" } : s.btnCard}
+        style={isLoading ? { ...s.btnCard, opacity: 0.5, cursor: "not-allowed" } : s.btnCard}
       >
         {checkoutLoading === "card"
           ? "REDIRECTING TO CHECKOUT…"
@@ -74,7 +76,7 @@ export default function PaymentOptionsPanel({
       <button
         onClick={onPayBank}
         disabled={isLoading}
-        style={isLoading ? { ...s.btnBank, opacity: 0.6, cursor: "not-allowed" } : s.btnBank}
+        style={isLoading ? { ...s.btnBank, opacity: 0.5, cursor: "not-allowed" } : s.btnBank}
       >
         {checkoutLoading === "bank"
           ? "REDIRECTING TO CHECKOUT…"
@@ -101,59 +103,61 @@ const s: Record<string, React.CSSProperties> = {
   eyebrow: {
     fontSize: "10px",
     fontWeight: 700,
-    letterSpacing: "0.28em",
-    color: "#C49A2B",
-    marginBottom: "14px",
+    letterSpacing: "0.30em",
+    color: C.gold,
+    marginBottom: "16px",
+    textTransform: "uppercase" as const,
   },
   breakdownBlock: {
-    border: "1px solid #D4A96A",
-    backgroundColor: "#FDF6EC",
-    padding: "16px 20px",
-    marginBottom: "12px",
+    border: `1px solid ${C.borderGold}`,
+    backgroundColor: "rgba(212,163,38,0.06)",
+    padding: "18px 20px",
+    marginBottom: "14px",
   },
   breakdownRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "baseline",
-    borderBottom: "1px solid #e0c98a",
-    padding: "9px 0",
+    borderBottom: `1px solid rgba(212,163,38,0.18)`,
+    padding: "10px 0",
   },
   breakdownKey: {
     fontSize: "10px",
     fontWeight: 700,
     letterSpacing: "0.18em",
-    color: "#6F685D",
+    color: C.textMuted,
+    textTransform: "uppercase" as const,
   },
   breakdownVal: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#0a0a0a",
+    color: C.textPrimary,
   },
   bankRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "baseline",
-    marginTop: "10px",
-    paddingTop: "10px",
-    borderTop: "1px dashed #c8d8c4",
+    marginTop: "12px",
+    paddingTop: "12px",
+    borderTop: `1px dashed ${C.greenBorder}`,
   },
   feeNotice: {
     fontSize: "11px",
-    color: "#4a3200",
+    color: C.textMuted,
     lineHeight: 1.65,
-    marginBottom: "12px",
+    marginBottom: "14px",
   },
   errorText: {
     fontSize: "12px",
-    color: "#b91c1c",
+    color: C.red,
     marginBottom: "10px",
   },
   btnCard: {
     display: "block",
     width: "100%",
-    backgroundColor: "#C49A2B",
-    color: "#fff",
-    fontSize: "10px",
+    backgroundColor: C.gold,
+    color: "#0d0b08",
+    fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.22em",
     padding: "16px 32px",
@@ -165,53 +169,53 @@ const s: Record<string, React.CSSProperties> = {
   btnBank: {
     display: "block",
     width: "100%",
-    backgroundColor: "#fff",
-    color: "#1a6644",
-    fontSize: "10px",
+    backgroundColor: "transparent",
+    color: C.green,
+    fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.22em",
     padding: "15px 32px",
-    border: "1.5px solid #1a6644",
+    border: `1.5px solid ${C.green}`,
     cursor: "pointer",
     textAlign: "center" as const,
-    marginBottom: "24px",
+    marginBottom: "28px",
   },
   altHeader: {
     fontSize: "9px",
     fontWeight: 700,
     letterSpacing: "0.24em",
-    color: "#9B9084",
-    marginBottom: "16px",
+    color: C.textMuted,
+    marginBottom: "14px",
     textTransform: "uppercase" as const,
   },
   checkBlock: {
-    border: "1px solid #DDD6CB",
-    backgroundColor: "#FAF7F2",
+    border: `1px solid ${C.border}`,
+    backgroundColor: C.bgCard,
     padding: "20px 20px 24px",
   },
   altLabel: {
     fontSize: "10px",
     fontWeight: 700,
     letterSpacing: "0.22em",
-    color: "#332E28",
-    marginBottom: "6px",
+    color: C.textSecondary,
+    marginBottom: "8px",
   },
   checkPayee: {
     fontSize: "14px",
     fontWeight: 700,
-    color: "#1a1a1a",
+    color: C.textPrimary,
     letterSpacing: "0.02em",
     marginBottom: "4px",
   },
   checkAddress: {
     fontSize: "13px",
-    color: "#3F3A33",
+    color: C.textSecondary,
     lineHeight: 1.75,
   },
   optionBody: {
     fontSize: "13px",
-    color: "#3F3A33",
+    color: C.textSecondary,
     lineHeight: 1.65,
-    marginBottom: "6px",
+    marginBottom: "4px",
   },
 };

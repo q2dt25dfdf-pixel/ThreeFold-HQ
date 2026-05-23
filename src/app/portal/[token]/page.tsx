@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { BUSINESS_EMAIL } from '@/lib/config'
+import { C } from '@/lib/clientTheme'
 
 function fmtBytes(b: number): string {
   if (b < 1024) return `${b} B`
@@ -27,7 +28,7 @@ function DriveEmbed({ url }: { url: string }) {
       <img
         src={thumbUrl}
         alt="Design preview"
-        style={{ width: '100%', borderRadius: '2px', marginBottom: '10px', border: '1px solid #E5DDD2' }}
+        style={{ width: '100%', height: 'auto', marginBottom: '10px', border: '1px solid rgba(255,255,255,0.09)' }}
         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
       />
       <a href={embedUrl} target="_blank" rel="noopener noreferrer" style={s.viewLink}>VIEW FULL DESIGN →</a>
@@ -158,18 +159,17 @@ export default function PortalPage() {
   return (
     <div style={s.page}>
       <style>{`
-        .p-outer { max-width: 680px; margin: 0 auto; padding: 64px 32px 96px; }
+        .p-outer { max-width: 680px; margin: 0 auto; padding: 48px 20px 80px; }
         .p-grid { display: block; }
-        .p-footer-row { display: block; }
         .p-brief-group { display: flex; flex-direction: column; gap: 5px; }
-        .p-brief-label { font-size: 9px; font-weight: 700; letter-spacing: 0.24em; color: #9B9084; text-transform: uppercase; }
+        .p-brief-label { font-size: 9px; font-weight: 700; letter-spacing: 0.24em; color: #a09488; text-transform: uppercase; }
         @media (min-width: 640px) {
           .p-brief-group { display: grid; grid-template-columns: 180px 1fr; column-gap: 28px; align-items: start; }
           .p-brief-label { padding-top: 4px; }
         }
         @media (min-width: 1024px) {
-          .p-outer { max-width: 1200px; padding: 64px 64px 96px; }
-          .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start; }
+          .p-outer { max-width: 1440px; padding: 64px 80px 100px; }
+          .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
           .p-brief-group { grid-template-columns: 200px 1fr; column-gap: 32px; }
         }
       `}</style>
@@ -236,10 +236,10 @@ export default function PortalPage() {
                   const current = i === currentPhaseIndex
                   return (
                     <div key={phase} style={s.timelineRow}>
-                      <span style={{ ...s.timelineNum, color: done || current ? '#C49A2B' : '#7F776B' }}>
+                      <span style={{ ...s.timelineNum, color: done || current ? C.gold : C.textMuted }}>
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span style={{ ...s.timelineLabel, color: done ? '#756D62' : current ? '#0a0a0a' : '#8A8174', fontWeight: current ? 700 : 400, textDecoration: done ? 'line-through' : 'none' }}>
+                      <span style={{ ...s.timelineLabel, color: done ? C.textMuted : current ? C.textPrimary : 'rgba(255,255,255,0.35)', fontWeight: current ? 700 : 400, textDecoration: done ? 'line-through' : 'none' }}>
                         {phase.toUpperCase()}
                       </span>
                       <span style={s.timelineTick}>{done ? '✓' : current ? '←' : ''}</span>
@@ -248,64 +248,6 @@ export default function PortalPage() {
                 })}
               </div>
             </div>
-
-            {(() => {
-              const totalVal = Number(data.invoiceTotal) || 0
-              if (!totalVal) return null
-              const depositVal = Number(data.depositAmount) || 0
-              const balanceVal = Number(data.balanceDue) || 0
-              const depositIsPaid = data.depositPaid === true
-              const isPaidInFull = data.finalPaid === true
-              const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-              return (<>
-                <div style={s.rule} />
-                <div style={s.section}>
-                  <div style={s.eyebrow}>PAYMENT SUMMARY</div>
-                  <div style={s.detailList}>
-                    <div style={s.detailRow}>
-                      <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
-                      <span style={s.detailVal}>{fmt(totalVal)}</span>
-                    </div>
-                    <div style={s.detailRow}>
-                      <span style={s.detailKey}>DEPOSIT PAID</span>
-                      <span style={{ ...s.detailVal, color: depositIsPaid ? '#1a6644' : undefined }}>
-                        {depositVal > 0 ? fmt(depositVal) : '—'}
-                        {depositIsPaid && <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.14em', marginLeft: '6px' }}>✓</span>}
-                      </span>
-                    </div>
-                    <div style={s.detailRow}>
-                      <div>
-                        <div style={s.detailKey}>REMAINING PAYMENT</div>
-                        {!isPaidInFull && (
-                          <div style={{ fontSize: '10px', color: '#9B9084', letterSpacing: '0.04em', marginTop: '3px', maxWidth: '220px', lineHeight: 1.5 }}>
-                            Final payment is due once your order is complete and ready for delivery.
-                          </div>
-                        )}
-                      </div>
-                      <span style={{ ...s.detailVal, color: isPaidInFull ? '#1a6644' : undefined, flexShrink: 0, marginLeft: '16px' }}>
-                        {isPaidInFull ? 'PAID IN FULL ✓' : fmt(balanceVal)}
-                      </span>
-                    </div>
-                    <div style={s.detailRow}>
-                      <span style={s.detailKey}>PAYMENT STATUS</span>
-                      <span style={{
-                        ...s.detailVal,
-                        fontSize: '12px',
-                        letterSpacing: '0.1em',
-                        color: isPaidInFull ? '#1a6644' : depositIsPaid ? '#C49A2B' : '#0a0a0a',
-                      }}>
-                        {(data.paymentStatus || 'AWAITING DEPOSIT').toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                  {data.stripeInvoiceUrl && (
-                    <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
-                      VIEW INVOICE →
-                    </a>
-                  )}
-                </div>
-              </>)
-            })()}
 
             {data.clientUpdates?.length > 0 && (<>
               <div style={s.rule} />
@@ -336,12 +278,12 @@ export default function PortalPage() {
                       <img
                         src={v.image_signed_url}
                         alt={`Design preview — ${v.name || `Version ${v.version_number || i + 1}`}`}
-                        style={{ display: 'block', width: '100%', borderRadius: '2px 2px 0 0' }}
+                        style={{ display: 'block', width: '100%', height: 'auto', objectFit: 'contain' as const }}
                       />
                     )}
                     <div style={v.image_signed_url ? s.designCardBody : undefined}>
                       {v.is_final && (
-                        <div style={{ display: 'inline-block', background: '#1a7a4a', color: '#fff', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '99px', marginBottom: '8px' }}>
+                        <div style={{ display: 'inline-block', background: C.green, color: '#0d0b08', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '99px', marginBottom: '8px' }}>
                           FINAL DESIGN
                         </div>
                       )}
@@ -370,6 +312,65 @@ export default function PortalPage() {
           </div>
 
         </div>
+
+        {/* Payment Summary — full-width card below grid */}
+        {(() => {
+          const totalVal = Number(data.invoiceTotal) || 0
+          if (!totalVal) return null
+          const depositVal = Number(data.depositAmount) || 0
+          const balanceVal = Number(data.balanceDue) || 0
+          const depositIsPaid = data.depositPaid === true
+          const isPaidInFull = data.finalPaid === true
+          const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          return (<>
+            <div style={s.rule} />
+            <div style={s.section}>
+              <div style={s.eyebrow}>PAYMENT SUMMARY</div>
+              <div style={s.detailList}>
+                <div style={s.detailRow}>
+                  <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
+                  <span style={s.detailVal}>{fmt(totalVal)}</span>
+                </div>
+                <div style={s.detailRow}>
+                  <span style={s.detailKey}>DEPOSIT PAID</span>
+                  <span style={{ ...s.detailVal, color: depositIsPaid ? C.green : undefined }}>
+                    {depositVal > 0 ? fmt(depositVal) : '—'}
+                    {depositIsPaid && <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.14em', marginLeft: '6px' }}>✓</span>}
+                  </span>
+                </div>
+                <div style={s.detailRow}>
+                  <div>
+                    <div style={s.detailKey}>REMAINING PAYMENT</div>
+                    {!isPaidInFull && (
+                      <div style={{ fontSize: '11px', color: C.textMuted, letterSpacing: '0.02em', marginTop: '4px', maxWidth: '260px', lineHeight: 1.5 }}>
+                        Final payment is due once your order is complete and ready for delivery.
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ ...s.detailVal, color: isPaidInFull ? C.green : undefined, flexShrink: 0, marginLeft: '16px' }}>
+                    {isPaidInFull ? 'PAID IN FULL ✓' : fmt(balanceVal)}
+                  </span>
+                </div>
+                <div style={s.detailRow}>
+                  <span style={s.detailKey}>PAYMENT STATUS</span>
+                  <span style={{
+                    ...s.detailVal,
+                    fontSize: '12px',
+                    letterSpacing: '0.1em',
+                    color: isPaidInFull ? C.green : depositIsPaid ? C.gold : C.textPrimary,
+                  }}>
+                    {(data.paymentStatus || 'AWAITING DEPOSIT').toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              {data.stripeInvoiceUrl && (
+                <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
+                  VIEW INVOICE →
+                </a>
+              )}
+            </div>
+          </>)
+        })()}
 
         {/* Order Breakdown — full-width, only when line items exist */}
         {data.lineItems?.length > 0 && (() => {
@@ -514,65 +515,79 @@ export default function PortalPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { backgroundColor: '#F7F3EC', minHeight: '100vh', fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif', color: '#0a0a0a' },
-  singleCol: { maxWidth: '660px', margin: '0 auto', padding: '64px 32px 96px' },
+  // ── Page shell ────────────────────────────────────────────────────────────
+  page: { backgroundColor: C.bg, minHeight: '100vh', fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif', color: C.textPrimary },
+  singleCol: { maxWidth: '660px', margin: '0 auto', padding: '64px 20px 96px' },
+
+  // ── Shared base ───────────────────────────────────────────────────────────
   headerBlock: { marginBottom: '8px' },
-  logo: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.22em', color: '#0a0a0a', marginBottom: '4px' },
-  tagline: { fontSize: '11px', letterSpacing: '0.08em', color: '#6F685D' },
-  rule: { height: '1px', backgroundColor: '#DDD6CB', margin: '36px 0' },
+  logo: { fontSize: '13px', fontWeight: 800, letterSpacing: '0.26em', color: C.textPrimary, marginBottom: '4px' },
+  tagline: { fontSize: '11px', letterSpacing: '0.08em', color: C.textMuted },
+  rule: { height: '1px', backgroundColor: C.border, margin: '40px 0' },
   section: { marginBottom: '4px' },
-  eyebrow: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.28em', color: '#C49A2B', marginBottom: '14px' },
-  headline: { fontSize: '52px', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1, textTransform: 'uppercase', marginBottom: '10px' },
-  subheadline: { fontSize: '16px', fontWeight: 400, color: '#3F3A33', letterSpacing: '0.04em' },
-  statusRow: { display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' },
-  badge: { backgroundColor: '#C49A2B', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em', padding: '6px 16px' },
-  deliveryText: { fontSize: '13px', color: '#3F3A33', letterSpacing: '0.04em' },
-  timeline: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  eyebrow: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.30em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' as const },
+  headline: { fontSize: '52px', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1, textTransform: 'uppercase' as const, color: C.textPrimary, marginBottom: '10px' },
+  subheadline: { fontSize: '16px', fontWeight: 400, color: C.textSecondary, letterSpacing: '0.03em' },
+
+  // ── Status area ──────────────────────────────────────────────────────────
+  statusRow: { display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' as const },
+  badge: { backgroundColor: C.gold, color: '#0d0b08', fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em', padding: '6px 16px' },
+  deliveryText: { fontSize: '13px', color: C.textSecondary, letterSpacing: '0.04em' },
+
+  // ── Timeline ─────────────────────────────────────────────────────────────
+  timeline: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
   timelineRow: { display: 'flex', alignItems: 'center', gap: '16px' },
   timelineNum: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', width: '26px', flexShrink: 0 },
-  timelineLabel: { fontSize: '12px', letterSpacing: '0.18em', flex: 1 },
-  timelineTick: { fontSize: '13px', color: '#C49A2B', width: '20px', textAlign: 'right' as const },
-  detailList: { display: 'flex', flexDirection: 'column' },
-  detailRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid #E5DDD2', padding: '12px 0' },
-  detailKey: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: '#6F685D' },
-  detailVal: { fontSize: '14px', fontWeight: 600, color: '#0a0a0a' },
-  btnGold: { display: 'inline-block', marginTop: '24px', backgroundColor: '#C49A2B', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
-  btnOutline: { display: 'inline-block', marginTop: '16px', border: '1.5px solid #0a0a0a', color: '#0a0a0a', fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
-  designCard: { border: '1px solid #DDD6CB', padding: '20px', marginBottom: '12px', backgroundColor: '#FAF7F2' },
-  designCardGallery: { border: '1px solid #DDD6CB', marginBottom: '12px', backgroundColor: '#FAF7F2', overflow: 'hidden' },
-  designCardBody: { padding: '16px 20px' },
+  timelineLabel: { fontSize: '12px', letterSpacing: '0.18em', flex: 1, color: C.textSecondary },
+  timelineTick: { fontSize: '13px', color: C.gold, width: '20px', textAlign: 'right' as const },
+
+  // ── Detail rows ──────────────────────────────────────────────────────────
+  detailList: { display: 'flex', flexDirection: 'column' as const },
+  detailRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: `1px solid ${C.border}`, padding: '13px 0' },
+  detailKey: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.20em', color: C.textMuted, textTransform: 'uppercase' as const },
+  detailVal: { fontSize: '15px', fontWeight: 600, color: C.textPrimary },
+
+  // ── Buttons ──────────────────────────────────────────────────────────────
+  btnGold: { display: 'inline-block', marginTop: '24px', backgroundColor: C.gold, color: '#0d0b08', fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
+  btnOutline: { display: 'inline-block', marginTop: '16px', border: `1.5px solid ${C.textMuted}`, color: C.textSecondary, fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
+
+  // ── Summary chips ────────────────────────────────────────────────────────
   summaryStrip: { display: 'flex', flexWrap: 'wrap' as const, gap: '10px', marginTop: '18px' },
-  summaryChip: { border: '1px solid #DDD6CB', padding: '8px 14px', backgroundColor: '#FAF7F2' },
-  summaryChipLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const, marginBottom: '3px' },
-  summaryChipValue: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a' },
-  updateRow: { marginBottom: '16px' },
-  updateDate: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.16em', color: '#9B9084', marginBottom: '4px' },
-  updateText: { fontSize: '14px', color: '#332E28', lineHeight: 1.7 },
-  designName: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' },
-  designStatusLabel: { fontSize: '10px', letterSpacing: '0.2em', color: '#C49A2B', marginBottom: '8px' },
-  designNotes: { fontSize: '13px', color: '#3F3A33', lineHeight: 1.6, marginBottom: '12px' },
-  viewLink: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: '#0a0a0a', textDecoration: 'none', borderBottom: '1px solid #0a0a0a', paddingBottom: '2px' },
-  notesBlock: { fontSize: '14px', color: '#332E28', lineHeight: 1.75, borderLeft: '2px solid #C49A2B', paddingLeft: '16px' },
-  bodyText: { fontSize: '13px', color: '#3F3A33', lineHeight: 1.7, marginBottom: '4px' },
-  mutedText: { fontSize: '12px', color: '#6F685D', letterSpacing: '0.05em', marginTop: '16px' },
-  footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: '#756D62', marginBottom: '4px' },
-  footerTagline: { fontSize: '10px', color: '#7F776B', letterSpacing: '0.06em' },
-  intakeSubmittedDate: { fontSize: '11px', color: '#6F685D', letterSpacing: '0.06em', marginBottom: '32px' },
+  summaryChip: { border: `1px solid ${C.border}`, padding: '8px 14px', backgroundColor: C.bgCard },
+  summaryChipLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: C.textMuted, textTransform: 'uppercase' as const, marginBottom: '3px' },
+  summaryChipValue: { fontSize: '13px', fontWeight: 600, color: C.textPrimary },
+
+  // ── Updates ──────────────────────────────────────────────────────────────
+  updateRow: { marginBottom: '18px' },
+  updateDate: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.16em', color: C.textMuted, marginBottom: '4px' },
+  updateText: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.7 },
+
+  // ── Design cards ─────────────────────────────────────────────────────────
+  designCard: { border: `1px solid ${C.border}`, padding: '20px', marginBottom: '14px', backgroundColor: C.bgCard },
+  designCardGallery: { border: `1px solid ${C.border}`, marginBottom: '14px', backgroundColor: C.bgElevated, overflow: 'hidden' },
+  designCardBody: { padding: '16px 20px' },
+  designName: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: C.textPrimary, marginBottom: '6px' },
+  designStatusLabel: { fontSize: '10px', letterSpacing: '0.2em', color: C.gold, marginBottom: '8px' },
+  designNotes: { fontSize: '13px', color: C.textSecondary, lineHeight: 1.6, marginBottom: '12px' },
+  viewLink: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: C.textSecondary, textDecoration: 'none', borderBottom: `1px solid ${C.textMuted}`, paddingBottom: '2px' },
+
+  // ── Notes & text ─────────────────────────────────────────────────────────
+  notesBlock: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.75, borderLeft: `2px solid ${C.gold}`, paddingLeft: '16px' },
+  bodyText: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.7, marginBottom: '4px' },
+  mutedText: { fontSize: '12px', color: C.textMuted, letterSpacing: '0.05em', marginTop: '16px' },
+  footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: C.textMuted, marginBottom: '4px' },
+  footerTagline: { fontSize: '10px', color: C.textMuted, letterSpacing: '0.06em' },
+
+  // ── Intake / brief ───────────────────────────────────────────────────────
+  intakeSubmittedDate: { fontSize: '11px', color: C.textMuted, letterSpacing: '0.06em', marginBottom: '32px' },
   intakeBlock: { marginBottom: '36px' },
-  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: '#C49A2B', marginBottom: '16px', textTransform: 'uppercase' as const },
-  intakeBody: { fontSize: '15px', color: '#1A1714', lineHeight: 1.75 },
-  intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: '1px solid #DDD6CB', padding: '12px 16px', backgroundColor: '#FAF7F2' },
-  intakeFileName: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a', letterSpacing: '0.02em', marginBottom: '2px' },
-  intakeFileMeta: { fontSize: '10px', color: '#6F685D', letterSpacing: '0.12em' },
-  lineItemsHeader: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const, marginBottom: '8px' },
-  lineItemsDivider: { height: '1px', backgroundColor: '#DDD6CB', margin: '16px 0 4px' },
-  paymentCalloutBalance: { marginTop: '12px', border: '1px solid #D4A96A', backgroundColor: '#FDF6EC', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  paymentCalloutPaid: { marginTop: '12px', border: '1px solid #8BC4A4', backgroundColor: '#EBF5EF', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  paymentCalloutLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em' },
-  paymentCalloutAmountBalance: { fontSize: '16px', fontWeight: 700, color: '#7A4A00', letterSpacing: '-0.01em' },
-  paymentCalloutAmountPaid: { fontSize: '12px', fontWeight: 700, letterSpacing: '0.14em', color: '#1a5c3a' },
+  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' as const },
+  intakeBody: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75 },
+  intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: `1px solid ${C.border}`, padding: '12px 16px', backgroundColor: C.bgCard },
+  intakeFileName: { fontSize: '13px', fontWeight: 600, color: C.textPrimary, letterSpacing: '0.02em', marginBottom: '2px' },
+  intakeFileMeta: { fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em' },
   briefFieldList: { display: 'flex', flexDirection: 'column' as const, gap: '20px' },
   briefFieldGroup: { display: 'flex', flexDirection: 'column' as const, gap: '5px' },
-  briefFieldLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const },
-  briefFieldAnswer: { fontSize: '15px', fontWeight: 500, color: '#1A1714', lineHeight: 1.65 },
+  briefFieldLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: C.textMuted, textTransform: 'uppercase' as const },
+  briefFieldAnswer: { fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 },
 }
