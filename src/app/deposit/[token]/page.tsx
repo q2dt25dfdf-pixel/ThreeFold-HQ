@@ -281,30 +281,30 @@ export default function DepositPage() {
               />
             </div>
           )}
-
-          {data.notes && (
-            <>
-              <div className="col-rule" />
-              <div style={s.section}>
-                <div style={s.eyebrow}>NOTES</div>
-                <div style={s.notesBlock}>{data.notes}</div>
-              </div>
-            </>
-          )}
-
-          <div className="col-rule" />
-          <div style={s.eyebrow}>QUESTIONS?</div>
-          <div style={s.bodyText}>
-            Reach out to your Threefold representative directly.
-          </div>
-          <a
-            href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
-            style={s.btnOutline}
-          >
-            CONTACT THREEFOLD →
-          </a>
         </div>
       </div>
+
+      {/* Full-width: Notes */}
+      {data.notes && (
+        <>
+          <div style={s.rule} />
+          <div style={s.eyebrow}>NOTES</div>
+          <div style={s.notesBlock}>{data.notes}</div>
+        </>
+      )}
+
+      {/* Full-width: Questions */}
+      <div style={s.rule} />
+      <div style={s.eyebrow}>QUESTIONS?</div>
+      <div style={s.bodyText}>
+        Reach out to your Threefold representative directly.
+      </div>
+      <a
+        href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
+        style={s.btnOutline}
+      >
+        CONTACT THREEFOLD →
+      </a>
 
       {/* Full-width footer */}
       <div style={s.rule} />

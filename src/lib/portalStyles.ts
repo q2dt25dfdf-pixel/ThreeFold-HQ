@@ -16,7 +16,7 @@ export const PORTAL_STYLES = `
     .portal-outer { max-width: 1200px; padding-left: 64px; padding-right: 64px; }
     .portal-columns {
       display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.8fr);
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
       gap: 0 72px;
       align-items: start;
     }
