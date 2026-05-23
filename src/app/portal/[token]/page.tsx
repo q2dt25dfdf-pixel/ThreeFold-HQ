@@ -267,31 +267,24 @@ export default function PortalPage() {
                       <span style={s.detailVal}>{fmt(totalVal)}</span>
                     </div>
                     <div style={s.detailRow}>
+                      <span style={s.detailKey}>DEPOSIT PAID</span>
+                      <span style={{ ...s.detailVal, color: depositIsPaid ? '#1a6644' : undefined }}>
+                        {depositVal > 0 ? fmt(depositVal) : '—'}
+                        {depositIsPaid && <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.14em', marginLeft: '6px' }}>✓</span>}
+                      </span>
+                    </div>
+                    <div style={s.detailRow}>
                       <div>
-                        <span style={s.detailKey}>DEPOSIT PAID</span>
-                      </div>
-                      <div style={{ textAlign: 'right' as const }}>
-                        {depositVal > 0 && <div style={s.detailVal}>{fmt(depositVal)}</div>}
-                        {depositIsPaid && (
-                          <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.14em', color: '#1a6644', marginTop: '2px' }}>PAID ✓</div>
+                        <div style={s.detailKey}>REMAINING PAYMENT</div>
+                        {!isPaidInFull && (
+                          <div style={{ fontSize: '10px', color: '#9B9084', letterSpacing: '0.04em', marginTop: '3px', maxWidth: '220px', lineHeight: 1.5 }}>
+                            Final payment is due once your order is complete and ready for delivery.
+                          </div>
                         )}
                       </div>
-                    </div>
-                    {!isPaidInFull && balanceVal > 0 && (
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>FINAL INVOICE DUE</span>
-                        <span style={s.detailVal}>{fmt(balanceVal)}</span>
-                      </div>
-                    )}
-                    <div style={s.detailRow}>
-                      <span style={{ ...s.detailKey, color: isPaidInFull ? '#1a6644' : '#0a0a0a', fontWeight: 700 }}>
-                        BALANCE REMAINING
+                      <span style={{ ...s.detailVal, color: isPaidInFull ? '#1a6644' : undefined, flexShrink: 0, marginLeft: '16px' }}>
+                        {isPaidInFull ? 'PAID IN FULL ✓' : fmt(balanceVal)}
                       </span>
-                      {isPaidInFull ? (
-                        <span style={{ ...s.detailVal, color: '#1a6644' }}>PAID IN FULL ✓</span>
-                      ) : (
-                        <span style={{ ...s.detailVal, fontSize: '16px' }}>{fmt(balanceVal)}</span>
-                      )}
                     </div>
                     <div style={s.detailRow}>
                       <span style={s.detailKey}>PAYMENT STATUS</span>
@@ -305,18 +298,6 @@ export default function PortalPage() {
                       </span>
                     </div>
                   </div>
-                  {!isPaidInFull && balanceVal > 0 && (
-                    <div style={s.paymentCalloutBalance}>
-                      <span style={{ ...s.paymentCalloutLabel, color: '#7A4A00' }}>BALANCE DUE</span>
-                      <span style={s.paymentCalloutAmountBalance}>{fmt(balanceVal)}</span>
-                    </div>
-                  )}
-                  {isPaidInFull && (
-                    <div style={s.paymentCalloutPaid}>
-                      <span style={{ ...s.paymentCalloutLabel, color: '#1a5c3a' }}>PAYMENT STATUS</span>
-                      <span style={s.paymentCalloutAmountPaid}>PAID IN FULL ✓</span>
-                    </div>
-                  )}
                   {data.stripeInvoiceUrl && (
                     <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
                       VIEW INVOICE →
