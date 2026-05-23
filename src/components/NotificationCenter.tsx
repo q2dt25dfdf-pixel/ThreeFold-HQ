@@ -47,14 +47,23 @@ export default function NotificationCenter() {
   const seenIds = useRef<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const { data: notifications, loading, upsertItem, setData } = useSupabaseTable<Notification>('notifications', [])
+  const { data: notifications, loading, upsertItem, setData, reload } = useSupabaseTable<Notification>('notifications', [])
   const [sending, setSending] = useState(false)
 
   const sendTestNotification = async () => {
     if (sending) return
     setSending(true)
     try {
-      await fetch('/api/internal/test-notification', { method: 'POST' })
+      const res = await fetch('/api/internal/test-notification', { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        console.error('[test-notification] POST failed', res.status, body)
+        return
+      }
+      // Force-reload so the new row is visible even when realtime hasn't fired
+      await reload()
+    } catch (err) {
+      console.error('[test-notification] fetch error', err)
     } finally {
       setSending(false)
     }
