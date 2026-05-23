@@ -9,7 +9,7 @@ type DashboardHeroProps = {
 export default function DashboardHero({ todayLabel }: DashboardHeroProps) {
   return (
     <section
-      className="relative -mx-4 -mt-20 min-h-[420px] overflow-hidden rounded-none border border-slate-800/80 bg-[#020817] px-5 pb-7 pt-24 text-white shadow-[0_30px_90px_rgba(2,8,23,0.34)] sm:-mx-6 sm:min-h-[440px] md:mx-0 md:mt-0 md:aspect-[2.45/1] md:min-h-0 md:rounded-[2.25rem] md:px-12 md:py-10"
+      className="relative -mx-4 -mt-20 min-h-[420px] overflow-hidden rounded-none border border-slate-800/80 bg-[#020817] px-5 pb-7 pt-24 text-white shadow-[0_30px_90px_rgba(2,8,23,0.34)] sm:-mx-6 sm:min-h-[440px] md:mx-0 md:mt-0 md:aspect-[16/9] md:max-h-[700px] md:min-h-0 md:rounded-[2.25rem] md:px-12 md:py-10"
       aria-label="Threefold operations dashboard hero"
     >
       <Image
@@ -19,7 +19,7 @@ export default function DashboardHero({ todayLabel }: DashboardHeroProps) {
         fill
         priority
         sizes="(min-width: 1024px) 1200px, 100vw"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center sm:object-contain sm:object-center"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center md:object-contain md:object-center"
       />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(2,8,23,0.96)_0%,rgba(2,8,23,0.78)_27%,rgba(2,8,23,0.28)_52%,rgba(2,8,23,0.02)_100%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_38%,rgba(37,99,235,0.18),transparent_30%),linear-gradient(180deg,rgba(2,8,23,0.03)_0%,rgba(2,8,23,0.18)_100%)]" />
