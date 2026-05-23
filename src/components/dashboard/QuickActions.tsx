@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 export default function QuickActions() {
   const router = useRouter();
   const [creatingNote, setCreatingNote] = useState(false);
+  const actionClass = "flex min-w-[100px] flex-1 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60";
 
   const handleNewNote = async () => {
     if (creatingNote) return;
@@ -30,7 +31,7 @@ export default function QuickActions() {
       <button
         type="button"
         onClick={() => router.push("/crm")}
-        className="flex flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+        className={actionClass}
       >
         <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         New Lead
@@ -39,7 +40,7 @@ export default function QuickActions() {
       <button
         type="button"
         onClick={() => router.push("/orders")}
-        className="flex flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-2xl bg-slate-950 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+        className={actionClass}
       >
         <Package className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         New Order
@@ -49,7 +50,7 @@ export default function QuickActions() {
         type="button"
         onClick={() => void handleNewNote()}
         disabled={creatingNote}
-        className="flex flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
+        className={actionClass}
       >
         {creatingNote ? (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
@@ -62,7 +63,7 @@ export default function QuickActions() {
       <button
         type="button"
         onClick={() => router.push("/vendors")}
-        className="flex flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+        className={actionClass}
       >
         <Store className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         Add Vendor
@@ -71,7 +72,7 @@ export default function QuickActions() {
       <button
         type="button"
         onClick={() => router.push("/finances")}
-        className="flex flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+        className={actionClass}
       >
         <DollarSign className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         View Finances
