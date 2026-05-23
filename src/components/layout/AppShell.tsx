@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { LoadingState } from "@/components/AppState";
 import Sidebar from "./Sidebar";
+import NotificationCenter from "@/components/NotificationCenter";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -106,6 +107,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="fade-in">{children}</div>
         )}
       </main>
+      {!checkingSession && <NotificationCenter />}
     </div>
   );
 }

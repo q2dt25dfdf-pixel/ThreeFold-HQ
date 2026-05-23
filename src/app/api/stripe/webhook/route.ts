@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
+import { createNotification } from "@/lib/notifications";
 
 // Disable body parsing — Stripe signature verification requires the raw body
 export const config = { api: { bodyParser: false } };
@@ -198,6 +199,17 @@ async function fulfillDepositPaid(
       `deposit marked paid but finance/order not created`,
     );
   }
+
+  // Notify HQ — fire-and-forget so a notification failure never affects payment fulfillment
+  const notifOrderId = effectiveLeadId ? `order-lead-${effectiveLeadId}` : "";
+  createNotification({
+    type: "deposit_received",
+    title: "Deposit Received",
+    message: `${clientName}${depositAmount > 0 ? ` · ${fmtNotifAmount(depositAmount)}` : ""}`,
+    entity_type: "order",
+    entity_id: notifOrderId,
+  }).catch(err => console.error("[webhook] deposit notification failed:", err));
+  console.log(`[webhook] notified: deposit received for ${clientName}`);
 }
 
 // ─── Client record upsert ─────────────────────────────────────────────────────
@@ -431,6 +443,28 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
   }
 }
 
+// ─── Notification helpers ─────────────────────────────────────────────────────
+
+function fmtNotifAmount(n: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+}
+
+async function notifyFinalInvoicePaid(financeId: string, baseAmount: string | undefined): Promise<void> {
+  const db = getSupabaseAdmin();
+  const { data: rows } = await db.from("finances").select("data").eq("id", financeId).limit(1);
+  const fd = (rows?.[0]?.data ?? {}) as Record<string, unknown>;
+  const clientName = (fd.client_name ?? fd.client ?? "") as string;
+  const amount = Number(baseAmount ?? 0);
+  await createNotification({
+    type: "final_invoice_paid",
+    title: "Final Invoice Paid",
+    message: `${clientName}${amount > 0 ? ` · ${fmtNotifAmount(amount)}` : ""}`,
+    entity_type: "finance",
+    entity_id: financeId,
+  });
+  console.log(`[webhook] notified: final invoice paid ${financeId}`);
+}
+
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
 async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
@@ -463,6 +497,7 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         stripe_final_payment_intent_id: paymentIntentId,
         final_paid_at: paidAt,
       });
+      notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     } else {
       // Bank ACH: initiated — wait for async_payment_succeeded
       console.log(`[webhook] final invoice ${financeId} → bank ACH initiated (awaiting settlement)`);
@@ -526,6 +561,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       stripe_final_payment_intent_id: paymentIntentId,
       final_paid_at: paidAt,
     });
+    notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     return;
   }
 
