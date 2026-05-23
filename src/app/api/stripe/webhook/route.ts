@@ -173,6 +173,12 @@ async function fulfillDepositPaid(
       },
     }).eq("id", fin.id);
     console.log(`[webhook] finances ${fin.id} → deposit_paid=true`);
+    // Ensure the client record exists even if it was created before the webhook was updated
+    if (effectiveLeadId) {
+      const { data: ldRows } = await db.from("crm_leads").select("id,data").eq("id", effectiveLeadId).limit(1);
+      const ld = (ldRows?.[0]?.data ?? {}) as Record<string, unknown>;
+      await upsertClientRecord(db, effectiveLeadId, clientName, ld, depData);
+    }
   } else if (effectiveLeadId) {
     // No finance record yet — bootstrap order + finance so HQ is fully up to date
     await bootstrapOrderAndFinance({
@@ -192,6 +198,86 @@ async function fulfillDepositPaid(
       `deposit marked paid but finance/order not created`,
     );
   }
+}
+
+// ─── Client record upsert ─────────────────────────────────────────────────────
+//
+// Mirrors syncClientFromLead in crm/page.tsx. Deduplicates by email then company name,
+// then falls back to the deterministic ID `client-{leadId}`.
+
+async function upsertClientRecord(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  leadId: string,
+  clientName: string,
+  leadData: Record<string, unknown>,
+  depData: Record<string, unknown>,
+): Promise<string> {
+  const defaultClientId = `client-${leadId}`;
+  const email = (leadData.email ?? depData.client_email ?? "") as string;
+  let clientId = defaultClientId;
+  let existingData: Record<string, unknown> = {};
+
+  // Deduplicate: email first, then company name, then deterministic ID
+  if (email) {
+    const { data: emailRows } = await db
+      .from("clients")
+      .select("id,data")
+      .eq("data->>email", email)
+      .limit(1);
+    if (emailRows && emailRows.length > 0) {
+      clientId = emailRows[0].id;
+      existingData = (emailRows[0].data as Record<string, unknown>) ?? {};
+    }
+  }
+
+  if (clientId === defaultClientId && clientName) {
+    const { data: nameRows } = await db
+      .from("clients")
+      .select("id,data")
+      .eq("data->>name", clientName)
+      .limit(1);
+    if (nameRows && nameRows.length > 0) {
+      clientId = nameRows[0].id;
+      existingData = (nameRows[0].data as Record<string, unknown>) ?? {};
+    }
+  }
+
+  if (clientId === defaultClientId) {
+    const { data: idRows } = await db
+      .from("clients")
+      .select("id,data")
+      .eq("id", defaultClientId)
+      .limit(1);
+    if (idRows && idRows.length > 0) {
+      existingData = (idRows[0].data as Record<string, unknown>) ?? {};
+    }
+  }
+
+  const cp = (leadData.companyProfile as Record<string, unknown> | undefined) ?? {};
+
+  await db.from("clients").upsert({
+    id: clientId,
+    data: {
+      ...existingData,
+      id: clientId,
+      name: clientName,
+      company: clientName,
+      contact: (leadData.contact ?? "") as string,
+      email,
+      phone: (leadData.phone ?? "") as string,
+      owner: (leadData.owner ?? "") as string,
+      industry: (cp.industry as string | undefined) ?? "",
+      address: (cp.address as string | undefined) ?? "",
+      website: (cp.website as string | undefined) ?? "",
+      orders: (existingData.orders as number | undefined) ?? 0,
+      notes: (existingData.notes as string | undefined) ??
+        `Added automatically when deposit was paid.`,
+      status: (existingData.status as string | undefined) ?? "Lead",
+    },
+  });
+
+  console.log(`[webhook] upserted client ${clientId} (name=${clientName})`);
+  return clientId;
 }
 
 // ─── Order + finance bootstrap ────────────────────────────────────────────────
@@ -250,6 +336,9 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     orderName = `${clientName} — ${orderNumber}`;
     const portalToken = "tf-" + randomBytes(12).toString("hex");
 
+    // Create the client record first so we can link it to the order
+    const clientId = await upsertClientRecord(db, leadId, clientName, leadData, depData);
+
     await db.from("orders").upsert({
       id: orderId,
       data: {
@@ -258,10 +347,17 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
         order_name: orderName,
         order_number: orderNumber,
         client: clientName,
+        client_id: clientId,
         client_name: clientName,
+        vendor: "",
+        items: [],
+        quantity: 0,
+        estimatedDeliveryDate: "",
+        notes: "",
         lead_id: leadId,
         deposit_request_id: depositRequestId,
         quote_id: (leadData.quote_id ?? depData.quote_id ?? "") as string,
+        questionnaire_id: (leadData.questionnaire_id ?? "") as string,
         total_amount: totalAmount,
         amount: totalAmount,
         status: "Production",

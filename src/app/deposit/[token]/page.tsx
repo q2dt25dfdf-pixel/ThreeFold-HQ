@@ -242,8 +242,28 @@ export default function DepositPage() {
             <div className="dk-card">
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
-                Your deposit has been received and confirmed. Threefold Supply Co. will
-                be in touch with next steps for your project.
+                Your deposit has been received and confirmed. Your order has now entered
+                production.
+              </div>
+              <div style={{ ...s.bodyText, marginTop: "16px" }}>
+                You will receive access to your Client Portal shortly, where you can:
+              </div>
+              <ul style={{ marginTop: "12px", paddingLeft: "0", listStyle: "none" }}>
+                {[
+                  "Track order progress",
+                  "View approved designs",
+                  "Monitor production status",
+                  "Review payment information",
+                  "Receive estimated completion and delivery updates",
+                ].map((item) => (
+                  <li key={item} style={{ ...s.bodyText, marginTop: "6px", display: "flex", gap: "8px" }}>
+                    <span style={{ color: C.green, flexShrink: 0 }}>•</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div style={{ ...s.bodyText, marginTop: "16px" }}>
+                Thank you for choosing Threefold Supply Co.
               </div>
             </div>
           )}

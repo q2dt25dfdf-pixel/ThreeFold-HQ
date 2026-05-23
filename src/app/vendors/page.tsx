@@ -118,7 +118,7 @@ export default function VendorsPage() {
   const [deletingId, setDeletingId] = useState("");
 
   const orderCountForVendor = (vendorName: string) =>
-    orders.filter((order) => order.vendor.trim().toLowerCase() === vendorName.trim().toLowerCase()).length;
+    orders.filter((order) => (order.vendor ?? "").trim().toLowerCase() === vendorName.trim().toLowerCase()).length;
 
   const visible = vendors.filter((vendor) =>
     Object.values(vendor).join(" ").toLowerCase().includes(query.toLowerCase()),
