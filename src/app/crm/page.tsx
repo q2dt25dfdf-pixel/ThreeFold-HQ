@@ -177,6 +177,20 @@ function normalizeCRMStage(stage: string): PipelineStage {
 const defaultFollowUpTaskNotes = "Auto-generated from CRM lead. Log interaction notes here after follow-up.";
 const normalizeMatchValue = (value: string | undefined) => (value ?? "").trim().toLowerCase();
 
+function postNotification(payload: {
+  type: string;
+  title: string;
+  message: string;
+  entity_type?: string;
+  entity_id?: string;
+}): void {
+  fetch('/api/internal/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(err => console.error('[notify]', err));
+}
+
 const initialLeads: Lead[] = [
   {
     id: "lead-1",
@@ -548,6 +562,24 @@ function CRMContent() {
       },
     });
 
+    // New order and client notifications (fire-and-forget)
+    postNotification({
+      type: 'order_created',
+      title: 'New Order Created',
+      message: `${orderNumber} · Order created successfully.`,
+      entity_type: 'order',
+      entity_id: orderId,
+    });
+    if (!existingClient) {
+      postNotification({
+        type: 'client_created',
+        title: 'New Client Created',
+        message: `${lead.company} · Client profile created successfully.`,
+        entity_type: 'client',
+        entity_id: clientId,
+      });
+    }
+
     // Generate client portal token for the order
     void fetch("/api/portal/generate", {
       method: "POST",
@@ -607,6 +639,15 @@ function CRMContent() {
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
+    if (updated.stage === "Design Approved" && viewLead?.stage !== "Design Approved") {
+      postNotification({
+        type: 'design_approved',
+        title: 'Design Approved',
+        message: `${updated.company} · Design approved and ready for next step.`,
+        entity_type: 'lead',
+        entity_id: updated.id,
+      });
+    }
     if (isDepositPaid(updated.stage as string) && !isDepositPaid(viewLead?.stage as string ?? "")) {
       await handleApproveLead(updated);
     }
@@ -615,6 +656,15 @@ function CRMContent() {
   const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
     const updated = { ...lead, stage: targetStage };
     await upsertItem(updated);
+    if (targetStage === "Design Approved") {
+      postNotification({
+        type: 'design_approved',
+        title: 'Design Approved',
+        message: `${lead.company} · Design approved and ready for next step.`,
+        entity_type: 'lead',
+        entity_id: lead.id,
+      });
+    }
     if (targetStage === "Deposit Paid") {
       await handleApproveLead(updated);
     }
@@ -650,6 +700,13 @@ function CRMContent() {
     };
     await upsertItem(updated);
     syncFollowUpTask(updated);
+    postNotification({
+      type: 'quote_sent',
+      title: 'Quote Sent',
+      message: `${lead.company} · Quote sent successfully.`,
+      entity_type: 'lead',
+      entity_id: lead.id,
+    });
     setToastMessage(`Quote ${result.quoteNumber} sent to ${lead.email}. Lead moved to Quote Sent.`);
   };
 
@@ -675,6 +732,13 @@ function CRMContent() {
       ],
     };
     await upsertItem(updated);
+    postNotification({
+      type: 'deposit_request_sent',
+      title: 'Deposit Request Sent',
+      message: `${lead.company} · Deposit request sent successfully.`,
+      entity_type: 'lead',
+      entity_id: lead.id,
+    });
     setToastMessage(`Deposit request ${result.depositRequestNumber} sent to ${lead.email}.`);
   };
 

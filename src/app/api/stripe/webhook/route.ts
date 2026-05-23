@@ -178,7 +178,16 @@ async function fulfillDepositPaid(
     if (effectiveLeadId) {
       const { data: ldRows } = await db.from("crm_leads").select("id,data").eq("id", effectiveLeadId).limit(1);
       const ld = (ldRows?.[0]?.data ?? {}) as Record<string, unknown>;
-      await upsertClientRecord(db, effectiveLeadId, clientName, ld, depData);
+      const { clientId: updatedClientId, isNew: isNewClient } = await upsertClientRecord(db, effectiveLeadId, clientName, ld, depData);
+      if (isNewClient) {
+        createNotification({
+          type: "client_created",
+          title: "New Client Created",
+          message: `${clientName} · Client profile created successfully.`,
+          entity_type: "client",
+          entity_id: updatedClientId,
+        }).catch(err => console.error("[webhook] client_created notification failed:", err));
+      }
     }
   } else if (effectiveLeadId) {
     // No finance record yet — bootstrap order + finance so HQ is fully up to date
@@ -223,7 +232,7 @@ async function upsertClientRecord(
   clientName: string,
   leadData: Record<string, unknown>,
   depData: Record<string, unknown>,
-): Promise<string> {
+): Promise<{ clientId: string; isNew: boolean }> {
   const defaultClientId = `client-${leadId}`;
   const email = (leadData.email ?? depData.client_email ?? "") as string;
   let clientId = defaultClientId;
@@ -266,6 +275,7 @@ async function upsertClientRecord(
   }
 
   const cp = (leadData.companyProfile as Record<string, unknown> | undefined) ?? {};
+  const isNew = Object.keys(existingData).length === 0;
 
   await db.from("clients").upsert({
     id: clientId,
@@ -288,8 +298,8 @@ async function upsertClientRecord(
     },
   });
 
-  console.log(`[webhook] upserted client ${clientId} (name=${clientName})`);
-  return clientId;
+  console.log(`[webhook] upserted client ${clientId} (name=${clientName} isNew=${isNew})`);
+  return { clientId, isNew };
 }
 
 // ─── Order + finance bootstrap ────────────────────────────────────────────────
@@ -349,7 +359,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     const portalToken = "tf-" + randomBytes(12).toString("hex");
 
     // Create the client record first so we can link it to the order
-    const clientId = await upsertClientRecord(db, leadId, clientName, leadData, depData);
+    const { clientId, isNew: isNewClient } = await upsertClientRecord(db, leadId, clientName, leadData, depData);
 
     await db.from("orders").upsert({
       id: orderId,
@@ -398,6 +408,22 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
       },
     });
     console.log(`[webhook] created order ${orderId} (${orderNumber}) for lead ${leadId}`);
+    createNotification({
+      type: "order_created",
+      title: "New Order Created",
+      message: `${orderNumber} · Order created successfully.`,
+      entity_type: "order",
+      entity_id: orderId,
+    }).catch(err => console.error("[webhook] order_created notification failed:", err));
+    if (isNewClient) {
+      createNotification({
+        type: "client_created",
+        title: "New Client Created",
+        message: `${clientName} · Client profile created successfully.`,
+        entity_type: "client",
+        entity_id: clientId,
+      }).catch(err => console.error("[webhook] client_created notification failed:", err));
+    }
   } else {
     const existing = existingOrders[0].data as Record<string, unknown>;
     orderName = (existing.order_name ?? existing.orderName ?? clientName) as string;
@@ -447,6 +473,28 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
 
 function fmtNotifAmount(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+}
+
+async function notifyAchPayment(
+  kind: "cleared" | "failed",
+  table: "finances" | "deposit_requests",
+  id: string,
+  baseAmount: string | number | undefined,
+): Promise<void> {
+  const db = getSupabaseAdmin();
+  const { data: rows } = await db.from(table).select("data").eq("id", id).limit(1);
+  const d = (rows?.[0]?.data ?? {}) as Record<string, unknown>;
+  const clientName = (d.client_name ?? d.client ?? "") as string;
+  const amount = baseAmount != null
+    ? Number(baseAmount)
+    : Number(table === "finances" ? (d.balance_remaining ?? 0) : (d.deposit_amount ?? 0));
+  await createNotification({
+    type: kind === "cleared" ? "ach_payment_cleared" : "ach_payment_failed",
+    title: kind === "cleared" ? "ACH Payment Cleared" : "ACH Payment Failed",
+    message: `${clientName}${amount > 0 ? ` · ${fmtNotifAmount(amount)}` : ""}`,
+    entity_type: table === "finances" ? "finance" : "order",
+    entity_id: id,
+  });
 }
 
 async function notifyFinalInvoicePaid(financeId: string, baseAmount: string | undefined): Promise<void> {
@@ -562,6 +610,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       final_paid_at: paidAt,
     });
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
+    notifyAchPayment("cleared", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
     return;
   }
 
@@ -578,6 +627,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
   // Bank ACH settled — run full deposit fulfillment (same as card path)
   console.log(`[webhook] deposit ${depositRequestId} → bank ACH settled`);
   await fulfillDepositPaid(session, depositRequestId, paymentIntentId);
+  notifyAchPayment("cleared", "deposit_requests", depositRequestId, undefined).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
 }
 
 async function handleAsyncPaymentFailed(session: CheckoutSession): Promise<void> {
@@ -595,6 +645,7 @@ async function handleAsyncPaymentFailed(session: CheckoutSession): Promise<void>
     await updateRecord("finances", financeId, {
       final_payment_failed_at: new Date().toISOString(),
     });
+    notifyAchPayment("failed", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH failed notification error:", err));
     return;
   }
 
@@ -608,4 +659,5 @@ async function handleAsyncPaymentFailed(session: CheckoutSession): Promise<void>
     status: "payment_failed",
     payment_failed_at: new Date().toISOString(),
   });
+  notifyAchPayment("failed", "deposit_requests", depositRequestId, undefined).catch(err => console.error("[webhook] ACH failed notification error:", err));
 }

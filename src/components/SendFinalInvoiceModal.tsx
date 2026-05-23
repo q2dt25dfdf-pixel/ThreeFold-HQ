@@ -87,6 +87,20 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
     try {
       openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
       setStep("sent");
+      if (invoice) {
+        const clientName = invoice.client_name || invoice.client || "";
+        fetch('/api/internal/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'final_invoice_sent',
+            title: 'Final Invoice Sent',
+            message: `${clientName} · Final invoice delivered.`,
+            entity_type: 'finance',
+            entity_id: invoice.id,
+          }),
+        }).catch(err => console.error('[notify]', err));
+      }
       window.setTimeout(onClose, 2000);
     } catch (err: unknown) {
       setErrorMsg(String(err));

@@ -5,6 +5,15 @@ export type NotificationType =
   | 'final_invoice_paid'
   | 'new_order'
   | 'new_client'
+  | 'quote_sent'
+  | 'deposit_request_sent'
+  | 'design_approved'
+  | 'order_created'
+  | 'client_created'
+  | 'portal_email_sent'
+  | 'final_invoice_sent'
+  | 'ach_payment_cleared'
+  | 'ach_payment_failed'
 
 export interface NotificationPayload {
   type: NotificationType
