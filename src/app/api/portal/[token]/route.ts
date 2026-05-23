@@ -26,6 +26,55 @@ export async function GET(
   if (!d.portal_enabled)
     return NextResponse.json({ error: 'Portal is disabled' }, { status: 403 })
 
+  const db = getSupabaseAdmin()
+  const orderId = order.id
+
+  // Look up the linked invoice by order_id only — no name matching
+  const { data: invoiceRows } = await db
+    .from('finances')
+    .select('id, data')
+    .eq('data->>order_id', orderId)
+    .order('id', { ascending: false })
+    .limit(1)
+  const inv = invoiceRows?.[0]?.data as Record<string, unknown> | undefined
+
+  // Look up deposit request by stored ID (order takes precedence over invoice)
+  const depositRequestId =
+    (d.deposit_request_id as string | undefined) ||
+    (inv?.deposit_request_id as string | undefined) ||
+    null
+
+  let depData: Record<string, unknown> | undefined
+  if (depositRequestId) {
+    const { data: depRows } = await db
+      .from('deposit_requests')
+      .select('data')
+      .eq('id', depositRequestId)
+      .limit(1)
+    depData = depRows?.[0]?.data as Record<string, unknown> | undefined
+  }
+
+  // Authoritative amounts — deposit_request first, then invoice, then order.amount
+  const totalAmount = Number(depData?.total_amount ?? inv?.total_amount ?? d.amount ?? 0)
+  const depositAmountVal = Number(depData?.deposit_amount ?? inv?.deposit_amount ?? 0)
+
+  // Payment status from the finance record (updated by Stripe webhook or manual marking)
+  const depositIsPaid = inv?.deposit_paid === true || inv?.deposit_paid === 'true'
+  const finalIsPaid = inv?.final_paid === true || inv?.final_paid === 'true'
+
+  // Balance remaining: 0 only when final invoice is actually paid
+  const balanceDue = finalIsPaid
+    ? 0
+    : depositIsPaid && totalAmount > 0
+    ? Math.max(totalAmount - depositAmountVal, 0)
+    : totalAmount
+
+  const paymentStatus = finalIsPaid
+    ? 'Paid in Full'
+    : depositIsPaid
+    ? 'Deposit Paid'
+    : 'Awaiting Deposit'
+
   // Collect image_path values from visible design versions to batch-sign in one call
   type RawDesignVersion = Record<string, unknown>
   const visibleDesignVersions: RawDesignVersion[] = (d.design_versions || [])
@@ -63,7 +112,7 @@ export async function GET(
       lineTotal: Number(li.lineTotal ?? 0),
     }))
   } else if (d.quote_id) {
-    const { data: quoteRows } = await getSupabaseAdmin()
+    const { data: quoteRows } = await db
       .from('quotes')
       .select('data')
       .eq('id', d.quote_id as string)
@@ -92,16 +141,16 @@ export async function GET(
     estimatedDelivery: d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
     quantity: d.quantity || '',
     items: Array.isArray(d.items) ? d.items.join(', ') : d.items || '',
-    invoiceTotal: d.invoice_total || d.amount || '',
-    depositAmount: d.deposit_amount || '',
-    depositPaid: d.deposit_paid || '',
-    balanceDue: d.balance_due || '',
+    invoiceTotal: totalAmount > 0 ? totalAmount : '',
+    depositAmount: depositAmountVal > 0 ? depositAmountVal : '',
+    depositPaid: depositIsPaid,
+    finalPaid: finalIsPaid,
+    balanceDue,
+    paymentStatus,
     stripeInvoiceUrl: d.stripe_invoice_url || '',
     designVersions: visibleDesignVersions.map((v) => ({
       ...v,
-      // Drive fallback preserved exactly as before
       file_url: v.drive_url || v.file_url || '',
-      // Signed URL for directly uploaded image (null when image_path absent)
       image_signed_url: (typeof v.image_path === 'string' && v.image_path)
         ? (designImageUrls[v.image_path] ?? null)
         : null,
