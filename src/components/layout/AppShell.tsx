@@ -15,7 +15,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isLoginPage = pathname === "/login";
   const isPortalPage = pathname.startsWith("/portal");
   const isPublicClientPage =
-    pathname.startsWith("/quote") || pathname.startsWith("/deposit");
+    pathname.startsWith("/quote") || pathname.startsWith("/deposit") || pathname.startsWith("/invoice");
 
   useEffect(() => {
     if (isLoginPage || isPublicClientPage) {
