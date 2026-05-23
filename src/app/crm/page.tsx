@@ -477,13 +477,22 @@ function CRMContent() {
     const orderId = `order-lead-${lead.id}`;
     const orderName = `${lead.company} — ${orderNumber}`;
 
-    // Look up any deposit request for this lead to get the confirmed amounts
-    const { data: depositRows } = await supabase
-      .from("deposit_requests")
-      .select("id,data")
-      .eq("data->>lead_id", lead.id)
-      .limit(1);
+    // Look up the deposit request for this lead using the specific ID on the lead,
+    // so we always get the latest request rather than an arbitrary old one.
     type DepositRow = { total_amount: number; deposit_amount: number; balance_remaining: number };
+    const leadDepositRequestId = lead.deposit_request_id;
+    const { data: depositRows } = leadDepositRequestId
+      ? await supabase
+          .from("deposit_requests")
+          .select("id,data")
+          .eq("id", leadDepositRequestId)
+          .limit(1)
+      : await supabase
+          .from("deposit_requests")
+          .select("id,data")
+          .eq("data->>lead_id", lead.id)
+          .order("id", { ascending: false })
+          .limit(1);
     const depositData = depositRows?.[0]?.data as DepositRow | undefined;
 
     const rawValue = lead.value;

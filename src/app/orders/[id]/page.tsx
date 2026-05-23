@@ -65,6 +65,7 @@ type Order = {
   client_id?: string;
   portal_token?: string;
   portal_enabled?: boolean;
+  deposit_request_id?: string;
 };
 
 type ClientUpdate = { id: string; date: string; text: string };
@@ -316,14 +317,12 @@ export default function OrderDetailPage() {
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
   const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
 
-  // Prefer matching by order_id; fall back to name for older invoices that pre-date the id field.
+  // Only match by order_id — never match by name/title to avoid picking up stale invoices.
   // invoices are ordered by id DESC from Supabase (most recently created first), so .find() returns
   // the newest when multiple invoices exist for the same order.
   const invoice = invoices.find((inv) => {
     if (!order) return false;
-    const byId = inv.order_id && inv.order_id === order.id;
-    const byName = (inv.order_name ?? inv.orderName ?? "").toLowerCase() === order.orderName.toLowerCase();
-    return byId || byName;
+    return Boolean(inv.order_id && inv.order_id === order.id);
   });
 
   // Authoritative amounts cross-referenced from deposit request
@@ -331,8 +330,9 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     const depositRequestId =
-      ((invoice as Record<string, unknown> | undefined)?.deposit_request_id as string | undefined) ||
-      ((order as Record<string, unknown> | undefined)?.deposit_request_id as string | undefined);
+      (invoice as { deposit_request_id?: string } | undefined)?.deposit_request_id ||
+      order?.deposit_request_id ||
+      undefined;
 
     if (depositRequestId) {
       void supabase
@@ -347,20 +347,20 @@ export default function OrderDetailPage() {
             const d = parseAmount(dep.deposit_amount) > 0 ? parseAmount(dep.deposit_amount) : t * 0.5;
             if (t > 0) { setAuthAmounts({ total: t, deposit: d, balance: Math.max(t - d, 0) }); return; }
           }
-          // Deposit request missing or has no total — fall back to stored values
-          const t = parseAmount(invoice?.total_amount) || parseAmount((order as Record<string, unknown> | undefined)?.amount as unknown) || 0;
+          // Deposit request row found but has no usable total — fall back to stored values
+          const t = parseAmount(invoice?.total_amount) || parseAmount(order?.amount) || 0;
           const d = parseAmount(invoice?.deposit_amount) > 0 ? parseAmount(invoice?.deposit_amount) : t * 0.5;
           setAuthAmounts({ total: t, deposit: d, balance: Math.max(t - d, 0) });
         });
     } else if (invoice || order) {
-      const t = parseAmount(invoice?.total_amount) || parseAmount((order as Record<string, unknown> | undefined)?.amount as unknown) || 0;
+      const t = parseAmount(invoice?.total_amount) || parseAmount(order?.amount) || 0;
       const d = parseAmount(invoice?.deposit_amount) > 0 ? parseAmount(invoice?.deposit_amount) : t * 0.5;
       setAuthAmounts({ total: t, deposit: d, balance: Math.max(t - d, 0) });
     } else {
       setAuthAmounts(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoice?.id, order?.id]);
+  }, [invoice?.id, order?.id, order?.deposit_request_id]);
 
   // Edit modal state (preserved exactly)
   const [orderDraft, setOrderDraft] = useState<Order | null>(null);
@@ -754,7 +754,7 @@ export default function OrderDetailPage() {
     let total = authAmounts?.total || Number(order.amount) || 0;
     let deposit = authAmounts?.deposit || total * 0.5;
 
-    const orderDepositRequestId = (order as Record<string, unknown>).deposit_request_id as string | undefined;
+    const orderDepositRequestId = order?.deposit_request_id;
     if (!authAmounts && orderDepositRequestId) {
       const { data: depRows } = await supabase
         .from("deposit_requests")
