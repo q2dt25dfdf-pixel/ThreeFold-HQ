@@ -151,8 +151,22 @@ const CSS = `
   .po-questions-row {
     display: flex;
     flex-direction: column;
+    flex-wrap: wrap;
     gap: 20px;
     align-items: flex-start;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .po-questions-copy {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .po-questions-row > a {
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .po-headline {
     font-size: 48px;
@@ -196,6 +210,8 @@ const CSS = `
   @media (max-width: 639px) {
     .po-header { flex-direction: column; }
     .po-header a { width: 100%; text-align: center; box-sizing: border-box; }
+    .po-questions-copy { align-items: flex-start; }
+    .po-questions-row > a { width: 100%; text-align: center; }
     .po-headline { font-size: 40px; }
   }
   @media (min-width: 1024px) {
@@ -214,6 +230,7 @@ const CSS = `
     }
     .po-questions-row {
       flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
     }
@@ -569,7 +586,7 @@ export default function PortalPage() {
 
             <div style={s.questionsCard}>
               <div className="po-questions-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div className="po-questions-copy">
                   <div style={s.questionsIcon}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
@@ -592,7 +609,7 @@ export default function PortalPage() {
         <div style={{ marginTop: '24px' }}>
           <div style={s.questionsCard}>
             <div className="po-questions-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div className="po-questions-copy">
                 <div style={s.questionsIcon}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
@@ -794,17 +811,21 @@ const s: Record<string, React.CSSProperties> = {
     padding: '15px 28px', textDecoration: 'none', borderRadius: '8px',
   },
   btnOutline: {
-    display: 'inline-block',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     border: `1.5px solid ${C.greenBorder}`, color: C.greenText,
     fontSize: '12px', fontWeight: 800, letterSpacing: '0',
     padding: '13px 24px', textDecoration: 'none', borderRadius: '999px',
-    flexShrink: 0, whiteSpace: 'nowrap',
+    flexShrink: 1, whiteSpace: 'normal',
+    maxWidth: '100%', boxSizing: 'border-box', textAlign: 'center',
   },
 
   // ── Questions card ─────────────────────────────────────────────────────────
   questionsCard: {
     background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '10px',
     padding: '34px 32px', boxShadow: C.shadow,
+    maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden',
   },
   questionsIcon: {
     width: '48px', height: '48px', borderRadius: '50%',
