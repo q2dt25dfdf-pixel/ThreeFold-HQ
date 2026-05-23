@@ -19,8 +19,11 @@ type Notification = {
 }
 
 const MAX_VISIBLE_TOASTS = 4
-// Faster poll specifically for notifications so other tabs see updates within ~12s
+// Fallback poll interval — BroadcastChannel handles instant cross-tab;
+// polling catches anything that slips through (e.g. different browsers, realtime gaps)
 const NOTIF_POLL_MS = 12_000
+// BroadcastChannel name — same-origin tabs share this channel
+const BC_CHANNEL = 'threefold-hq-notifications'
 
 function entityRoute(entity_type: string, entity_id: string): string | null {
   const routes: Record<string, string> = {
@@ -42,38 +45,80 @@ function timeAgo(iso: string): string {
 export default function NotificationCenter() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [toasts, setToasts] = useState<Notification[]>([])
-  // Client-side-only notifications (test button, optimistic inserts before DB syncs)
+  // Client-side-only notifications (test button, BC-received, optimistic inserts)
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
 
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
+  const bcRef = useRef<BroadcastChannel | null>(null)
 
   const { data: dbNotifications, loading, upsertItem, deleteItem, setData, reload } =
     useSupabaseTable<Notification>('notifications', [])
 
   useEffect(() => { setMounted(true) }, [])
 
-  // 12-second poll so every open HQ tab picks up new notifications quickly
+  // Detect desktop breakpoint for toast sizing (mobile layout is not changed)
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // ── BroadcastChannel — instant cross-tab sync within the same browser ──────
+  // Receives notifications broadcast by other HQ tabs so they appear immediately
+  // without waiting for the next poll cycle.
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const bc = new BroadcastChannel(BC_CHANNEL)
+    bcRef.current = bc
+
+    bc.onmessage = (event: MessageEvent) => {
+      const msg = event.data as { type: string; notification?: Notification }
+      if (msg.type !== 'new-notification' || !msg.notification) return
+      const n = msg.notification
+      // Guard: skip if this tab already has it (avoids double-toast on self-send)
+      if (seenIds.current.has(n.id)) return
+      seenIds.current.add(n.id)
+      setLocalNotifs(prev => [n, ...prev])
+      setToasts(prev => [n, ...prev])
+      // Best-effort DB sync — replaces local copy if insert succeeded in originating tab
+      reload().catch(() => {})
+    }
+
+    return () => {
+      bc.close()
+      bcRef.current = null
+    }
+  }, [reload])
+
+  // ── 12-second polling fallback ────────────────────────────────────────────
+  // Catches notifications from Stripe webhooks and other server-side paths that
+  // don't go through BroadcastChannel (different browsers, cross-device, etc.)
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        reload().catch(() => {})
-      }
+      if (document.visibilityState === 'visible') reload().catch(() => {})
     }, NOTIF_POLL_MS)
     return () => window.clearInterval(id)
   }, [reload])
 
-  // Detect genuinely new DB-originated notifications and queue as toasts
+  // ── Detect new DB-originated notifications ────────────────────────────────
+  // Fires when DB data arrives (initial load, poll, or realtime event).
+  // Queues toasts and broadcasts to all other open HQ tabs so they update
+  // without waiting for their own poll cycle.
   useEffect(() => {
     dbNotifications.forEach(n => {
       if (seenIds.current.has(n.id)) return
       seenIds.current.add(n.id)
       if (n.created_at > mountTime.current) {
         setToasts(prev => [n, ...prev])
+        // Broadcast to other open tabs (they may not have polled yet)
+        bcRef.current?.postMessage({ type: 'new-notification', notification: n })
       }
     })
   }, [dbNotifications])
@@ -139,7 +184,7 @@ export default function NotificationCenter() {
     }
   }
 
-  // Click notification body → mark read + navigate to related record
+  // Click notification body → mark read + navigate
   const handleNavigate = async (n: Notification) => {
     setPanelOpen(false)
     await markRead(n)
@@ -147,7 +192,7 @@ export default function NotificationCenter() {
     if (route) router.push(route)
   }
 
-  // Toast click → dismiss toast + mark read + navigate
+  // Toast click → dismiss + mark read + navigate
   const handleToastClick = async (n: Notification) => {
     setToasts(prev => prev.filter(t => t.id !== n.id))
     await markRead(n)
@@ -174,11 +219,15 @@ export default function NotificationCenter() {
       read_at: null,
     }
 
-    // Immediate local display — works even if DB is unavailable
+    // Immediate local display in this tab
     seenIds.current.add(id)
     setLocalNotifs(prev => [n, ...prev])
     setToasts(prev => [n, ...prev])
 
+    // Broadcast to all other open HQ tabs instantly (BroadcastChannel)
+    bcRef.current?.postMessage({ type: 'new-notification', notification: n })
+
+    // Persist to DB in background
     try {
       const res = await fetch('/api/internal/test-notification', {
         method: 'POST',
@@ -189,7 +238,7 @@ export default function NotificationCenter() {
       if (!res.ok) {
         console.error('[test-notification] POST failed', res.status, json)
       } else {
-        // DB insert succeeded — reload so DB version replaces local copy
+        // Reload replaces local copy with canonical DB row
         reload().catch(err => console.error('[test-notification] reload error', err))
       }
     } catch (err) {
@@ -203,6 +252,17 @@ export default function NotificationCenter() {
 
   const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS)
   const hiddenToastCount = toasts.length - visibleToasts.length
+
+  // Desktop-only toast dimensions — mobile values are unchanged
+  const toastWidth = isDesktop ? 'min(580px, calc(100vw - 5rem))' : 'min(480px, calc(100vw - 4rem))'
+  const toastPad = isDesktop ? '18px 24px' : '14px 16px'
+  const toastTitleSize = isDesktop ? '15px' : '13px'
+  const toastMsgSize = isDesktop ? '13px' : '12px'
+  const toastIconSize = isDesktop ? 36 : 28
+  const toastCheckSize = isDesktop ? 16 : 14
+  const toastShadow = isDesktop
+    ? '0 16px 48px -8px rgba(0,0,0,0.24), 0 4px 16px -4px rgba(0,0,0,0.12)'
+    : '0 8px 32px -4px rgba(0,0,0,0.18), 0 2px 8px -2px rgba(0,0,0,0.08)'
 
   return createPortal(
     <>
@@ -294,7 +354,6 @@ export default function NotificationCenter() {
                     const route = entityRoute(n.entity_type, n.entity_id)
                     const isLast = i === sorted.length - 1
                     return (
-                      // Row: flex container — content button + action buttons are siblings (no nested buttons)
                       <div key={n.id} style={{
                         display: 'flex', alignItems: 'stretch',
                         background: n.read ? 'transparent' : 'rgba(255,255,255,0.04)',
@@ -378,6 +437,7 @@ export default function NotificationCenter() {
       </div>
 
       {/* ── Toast banners — top-center, max 4 visible ─────────────────── */}
+      {/* Desktop: larger width, padding, font. Mobile: unchanged from approved design. */}
       {visibleToasts.length > 0 && (
         <div style={{
           position: 'fixed',
@@ -388,7 +448,7 @@ export default function NotificationCenter() {
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-          width: 'min(480px, calc(100vw - 4rem))',
+          width: toastWidth,
           pointerEvents: 'none',
         }}>
           {hiddenToastCount > 0 && (
@@ -407,20 +467,22 @@ export default function NotificationCenter() {
             const route = entityRoute(t.entity_type, t.entity_id)
             return (
               <div key={t.id} style={{
-                display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
+                display: 'flex', alignItems: 'center', gap: '12px',
+                padding: toastPad,
                 background: 'white', border: '1px solid #e2e8f0', borderRadius: '14px',
-                boxShadow: '0 8px 32px -4px rgba(0,0,0,0.18), 0 2px 8px -2px rgba(0,0,0,0.08)',
+                boxShadow: toastShadow,
                 pointerEvents: 'auto',
               }}>
                 {/* Icon */}
                 <div style={{
                   flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: '28px', height: '28px', borderRadius: '50%', background: '#d1fae5',
+                  width: `${toastIconSize}px`, height: `${toastIconSize}px`,
+                  borderRadius: '50%', background: '#d1fae5',
                 }}>
-                  <Check size={14} style={{ color: '#059669' }} />
+                  <Check size={toastCheckSize} style={{ color: '#059669' }} />
                 </div>
 
-                {/* Content — clickable if there's a route */}
+                {/* Content */}
                 <button
                   type="button"
                   onClick={() => void handleToastClick(t)}
@@ -430,8 +492,8 @@ export default function NotificationCenter() {
                     border: 'none', padding: 0, cursor: route ? 'pointer' : 'default',
                   }}
                 >
-                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{t.title}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.message}</p>
+                  <p style={{ margin: 0, fontSize: toastTitleSize, fontWeight: 700, color: '#0f172a' }}>{t.title}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: toastMsgSize, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.message}</p>
                 </button>
 
                 {/* Dismiss */}
