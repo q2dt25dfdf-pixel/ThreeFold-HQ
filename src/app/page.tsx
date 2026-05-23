@@ -1,24 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  Bell,
-  DollarSign,
-  Package,
-  Users,
-  Wrench,
-} from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
-import { INACTIVE_ORDER_STATUSES, INACTIVE_FINANCE_STATUSES } from "@/lib/constants";
-import { calcBalance } from "@/lib/invoiceCalc";
-import { formatCurrency } from "@/lib/format";
-import { statusText } from "@/lib/recordUtils";
 import { addDaysToISODate, businessTodayISO, businessTodayLabel } from "@/lib/businessDate";
-import { isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
 import GlobalSearch from "@/components/GlobalSearch";
-import SummaryCards, { type SummaryCard } from "@/components/dashboard/SummaryCards";
-import QuickActions from "@/components/dashboard/QuickActions";
 import DashboardVisualGrid from "@/components/dashboard/DashboardVisualGrid";
 
 type StorageRecord = Record<string, unknown> & { id: string };
@@ -41,95 +27,6 @@ export default function Home() {
   const todayISO = useMemo(() => businessTodayISO(), []);
   const sevenDaysAheadISO = useMemo(() => addDaysToISODate(todayISO, 7), [todayISO]);
 
-  // ── Derived data ──────────────────────────────────────────────────────────
-
-  const activeOrders = useMemo(
-    () => orders.filter((o) => !INACTIVE_ORDER_STATUSES.has(statusText(o))),
-    [orders],
-  );
-
-  const inProductionCount = useMemo(
-    () => orders.filter((o) => statusText(o).includes("production")).length,
-    [orders],
-  );
-
-  const totalUnpaidBalance = useMemo(
-    () => finances
-      .filter((f) => !INACTIVE_FINANCE_STATUSES.has(statusText(f)) && f.final_paid !== true)
-      .reduce((sum, f) => sum + calcBalance(f), 0),
-    [finances],
-  );
-
-  const openLeads = useMemo(
-    () => crmLeads.filter((l) => statusText(l) !== "won").length,
-    [crmLeads],
-  );
-
-  // CRM follow-ups: overdue + due within the next 7 days
-  const followUpsDue = useMemo(
-    () => crmLeads
-      .filter((lead) => isLeadFollowUpDueWithin(lead, tasks, sevenDaysAheadISO))
-      .sort((a, b) => {
-        const dateA = leadFollowUpDate(a);
-        const dateB = leadFollowUpDate(b);
-        return dateA.localeCompare(dateB);
-      }),
-    [crmLeads, tasks, sevenDaysAheadISO],
-  );
-
-  const overdueFollowUpsCount = useMemo(
-    () => followUpsDue.filter((l) => {
-      const date = leadFollowUpDate(l);
-      return date < todayISO;
-    }).length,
-    [followUpsDue, todayISO],
-  );
-
-  // ── Summary cards config ──────────────────────────────────────────────────
-
-  const summaryCards = useMemo<SummaryCard[]>(() => [
-    {
-      label: "Active Orders",
-      value: activeOrders.length,
-      sub: activeOrders.length === 1 ? "order in progress" : "orders in progress",
-      href: "/orders?filter=Active",
-      Icon: Package,
-      color: "blue",
-    },
-    {
-      label: "Open Leads",
-      value: openLeads,
-      sub: "in pipeline",
-      href: "/crm?view=open",
-      Icon: Users,
-      color: "violet",
-    },
-    {
-      label: "Unpaid Balance",
-      value: totalUnpaidBalance > 0 ? formatCurrency(totalUnpaidBalance) : "$0",
-      sub: "outstanding",
-      href: "/finances?filter=Unpaid",
-      Icon: DollarSign,
-      color: totalUnpaidBalance > 0 ? "amber" : "slate",
-    },
-    {
-      label: "Follow-ups Due",
-      value: followUpsDue.length,
-      sub: overdueFollowUpsCount > 0 ? `${overdueFollowUpsCount} overdue` : "next 7 days",
-      href: "/crm?view=followups",
-      Icon: Bell,
-      color: overdueFollowUpsCount > 0 ? "red" : "slate",
-    },
-    {
-      label: "In Production",
-      value: inProductionCount,
-      sub: inProductionCount === 1 ? "order" : "orders",
-      href: "/orders?filter=Production",
-      Icon: Wrench,
-      color: inProductionCount > 0 ? "indigo" : "slate",
-    },
-  ], [activeOrders.length, openLeads, totalUnpaidBalance, followUpsDue.length, overdueFollowUpsCount, inProductionCount]);
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) return <LoadingState label="Loading dashboard..." />;
@@ -140,20 +37,15 @@ export default function Home() {
         <ErrorBanner message={loadError} />
 
         {/* Header */}
-        <section className="-mx-4 -mt-20 overflow-hidden rounded-none bg-[#0f172a] p-4 pt-24 text-white sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[2rem] md:px-10 md:py-10">
-          <p className="text-xs font-medium text-[#94a3b8]">{todayLabel}</p>
-          <h1 className="mt-2 text-2xl font-semibold text-white md:text-5xl">Today at Threefold</h1>
-          <p className="mt-1 text-xs text-[#94a3b8] md:mt-2 md:text-sm">Your operations at a glance.</p>
+        <section className="relative -mx-4 -mt-20 overflow-hidden rounded-none border border-slate-800/70 bg-[radial-gradient(circle_at_78%_18%,rgba(37,99,235,0.32),transparent_32%),linear-gradient(145deg,#08111f,#0f172a_54%,#111827)] p-5 pt-24 text-white shadow-[0_28px_80px_rgba(15,23,42,0.22)] sm:-mx-6 md:mx-0 md:mt-0 md:rounded-[2.25rem] md:px-10 md:py-14">
+          <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-blue-300/60 to-transparent" />
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100/70">{todayLabel}</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white md:text-6xl">Today at Threefold</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:mt-3 md:text-base">Your operations at a glance.</p>
         </section>
 
         {/* Global search */}
         <GlobalSearch />
-
-        {/* KPI summary strip */}
-        <SummaryCards cards={summaryCards} />
-
-        {/* Quick actions */}
-        <QuickActions />
 
         {/* Visual executive dashboard */}
         <DashboardVisualGrid

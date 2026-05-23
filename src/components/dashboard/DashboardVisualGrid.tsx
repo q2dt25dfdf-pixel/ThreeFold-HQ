@@ -72,11 +72,9 @@ const invoicePalette: Record<string, string> = {
 
 const funnelPalette = ["#2563eb", "#315ee4", "#3f46c5", "#51359f", "#3f247b"];
 const workflowPalette = ["#2563eb", "#4f46e5", "#f59e0b", "#16a34a", "#64748b"];
-const cardShell = "group relative min-w-0 overflow-hidden rounded-[1.65rem] border p-4 shadow-[0_22px_70px_rgba(15,23,42,0.12)] ring-1 ring-white/70 md:p-5";
+const cardShell = "group relative min-w-0 cursor-pointer overflow-hidden rounded-[1.65rem] border p-4 shadow-[0_22px_70px_rgba(15,23,42,0.12)] ring-1 ring-white/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_28px_80px_rgba(15,23,42,0.16)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 md:p-5";
 const lightCardSurface = "border-slate-900/10 bg-[radial-gradient(circle_at_85%_0%,rgba(37,99,235,0.09),transparent_32%),linear-gradient(180deg,#ffffff,#f8fafc)]";
-const darkCardSurface = "border-slate-800/70 bg-[radial-gradient(circle_at_75%_20%,rgba(37,99,235,0.28),transparent_34%),linear-gradient(145deg,#08111f,#0f172a_52%,#111827)] text-white";
 const chartFrameClass = "rounded-3xl border border-slate-200/70 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_10px_30px_rgba(15,23,42,0.06)]";
-const darkChartFrameClass = "rounded-3xl border border-white/10 bg-slate-950/25 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
 const metricPanelClass = "rounded-3xl border border-slate-200/70 bg-white/75 px-4 py-3 shadow-sm";
 const labelClass = "text-xs font-semibold uppercase tracking-[0.18em] text-slate-400";
 const metricClass = "text-3xl font-bold tracking-[-0.05em] text-slate-950";
@@ -102,7 +100,6 @@ function Card({
   children,
   className = "",
   actionLabel = "View",
-  variant = "light",
 }: {
   title: string;
   href: string;
@@ -110,25 +107,39 @@ function Card({
   children: React.ReactNode;
   className?: string;
   actionLabel?: string;
-  variant?: "light" | "dark";
 }) {
   const router = useRouter();
-  const isDark = variant === "dark";
+  const openCard = () => router.push(href);
   return (
-    <section className={`${cardShell} ${isDark ? darkCardSurface : lightCardSurface} ${className}`}>
-      <div className={`pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent ${isDark ? "via-blue-300/55" : "via-blue-300/70"} to-transparent`} />
-      <div className={`pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full ${isDark ? "bg-blue-400/[0.14]" : "bg-blue-500/10"} blur-3xl`} />
+    <section
+      role="link"
+      tabIndex={0}
+      aria-label={`Open ${title}`}
+      onClick={openCard}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openCard();
+        }
+      }}
+      className={`${cardShell} ${lightCardSurface} ${className}`}
+    >
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-blue-300/70 to-transparent" />
+      <div className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
       <div className="relative mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_22px_rgba(15,23,42,0.08)] ${isDark ? "border-white/10 bg-white/[0.08] text-blue-100" : "border-slate-200/80 bg-white text-slate-700"}`}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_22px_rgba(15,23,42,0.08)]">
             {icon}
           </span>
-          <h2 className={`min-w-0 truncate text-sm font-semibold tracking-[-0.01em] md:text-base ${isDark ? "text-white" : "text-slate-950"}`}>{title}</h2>
+          <h2 className="min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-slate-950 md:text-base">{title}</h2>
         </div>
         <button
           type="button"
-          onClick={() => router.push(href)}
-          className={`flex min-h-9 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold shadow-sm transition-colors ${isDark ? "border-white/10 bg-white/[0.08] text-blue-100 hover:border-blue-300/40 hover:bg-white/[0.14]" : "border-slate-200 bg-white/90 text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            openCard();
+          }}
+          className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white/90 px-3 text-xs font-semibold text-slate-500 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
         >
           {actionLabel} <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
@@ -138,8 +149,8 @@ function Card({
   );
 }
 
-function ChartFrame({ children, className = "", dark = false }: { children: React.ReactNode; className?: string; dark?: boolean }) {
-  return <div className={`${dark ? darkChartFrameClass : chartFrameClass} ${className}`}>{children}</div>;
+function ChartFrame({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`${chartFrameClass} ${className}`}>{children}</div>;
 }
 
 function StatusChip({ tone, children }: { tone: AttentionItem["tone"]; children: React.ReactNode }) {
@@ -168,30 +179,29 @@ function RevenueProgressCard({ metric }: { metric: RevenueProgressMetric }) {
       href="/finances"
       icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
       actionLabel="Finances"
-      variant="dark"
       className="sm:col-span-2 xl:col-span-1"
     >
       <div className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200/70">Collected this month</p>
+            <p className={labelClass}>Collected this month</p>
             <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
-              <p className="text-4xl font-bold tracking-[-0.05em] text-white md:text-5xl">{formatCurrency(metric.collected)}</p>
-              <p className="pb-1 text-sm font-medium text-slate-300">of {formatCurrency(metric.goal)} goal</p>
+              <p className="text-4xl font-bold tracking-[-0.05em] text-slate-950 md:text-5xl">{formatCurrency(metric.collected)}</p>
+              <p className="pb-1 text-sm font-medium text-slate-500">of {formatCurrency(metric.goal)} goal</p>
             </div>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.08] px-4 py-3 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-            <p className="text-2xl font-bold tracking-[-0.04em] text-white">{metric.percent}%</p>
-            <p className="text-xs font-medium text-slate-400">of goal</p>
+          <div className={`${metricPanelClass} text-right`}>
+            <p className="text-2xl font-bold tracking-[-0.04em] text-slate-950">{metric.percent}%</p>
+            <p className="text-xs font-medium text-slate-500">of goal</p>
           </div>
         </div>
 
-        <div className={`inline-flex max-w-full items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${deltaPositive ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>
+        <div className={`inline-flex max-w-full items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${deltaPositive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
           {deltaPositive ? "+" : "-"}{formatCurrency(Math.abs(metric.delta))} vs last month
         </div>
 
         {canShowTrend ? (
-          <ChartFrame dark className="h-52">
+          <ChartFrame className="h-52">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={metric.trend} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
                 <defs>
@@ -205,7 +215,7 @@ function RevenueProgressCard({ metric }: { metric: RevenueProgressMetric }) {
                 <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${Number(value) / 1000}k`} tick={{ fontSize: 11, fill: "#94a3b8" }} width={42} />
                 <Tooltip
                   cursor={{ stroke: "rgba(96,165,250,0.45)" }}
-                  contentStyle={{ borderRadius: 16, border: "1px solid rgba(148,163,184,0.24)", background: "#020617", color: "#fff" }}
+                  contentStyle={{ borderRadius: 16, border: "1px solid rgba(148,163,184,0.24)", background: "#ffffff", color: "#0f172a" }}
                   formatter={(value) => [formatCurrency(Number(value)), "Collected"]}
                   labelFormatter={(label) => String(label)}
                 />
@@ -214,12 +224,12 @@ function RevenueProgressCard({ metric }: { metric: RevenueProgressMetric }) {
             </ResponsiveContainer>
           </ChartFrame>
         ) : (
-          <ChartFrame dark className="flex min-h-[208px] flex-col justify-center p-5">
-            <p className="text-sm font-semibold text-white">Revenue trend needs more payment history.</p>
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">
+          <ChartFrame className="flex min-h-[208px] flex-col justify-center p-5">
+            <p className="text-sm font-semibold text-slate-950">Revenue trend needs more payment history.</p>
+            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
               The card is showing the real collected total, but there are not enough distinct paid dates this month to draw a trustworthy trend chart yet.
             </p>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-blue-200/70">{formatCurrency(Math.max(metric.goal - metric.collected, 0))} remaining</p>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{formatCurrency(Math.max(metric.goal - metric.collected, 0))} remaining</p>
           </ChartFrame>
         )}
       </div>
@@ -433,7 +443,10 @@ function NeedsAttentionCard({ items }: { items: AttentionItem[] }) {
             <button
               key={item.id}
               type="button"
-              onClick={() => router.push(item.href)}
+              onClick={(event) => {
+                event.stopPropagation();
+                router.push(item.href);
+              }}
               className="group/row grid w-full min-w-0 gap-2 border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50 md:grid-cols-[1.3fr_auto_auto] md:items-center md:gap-4"
             >
               <span className="min-w-0">
