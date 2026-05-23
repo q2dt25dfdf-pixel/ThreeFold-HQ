@@ -486,10 +486,14 @@ function CRMContent() {
     const depositData = depositRows?.[0]?.data as DepositRow | undefined;
 
     const rawValue = lead.value;
-    const totalAmount =
+    const leadTotal =
       typeof rawValue === "number"
         ? rawValue
         : Number(String(rawValue).replace(/[^0-9.-]/g, "")) || 0;
+    const totalAmount =
+      depositData?.total_amount != null && Number(depositData.total_amount) > 0
+        ? Number(depositData.total_amount)
+        : leadTotal;
     const depositAmount = depositData?.deposit_amount ?? Math.round(totalAmount * 0.5 * 100) / 100;
     const balanceRemaining = depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0);
     const today = businessTodayISO();
