@@ -2,27 +2,29 @@ export const PORTAL_STYLES = `
   .portal-outer {
     max-width: 780px;
     margin: 0 auto;
-    padding: 48px 20px 80px;
+    padding: 32px 20px 80px;
     box-sizing: border-box;
   }
   .col-rule {
     height: 1px;
-    background-color: rgba(255,255,255,0.09);
+    background-color: rgba(0,0,0,0.08);
     margin: 36px 0;
   }
   .dk-card {
-    background: #242118;
-    border: 1px solid rgba(255,255,255,0.09);
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.08);
     border-radius: 12px;
     padding: 28px 32px;
     margin-bottom: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.06);
   }
   .dk-card-elevated {
-    background: #2e2922;
-    border: 1px solid rgba(255,255,255,0.09);
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.08);
     border-radius: 12px;
     padding: 28px 32px;
     margin-bottom: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.06);
   }
   .portal-columns { display: block; }
   .portal-col-side { margin-top: 48px; }
@@ -38,7 +40,7 @@ export const PORTAL_STYLES = `
       max-width: 1540px;
       padding-left: 80px;
       padding-right: 80px;
-      padding-top: 64px;
+      padding-top: 40px;
     }
     .portal-columns {
       display: grid;

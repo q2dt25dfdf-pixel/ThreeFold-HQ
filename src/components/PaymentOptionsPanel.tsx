@@ -47,11 +47,11 @@ export default function PaymentOptionsPanel({
         </div>
         <div style={s.breakdownRow}>
           <span style={s.breakdownKey}>CARD FEE (3%)</span>
-          <span style={{ ...s.breakdownVal, color: C.amber }}>{fmt(cardFee)}</span>
+          <span style={{ ...s.breakdownVal, color: C.textSecondary }}>{fmt(cardFee)}</span>
         </div>
         <div style={{ ...s.breakdownRow, borderBottom: "none", paddingBottom: 0 }}>
-          <span style={{ ...s.breakdownKey, color: C.amber }}>TOTAL IF PAYING BY CARD</span>
-          <span style={{ ...s.breakdownVal, color: C.amber }}>{fmt(cardTotal)}</span>
+          <span style={{ ...s.breakdownKey, color: C.textPrimary }}>TOTAL IF PAYING BY CARD</span>
+          <span style={{ ...s.breakdownVal, color: C.textPrimary }}>{fmt(cardTotal)}</span>
         </div>
         <div style={s.bankRow}>
           <span style={s.breakdownKey}>BANK ACCOUNT PAYMENT</span>
@@ -103,16 +103,16 @@ export default function PaymentOptionsPanel({
 
 const s: Record<string, React.CSSProperties> = {
   eyebrow: {
-    fontSize: "11px",
+    fontSize: "12px",
     fontWeight: 700,
-    letterSpacing: "0.28em",
-    color: C.gold,
+    letterSpacing: "0.16em",
+    color: C.textPrimary,
     marginBottom: "20px",
     textTransform: "uppercase" as const,
   },
   breakdownBlock: {
-    border: `1px solid ${C.borderGold}`,
-    backgroundColor: "rgba(212,163,38,0.06)",
+    border: `1px solid ${C.border}`,
+    backgroundColor: C.bgSubtle,
     padding: "20px 24px",
     marginBottom: "16px",
     borderRadius: "8px",
@@ -121,7 +121,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "baseline",
-    borderBottom: `1px solid rgba(212,163,38,0.18)`,
+    borderBottom: `1px solid ${C.border}`,
     padding: "12px 0",
   },
   breakdownKey: {
@@ -159,8 +159,8 @@ const s: Record<string, React.CSSProperties> = {
   btnCard: {
     display: "block",
     width: "100%",
-    backgroundColor: C.gold,
-    color: "#0d0b08",
+    backgroundColor: C.textPrimary,
+    color: "#ffffff",
     fontSize: "12px",
     fontWeight: 700,
     letterSpacing: "0.20em",
@@ -169,13 +169,13 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     textAlign: "center" as const,
     marginBottom: "10px",
-    borderRadius: "6px",
+    borderRadius: "8px",
   },
   btnBank: {
     display: "block",
     width: "100%",
     backgroundColor: "transparent",
-    color: C.green,
+    color: C.greenText,
     fontSize: "12px",
     fontWeight: 700,
     letterSpacing: "0.20em",
@@ -184,7 +184,7 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     textAlign: "center" as const,
     marginBottom: "32px",
-    borderRadius: "6px",
+    borderRadius: "8px",
   },
   altHeader: {
     fontSize: "10px",
@@ -196,7 +196,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   checkBlock: {
     border: `1px solid ${C.border}`,
-    backgroundColor: C.bgCard,
+    backgroundColor: "#ffffff",
     padding: "22px 24px 26px",
     borderRadius: "8px",
   },

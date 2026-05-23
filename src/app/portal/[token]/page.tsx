@@ -120,6 +120,15 @@ const CSS = `
   }
   .po-top-grid { display: block; }
   .po-right { margin-top: 48px; }
+  .po-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 26px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    margin-bottom: 44px;
+  }
   .po-stat-row {
     display: flex;
     gap: 12px;
@@ -151,7 +160,7 @@ const CSS = `
     letter-spacing: -0.02em;
     line-height: 1;
     text-transform: uppercase;
-    color: #f5f1e8;
+    color: #181818;
     margin-bottom: 10px;
     margin-top: 4px;
   }
@@ -160,14 +169,14 @@ const CSS = `
     flex-direction: column;
     gap: 14px;
     padding: 20px 24px;
-    border-top: 1px solid rgba(255,255,255,0.09);
+    border-top: 1px solid rgba(0,0,0,0.08);
   }
   .po-brief-group { display: flex; flex-direction: column; gap: 5px; }
   .po-brief-label {
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.24em;
-    color: #a09488;
+    color: #8b8f88;
     text-transform: uppercase;
   }
   @media (min-width: 640px) {
@@ -184,6 +193,11 @@ const CSS = `
       justify-content: space-between;
     }
   }
+  @media (max-width: 639px) {
+    .po-header { flex-direction: column; }
+    .po-header a { width: 100%; text-align: center; box-sizing: border-box; }
+    .po-headline { font-size: 40px; }
+  }
   @media (min-width: 1024px) {
     .po-outer { max-width: 1540px; padding: 64px 80px 100px; }
     .po-top-grid {
@@ -195,7 +209,7 @@ const CSS = `
     .po-right { margin-top: 0; }
     .po-bottom-grid {
       display: grid;
-      grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 24px;
     }
     .po-questions-row {
@@ -203,7 +217,7 @@ const CSS = `
       align-items: center;
       justify-content: space-between;
     }
-    .po-headline { font-size: 68px; }
+    .po-headline { font-size: 48px; }
     .po-brief-group {
       grid-template-columns: 200px 1fr;
       column-gap: 32px;
@@ -272,25 +286,28 @@ export default function PortalPage() {
       <div className="po-outer">
 
         {/* ── HEADER ─────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '8px' }}>
-          <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
-          <div style={s.tagline}>Made by three, worn by all.</div>
+        <div className="po-header">
+          <div>
+            <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+            <div style={s.tagline}>Made by three, worn by all.</div>
+          </div>
+          <a href={`mailto:${BUSINESS_EMAIL}`} style={{ ...s.btnOutline, marginTop: 0 }}>
+            CONTACT THREEFOLD
+          </a>
         </div>
-        <div style={s.rule} />
 
         {/* ── TOP TWO-COLUMN GRID ────────────────────────────────── */}
         <div className="po-top-grid">
 
           {/* LEFT COLUMN */}
           <div className="po-left">
-            <div style={s.eyebrow}>ORDER PORTAL</div>
+            <div style={s.eyebrow}>CLIENT PORTAL</div>
             <div className="po-headline">
-              {(data.clientName || 'Your Order').toUpperCase()}
+              {data.orderName || data.collectionName || data.clientName || 'Your Order'}
             </div>
-            {(data.collectionName || data.orderName) && (
+            {data.orderId && (
               <div style={s.subheadline}>
-                {(data.collectionName || data.orderName).toUpperCase()}
-                {data.orderId ? ` — ${data.orderId}` : ''}
+                {data.orderId}
               </div>
             )}
 
@@ -336,10 +353,11 @@ export default function PortalPage() {
                   const done = i < currentPhaseIndex
                   const current = i === currentPhaseIndex
                   const isLast = i === PHASES.length - 1
-                  const nodeColor = current ? C.gold : done ? C.gold : 'rgba(255,255,255,0.18)'
-                  const nodeBg = current ? C.gold : 'transparent'
-                  const labelColor = current ? C.textPrimary : done ? C.textMuted : 'rgba(255,255,255,0.25)'
-                  const lineColor = done ? C.gold : 'rgba(255,255,255,0.12)'
+                  const nodeColor = current ? C.green : done ? C.green : '#d9dbd5'
+                  const nodeBg = current ? C.green : done ? C.greenSoft : '#ffffff'
+                  const labelColor = current ? C.textPrimary : done ? C.textMuted : C.textMuted
+                  const inactiveLabel = '#8b8f88'
+                  const lineColor = done ? C.green : '#d9dbd5'
                   return (
                     <div key={phase} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -353,16 +371,16 @@ export default function PortalPage() {
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           flexShrink: 0,
                         }}>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: current ? '#0d0b08' : done ? C.gold : 'rgba(255,255,255,0.3)', letterSpacing: '0.02em' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: current ? '#ffffff' : done ? C.greenText : C.textMuted, letterSpacing: '0.02em' }}>
                             {i + 1}
                           </span>
                         </div>
                         {/* Right connector */}
-                        <div style={{ flex: 1, height: '2px', background: isLast ? 'transparent' : (done ? C.gold : 'rgba(255,255,255,0.12)') }} />
+                        <div style={{ flex: 1, height: '2px', background: isLast ? 'transparent' : (done ? C.green : '#d9dbd5') }} />
                       </div>
                       <div style={{
                         fontSize: '10px', fontWeight: current ? 700 : 400,
-                        letterSpacing: '0.14em', color: labelColor,
+                        letterSpacing: '0.08em', color: current || done ? labelColor : inactiveLabel,
                         textAlign: 'center', marginTop: '10px',
                         textTransform: 'uppercase', lineHeight: 1.4, padding: '0 2px',
                       }}>
@@ -549,10 +567,28 @@ export default function PortalPage() {
               </div>
             )}
 
+            <div style={s.questionsCard}>
+              <div className="po-questions-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <div style={s.questionsIcon}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style={s.questionsHeading}>QUESTIONS?</div>
+                    <div style={s.questionsText}>Reach out to your Threefold representative directly.</div>
+                  </div>
+                </div>
+                <a href={`mailto:${BUSINESS_EMAIL}`} style={s.btnOutline}>CONTACT THREEFOLD →</a>
+              </div>
+            </div>
+
           </div>
         )}
 
         {/* ── QUESTIONS CARD ─────────────────────────────────────── */}
+        {!(hasPayment || hasLineItems) && (
         <div style={{ marginTop: '24px' }}>
           <div style={s.questionsCard}>
             <div className="po-questions-row">
@@ -571,6 +607,7 @@ export default function PortalPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* ── INTAKE / BRIEF SUMMARY ─────────────────────────────── */}
         {(() => {
@@ -674,20 +711,20 @@ const s: Record<string, React.CSSProperties> = {
   page: { backgroundColor: C.bg, minHeight: '100vh', fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif', color: C.textPrimary },
 
   // ── Header ────────────────────────────────────────────────────────────────
-  logo: { fontSize: '13px', fontWeight: 800, letterSpacing: '0.26em', color: C.textPrimary, marginBottom: '4px' },
-  tagline: { fontSize: '11px', letterSpacing: '0.08em', color: C.textMuted },
+  logo: { fontSize: '19px', fontWeight: 800, letterSpacing: '0.06em', color: C.textPrimary, marginBottom: '6px' },
+  tagline: { fontSize: '13px', letterSpacing: '0', color: C.textSecondary },
   rule: { height: '1px', backgroundColor: C.border, margin: '40px 0' },
 
   // ── Typography ────────────────────────────────────────────────────────────
-  eyebrow: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.30em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' },
-  subheadline: { fontSize: '18px', fontWeight: 400, color: C.textSecondary, letterSpacing: '0.03em', marginTop: '6px' },
+  eyebrow: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.12em', color: C.textSecondary, marginBottom: '16px', textTransform: 'uppercase' },
+  subheadline: { fontSize: '15px', fontWeight: 600, color: C.textSecondary, letterSpacing: '0', marginTop: '12px' },
   bodyText: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75, marginBottom: '4px' },
-  notesBlock: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75, borderLeft: `2px solid ${C.gold}`, paddingLeft: '16px' },
+  notesBlock: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75, borderLeft: `2px solid ${C.green}`, paddingLeft: '16px' },
   mutedText: { fontSize: '13px', color: C.textMuted, letterSpacing: '0.05em', marginTop: '16px' },
 
   // ── Status cards row ──────────────────────────────────────────────────────
   statCard: {
-    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '18px 22px',
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '20px 22px', boxShadow: C.shadow,
   },
   statCardLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: C.textMuted, textTransform: 'uppercase', marginBottom: '8px' },
   statCardValue: { fontSize: '18px', fontWeight: 700, color: C.textPrimary },
@@ -695,13 +732,13 @@ const s: Record<string, React.CSSProperties> = {
   // ── Current status badge ──────────────────────────────────────────────────
   badge: {
     display: 'inline-flex', alignItems: 'center', gap: '8px',
-    background: C.gold, color: '#0d0b08',
-    fontSize: '12px', fontWeight: 700, letterSpacing: '0.14em',
-    padding: '10px 20px', borderRadius: '6px',
+    background: C.greenSoft, color: C.greenText,
+    fontSize: '12px', fontWeight: 800, letterSpacing: '0.12em',
+    padding: '10px 20px', borderRadius: '999px',
   },
   badgeDot: {
     width: '8px', height: '8px', borderRadius: '50%',
-    background: 'rgba(0,0,0,0.35)', flexShrink: 0,
+    background: C.green, flexShrink: 0,
   },
 
   // ── Client updates ────────────────────────────────────────────────────────
@@ -711,34 +748,34 @@ const s: Record<string, React.CSSProperties> = {
 
   // ── Design card ───────────────────────────────────────────────────────────
   bigDesignCard: {
-    background: C.bgElevated, border: `1px solid ${C.border}`, borderRadius: '14px',
-    overflow: 'hidden', marginBottom: '20px',
+    background: C.bgElevated, border: `1px solid ${C.border}`, borderRadius: '10px',
+    overflow: 'hidden', marginBottom: '20px', boxShadow: C.shadow,
   },
   bigDesignImageArea: {
-    background: '#1c1914', padding: '36px 28px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '280px',
+    background: C.bgSubtle, padding: '36px 28px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px',
   },
-  bigDesignName: { fontSize: '15px', fontWeight: 700, letterSpacing: '0.1em', color: C.textPrimary, marginBottom: '5px' },
-  bigDesignStatus: { fontSize: '11px', letterSpacing: '0.18em', color: C.gold, marginBottom: '6px' },
+  bigDesignName: { fontSize: '17px', fontWeight: 800, letterSpacing: '0', color: C.textPrimary, marginBottom: '5px' },
+  bigDesignStatus: { fontSize: '13px', letterSpacing: '0', color: C.textSecondary, marginBottom: '6px' },
   bigDesignNotes: { fontSize: '13px', color: C.textSecondary, lineHeight: 1.6, marginTop: '6px' },
   finalBadge: {
-    display: 'inline-block', background: C.green, color: '#0d0b08',
+    display: 'inline-block', background: C.greenSoft, color: C.greenText,
     fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em',
     padding: '3px 10px', borderRadius: '99px', marginBottom: '8px',
   },
   viewFullLink: {
-    fontSize: '11px', fontWeight: 700, letterSpacing: '0.16em', color: C.textSecondary,
-    textDecoration: 'none', borderBottom: `1px solid ${C.textMuted}`, paddingBottom: '2px',
+    fontSize: '13px', fontWeight: 800, letterSpacing: '0', color: C.greenText,
+    textDecoration: 'none', borderBottom: `1px solid ${C.greenBorder}`, paddingBottom: '2px',
     whiteSpace: 'nowrap', flexShrink: 0,
   },
 
   // ── Dashboard cards (bottom grid) ─────────────────────────────────────────
   dashCard: {
-    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '12px',
-    padding: '28px 32px',
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '10px',
+    padding: '28px 32px', boxShadow: C.shadow,
   },
   cardEyebrow: {
-    fontSize: '11px', fontWeight: 700, letterSpacing: '0.26em', color: C.gold,
+    fontSize: '12px', fontWeight: 800, letterSpacing: '0.12em', color: C.textPrimary,
     textTransform: 'uppercase', marginBottom: '4px',
     display: 'flex', alignItems: 'center', gap: '8px',
   },
@@ -752,28 +789,28 @@ const s: Record<string, React.CSSProperties> = {
   // ── Buttons ───────────────────────────────────────────────────────────────
   btnGold: {
     display: 'inline-block', marginTop: '24px',
-    backgroundColor: C.gold, color: '#0d0b08',
-    fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em',
-    padding: '15px 36px', textDecoration: 'none', borderRadius: '4px',
+    backgroundColor: C.green, color: '#ffffff',
+    fontSize: '12px', fontWeight: 800, letterSpacing: '0.08em',
+    padding: '15px 28px', textDecoration: 'none', borderRadius: '8px',
   },
   btnOutline: {
     display: 'inline-block',
-    border: '1.5px solid rgba(255,255,255,0.3)', color: C.textSecondary,
-    fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em',
-    padding: '15px 36px', textDecoration: 'none', borderRadius: '4px',
+    border: `1.5px solid ${C.greenBorder}`, color: C.greenText,
+    fontSize: '12px', fontWeight: 800, letterSpacing: '0',
+    padding: '13px 24px', textDecoration: 'none', borderRadius: '999px',
     flexShrink: 0, whiteSpace: 'nowrap',
   },
 
   // ── Questions card ─────────────────────────────────────────────────────────
   questionsCard: {
-    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '12px',
-    padding: '28px 32px',
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '10px',
+    padding: '34px 32px', boxShadow: C.shadow,
   },
   questionsIcon: {
     width: '48px', height: '48px', borderRadius: '50%',
-    background: 'rgba(212,163,38,0.15)', border: `1px solid ${C.borderGold}`,
+    background: C.bgSubtle, border: `1px solid ${C.border}`,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: C.gold, flexShrink: 0,
+    color: C.textPrimary, flexShrink: 0,
   },
   questionsHeading: {
     fontSize: '18px', fontWeight: 800, letterSpacing: '0.12em',
@@ -782,7 +819,7 @@ const s: Record<string, React.CSSProperties> = {
   questionsText: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.6 },
 
   // ── Intake / brief ────────────────────────────────────────────────────────
-  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' },
+  intakeSubLabel: { fontSize: '11px', fontWeight: 800, letterSpacing: '0.12em', color: C.textPrimary, marginBottom: '16px', textTransform: 'uppercase' },
   intakeFileRow: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
     border: `1px solid ${C.border}`, padding: '12px 16px', backgroundColor: C.bgCard, borderRadius: '6px',

@@ -8,10 +8,10 @@ export default function PortalShell({ children }: { children: React.ReactNode })
       <style>{PORTAL_STYLES}</style>
       <div
         style={{
-          backgroundColor: "#1a1815",
+          backgroundColor: "#f7f7f5",
           minHeight: "100vh",
           fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif',
-          color: "#f5f1e8",
+          color: "#181818",
         }}
       >
         <div className="portal-outer">{children}</div>

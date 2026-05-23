@@ -53,7 +53,7 @@ const INV_CSS = `
     letter-spacing: -0.02em;
     line-height: 1;
     text-transform: uppercase;
-    color: #f5f1e8;
+    color: #181818;
     margin-bottom: 10px;
   }
   @media (min-width: 1024px) {
@@ -372,7 +372,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.26em",
-    color: C.gold,
+    color: C.textPrimary,
     textTransform: "uppercase" as const,
     marginBottom: "20px",
     display: "flex",
@@ -383,12 +383,12 @@ const s: Record<string, React.CSSProperties> = {
     width: "48px",
     height: "48px",
     borderRadius: "50%",
-    background: "rgba(212,163,38,0.15)",
-    border: `1px solid ${C.borderGold}`,
+    background: C.bgSubtle,
+    border: `1px solid ${C.border}`,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: C.gold,
+    color: C.textPrimary,
     flexShrink: 0,
   },
   questionsHeading: {
