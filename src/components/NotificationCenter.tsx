@@ -19,6 +19,8 @@ type Notification = {
 }
 
 const MAX_VISIBLE_TOASTS = 4
+// Faster poll specifically for notifications so other tabs see updates within ~12s
+const NOTIF_POLL_MS = 12_000
 
 function entityRoute(entity_type: string, entity_id: string): string | null {
   const routes: Record<string, string> = {
@@ -42,7 +44,7 @@ export default function NotificationCenter() {
   const [mounted, setMounted] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [toasts, setToasts] = useState<Notification[]>([])
-  // Local-only notifications injected directly (test button, optimistic inserts)
+  // Client-side-only notifications (test button, optimistic inserts before DB syncs)
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
 
@@ -50,12 +52,22 @@ export default function NotificationCenter() {
   const seenIds = useRef<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const { data: dbNotifications, loading, upsertItem, setData, reload } =
+  const { data: dbNotifications, loading, upsertItem, deleteItem, setData, reload } =
     useSupabaseTable<Notification>('notifications', [])
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Detect genuinely new DB notifications and queue as toasts
+  // 12-second poll so every open HQ tab picks up new notifications quickly
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        reload().catch(() => {})
+      }
+    }, NOTIF_POLL_MS)
+    return () => window.clearInterval(id)
+  }, [reload])
+
+  // Detect genuinely new DB-originated notifications and queue as toasts
   useEffect(() => {
     dbNotifications.forEach(n => {
       if (seenIds.current.has(n.id)) return
@@ -66,25 +78,25 @@ export default function NotificationCenter() {
     })
   }, [dbNotifications])
 
-  // Remove local copies once the DB version arrives (deduplication)
+  // Drop local copies once the canonical DB version arrives
   useEffect(() => {
-    const dbIds = new Set(dbNotifications.map(n => n.id))
-    setLocalNotifs(prev => prev.filter(n => !dbIds.has(n.id)))
+    const ids = new Set(dbNotifications.map(n => n.id))
+    setLocalNotifs(prev => prev.filter(n => !ids.has(n.id)))
   }, [dbNotifications])
 
   // Close panel on outside click
   useEffect(() => {
     if (!panelOpen) return
-    function handleClick(e: MouseEvent) {
+    function onMouseDown(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setPanelOpen(false)
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
   }, [panelOpen])
 
-  // Merged view: DB notifications + local-only ones not yet synced
+  // Merged view: DB rows + local-only rows not yet in DB
   const dbIds = useMemo(() => new Set(dbNotifications.map(n => n.id)), [dbNotifications])
   const allNotifications = useMemo(
     () => [...dbNotifications, ...localNotifs.filter(n => !dbIds.has(n.id))],
@@ -96,14 +108,7 @@ export default function NotificationCenter() {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
 
-  const markAllRead = async () => {
-    if (unreadCount === 0) return
-    const now = new Date().toISOString()
-    setLocalNotifs(prev => prev.map(n => n.read ? n : { ...n, read: true, read_at: now }))
-    if (dbNotifications.some(n => !n.read)) {
-      await setData(dbNotifications.map(n => n.read ? n : { ...n, read: true, read_at: now }))
-    }
-  }
+  // ── Mutation helpers ──────────────────────────────────────────────────────
 
   const markRead = async (n: Notification) => {
     if (n.read) return
@@ -115,21 +120,42 @@ export default function NotificationCenter() {
     }
   }
 
-  const handlePanelItemClick = async (n: Notification) => {
+  const markAllRead = async () => {
+    if (unreadCount === 0) return
+    const now = new Date().toISOString()
+    setLocalNotifs(prev => prev.map(n => n.read ? n : { ...n, read: true, read_at: now }))
+    if (dbNotifications.some(n => !n.read)) {
+      await setData(dbNotifications.map(n => n.read ? n : { ...n, read: true, read_at: now }))
+    }
+  }
+
+  // Dismiss = delete from DB (or remove from local state). Also clears any toast.
+  const handleDismiss = async (n: Notification) => {
+    setToasts(prev => prev.filter(t => t.id !== n.id))
+    if (dbIds.has(n.id)) {
+      await deleteItem(n.id)
+    } else {
+      setLocalNotifs(prev => prev.filter(p => p.id !== n.id))
+    }
+  }
+
+  // Click notification body → mark read + navigate to related record
+  const handleNavigate = async (n: Notification) => {
     setPanelOpen(false)
     await markRead(n)
     const route = entityRoute(n.entity_type, n.entity_id)
     if (route) router.push(route)
   }
 
-  const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id))
-
+  // Toast click → dismiss toast + mark read + navigate
   const handleToastClick = async (n: Notification) => {
-    dismissToast(n.id)
+    setToasts(prev => prev.filter(t => t.id !== n.id))
     await markRead(n)
     const route = entityRoute(n.entity_type, n.entity_id)
     if (route) router.push(route)
   }
+
+  // ── Test notification ─────────────────────────────────────────────────────
 
   const sendTestNotification = async () => {
     if (sending) return
@@ -148,12 +174,11 @@ export default function NotificationCenter() {
       read_at: null,
     }
 
-    // Show immediately — bell, panel, and toast update right away
+    // Immediate local display — works even if DB is unavailable
     seenIds.current.add(id)
     setLocalNotifs(prev => [n, ...prev])
     setToasts(prev => [n, ...prev])
 
-    // Persist to DB in background — failure is silent (local display stays)
     try {
       const res = await fetch('/api/internal/test-notification', {
         method: 'POST',
@@ -164,7 +189,7 @@ export default function NotificationCenter() {
       if (!res.ok) {
         console.error('[test-notification] POST failed', res.status, json)
       } else {
-        // Sync DB version — the useEffect above will remove the local copy
+        // DB insert succeeded — reload so DB version replaces local copy
         reload().catch(err => console.error('[test-notification] reload error', err))
       }
     } catch (err) {
@@ -185,6 +210,7 @@ export default function NotificationCenter() {
 
       {/* ── Bell + panel ─────────────────────────────────────────────── */}
       <div ref={panelRef} style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 60000 }}>
+
         {/* Bell button */}
         <button
           type="button"
@@ -209,16 +235,16 @@ export default function NotificationCenter() {
           )}
         </button>
 
-        {/* Panel */}
+        {/* Notification panel */}
         {panelOpen && (
           <div style={{
             position: 'fixed', top: '60px', right: '1rem',
-            width: 'min(320px, calc(100vw - 2rem))', maxHeight: 'calc(100dvh - 80px)',
+            width: 'min(340px, calc(100vw - 2rem))', maxHeight: 'calc(100dvh - 80px)',
             background: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px',
             boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', display: 'flex',
             flexDirection: 'column', overflow: 'hidden', zIndex: 60001,
           }}>
-            {/* Header */}
+            {/* Panel header */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '12px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0,
@@ -237,7 +263,7 @@ export default function NotificationCenter() {
                     Mark all read
                   </button>
                 )}
-                <button type="button" onClick={() => setPanelOpen(false)} aria-label="Close notifications" style={{
+                <button type="button" onClick={() => setPanelOpen(false)} aria-label="Close" style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px',
                   height: '28px', background: 'none', border: 'none', color: '#475569',
                   cursor: 'pointer', borderRadius: '8px',
@@ -247,7 +273,7 @@ export default function NotificationCenter() {
               </div>
             </div>
 
-            {/* Body */}
+            {/* Panel body */}
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
               {loading && allNotifications.length === 0 ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 16px', color: '#475569' }}>
@@ -260,10 +286,7 @@ export default function NotificationCenter() {
               ) : (
                 <>
                   {unreadCount === 0 && (
-                    <div style={{
-                      padding: '8px 16px 4px', textAlign: 'center', color: '#334155',
-                      fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
-                    }}>
+                    <div style={{ padding: '8px 16px 4px', textAlign: 'center', color: '#334155', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                       All caught up
                     </div>
                   )}
@@ -271,39 +294,76 @@ export default function NotificationCenter() {
                     const route = entityRoute(n.entity_type, n.entity_id)
                     const isLast = i === sorted.length - 1
                     return (
-                      <button key={n.id} type="button" onClick={() => void handlePanelItemClick(n)} disabled={!route} style={{
-                        display: 'block', width: '100%', padding: '12px 16px', textAlign: 'left',
+                      // Row: flex container — content button + action buttons are siblings (no nested buttons)
+                      <div key={n.id} style={{
+                        display: 'flex', alignItems: 'stretch',
                         background: n.read ? 'transparent' : 'rgba(255,255,255,0.04)',
-                        border: 'none', borderBottom: isLast ? 'none' : '1px solid #1e293b',
-                        cursor: route ? 'pointer' : 'default',
+                        borderBottom: isLast ? 'none' : '1px solid #1e293b',
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                          {!n.read && (
-                            <span style={{
-                              marginTop: '5px', flexShrink: 0, width: '6px', height: '6px',
-                              borderRadius: '50%', background: '#f87171', display: 'block',
-                            }} />
-                          )}
-                          <div style={{ minWidth: 0, paddingLeft: n.read ? '14px' : 0 }}>
-                            <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'white' }}>
-                              {n.title}
-                            </p>
-                            <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {n.message}
-                            </p>
-                            <p style={{ margin: '4px 0 0', fontSize: '10px', color: '#475569' }}>
-                              {timeAgo(n.created_at)}
-                            </p>
+                        {/* Clickable content → navigate */}
+                        <button
+                          type="button"
+                          onClick={() => void handleNavigate(n)}
+                          disabled={!route}
+                          title={route ? 'Open related record' : undefined}
+                          style={{
+                            flex: 1, minWidth: 0, padding: '12px 8px 12px 16px',
+                            textAlign: 'left', background: 'none', border: 'none',
+                            cursor: route ? 'pointer' : 'default',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            {!n.read && (
+                              <span style={{
+                                marginTop: '5px', flexShrink: 0, width: '6px', height: '6px',
+                                borderRadius: '50%', background: '#f87171', display: 'block',
+                              }} />
+                            )}
+                            <div style={{ minWidth: 0, paddingLeft: n.read ? '14px' : 0 }}>
+                              <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'white' }}>{n.title}</p>
+                              <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.message}</p>
+                              <p style={{ margin: '4px 0 0', fontSize: '10px', color: '#475569' }}>{timeAgo(n.created_at)}</p>
+                            </div>
                           </div>
+                        </button>
+
+                        {/* Per-item actions: mark read + dismiss */}
+                        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', padding: '8px 10px 8px 2px', flexShrink: 0 }}>
+                          {!n.read && (
+                            <button
+                              type="button"
+                              onClick={() => void markRead(n)}
+                              title="Mark as read"
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                width: '24px', height: '24px', borderRadius: '6px', background: 'none',
+                                border: '1px solid #1e293b', color: '#475569', cursor: 'pointer',
+                              }}
+                            >
+                              <Check size={11} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleDismiss(n)}
+                            title="Dismiss"
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: '24px', height: '24px', borderRadius: '6px', background: 'none',
+                              border: '1px solid #1e293b', color: '#475569', cursor: 'pointer',
+                            }}
+                          >
+                            <X size={11} />
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     )
                   })}
                 </>
               )}
             </div>
 
-            {/* Footer — test button */}
+            {/* Panel footer — test button */}
             <div style={{ borderTop: '1px solid #1e293b', padding: '8px 16px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
               <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
                 background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
@@ -317,55 +377,79 @@ export default function NotificationCenter() {
         )}
       </div>
 
-      {/* ── Toast stack — bottom-right, max 4 visible ─────────────────── */}
+      {/* ── Toast banners — top-center, max 4 visible ─────────────────── */}
       {visibleToasts.length > 0 && (
         <div style={{
-          position: 'fixed', bottom: '24px', right: '1rem', zIndex: 59999,
-          display: 'flex', flexDirection: 'column', gap: '8px',
-          width: 'min(320px, calc(100vw - 2rem))', pointerEvents: 'none',
+          position: 'fixed',
+          top: '68px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 59999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          width: 'min(480px, calc(100vw - 4rem))',
+          pointerEvents: 'none',
         }}>
           {hiddenToastCount > 0 && (
-            <div onClick={() => setToasts([])} style={{
-              padding: '8px 14px', background: '#1e293b', borderRadius: '12px',
-              fontSize: '11px', fontWeight: 600, color: '#94a3b8', textAlign: 'center',
-              pointerEvents: 'auto', cursor: 'pointer',
-            }}>
+            <div
+              onClick={() => setToasts([])}
+              style={{
+                padding: '8px 16px', background: '#1e293b', borderRadius: '12px',
+                fontSize: '11px', fontWeight: 600, color: '#94a3b8', textAlign: 'center',
+                pointerEvents: 'auto', cursor: 'pointer',
+              }}
+            >
               +{hiddenToastCount} more · dismiss all
             </div>
           )}
-          {visibleToasts.map(t => (
-            <div key={t.id} style={{
-              display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px',
-              background: 'white', border: '1px solid #e2e8f0', borderRadius: '16px',
-              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.05)',
-              pointerEvents: 'auto',
-            }}>
-              <div style={{
-                marginTop: '1px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', width: '24px', height: '24px',
-                borderRadius: '50%', background: '#d1fae5',
+          {visibleToasts.map(t => {
+            const route = entityRoute(t.entity_type, t.entity_id)
+            return (
+              <div key={t.id} style={{
+                display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
+                background: 'white', border: '1px solid #e2e8f0', borderRadius: '14px',
+                boxShadow: '0 8px 32px -4px rgba(0,0,0,0.18), 0 2px 8px -2px rgba(0,0,0,0.08)',
+                pointerEvents: 'auto',
               }}>
-                <Check size={13} style={{ color: '#059669' }} />
+                {/* Icon */}
+                <div style={{
+                  flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: '28px', height: '28px', borderRadius: '50%', background: '#d1fae5',
+                }}>
+                  <Check size={14} style={{ color: '#059669' }} />
+                </div>
+
+                {/* Content — clickable if there's a route */}
+                <button
+                  type="button"
+                  onClick={() => void handleToastClick(t)}
+                  disabled={!route}
+                  style={{
+                    flex: 1, minWidth: 0, textAlign: 'left', background: 'none',
+                    border: 'none', padding: 0, cursor: route ? 'pointer' : 'default',
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{t.title}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.message}</p>
+                </button>
+
+                {/* Dismiss */}
+                <button
+                  type="button"
+                  onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
+                  aria-label="Dismiss"
+                  style={{
+                    flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: '28px', height: '28px', borderRadius: '8px', background: '#f1f5f9',
+                    border: 'none', color: '#64748b', cursor: 'pointer',
+                  }}
+                >
+                  <X size={14} />
+                </button>
               </div>
-              <button type="button" onClick={() => void handleToastClick(t)} disabled={!entityRoute(t.entity_type, t.entity_id)} style={{
-                flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none',
-                padding: 0, cursor: entityRoute(t.entity_type, t.entity_id) ? 'pointer' : 'default',
-              }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
-                  {t.title}
-                </p>
-                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t.message}
-                </p>
-              </button>
-              <button type="button" onClick={() => dismissToast(t.id)} aria-label="Dismiss notification" style={{
-                flexShrink: 0, display: 'flex', alignItems: 'center', background: 'none',
-                border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px',
-              }}>
-                <X size={16} />
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </>,
