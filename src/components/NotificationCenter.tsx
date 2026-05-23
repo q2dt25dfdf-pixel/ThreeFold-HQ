@@ -48,6 +48,17 @@ export default function NotificationCenter() {
   const panelRef = useRef<HTMLDivElement>(null)
 
   const { data: notifications, loading, upsertItem, setData } = useSupabaseTable<Notification>('notifications', [])
+  const [sending, setSending] = useState(false)
+
+  const sendTestNotification = async () => {
+    if (sending) return
+    setSending(true)
+    try {
+      await fetch('/api/internal/test-notification', { method: 'POST' })
+    } finally {
+      setSending(false)
+    }
+  }
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -245,7 +256,7 @@ export default function NotificationCenter() {
             </div>
 
             {/* Panel body */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
               {loading ? (
                 <div
                   style={{
@@ -346,6 +357,36 @@ export default function NotificationCenter() {
                   })}
                 </>
               )}
+            </div>
+
+            {/* Panel footer — test button */}
+            <div
+              style={{
+                borderTop: '1px solid #1e293b',
+                padding: '8px 16px',
+                flexShrink: 0,
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => void sendTestNotification()}
+                disabled={sending}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: sending ? '#334155' : '#475569',
+                  fontSize: '10px',
+                  fontWeight: 500,
+                  cursor: sending ? 'default' : 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {sending ? 'Sending…' : '⚡ Send test notification'}
+              </button>
             </div>
           </div>
         )}
