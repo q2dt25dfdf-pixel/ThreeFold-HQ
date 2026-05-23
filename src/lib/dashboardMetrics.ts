@@ -13,12 +13,20 @@ export type RevenueProgressMetric = {
   delta: number;
   goal: number;
   percent: number;
+  trend: RevenueTrendDatum[];
+  paymentDays: number;
 };
 
 export type ChartDatum = {
   name: string;
   value: number;
   amount?: number;
+};
+
+export type RevenueTrendDatum = {
+  date: string;
+  label: string;
+  collected: number;
 };
 
 export type FollowUpLoadDatum = {
@@ -53,6 +61,16 @@ const ORDER_STATUS_MAP: Record<string, string> = {
   "client review": "Production",
   "design approved": "Production",
 };
+const ORDER_STATUS_ORDER = [
+  "Design",
+  "Approved",
+  "Deposit Paid",
+  "Production",
+  "Quality Check",
+  "Ready",
+  "Delivered",
+  "Completed",
+];
 
 function numberField(record: DashboardRecord, key: string): number {
   return parseAmount(record[key]);
@@ -61,6 +79,55 @@ function numberField(record: DashboardRecord, key: string): number {
 function isSameMonth(value: string, monthStart: Date): boolean {
   const date = parseDashboardDate(value);
   return Boolean(date && date.getFullYear() === monthStart.getFullYear() && date.getMonth() === monthStart.getMonth());
+}
+
+function paymentEventsForMonth(finances: DashboardRecord[], targetMonth: Date) {
+  return finances
+    .filter((invoice) => !INACTIVE_FINANCE_STATUSES.has(statusText(invoice)))
+    .flatMap((invoice) => {
+      const total = calcTotal(invoice);
+      const deposit = calcDeposit(invoice);
+      const balance = calcBalance(invoice);
+      const events: { date: string; amount: number }[] = [];
+      const depositPaidDate = stringField(invoice, "deposit_paid_date");
+      const finalPaidDate = stringField(invoice, "final_paid_date");
+
+      if (invoice.deposit_paid === true && depositPaidDate && isSameMonth(depositPaidDate, targetMonth)) {
+        events.push({ date: depositPaidDate, amount: deposit });
+      }
+
+      if (invoice.final_paid === true && finalPaidDate && isSameMonth(finalPaidDate, targetMonth)) {
+        events.push({ date: finalPaidDate, amount: invoice.deposit_paid === true ? balance : total });
+      }
+
+      return events;
+    });
+}
+
+function revenueTrendForMonth(finances: DashboardRecord[], monthStart: Date, today: Date): { trend: RevenueTrendDatum[]; paymentDays: number } {
+  const events = paymentEventsForMonth(finances, monthStart);
+  const byDate = new Map<string, number>();
+  for (const event of events) {
+    byDate.set(event.date, (byDate.get(event.date) ?? 0) + event.amount);
+  }
+
+  const finalDay = today.getFullYear() === monthStart.getFullYear() && today.getMonth() === monthStart.getMonth()
+    ? today.getDate()
+    : new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  let runningTotal = 0;
+  const trend = Array.from({ length: finalDay }, (_, index) => {
+    const day = index + 1;
+    const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day, 12);
+    const dateKey = date.toISOString().slice(0, 10);
+    runningTotal += byDate.get(dateKey) ?? 0;
+    return {
+      date: dateKey,
+      label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      collected: runningTotal,
+    };
+  });
+
+  return { trend, paymentDays: byDate.size };
 }
 
 export function parseDashboardDate(rawDate: string): Date | null {
@@ -84,30 +151,15 @@ export function monthlyRevenueProgress(finances: DashboardRecord[], todayISO: st
   const today = parseDashboardDate(todayISO) ?? new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 12);
   const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1, 12);
-  const collectedForMonth = (targetMonth: Date) => finances
-    .filter((invoice) => !INACTIVE_FINANCE_STATUSES.has(statusText(invoice)))
-    .reduce((sum, invoice) => {
-      const total = calcTotal(invoice);
-      const deposit = calcDeposit(invoice);
-      const balance = calcBalance(invoice);
-      let invoiceCollected = 0;
-
-      if (invoice.deposit_paid === true && isSameMonth(stringField(invoice, "deposit_paid_date"), targetMonth)) {
-        invoiceCollected += deposit;
-      }
-
-      if (invoice.final_paid === true && isSameMonth(stringField(invoice, "final_paid_date"), targetMonth)) {
-        invoiceCollected += invoice.deposit_paid === true ? balance : total;
-      }
-
-      return sum + invoiceCollected;
-    }, 0);
+  const collectedForMonth = (targetMonth: Date) => paymentEventsForMonth(finances, targetMonth)
+    .reduce((sum, event) => sum + event.amount, 0);
 
   const collected = collectedForMonth(monthStart);
   const previousCollected = collectedForMonth(previousMonthStart);
   const goal = monthlyRevenueGoal();
   const percent = goal > 0 ? Math.min(100, Math.round((collected / goal) * 100)) : 0;
-  return { collected, previousCollected, delta: collected - previousCollected, goal, percent };
+  const { trend, paymentDays } = revenueTrendForMonth(finances, monthStart, today);
+  return { collected, previousCollected, delta: collected - previousCollected, goal, percent, trend, paymentDays };
 }
 
 export function normalizeCRMStage(stage: string): PipelineStage {
@@ -165,7 +217,14 @@ export function ordersByStatus(orders: DashboardRecord[]): ChartDatum[] {
     counts.set(status, (counts.get(status) ?? 0) + 1);
   }
   return Array.from(counts, ([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const indexA = ORDER_STATUS_ORDER.indexOf(a.name);
+      const indexB = ORDER_STATUS_ORDER.indexOf(b.name);
+      if (indexA !== -1 || indexB !== -1) {
+        return (indexA === -1 ? ORDER_STATUS_ORDER.length : indexA) - (indexB === -1 ? ORDER_STATUS_ORDER.length : indexB);
+      }
+      return b.value - a.value || a.name.localeCompare(b.name);
+    });
 }
 
 export function followUpLoad(leads: DashboardRecord[], tasks: DashboardRecord[], todayISO: string): FollowUpLoadDatum[] {
