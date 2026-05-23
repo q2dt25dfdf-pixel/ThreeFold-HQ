@@ -51,6 +51,7 @@ export default function NotificationCenter() {
   // Client-side-only notifications (test button, BC-received, optimistic inserts)
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
+  const [testError, setTestError] = useState<string | null>(null)
 
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
@@ -201,10 +202,14 @@ export default function NotificationCenter() {
   }
 
   // ── Test notification ─────────────────────────────────────────────────────
+  // DB-first: insert to Supabase before showing locally so other devices
+  // (mobile ↔ desktop) can pick it up through polling/realtime.
+  // BroadcastChannel still fires for instant same-browser tab sync.
 
   const sendTestNotification = async () => {
     if (sending) return
     setSending(true)
+    setTestError(null)
 
     const id = `notif-test-${Date.now()}`
     const n: Notification = {
@@ -219,15 +224,6 @@ export default function NotificationCenter() {
       read_at: null,
     }
 
-    // Immediate local display in this tab
-    seenIds.current.add(id)
-    setLocalNotifs(prev => [n, ...prev])
-    setToasts(prev => [n, ...prev])
-
-    // Broadcast to all other open HQ tabs instantly (BroadcastChannel)
-    bcRef.current?.postMessage({ type: 'new-notification', notification: n })
-
-    // Persist to DB in background
     try {
       const res = await fetch('/api/internal/test-notification', {
         method: 'POST',
@@ -235,14 +231,27 @@ export default function NotificationCenter() {
         body: JSON.stringify({ id }),
       })
       const json = await res.json().catch(() => ({})) as Record<string, unknown>
+
       if (!res.ok) {
-        console.error('[test-notification] POST failed', res.status, json)
-      } else {
-        // Reload replaces local copy with canonical DB row
-        reload().catch(err => console.error('[test-notification] reload error', err))
+        const msg = typeof json.error === 'string' ? json.error : `HTTP ${res.status}`
+        console.error('[test-notification] DB insert failed:', msg, json)
+        setTestError(`Insert failed: ${msg}`)
+        return
       }
+
+      // DB insert confirmed — now show locally and sync
+      seenIds.current.add(id)
+      setLocalNotifs(prev => [n, ...prev])
+      setToasts(prev => [n, ...prev])
+      // Instant same-browser tab sync
+      bcRef.current?.postMessage({ type: 'new-notification', notification: n })
+      // Reload replaces local copy with canonical DB row
+      reload().catch(err => console.error('[test-notification] reload error', err))
+
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       console.error('[test-notification] fetch error', err)
+      setTestError(`Network error: ${msg}`)
     } finally {
       setSending(false)
     }
@@ -423,14 +432,19 @@ export default function NotificationCenter() {
             </div>
 
             {/* Panel footer — test button */}
-            <div style={{ borderTop: '1px solid #1e293b', padding: '8px 16px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ borderTop: '1px solid #1e293b', padding: '8px 16px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
                 background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
                 fontSize: '10px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
                 padding: '4px 8px', borderRadius: '6px', letterSpacing: '0.02em',
               }}>
-                {sending ? 'Sending…' : '⚡ Send test notification'}
+                {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
               </button>
+              {testError && (
+                <p style={{ margin: 0, fontSize: '10px', color: '#ef4444', textAlign: 'center', maxWidth: '260px' }}>
+                  {testError}
+                </p>
+              )}
             </div>
           </div>
         )}
