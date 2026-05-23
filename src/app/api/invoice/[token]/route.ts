@@ -20,9 +20,11 @@ export async function GET(
 
     const raw = rows[0].data as Record<string, unknown>;
 
-    // Use deposit request as authoritative source for amounts when available
+    // Use deposit request as authoritative source for amounts and line items when available
     let totalAmount = calcTotal(raw);
     let depositAmount = calcDeposit(raw);
+    type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown };
+    let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number }[] = [];
 
     if (raw.deposit_request_id) {
       const { data: depRows } = await getSupabaseAdmin()
@@ -36,7 +38,27 @@ export async function GET(
         const d = parseAmount(dep.deposit_amount);
         if (t > 0) totalAmount = t;
         if (d > 0) depositAmount = d;
+        if (Array.isArray(dep.line_items)) {
+          lineItems = (dep.line_items as RawLineItem[]).map((li) => ({
+            name: String(li.name ?? ""),
+            description: String(li.description ?? ""),
+            quantity: Number(li.quantity ?? 0),
+            unitPrice: Number(li.unitPrice ?? 0),
+            lineTotal: Number(li.lineTotal ?? 0),
+          }));
+        }
       }
+    }
+
+    // Fall back to line items stored directly on the finance record
+    if (lineItems.length === 0 && Array.isArray(raw.line_items)) {
+      lineItems = (raw.line_items as RawLineItem[]).map((li) => ({
+        name: String(li.name ?? ""),
+        description: String(li.description ?? ""),
+        quantity: Number(li.quantity ?? 0),
+        unitPrice: Number(li.unitPrice ?? 0),
+        lineTotal: Number(li.lineTotal ?? 0),
+      }));
     }
 
     const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
@@ -54,6 +76,7 @@ export async function GET(
       final_paid_date: (raw.final_paid_date ?? null) as string | null,
       final_due_date: (raw.final_due_date ?? null) as string | null,
       status: (raw.status ?? "Draft") as string,
+      line_items: lineItems,
     };
 
     return NextResponse.json(clientSafe);

@@ -5,6 +5,14 @@ import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
 import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 
+interface LineItem {
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 interface InvoiceData {
   id: string;
   order_name: string;
@@ -18,6 +26,7 @@ interface InvoiceData {
   final_paid_date: string | null;
   final_due_date: string | null;
   status: string;
+  line_items: LineItem[];
 }
 
 function fmt(amount: number) {
@@ -165,8 +174,36 @@ export default function InvoicePage() {
       {/* Two-column body */}
       <div className="portal-columns">
 
-        {/* Left: payment summary */}
+        {/* Left: itemization + payment summary */}
         <div className="portal-col-main">
+          {data.line_items && data.line_items.length > 0 && (
+            <>
+              <div style={s.section}>
+                <div style={s.eyebrow}>WHAT&apos;S INCLUDED</div>
+                <div style={s.detailList}>
+                  {data.line_items.map((item, i) => (
+                    <div key={i} style={s.detailRow}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                        {item.description && (
+                          <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                            {item.description}
+                          </div>
+                        )}
+                        <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                          {item.quantity} × {fmt(item.unitPrice)}
+                        </div>
+                      </div>
+                      <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                        {fmt(item.lineTotal)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-rule" />
+            </>
+          )}
           <div style={s.section}>
             <div style={s.eyebrow}>PAYMENT SUMMARY</div>
             <div style={s.detailList}>
