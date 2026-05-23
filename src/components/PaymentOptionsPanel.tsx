@@ -35,7 +35,9 @@ export default function PaymentOptionsPanel({
 
   return (
     <div>
-      {eyebrow && <div style={s.eyebrow}>{eyebrow}</div>}
+      {eyebrow && (
+        <div style={s.eyebrow}>{eyebrow}</div>
+      )}
 
       {/* Fee breakdown */}
       <div style={s.breakdownBlock}>
@@ -83,7 +85,7 @@ export default function PaymentOptionsPanel({
           : `PAY BY BANK ACCOUNT — ${fmt(amount)} →`}
       </button>
 
-      {/* Check */}
+      {/* Check option */}
       <div style={s.altHeader}>OTHER PAYMENT OPTIONS</div>
       <div style={s.checkBlock}>
         <div style={s.altLabel}>CHECK</div>
@@ -101,87 +103,91 @@ export default function PaymentOptionsPanel({
 
 const s: Record<string, React.CSSProperties> = {
   eyebrow: {
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 700,
-    letterSpacing: "0.30em",
+    letterSpacing: "0.28em",
     color: C.gold,
-    marginBottom: "16px",
+    marginBottom: "20px",
     textTransform: "uppercase" as const,
   },
   breakdownBlock: {
     border: `1px solid ${C.borderGold}`,
     backgroundColor: "rgba(212,163,38,0.06)",
-    padding: "18px 20px",
-    marginBottom: "14px",
+    padding: "20px 24px",
+    marginBottom: "16px",
+    borderRadius: "8px",
   },
   breakdownRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "baseline",
     borderBottom: `1px solid rgba(212,163,38,0.18)`,
-    padding: "10px 0",
+    padding: "12px 0",
   },
   breakdownKey: {
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 700,
-    letterSpacing: "0.18em",
+    letterSpacing: "0.16em",
     color: C.textMuted,
     textTransform: "uppercase" as const,
   },
   breakdownVal: {
-    fontSize: "14px",
-    fontWeight: 600,
+    fontSize: "16px",
+    fontWeight: 700,
     color: C.textPrimary,
   },
   bankRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "baseline",
-    marginTop: "12px",
-    paddingTop: "12px",
+    marginTop: "14px",
+    paddingTop: "14px",
     borderTop: `1px dashed ${C.greenBorder}`,
   },
   feeNotice: {
-    fontSize: "11px",
+    fontSize: "13px",
     color: C.textMuted,
     lineHeight: 1.65,
-    marginBottom: "14px",
+    marginBottom: "20px",
   },
   errorText: {
-    fontSize: "12px",
+    fontSize: "13px",
     color: C.red,
-    marginBottom: "10px",
+    marginBottom: "12px",
+    lineHeight: 1.5,
   },
   btnCard: {
     display: "block",
     width: "100%",
     backgroundColor: C.gold,
     color: "#0d0b08",
-    fontSize: "11px",
+    fontSize: "12px",
     fontWeight: 700,
-    letterSpacing: "0.22em",
-    padding: "16px 32px",
+    letterSpacing: "0.20em",
+    padding: "18px 32px",
     border: "none",
     cursor: "pointer",
     textAlign: "center" as const,
-    marginBottom: "8px",
+    marginBottom: "10px",
+    borderRadius: "6px",
   },
   btnBank: {
     display: "block",
     width: "100%",
     backgroundColor: "transparent",
     color: C.green,
-    fontSize: "11px",
+    fontSize: "12px",
     fontWeight: 700,
-    letterSpacing: "0.22em",
-    padding: "15px 32px",
+    letterSpacing: "0.20em",
+    padding: "17px 32px",
     border: `1.5px solid ${C.green}`,
     cursor: "pointer",
     textAlign: "center" as const,
-    marginBottom: "28px",
+    marginBottom: "32px",
+    borderRadius: "6px",
   },
   altHeader: {
-    fontSize: "9px",
+    fontSize: "10px",
     fontWeight: 700,
     letterSpacing: "0.24em",
     color: C.textMuted,
@@ -191,24 +197,25 @@ const s: Record<string, React.CSSProperties> = {
   checkBlock: {
     border: `1px solid ${C.border}`,
     backgroundColor: C.bgCard,
-    padding: "20px 20px 24px",
+    padding: "22px 24px 26px",
+    borderRadius: "8px",
   },
   altLabel: {
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.22em",
     color: C.textSecondary,
-    marginBottom: "8px",
+    marginBottom: "10px",
   },
   checkPayee: {
-    fontSize: "14px",
+    fontSize: "15px",
     fontWeight: 700,
     color: C.textPrimary,
     letterSpacing: "0.02em",
     marginBottom: "4px",
   },
   checkAddress: {
-    fontSize: "13px",
+    fontSize: "14px",
     color: C.textSecondary,
     lineHeight: 1.75,
   },

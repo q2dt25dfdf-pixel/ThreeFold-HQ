@@ -46,6 +46,21 @@ function fmtDate(iso: string) {
   });
 }
 
+const INV_CSS = `
+  .inv-headline {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: #f5f1e8;
+    margin-bottom: 10px;
+  }
+  @media (min-width: 1024px) {
+    .inv-headline { font-size: 64px; }
+  }
+`;
+
 export default function InvoicePage() {
   const [data, setData] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,6 +118,7 @@ export default function InvoicePage() {
   if (loading) {
     return (
       <PortalShell>
+        <style>{INV_CSS}</style>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.rule} />
         <div style={s.mutedText}>Loading your invoice...</div>
@@ -113,14 +129,14 @@ export default function InvoicePage() {
   if (error || !data) {
     return (
       <PortalShell>
+        <style>{INV_CSS}</style>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.tagline}>Made by three, worn by all.</div>
         <div style={s.rule} />
         <div style={s.eyebrow}>ERROR</div>
-        <div style={s.headline}>INVOICE NOT FOUND</div>
+        <div className="inv-headline">INVOICE NOT FOUND</div>
         <div style={s.bodyText}>
-          This link may be invalid or expired. Contact your Threefold
-          representative.
+          This link may be invalid or expired. Contact your Threefold representative.
         </div>
       </PortalShell>
     );
@@ -142,7 +158,9 @@ export default function InvoicePage() {
 
   return (
     <PortalShell>
-      {/* Full-width header */}
+      <style>{INV_CSS}</style>
+
+      {/* Header */}
       <div style={s.headerBlock}>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.tagline}>Made by three, worn by all.</div>
@@ -151,7 +169,7 @@ export default function InvoicePage() {
       <div style={s.rule} />
 
       <div style={s.eyebrow}>FINAL INVOICE</div>
-      <div style={s.headline}>{data.client_name.toUpperCase()}</div>
+      <div className="inv-headline">{data.client_name.toUpperCase()}</div>
 
       <div style={s.summaryStrip}>
         {data.order_name && (
@@ -178,35 +196,43 @@ export default function InvoicePage() {
         {/* Left: itemization + payment summary */}
         <div className="portal-col-main">
           {data.line_items && data.line_items.length > 0 && (
-            <>
-              <div style={s.section}>
-                <div style={s.eyebrow}>WHAT&apos;S INCLUDED</div>
-                <div style={s.detailList}>
-                  {data.line_items.map((item, i) => (
-                    <div key={i} style={s.detailRow}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={s.detailKey}>{item.name.toUpperCase()}</div>
-                        {item.description && (
-                          <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
-                            {item.description}
-                          </div>
-                        )}
-                        <div style={{ ...s.detailKey, marginTop: "4px" }}>
-                          {item.quantity} × {fmt(item.unitPrice)}
-                        </div>
-                      </div>
-                      <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
-                        {fmt(item.lineTotal)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                </svg>
+                WHAT&apos;S INCLUDED
               </div>
-              <div className="col-rule" />
-            </>
+              <div style={s.detailList}>
+                {data.line_items.map((item, i) => (
+                  <div key={i} style={s.detailRow}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                      {item.description && (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
+                          {item.description}
+                        </div>
+                      )}
+                      <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                        {item.quantity} × {fmt(item.unitPrice)}
+                      </div>
+                    </div>
+                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                      {fmt(item.lineTotal)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-          <div style={s.section}>
-            <div style={s.eyebrow}>PAYMENT SUMMARY</div>
+
+          <div className="dk-card">
+            <div style={s.cardEyebrow}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+              </svg>
+              PAYMENT SUMMARY
+            </div>
             <div style={s.detailList}>
               <div style={s.detailRow}>
                 <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
@@ -216,7 +242,7 @@ export default function InvoicePage() {
                 <div style={{ flex: 1 }}>
                   <span style={s.detailKey}>DEPOSIT</span>
                   {isDepositPaid && data.deposit_paid_date && (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
                       Paid {fmtDate(data.deposit_paid_date)}
                     </div>
                   )}
@@ -224,24 +250,24 @@ export default function InvoicePage() {
                 <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "16px" }}>
                   <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
                   {isDepositPaid && (
-                    <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.14em", color: C.green, marginTop: "2px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", color: C.green, marginTop: "2px" }}>
                       PAID ✓
                     </div>
                   )}
                 </div>
               </div>
-              <div style={s.detailRow}>
+              <div style={{ ...s.detailRow, borderBottom: "none" }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ ...s.detailKey, color: isPaidInFull ? C.green : C.textSecondary, fontWeight: 700 }}>
                     BALANCE REMAINING
                   </span>
                   {data.final_due_date && !isPaidInFull && (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px", color: isOverdue ? C.red : C.textMuted, textTransform: "none" as const }}>
+                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: isOverdue ? C.red : C.textMuted, textTransform: "none" as const }}>
                       Due {fmtDate(data.final_due_date)}{isOverdue ? " — OVERDUE" : ""}
                     </div>
                   )}
                   {isPaidInFull && data.final_paid_date && (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
+                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
                       Paid {fmtDate(data.final_paid_date)}
                     </div>
                   )}
@@ -250,7 +276,7 @@ export default function InvoicePage() {
                   {isPaidInFull ? (
                     <span style={{ ...s.detailVal, color: C.green }}>PAID IN FULL ✓</span>
                   ) : (
-                    <span style={{ ...s.detailVal, fontSize: "18px" }}>{fmt(data.balance_remaining)}</span>
+                    <span style={{ ...s.detailVal, fontSize: "20px" }}>{fmt(data.balance_remaining)}</span>
                   )}
                 </div>
               </div>
@@ -273,16 +299,16 @@ export default function InvoicePage() {
         {/* Right: how to pay */}
         <div className="portal-col-side">
           {isPaidInFull ? (
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your final payment has been received and confirmed. Thank you for
                 your business — it&apos;s been a pleasure working with you.
               </div>
             </div>
           ) : paymentParam === "success" ? (
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your payment is being confirmed. Bank transfers may take a moment to
                 process — this page will reflect the updated status once confirmed.
@@ -290,7 +316,7 @@ export default function InvoicePage() {
               </div>
             </div>
           ) : (
-            <div style={s.section}>
+            <div className="dk-card">
               <PaymentOptionsPanel
                 amount={data.balance_remaining}
                 label="REMAINING BALANCE"
@@ -310,20 +336,29 @@ export default function InvoicePage() {
         </div>
       </div>
 
-      {/* Full-width: Questions */}
+      {/* Questions */}
       <div style={s.rule} />
-      <div style={s.eyebrow}>QUESTIONS?</div>
-      <div style={s.bodyText}>
-        Reach out to your Threefold representative directly.
+      <div className="dk-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <div style={s.questionsIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+          </div>
+          <div>
+            <div style={s.questionsHeading}>QUESTIONS?</div>
+            <div style={s.questionsText}>Reach out to your Threefold representative directly.</div>
+          </div>
+        </div>
+        <a
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice — ${data.order_name || data.client_name}`}
+          style={s.btnOutline}
+        >
+          CONTACT THREEFOLD →
+        </a>
       </div>
-      <a
-        href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice — ${data.order_name || data.client_name}`}
-        style={s.btnOutline}
-      >
-        CONTACT THREEFOLD →
-      </a>
 
-      {/* Full-width footer */}
+      {/* Footer */}
       <div style={s.rule} />
       <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
       <div style={s.footerTagline}>Made by three, worn by all.</div>
@@ -333,4 +368,40 @@ export default function InvoicePage() {
 
 const s: Record<string, React.CSSProperties> = {
   ...dk,
+  cardEyebrow: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.26em",
+    color: C.gold,
+    textTransform: "uppercase" as const,
+    marginBottom: "20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  questionsIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "50%",
+    background: "rgba(212,163,38,0.15)",
+    border: `1px solid ${C.borderGold}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: C.gold,
+    flexShrink: 0,
+  },
+  questionsHeading: {
+    fontSize: "18px",
+    fontWeight: 800,
+    letterSpacing: "0.12em",
+    color: C.textPrimary,
+    textTransform: "uppercase" as const,
+    marginBottom: "6px",
+  },
+  questionsText: {
+    fontSize: "14px",
+    color: C.textSecondary,
+    lineHeight: 1.6,
+  },
 };

@@ -37,6 +37,21 @@ function fmt(amount: number) {
   }).format(amount);
 }
 
+const DEP_CSS = `
+  .dep-headline {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: #f5f1e8;
+    margin-bottom: 10px;
+  }
+  @media (min-width: 1024px) {
+    .dep-headline { font-size: 64px; }
+  }
+`;
+
 export default function DepositPage() {
   const [data, setData] = useState<DepositData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +109,7 @@ export default function DepositPage() {
   if (loading) {
     return (
       <PortalShell>
+        <style>{DEP_CSS}</style>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.rule} />
         <div style={s.mutedText}>Loading your deposit request...</div>
@@ -104,14 +120,14 @@ export default function DepositPage() {
   if (error || !data) {
     return (
       <PortalShell>
+        <style>{DEP_CSS}</style>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.tagline}>Made by three, worn by all.</div>
         <div style={s.rule} />
         <div style={s.eyebrow}>ERROR</div>
-        <div style={s.headline}>REQUEST NOT FOUND</div>
+        <div className="dep-headline">REQUEST NOT FOUND</div>
         <div style={s.bodyText}>
-          This link may be invalid or expired. Contact your Threefold
-          representative.
+          This link may be invalid or expired. Contact your Threefold representative.
         </div>
       </PortalShell>
     );
@@ -125,7 +141,9 @@ export default function DepositPage() {
 
   return (
     <PortalShell>
-      {/* Full-width header */}
+      <style>{DEP_CSS}</style>
+
+      {/* Header */}
       <div style={s.headerBlock}>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.tagline}>Made by three, worn by all.</div>
@@ -134,7 +152,7 @@ export default function DepositPage() {
       <div style={s.rule} />
 
       <div style={s.eyebrow}>DEPOSIT REQUEST</div>
-      <div style={s.headline}>{data.client_name.toUpperCase()}</div>
+      <div className="dep-headline">{data.client_name.toUpperCase()}</div>
 
       <div style={s.summaryStrip}>
         <div style={s.chip}>
@@ -157,36 +175,38 @@ export default function DepositPage() {
         {/* Left: project details + payment breakdown */}
         <div className="portal-col-main">
           {data.line_items && data.line_items.length > 0 && (
-            <>
-              <div style={s.section}>
-                <div style={s.eyebrow}>WHAT&apos;S INCLUDED</div>
-                <div style={s.detailList}>
-                  {data.line_items.map((item, i) => (
-                    <div key={i} style={s.detailRow}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={s.detailKey}>{item.name.toUpperCase()}</div>
-                        {item.description && (
-                          <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px" }}>
-                            {item.description}
-                          </div>
-                        )}
-                        <div style={{ ...s.detailKey, marginTop: "4px" }}>
-                          {item.quantity} × {fmt(item.unitPrice)}
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>WHAT&apos;S INCLUDED</div>
+              <div style={s.detailList}>
+                {data.line_items.map((item, i) => (
+                  <div key={i} style={s.detailRow}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={s.detailKey}>{item.name.toUpperCase()}</div>
+                      {item.description && (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
+                          {item.description}
                         </div>
+                      )}
+                      <div style={{ ...s.detailKey, marginTop: "4px" }}>
+                        {item.quantity} × {fmt(item.unitPrice)}
                       </div>
-                      <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
-                        {fmt(item.lineTotal)}
-                      </span>
                     </div>
-                  ))}
-                </div>
+                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
+                      {fmt(item.lineTotal)}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="col-rule" />
-            </>
+            </div>
           )}
 
-          <div style={s.section}>
-            <div style={s.eyebrow}>PAYMENT BREAKDOWN</div>
+          <div className="dk-card">
+            <div style={s.cardEyebrow}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+              </svg>
+              PAYMENT BREAKDOWN
+            </div>
             <div style={s.detailList}>
               <div style={s.detailRow}>
                 <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
@@ -196,7 +216,7 @@ export default function DepositPage() {
                 <span style={s.detailKey}>DEPOSIT REQUIRED ({depositPercent}%)</span>
                 <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
               </div>
-              <div style={s.detailRow}>
+              <div style={{ ...s.detailRow, borderBottom: "none" }}>
                 <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
                 <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
               </div>
@@ -216,11 +236,11 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* Right: payment action + notes + questions */}
+        {/* Right: payment action + notes */}
         <div className="portal-col-side">
           {isPaid && (
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your deposit has been received and confirmed. Threefold Supply Co. will
                 be in touch with next steps for your project.
@@ -229,8 +249,8 @@ export default function DepositPage() {
           )}
 
           {isPending && !isPaid && (
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT IN PROGRESS</div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>PAYMENT IN PROGRESS</div>
               <div style={s.bodyText}>
                 Your bank transfer is being processed. ACH payments typically settle
                 within 3–5 business days. You will receive confirmation once the
@@ -240,8 +260,8 @@ export default function DepositPage() {
           )}
 
           {!isPaid && !isPending && paymentParam === "success" && (
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your payment is being confirmed. Bank transfers may take a moment to
                 process — this page will reflect the updated status once confirmed.
@@ -251,25 +271,27 @@ export default function DepositPage() {
           )}
 
           {!isPaid && !isPending && paymentParam === "cancelled" && (
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT CANCELLED</div>
+            <div className="dk-card">
+              <div style={s.cardEyebrow}>PAYMENT CANCELLED</div>
               <div style={s.bodyText}>
                 Your payment was not completed. You can try again whenever you are ready.
               </div>
-              <PaymentOptionsPanel
-                amount={data.deposit_amount}
-                label="DEPOSIT AMOUNT"
-                eyebrow=""
-                onPayCard={() => void handlePay("card")}
-                onPayBank={() => void handlePay("bank")}
-                checkoutLoading={checkoutLoading}
-                checkoutError={checkoutError || undefined}
-              />
+              <div style={{ marginTop: "20px" }}>
+                <PaymentOptionsPanel
+                  amount={data.deposit_amount}
+                  label="DEPOSIT AMOUNT"
+                  eyebrow=""
+                  onPayCard={() => void handlePay("card")}
+                  onPayBank={() => void handlePay("bank")}
+                  checkoutLoading={checkoutLoading}
+                  checkoutError={checkoutError || undefined}
+                />
+              </div>
             </div>
           )}
 
           {!isPaid && !isPending && paymentParam === null && (
-            <div style={s.section}>
+            <div className="dk-card">
               <PaymentOptionsPanel
                 amount={data.deposit_amount}
                 label="DEPOSIT AMOUNT"
@@ -283,29 +305,40 @@ export default function DepositPage() {
         </div>
       </div>
 
-      {/* Full-width: Notes */}
+      {/* Notes */}
       {data.notes && (
         <>
           <div style={s.rule} />
-          <div style={s.eyebrow}>NOTES</div>
-          <div style={s.notesBlock}>{data.notes}</div>
+          <div className="dk-card">
+            <div style={s.cardEyebrow}>NOTES</div>
+            <div style={s.notesBlock}>{data.notes}</div>
+          </div>
         </>
       )}
 
-      {/* Full-width: Questions */}
+      {/* Questions */}
       <div style={s.rule} />
-      <div style={s.eyebrow}>QUESTIONS?</div>
-      <div style={s.bodyText}>
-        Reach out to your Threefold representative directly.
+      <div className="dk-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <div style={s.questionsIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+          </div>
+          <div>
+            <div style={s.questionsHeading}>QUESTIONS?</div>
+            <div style={s.questionsText}>Reach out to your Threefold representative directly.</div>
+          </div>
+        </div>
+        <a
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
+          style={s.btnOutline}
+        >
+          CONTACT THREEFOLD →
+        </a>
       </div>
-      <a
-        href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
-        style={s.btnOutline}
-      >
-        CONTACT THREEFOLD →
-      </a>
 
-      {/* Full-width footer */}
+      {/* Footer */}
       <div style={s.rule} />
       <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
       <div style={s.footerTagline}>Made by three, worn by all.</div>
@@ -315,4 +348,40 @@ export default function DepositPage() {
 
 const s: Record<string, React.CSSProperties> = {
   ...dk,
+  cardEyebrow: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.26em",
+    color: C.gold,
+    textTransform: "uppercase" as const,
+    marginBottom: "20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  questionsIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "50%",
+    background: "rgba(212,163,38,0.15)",
+    border: `1px solid ${C.borderGold}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: C.gold,
+    flexShrink: 0,
+  },
+  questionsHeading: {
+    fontSize: "18px",
+    fontWeight: 800,
+    letterSpacing: "0.12em",
+    color: C.textPrimary,
+    textTransform: "uppercase" as const,
+    marginBottom: "6px",
+  },
+  questionsText: {
+    fontSize: "14px",
+    color: C.textSecondary,
+    lineHeight: 1.6,
+  },
 };

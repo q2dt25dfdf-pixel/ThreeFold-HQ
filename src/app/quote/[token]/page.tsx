@@ -43,6 +43,21 @@ function fmtDate(iso: string) {
   });
 }
 
+const QUOTE_CSS = `
+  .q-headline {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: #f5f1e8;
+    margin-bottom: 10px;
+  }
+  @media (min-width: 1024px) {
+    .q-headline { font-size: 64px; }
+  }
+`;
+
 export default function QuotePage() {
   const [data, setData] = useState<QuoteData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +80,7 @@ export default function QuotePage() {
   if (loading) {
     return (
       <PortalShell>
+        <style>{QUOTE_CSS}</style>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.rule} />
         <div style={s.mutedText}>Loading your quote...</div>
@@ -75,14 +91,14 @@ export default function QuotePage() {
   if (error || !data) {
     return (
       <PortalShell>
+        <style>{QUOTE_CSS}</style>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.tagline}>Made by three, worn by all.</div>
         <div style={s.rule} />
         <div style={s.eyebrow}>ERROR</div>
-        <div style={s.headline}>QUOTE NOT FOUND</div>
+        <div className="q-headline">QUOTE NOT FOUND</div>
         <div style={s.bodyText}>
-          This link may be invalid or expired. Contact your Threefold
-          representative.
+          This link may be invalid or expired. Contact your Threefold representative.
         </div>
       </PortalShell>
     );
@@ -94,7 +110,9 @@ export default function QuotePage() {
 
   return (
     <PortalShell>
-      {/* Full-width header */}
+      <style>{QUOTE_CSS}</style>
+
+      {/* Header */}
       <div style={s.headerBlock}>
         <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
         <div style={s.tagline}>Made by three, worn by all.</div>
@@ -103,7 +121,7 @@ export default function QuotePage() {
       <div style={s.rule} />
 
       <div style={s.eyebrow}>CUSTOM QUOTE</div>
-      <div style={s.headline}>{data.client_name.toUpperCase()}</div>
+      <div className="q-headline">{data.client_name.toUpperCase()}</div>
 
       <div style={s.summaryStrip}>
         <div style={s.chip}>
@@ -132,8 +150,13 @@ export default function QuotePage() {
 
         {/* Left: pricing summary */}
         <div className="portal-col-main">
-          <div style={s.section}>
-            <div style={s.eyebrow}>PRICING SUMMARY</div>
+          <div className="dk-card">
+            <div style={s.cardEyebrow}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+              </svg>
+              PRICING SUMMARY
+            </div>
             <div style={s.detailList}>
               {data.line_items && data.line_items.length > 0 ? (
                 <>
@@ -142,7 +165,7 @@ export default function QuotePage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={s.detailKey}>{item.name.toUpperCase()}</div>
                         {item.description && (
-                          <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "2px", textTransform: "none" as const }}>
+                          <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", textTransform: "none" as const }}>
                             {item.description}
                           </div>
                         )}
@@ -159,7 +182,7 @@ export default function QuotePage() {
                     <span style={{ ...s.detailKey, color: C.textSecondary, fontWeight: 700 }}>
                       TOTAL PROJECT VALUE
                     </span>
-                    <span style={{ ...s.detailVal, fontSize: "18px" }}>
+                    <span style={{ ...s.detailVal, fontSize: "20px" }}>
                       {fmt(data.total_amount)}
                     </span>
                   </div>
@@ -177,7 +200,7 @@ export default function QuotePage() {
                     <span style={{ ...s.detailKey, color: C.textSecondary, fontWeight: 700 }}>
                       TOTAL PROJECT VALUE
                     </span>
-                    <span style={{ ...s.detailVal, fontSize: "18px" }}>
+                    <span style={{ ...s.detailVal, fontSize: "20px" }}>
                       {fmt(data.total_amount)}
                     </span>
                   </div>
@@ -194,8 +217,8 @@ export default function QuotePage() {
 
         {/* Right: next steps + CTA */}
         <div className="portal-col-side">
-          <div style={s.section}>
-            <div style={s.eyebrow}>NEXT STEPS</div>
+          <div className="dk-card">
+            <div style={s.cardEyebrow}>NEXT STEPS</div>
             <div style={s.bodyText}>
               Review this quote and reach out to approve it. Once approved, we
               will send a deposit request to get your project into production.
@@ -205,20 +228,20 @@ export default function QuotePage() {
             )}
           </div>
 
-          <div className="col-rule" />
-
-          <div style={s.eyebrow}>READY TO MOVE FORWARD?</div>
-          <div style={s.bodyText}>
-            Reply to the email you received or contact your Threefold
-            representative directly.
+          <div className="dk-card">
+            <div style={s.cardEyebrow}>READY TO MOVE FORWARD?</div>
+            <div style={s.bodyText}>
+              Reply to the email you received or contact your Threefold
+              representative directly.
+            </div>
+            <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
+              CONTACT THREEFOLD →
+            </a>
           </div>
-          <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
-            CONTACT THREEFOLD →
-          </a>
         </div>
       </div>
 
-      {/* Full-width footer */}
+      {/* Footer */}
       <div style={s.rule} />
       <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
       <div style={s.footerTagline}>Made by three, worn by all.</div>
@@ -228,23 +251,35 @@ export default function QuotePage() {
 
 const s: Record<string, React.CSSProperties> = {
   ...dk,
+  cardEyebrow: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.26em",
+    color: C.gold,
+    textTransform: "uppercase" as const,
+    marginBottom: "20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
   paymentCallout: {
-    marginTop: "20px",
+    marginTop: "24px",
     border: `1.5px solid ${C.borderGold}`,
     backgroundColor: "rgba(212,163,38,0.07)",
-    padding: "18px 22px",
+    padding: "20px 24px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    borderRadius: "8px",
   },
   paymentCalloutLabel: {
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.22em",
     color: C.gold,
   },
   paymentCalloutAmount: {
-    fontSize: "22px",
+    fontSize: "26px",
     fontWeight: 700,
     color: C.gold,
     letterSpacing: "-0.01em",

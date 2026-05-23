@@ -15,24 +15,18 @@ function extractDriveId(url: string): string | null {
   return match ? match[1] : null
 }
 
-function DriveEmbed({ url }: { url: string }) {
+function DriveThumb({ url }: { url: string }) {
   const fileId = extractDriveId(url)
-  if (!fileId) return (
-    <a href={url} target="_blank" rel="noopener noreferrer" style={s.viewLink}>VIEW DESIGN →</a>
-  )
+  if (!fileId) return null
   const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`
-  const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`
   return (
-    <div style={{ marginTop: '12px' }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={thumbUrl}
-        alt="Design preview"
-        style={{ width: '100%', height: 'auto', marginBottom: '10px', border: '1px solid rgba(255,255,255,0.09)' }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-      />
-      <a href={embedUrl} target="_blank" rel="noopener noreferrer" style={s.viewLink}>VIEW FULL DESIGN →</a>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={thumbUrl}
+      alt="Design preview"
+      style={{ maxWidth: '100%', maxHeight: '440px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', margin: '0 auto' }}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+    />
   )
 }
 
@@ -115,7 +109,107 @@ interface PortalData {
   lineItems: LineItem[]
 }
 
-const PHASES = ['Production','Quality Check','Ready','Delivered']
+const PHASES = ['Production', 'Quality Check', 'Ready', 'Delivered']
+
+const CSS = `
+  .po-outer {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 20px 80px;
+    box-sizing: border-box;
+  }
+  .po-top-grid { display: block; }
+  .po-right { margin-top: 48px; }
+  .po-stat-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .po-stat-row > div { flex: 1; min-width: 140px; }
+  .po-timeline {
+    display: flex;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .po-bottom-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-top: 48px;
+  }
+  .po-questions-row {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .po-headline {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: #f5f1e8;
+    margin-bottom: 10px;
+    margin-top: 4px;
+  }
+  .po-design-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255,255,255,0.09);
+  }
+  .po-brief-group { display: flex; flex-direction: column; gap: 5px; }
+  .po-brief-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    color: #a09488;
+    text-transform: uppercase;
+  }
+  @media (min-width: 640px) {
+    .po-brief-group {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      column-gap: 28px;
+      align-items: start;
+    }
+    .po-brief-label { padding-top: 4px; }
+    .po-design-footer {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+  @media (min-width: 1024px) {
+    .po-outer { max-width: 1540px; padding: 64px 80px 100px; }
+    .po-top-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+      gap: 56px;
+      align-items: start;
+    }
+    .po-right { margin-top: 0; }
+    .po-bottom-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+      gap: 24px;
+    }
+    .po-questions-row {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .po-headline { font-size: 68px; }
+    .po-brief-group {
+      grid-template-columns: 200px 1fr;
+      column-gap: 32px;
+    }
+  }
+`
 
 export default function PortalPage() {
   const [data, setData] = useState<PortalData | null>(null)
@@ -133,277 +227,352 @@ export default function PortalPage() {
   }, [])
 
   if (loading) return (
-    <div style={s.page}><div style={s.singleCol}>
-      <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
-      <div style={s.rule} />
-      <div style={s.mutedText}>Loading your order portal...</div>
-    </div></div>
+    <div style={s.page}>
+      <style>{CSS}</style>
+      <div className="po-outer">
+        <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+        <div style={s.rule} />
+        <div style={s.mutedText}>Loading your order portal...</div>
+      </div>
+    </div>
   )
 
   if (error || !data) return (
-    <div style={s.page}><div style={s.singleCol}>
-      <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
-      <div style={s.tagline}>Made by three, worn by all.</div>
-      <div style={s.rule} />
-      <div style={s.eyebrow}>ERROR</div>
-      <div style={s.headline}>PORTAL NOT FOUND</div>
-      <div style={s.bodyText}>This link may be invalid or expired. Contact your Threefold representative.</div>
-    </div></div>
+    <div style={s.page}>
+      <style>{CSS}</style>
+      <div className="po-outer">
+        <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+        <div style={s.tagline}>Made by three, worn by all.</div>
+        <div style={s.rule} />
+        <div style={s.eyebrow}>ERROR</div>
+        <div className="po-headline">PORTAL NOT FOUND</div>
+        <div style={s.bodyText}>This link may be invalid or expired. Contact your Threefold representative.</div>
+      </div>
+    </div>
   )
 
   const currentPhaseIndex = PHASES.findIndex(p =>
     p.toLowerCase() === (data.currentPhase || data.status || '').toLowerCase()
   )
   const fileUrl = (v: DesignVersion) => v.drive_url || v.file_url || ''
+  const fmtCurrency = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  const totalVal = Number(data.invoiceTotal) || 0
+  const depositVal = Number(data.depositAmount) || 0
+  const balanceVal = Number(data.balanceDue) || 0
+  const depositIsPaid = data.depositPaid === true
+  const isPaidInFull = data.finalPaid === true
+  const hasPayment = totalVal > 0
+  const hasLineItems = (data.lineItems?.length ?? 0) > 0
 
   return (
     <div style={s.page}>
-      <style>{`
-        .p-outer { max-width: 680px; margin: 0 auto; padding: 48px 20px 80px; }
-        .p-grid { display: block; }
-        .p-brief-group { display: flex; flex-direction: column; gap: 5px; }
-        .p-brief-label { font-size: 9px; font-weight: 700; letter-spacing: 0.24em; color: #a09488; text-transform: uppercase; }
-        @media (min-width: 640px) {
-          .p-brief-group { display: grid; grid-template-columns: 180px 1fr; column-gap: 28px; align-items: start; }
-          .p-brief-label { padding-top: 4px; }
-        }
-        @media (min-width: 1024px) {
-          .p-outer { max-width: 1440px; padding: 64px 80px 100px; }
-          .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
-          .p-brief-group { grid-template-columns: 200px 1fr; column-gap: 32px; }
-        }
-      `}</style>
+      <style>{CSS}</style>
 
-      <div className="p-outer">
+      <div className="po-outer">
 
-        <div style={s.headerBlock}>
+        {/* ── HEADER ─────────────────────────────────────────────── */}
+        <div style={{ marginBottom: '8px' }}>
           <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
           <div style={s.tagline}>Made by three, worn by all.</div>
         </div>
-
         <div style={s.rule} />
 
-        <div className="p-grid">
+        {/* ── TOP TWO-COLUMN GRID ────────────────────────────────── */}
+        <div className="po-top-grid">
 
-          {/* LEFT — information column */}
-          <div>
+          {/* LEFT COLUMN */}
+          <div className="po-left">
+            <div style={s.eyebrow}>ORDER PORTAL</div>
+            <div className="po-headline">
+              {(data.clientName || 'Your Order').toUpperCase()}
+            </div>
+            {(data.collectionName || data.orderName) && (
+              <div style={s.subheadline}>
+                {(data.collectionName || data.orderName).toUpperCase()}
+                {data.orderId ? ` — ${data.orderId}` : ''}
+              </div>
+            )}
 
-            <div style={s.section}>
-              <div style={s.eyebrow}>ORDER PORTAL</div>
-              <div style={s.headline}>{(data.clientName || 'Your Order').toUpperCase()}</div>
-              <div style={s.subheadline}>{data.collectionName || data.orderName}</div>
-              {(data.status || data.quantity || data.depositPaid || data.balanceDue || data.lastUpdated) && (
-                <div style={s.summaryStrip}>
-                  {data.status && (
-                    <div style={s.summaryChip}>
-                      <div style={s.summaryChipLabel}>STATUS</div>
-                      <div style={s.summaryChipValue}>{data.status.toUpperCase()}</div>
-                    </div>
-                  )}
-                  {data.quantity && (
-                    <div style={s.summaryChip}>
-                      <div style={s.summaryChipLabel}>QUANTITY</div>
-                      <div style={s.summaryChipValue}>{data.quantity}</div>
-                    </div>
-                  )}
-                  {data.lastUpdated && (
-                    <div style={s.summaryChip}>
-                      <div style={s.summaryChipLabel}>LAST UPDATED</div>
-                      <div style={s.summaryChipValue}>{new Date(data.lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                    </div>
-                  )}
+            {/* Status + Last Updated cards */}
+            <div className="po-stat-row">
+              {data.status && (
+                <div style={s.statCard}>
+                  <div style={s.statCardLabel}>STATUS</div>
+                  <div style={s.statCardValue}>{data.status.toUpperCase()}</div>
+                </div>
+              )}
+              {data.lastUpdated && (
+                <div style={s.statCard}>
+                  <div style={s.statCardLabel}>LAST UPDATED</div>
+                  <div style={s.statCardValue}>
+                    {new Date(data.lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div style={s.rule} />
-
-            <div style={s.section}>
-              <div style={s.eyebrow}>CURRENT STATUS</div>
-              <div style={s.statusRow}>
-                <span style={s.badge}>{(data.currentPhase || data.status || 'IN PROGRESS').toUpperCase()}</span>
-                {data.estimatedDelivery && <span style={s.deliveryText}>Est. Delivery — {data.estimatedDelivery}</span>}
+            {/* Current Status pill */}
+            <div style={{ marginTop: '28px' }}>
+              <div style={s.statCardLabel}>CURRENT STATUS</div>
+              <div style={{ marginTop: '10px' }}>
+                <span style={s.badge}>
+                  <span style={s.badgeDot} />
+                  {(data.currentPhase || data.status || 'IN PROGRESS').toUpperCase()}
+                </span>
               </div>
+              {data.estimatedDelivery && (
+                <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '8px', letterSpacing: '0.04em' }}>
+                  Est. Delivery — {data.estimatedDelivery}
+                </div>
+              )}
             </div>
 
-            <div style={s.rule} />
-
-            <div style={s.section}>
+            {/* Horizontal timeline stepper */}
+            <div style={{ marginTop: '40px' }}>
               <div style={s.eyebrow}>ORDER TIMELINE</div>
-              <div style={s.timeline}>
+              <div className="po-timeline">
                 {PHASES.map((phase, i) => {
                   const done = i < currentPhaseIndex
                   const current = i === currentPhaseIndex
+                  const isLast = i === PHASES.length - 1
+                  const nodeColor = current ? C.gold : done ? C.gold : 'rgba(255,255,255,0.18)'
+                  const nodeBg = current ? C.gold : 'transparent'
+                  const labelColor = current ? C.textPrimary : done ? C.textMuted : 'rgba(255,255,255,0.25)'
+                  const lineColor = done ? C.gold : 'rgba(255,255,255,0.12)'
                   return (
-                    <div key={phase} style={s.timelineRow}>
-                      <span style={{ ...s.timelineNum, color: done || current ? C.gold : C.textMuted }}>
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <span style={{ ...s.timelineLabel, color: done ? C.textMuted : current ? C.textPrimary : 'rgba(255,255,255,0.35)', fontWeight: current ? 700 : 400, textDecoration: done ? 'line-through' : 'none' }}>
-                        {phase.toUpperCase()}
-                      </span>
-                      <span style={s.timelineTick}>{done ? '✓' : current ? '←' : ''}</span>
+                    <div key={phase} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                        {/* Left connector */}
+                        <div style={{ flex: 1, height: '2px', background: i === 0 ? 'transparent' : lineColor }} />
+                        {/* Node circle */}
+                        <div style={{
+                          width: '40px', height: '40px', borderRadius: '50%',
+                          border: `2px solid ${nodeColor}`,
+                          background: nodeBg,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: current ? '#0d0b08' : done ? C.gold : 'rgba(255,255,255,0.3)', letterSpacing: '0.02em' }}>
+                            {i + 1}
+                          </span>
+                        </div>
+                        {/* Right connector */}
+                        <div style={{ flex: 1, height: '2px', background: isLast ? 'transparent' : (done ? C.gold : 'rgba(255,255,255,0.12)') }} />
+                      </div>
+                      <div style={{
+                        fontSize: '10px', fontWeight: current ? 700 : 400,
+                        letterSpacing: '0.14em', color: labelColor,
+                        textAlign: 'center', marginTop: '10px',
+                        textTransform: 'uppercase', lineHeight: 1.4, padding: '0 2px',
+                      }}>
+                        {phase}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             </div>
 
-            {data.clientUpdates?.length > 0 && (<>
-              <div style={s.rule} />
-              <div style={s.section}>
+            {/* Client updates */}
+            {data.clientUpdates?.length > 0 && (
+              <div style={{ marginTop: '48px' }}>
                 <div style={s.eyebrow}>UPDATES</div>
                 {[...data.clientUpdates].sort((a, b) => b.date.localeCompare(a.date)).map((u) => (
                   <div key={u.id} style={s.updateRow}>
-                    <div style={s.updateDate}>{new Date(u.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                    <div style={s.updateDate}>
+                      {new Date(u.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
                     <div style={s.updateText}>{u.text}</div>
                   </div>
                 ))}
               </div>
-            </>)}
-
+            )}
           </div>
 
-          {/* RIGHT — visual column */}
-          <div>
-
+          {/* RIGHT COLUMN — design preview */}
+          <div className="po-right">
             {data.designVersions?.length > 0 && (
-              <div style={s.section}>
+              <>
                 <div style={s.eyebrow}>APPROVED DESIGNS</div>
-                {data.designVersions.map((v, i) => (
-                  <div key={i} style={v.image_signed_url ? s.designCardGallery : s.designCard}>
-                    {/* Uploaded image — full-bleed when available */}
-                    {v.image_signed_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={v.image_signed_url}
-                        alt={`Design preview — ${v.name || `Version ${v.version_number || i + 1}`}`}
-                        style={{ display: 'block', width: '100%', height: 'auto', objectFit: 'contain' as const }}
-                      />
-                    )}
-                    <div style={v.image_signed_url ? s.designCardBody : undefined}>
-                      {v.is_final && (
-                        <div style={{ display: 'inline-block', background: C.green, color: '#0d0b08', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '99px', marginBottom: '8px' }}>
-                          FINAL DESIGN
+                {data.designVersions.map((v, i) => {
+                  const url = fileUrl(v)
+                  return (
+                    <div key={i} style={s.bigDesignCard}>
+                      {/* Image area */}
+                      <div style={s.bigDesignImageArea}>
+                        {v.image_signed_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={v.image_signed_url}
+                            alt={`Design — ${v.name || `Version ${v.version_number || i + 1}`}`}
+                            style={{ maxWidth: '100%', maxHeight: '440px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', margin: '0 auto' }}
+                          />
+                        ) : url ? (
+                          <DriveThumb url={url} />
+                        ) : (
+                          <div style={{ color: C.textMuted, fontSize: '12px', letterSpacing: '0.1em', textAlign: 'center' }}>
+                            NO PREVIEW AVAILABLE
+                          </div>
+                        )}
+                      </div>
+                      {/* Footer */}
+                      <div className="po-design-footer">
+                        <div>
+                          {v.is_final && (
+                            <div style={s.finalBadge}>FINAL DESIGN</div>
+                          )}
+                          <div style={s.bigDesignName}>
+                            {(v.name || `Version ${v.version_number || i + 1}`).toUpperCase()}
+                          </div>
+                          {v.status && (
+                            <div style={s.bigDesignStatus}>{v.status.toUpperCase()}</div>
+                          )}
+                          {v.notes && (
+                            <div style={s.bigDesignNotes}>{v.notes}</div>
+                          )}
                         </div>
-                      )}
-                      <div style={s.designName}>{v.name || `Version ${v.version_number || i + 1}`}</div>
-                      {v.status && <div style={s.designStatusLabel}>{v.status.toUpperCase()}</div>}
-                      {v.notes && <div style={s.designNotes}>{v.notes}</div>}
-                      {/* Drive link: full embed when no uploaded image; plain link when uploaded image is present */}
-                      {v.image_signed_url
-                        ? fileUrl(v) && <a href={fileUrl(v)} target="_blank" rel="noopener noreferrer" style={{ ...s.viewLink, display: 'inline-block', marginTop: '10px' }}>VIEW FULL DESIGN →</a>
-                        : fileUrl(v) && <DriveEmbed url={fileUrl(v)} />
-                      }
+                        {url && (
+                          <a href={url} target="_blank" rel="noopener noreferrer" style={s.viewFullLink}>
+                            VIEW FULL DESIGN →
+                          </a>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  )
+                })}
+              </>
             )}
 
-            {data.clientNotes && (<>
-              <div style={s.rule} />
-              <div style={s.section}>
+            {data.clientNotes && (
+              <div style={{ marginTop: data.designVersions?.length ? '28px' : '0' }}>
                 <div style={s.eyebrow}>NOTES FROM THREEFOLD</div>
                 <div style={s.notesBlock}>{data.clientNotes}</div>
               </div>
-            </>)}
-
+            )}
           </div>
 
         </div>
+        {/* ── END TOP GRID ─────────────────────────────────────────── */}
 
-        {/* Payment Summary — full-width card below grid */}
-        {(() => {
-          const totalVal = Number(data.invoiceTotal) || 0
-          if (!totalVal) return null
-          const depositVal = Number(data.depositAmount) || 0
-          const balanceVal = Number(data.balanceDue) || 0
-          const depositIsPaid = data.depositPaid === true
-          const isPaidInFull = data.finalPaid === true
-          const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          return (<>
-            <div style={s.rule} />
-            <div style={s.section}>
-              <div style={s.eyebrow}>PAYMENT SUMMARY</div>
-              <div style={s.detailList}>
-                <div style={s.detailRow}>
-                  <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
-                  <span style={s.detailVal}>{fmt(totalVal)}</span>
+        {/* ── BOTTOM DASHBOARD CARDS ─────────────────────────────── */}
+        {(hasPayment || hasLineItems) && (
+          <div className="po-bottom-grid">
+
+            {/* Payment Summary card */}
+            {hasPayment && (
+              <div style={s.dashCard}>
+                <div style={s.cardEyebrow}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                  </svg>
+                  PAYMENT SUMMARY
                 </div>
-                <div style={s.detailRow}>
-                  <span style={s.detailKey}>DEPOSIT PAID</span>
-                  <span style={{ ...s.detailVal, color: depositIsPaid ? C.green : undefined }}>
-                    {depositVal > 0 ? fmt(depositVal) : '—'}
-                    {depositIsPaid && <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.14em', marginLeft: '6px' }}>✓</span>}
-                  </span>
-                </div>
-                <div style={s.detailRow}>
-                  <div>
-                    <div style={s.detailKey}>REMAINING PAYMENT</div>
-                    {!isPaidInFull && (
-                      <div style={{ fontSize: '11px', color: C.textMuted, letterSpacing: '0.02em', marginTop: '4px', maxWidth: '260px', lineHeight: 1.5 }}>
-                        Final payment is due once your order is complete and ready for delivery.
-                      </div>
-                    )}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={s.cardRow}>
+                    <span style={s.cardRowLabel}>TOTAL PROJECT VALUE</span>
+                    <span style={s.cardRowValue}>{fmtCurrency(totalVal)}</span>
                   </div>
-                  <span style={{ ...s.detailVal, color: isPaidInFull ? C.green : undefined, flexShrink: 0, marginLeft: '16px' }}>
-                    {isPaidInFull ? 'PAID IN FULL ✓' : fmt(balanceVal)}
-                  </span>
-                </div>
-                <div style={s.detailRow}>
-                  <span style={s.detailKey}>PAYMENT STATUS</span>
-                  <span style={{
-                    ...s.detailVal,
-                    fontSize: '12px',
-                    letterSpacing: '0.1em',
-                    color: isPaidInFull ? C.green : depositIsPaid ? C.gold : C.textPrimary,
-                  }}>
-                    {(data.paymentStatus || 'AWAITING DEPOSIT').toUpperCase()}
-                  </span>
-                </div>
-              </div>
-              {data.stripeInvoiceUrl && (
-                <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
-                  VIEW INVOICE →
-                </a>
-              )}
-            </div>
-          </>)
-        })()}
-
-        {/* Order Breakdown — full-width, only when line items exist */}
-        {data.lineItems?.length > 0 && (() => {
-          const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          return (<>
-            <div style={s.rule} />
-            <div style={s.section}>
-              <div style={s.eyebrow}>ORDER BREAKDOWN</div>
-              <div style={s.detailList}>
-                {data.lineItems.map((li, i) => (
-                  <div key={i} style={s.detailRow}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={s.detailKey}>{li.name.toUpperCase()}</div>
-                      {li.description && (
-                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: '0.04em', marginTop: '2px' }}>
-                          {li.description}
-                        </div>
-                      )}
-                      <div style={{ ...s.detailKey, marginTop: '3px' }}>
-                        {li.quantity} × {fmt(li.unitPrice)}
-                      </div>
-                    </div>
-                    <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: '16px' }}>
-                      {fmt(li.lineTotal)}
+                  <div style={s.cardRow}>
+                    <span style={s.cardRowLabel}>DEPOSIT PAID</span>
+                    <span style={{ ...s.cardRowValue, color: depositIsPaid ? C.green : undefined }}>
+                      {depositVal > 0 ? fmtCurrency(depositVal) : '—'}
+                      {depositIsPaid && <span style={{ fontSize: '13px', marginLeft: '6px' }}>✓</span>}
                     </span>
                   </div>
-                ))}
+                  <div style={s.cardRow}>
+                    <div style={{ flex: 1 }}>
+                      <div style={s.cardRowLabel}>REMAINING PAYMENT</div>
+                      {!isPaidInFull && (
+                        <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '5px', lineHeight: 1.5, maxWidth: '220px' }}>
+                          Final payment is due once your order is complete and ready for delivery.
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ ...s.cardRowValue, flexShrink: 0, marginLeft: '16px', color: isPaidInFull ? C.green : undefined }}>
+                      {isPaidInFull ? 'PAID IN FULL ✓' : fmtCurrency(balanceVal)}
+                    </span>
+                  </div>
+                  <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
+                    <span style={s.cardRowLabel}>PAYMENT STATUS</span>
+                    <span style={{
+                      ...s.cardRowValue,
+                      fontSize: '13px',
+                      letterSpacing: '0.1em',
+                      color: isPaidInFull ? C.green : depositIsPaid ? C.gold : C.textPrimary,
+                    }}>
+                      {(data.paymentStatus || 'AWAITING DEPOSIT').toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                {data.stripeInvoiceUrl && (
+                  <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
+                    VIEW INVOICE →
+                  </a>
+                )}
               </div>
-            </div>
-          </>)
-        })()}
+            )}
 
-        {/* Intake summary — only when snapshot data exists */}
+            {/* Order Breakdown card */}
+            {hasLineItems && (
+              <div style={s.dashCard}>
+                <div style={s.cardEyebrow}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                  </svg>
+                  ORDER BREAKDOWN
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {data.lineItems.map((li, i) => (
+                    <div key={i} style={s.cardRow}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={s.cardRowLabel}>{li.name.toUpperCase()}</div>
+                        {li.description && (
+                          <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>{li.description}</div>
+                        )}
+                        <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>
+                          {li.quantity} × {fmtCurrency(li.unitPrice)}
+                        </div>
+                      </div>
+                      <span style={{ ...s.cardRowValue, flexShrink: 0, marginLeft: '16px' }}>
+                        {fmtCurrency(li.lineTotal)}
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
+                    <span style={{ ...s.cardRowLabel, color: C.textSecondary, fontWeight: 700 }}>ORDER TOTAL</span>
+                    <span style={{ ...s.cardRowValue, color: C.gold, fontSize: '22px' }}>
+                      {fmtCurrency(totalVal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {/* ── QUESTIONS CARD ─────────────────────────────────────── */}
+        <div style={{ marginTop: '24px' }}>
+          <div style={s.questionsCard}>
+            <div className="po-questions-row">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={s.questionsIcon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={s.questionsHeading}>QUESTIONS?</div>
+                  <div style={s.questionsText}>Reach out to your Threefold representative directly.</div>
+                </div>
+              </div>
+              <a href={`mailto:${BUSINESS_EMAIL}`} style={s.btnOutline}>CONTACT THREEFOLD →</a>
+            </div>
+          </div>
+        </div>
+
+        {/* ── INTAKE / BRIEF SUMMARY ─────────────────────────────── */}
         {(() => {
           const snap = data.intakeSummary
           if (!snap) return null
@@ -425,71 +594,65 @@ export default function PortalPage() {
           return (
             <>
               <div style={s.rule} />
-              <div style={s.section}>
+              <div style={{ marginBottom: '4px' }}>
                 <div style={s.eyebrow}>YOUR SUBMITTED BRIEF</div>
-
                 {snap.submitted_at && (
-                  <div style={s.intakeSubmittedDate}>
+                  <div style={{ fontSize: '12px', color: C.textMuted, letterSpacing: '0.06em', marginBottom: '32px' }}>
                     Submitted {new Date(snap.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </div>
                 )}
-
                 {snap.company_description && (
-                  <div style={s.intakeBlock}>
+                  <div style={{ marginBottom: '36px' }}>
                     <div style={s.intakeSubLabel}>COMPANY OVERVIEW</div>
-                    <div style={s.intakeBody}>{snap.company_description}</div>
+                    <div style={{ fontSize: '15px', color: C.textSecondary, lineHeight: 1.75 }}>{snap.company_description}</div>
                   </div>
                 )}
-
                 {orderFields.length > 0 && (
-                  <div style={s.intakeBlock}>
+                  <div style={{ marginBottom: '36px' }}>
                     <div style={s.intakeSubLabel}>ORDER NEEDS</div>
-                    <div style={s.briefFieldList}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       {orderFields.map(([k, v]) => (
-                        <div key={k} className="p-brief-group">
-                          <div className="p-brief-label">{k}</div>
-                          <div style={s.briefFieldAnswer}>{v}</div>
+                        <div key={k} className="po-brief-group">
+                          <div className="po-brief-label">{k}</div>
+                          <div style={{ fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 }}>{v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
                 {designFields.length > 0 && (
-                  <div style={s.intakeBlock}>
+                  <div style={{ marginBottom: '36px' }}>
                     <div style={s.intakeSubLabel}>DESIGN DIRECTION</div>
-                    <div style={s.briefFieldList}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       {designFields.map(([k, v]) => (
-                        <div key={k} className="p-brief-group">
-                          <div className="p-brief-label">{k}</div>
-                          <div style={s.briefFieldAnswer}>{v}</div>
+                        <div key={k} className="po-brief-group">
+                          <div className="po-brief-label">{k}</div>
+                          <div style={{ fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 }}>{v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
                 {snap.notes && (
-                  <div style={s.intakeBlock}>
+                  <div style={{ marginBottom: '36px' }}>
                     <div style={s.intakeSubLabel}>NOTES &amp; INSPIRATION</div>
                     <div style={s.notesBlock}>{snap.notes}</div>
                   </div>
                 )}
-
                 {snap.files.length > 0 && (
-                  <div style={s.intakeBlock}>
+                  <div style={{ marginBottom: '36px' }}>
                     <div style={s.intakeSubLabel}>SUBMITTED FILES</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {snap.files.map(f => (
                         <div key={f.id} style={s.intakeFileRow}>
                           <div style={{ minWidth: 0 }}>
-                            <div style={s.intakeFileName}>{f.name}</div>
-                            <div style={s.intakeFileMeta}>{f.category.toUpperCase()} · {fmtBytes(f.size)}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: C.textPrimary, letterSpacing: '0.02em', marginBottom: '2px' }}>{f.name}</div>
+                            <div style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em' }}>{f.category.toUpperCase()} · {fmtBytes(f.size)}</div>
                           </div>
                           {f.signed_url ? (
-                            <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewLink}>VIEW →</a>
+                            <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewFullLink}>VIEW →</a>
                           ) : (
-                            <span style={{ ...s.intakeFileMeta, flexShrink: 0 }}>Unavailable</span>
+                            <span style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em', flexShrink: 0 }}>Unavailable</span>
                           )}
                         </div>
                       ))}
@@ -501,14 +664,6 @@ export default function PortalPage() {
           )
         })()}
 
-        {/* Footer — full-width */}
-        <div style={s.rule} />
-        <div>
-          <div style={s.eyebrow}>QUESTIONS?</div>
-          <div style={s.bodyText}>Reach out to your Threefold representative directly.</div>
-          <a href={`mailto:${BUSINESS_EMAIL}`} style={s.btnOutline}>CONTACT THREEFOLD →</a>
-        </div>
-
       </div>
     </div>
   )
@@ -517,77 +672,119 @@ export default function PortalPage() {
 const s: Record<string, React.CSSProperties> = {
   // ── Page shell ────────────────────────────────────────────────────────────
   page: { backgroundColor: C.bg, minHeight: '100vh', fontFamily: '"Inter","Helvetica Neue",Arial,sans-serif', color: C.textPrimary },
-  singleCol: { maxWidth: '660px', margin: '0 auto', padding: '64px 20px 96px' },
 
-  // ── Shared base ───────────────────────────────────────────────────────────
-  headerBlock: { marginBottom: '8px' },
+  // ── Header ────────────────────────────────────────────────────────────────
   logo: { fontSize: '13px', fontWeight: 800, letterSpacing: '0.26em', color: C.textPrimary, marginBottom: '4px' },
   tagline: { fontSize: '11px', letterSpacing: '0.08em', color: C.textMuted },
   rule: { height: '1px', backgroundColor: C.border, margin: '40px 0' },
-  section: { marginBottom: '4px' },
-  eyebrow: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.30em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' as const },
-  headline: { fontSize: '52px', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1, textTransform: 'uppercase' as const, color: C.textPrimary, marginBottom: '10px' },
-  subheadline: { fontSize: '16px', fontWeight: 400, color: C.textSecondary, letterSpacing: '0.03em' },
 
-  // ── Status area ──────────────────────────────────────────────────────────
-  statusRow: { display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' as const },
-  badge: { backgroundColor: C.gold, color: '#0d0b08', fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em', padding: '6px 16px' },
-  deliveryText: { fontSize: '13px', color: C.textSecondary, letterSpacing: '0.04em' },
+  // ── Typography ────────────────────────────────────────────────────────────
+  eyebrow: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.30em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' },
+  subheadline: { fontSize: '18px', fontWeight: 400, color: C.textSecondary, letterSpacing: '0.03em', marginTop: '6px' },
+  bodyText: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75, marginBottom: '4px' },
+  notesBlock: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75, borderLeft: `2px solid ${C.gold}`, paddingLeft: '16px' },
+  mutedText: { fontSize: '13px', color: C.textMuted, letterSpacing: '0.05em', marginTop: '16px' },
 
-  // ── Timeline ─────────────────────────────────────────────────────────────
-  timeline: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
-  timelineRow: { display: 'flex', alignItems: 'center', gap: '16px' },
-  timelineNum: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', width: '26px', flexShrink: 0 },
-  timelineLabel: { fontSize: '12px', letterSpacing: '0.18em', flex: 1, color: C.textSecondary },
-  timelineTick: { fontSize: '13px', color: C.gold, width: '20px', textAlign: 'right' as const },
+  // ── Status cards row ──────────────────────────────────────────────────────
+  statCard: {
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '18px 22px',
+  },
+  statCardLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: C.textMuted, textTransform: 'uppercase', marginBottom: '8px' },
+  statCardValue: { fontSize: '18px', fontWeight: 700, color: C.textPrimary },
 
-  // ── Detail rows ──────────────────────────────────────────────────────────
-  detailList: { display: 'flex', flexDirection: 'column' as const },
-  detailRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: `1px solid ${C.border}`, padding: '13px 0' },
-  detailKey: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.20em', color: C.textMuted, textTransform: 'uppercase' as const },
-  detailVal: { fontSize: '15px', fontWeight: 600, color: C.textPrimary },
+  // ── Current status badge ──────────────────────────────────────────────────
+  badge: {
+    display: 'inline-flex', alignItems: 'center', gap: '8px',
+    background: C.gold, color: '#0d0b08',
+    fontSize: '12px', fontWeight: 700, letterSpacing: '0.14em',
+    padding: '10px 20px', borderRadius: '6px',
+  },
+  badgeDot: {
+    width: '8px', height: '8px', borderRadius: '50%',
+    background: 'rgba(0,0,0,0.35)', flexShrink: 0,
+  },
 
-  // ── Buttons ──────────────────────────────────────────────────────────────
-  btnGold: { display: 'inline-block', marginTop: '24px', backgroundColor: C.gold, color: '#0d0b08', fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
-  btnOutline: { display: 'inline-block', marginTop: '16px', border: `1.5px solid ${C.textMuted}`, color: C.textSecondary, fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', padding: '14px 32px', textDecoration: 'none' },
-
-  // ── Summary chips ────────────────────────────────────────────────────────
-  summaryStrip: { display: 'flex', flexWrap: 'wrap' as const, gap: '10px', marginTop: '18px' },
-  summaryChip: { border: `1px solid ${C.border}`, padding: '8px 14px', backgroundColor: C.bgCard },
-  summaryChipLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: C.textMuted, textTransform: 'uppercase' as const, marginBottom: '3px' },
-  summaryChipValue: { fontSize: '13px', fontWeight: 600, color: C.textPrimary },
-
-  // ── Updates ──────────────────────────────────────────────────────────────
-  updateRow: { marginBottom: '18px' },
+  // ── Client updates ────────────────────────────────────────────────────────
+  updateRow: { marginBottom: '20px' },
   updateDate: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.16em', color: C.textMuted, marginBottom: '4px' },
-  updateText: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.7 },
+  updateText: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.7 },
 
-  // ── Design cards ─────────────────────────────────────────────────────────
-  designCard: { border: `1px solid ${C.border}`, padding: '20px', marginBottom: '14px', backgroundColor: C.bgCard },
-  designCardGallery: { border: `1px solid ${C.border}`, marginBottom: '14px', backgroundColor: C.bgElevated, overflow: 'hidden' },
-  designCardBody: { padding: '16px 20px' },
-  designName: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: C.textPrimary, marginBottom: '6px' },
-  designStatusLabel: { fontSize: '10px', letterSpacing: '0.2em', color: C.gold, marginBottom: '8px' },
-  designNotes: { fontSize: '13px', color: C.textSecondary, lineHeight: 1.6, marginBottom: '12px' },
-  viewLink: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: C.textSecondary, textDecoration: 'none', borderBottom: `1px solid ${C.textMuted}`, paddingBottom: '2px' },
+  // ── Design card ───────────────────────────────────────────────────────────
+  bigDesignCard: {
+    background: C.bgElevated, border: `1px solid ${C.border}`, borderRadius: '14px',
+    overflow: 'hidden', marginBottom: '20px',
+  },
+  bigDesignImageArea: {
+    background: '#1c1914', padding: '36px 28px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '280px',
+  },
+  bigDesignName: { fontSize: '15px', fontWeight: 700, letterSpacing: '0.1em', color: C.textPrimary, marginBottom: '5px' },
+  bigDesignStatus: { fontSize: '11px', letterSpacing: '0.18em', color: C.gold, marginBottom: '6px' },
+  bigDesignNotes: { fontSize: '13px', color: C.textSecondary, lineHeight: 1.6, marginTop: '6px' },
+  finalBadge: {
+    display: 'inline-block', background: C.green, color: '#0d0b08',
+    fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em',
+    padding: '3px 10px', borderRadius: '99px', marginBottom: '8px',
+  },
+  viewFullLink: {
+    fontSize: '11px', fontWeight: 700, letterSpacing: '0.16em', color: C.textSecondary,
+    textDecoration: 'none', borderBottom: `1px solid ${C.textMuted}`, paddingBottom: '2px',
+    whiteSpace: 'nowrap', flexShrink: 0,
+  },
 
-  // ── Notes & text ─────────────────────────────────────────────────────────
-  notesBlock: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.75, borderLeft: `2px solid ${C.gold}`, paddingLeft: '16px' },
-  bodyText: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.7, marginBottom: '4px' },
-  mutedText: { fontSize: '12px', color: C.textMuted, letterSpacing: '0.05em', marginTop: '16px' },
-  footerLogo: { fontSize: '10px', fontWeight: 800, letterSpacing: '0.22em', color: C.textMuted, marginBottom: '4px' },
-  footerTagline: { fontSize: '10px', color: C.textMuted, letterSpacing: '0.06em' },
+  // ── Dashboard cards (bottom grid) ─────────────────────────────────────────
+  dashCard: {
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '12px',
+    padding: '28px 32px',
+  },
+  cardEyebrow: {
+    fontSize: '11px', fontWeight: 700, letterSpacing: '0.26em', color: C.gold,
+    textTransform: 'uppercase', marginBottom: '4px',
+    display: 'flex', alignItems: 'center', gap: '8px',
+  },
+  cardRow: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+    borderBottom: `1px solid ${C.border}`, padding: '16px 0',
+  },
+  cardRowLabel: { fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em', color: C.textMuted, textTransform: 'uppercase' },
+  cardRowValue: { fontSize: '18px', fontWeight: 700, color: C.textPrimary },
 
-  // ── Intake / brief ───────────────────────────────────────────────────────
-  intakeSubmittedDate: { fontSize: '11px', color: C.textMuted, letterSpacing: '0.06em', marginBottom: '32px' },
-  intakeBlock: { marginBottom: '36px' },
-  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' as const },
-  intakeBody: { fontSize: '15px', color: C.textSecondary, lineHeight: 1.75 },
-  intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: `1px solid ${C.border}`, padding: '12px 16px', backgroundColor: C.bgCard },
-  intakeFileName: { fontSize: '13px', fontWeight: 600, color: C.textPrimary, letterSpacing: '0.02em', marginBottom: '2px' },
-  intakeFileMeta: { fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em' },
-  briefFieldList: { display: 'flex', flexDirection: 'column' as const, gap: '20px' },
-  briefFieldGroup: { display: 'flex', flexDirection: 'column' as const, gap: '5px' },
-  briefFieldLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: C.textMuted, textTransform: 'uppercase' as const },
-  briefFieldAnswer: { fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 },
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  btnGold: {
+    display: 'inline-block', marginTop: '24px',
+    backgroundColor: C.gold, color: '#0d0b08',
+    fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em',
+    padding: '15px 36px', textDecoration: 'none', borderRadius: '4px',
+  },
+  btnOutline: {
+    display: 'inline-block',
+    border: '1.5px solid rgba(255,255,255,0.3)', color: C.textSecondary,
+    fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em',
+    padding: '15px 36px', textDecoration: 'none', borderRadius: '4px',
+    flexShrink: 0, whiteSpace: 'nowrap',
+  },
+
+  // ── Questions card ─────────────────────────────────────────────────────────
+  questionsCard: {
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '12px',
+    padding: '28px 32px',
+  },
+  questionsIcon: {
+    width: '48px', height: '48px', borderRadius: '50%',
+    background: 'rgba(212,163,38,0.15)', border: `1px solid ${C.borderGold}`,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: C.gold, flexShrink: 0,
+  },
+  questionsHeading: {
+    fontSize: '18px', fontWeight: 800, letterSpacing: '0.12em',
+    color: C.textPrimary, textTransform: 'uppercase', marginBottom: '6px',
+  },
+  questionsText: { fontSize: '14px', color: C.textSecondary, lineHeight: 1.6 },
+
+  // ── Intake / brief ────────────────────────────────────────────────────────
+  intakeSubLabel: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', color: C.gold, marginBottom: '16px', textTransform: 'uppercase' },
+  intakeFileRow: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
+    border: `1px solid ${C.border}`, padding: '12px 16px', backgroundColor: C.bgCard, borderRadius: '6px',
+  },
 }
