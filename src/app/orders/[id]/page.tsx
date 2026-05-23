@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, RotateCcw, Trash2, User } from "lucide-react";
+import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, RotateCcw, Send, Trash2, User } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -18,6 +18,7 @@ import {
   SmartSearchInput,
 } from "@/components/orders/OrderFormShared";
 import PortalSection from "@/components/PortalSection";
+import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
 import type { QuestionnaireFile } from "@/components/crm/types";
 import { parseAmount } from "@/lib/invoiceCalc";
 
@@ -89,6 +90,7 @@ type Invoice = {
   client: string;
   client_name?: string;
   client_id?: string;
+  client_email?: string;
   orderName: string;
   order_id?: string;
   order_name?: string;
@@ -355,6 +357,7 @@ export default function OrderDetailPage() {
   const [portalCopied, setPortalCopied] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [generatingInvoicePreview, setGeneratingInvoicePreview] = useState(false);
+  const [sendInvoiceOpen, setSendInvoiceOpen] = useState(false);
 
   // Timeline
   const [stageSaving, setStageSaving] = useState(false);
@@ -1210,6 +1213,22 @@ export default function OrderDetailPage() {
               </span>
             </div>
           )}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setSendInvoiceOpen(true)}
+              disabled={invoice.final_paid}
+              title={invoice.final_paid ? "Invoice is already paid in full" : "Send final invoice email to client"}
+              className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold transition ${
+                invoice.final_paid
+                  ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <Send className="h-3.5 w-3.5 shrink-0" />
+              Send Final Invoice
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1623,6 +1642,13 @@ export default function OrderDetailPage() {
 
       {/* Internal Notes — full-width below Client Portal for all order types */}
       {InternalNotesSection}
+
+      {/* Send final invoice modal */}
+      <SendFinalInvoiceModal
+        open={sendInvoiceOpen}
+        invoice={invoice ?? null}
+        onClose={() => setSendInvoiceOpen(false)}
+      />
 
       {/* Edit order modal (preserved exactly) */}
       {orderDraft && (
