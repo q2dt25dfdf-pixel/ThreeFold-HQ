@@ -105,6 +105,7 @@ type InvoiceRecord = {
   client: string;
   client_id?: string;
   client_name?: string;
+  client_email?: string;
   orderName: string;
   order_name?: string;
   order_id?: string;
@@ -558,6 +559,7 @@ function CRMContent() {
       client: lead.company,
       client_id: clientId,
       client_name: lead.company,
+      client_email: lead.email ?? "",
       orderName,
       order_name: orderName,
       order_id: orderId,

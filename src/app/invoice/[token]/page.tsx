@@ -17,7 +17,6 @@ interface InvoiceData {
   final_paid_date: string | null;
   final_due_date: string | null;
   status: string;
-  notes: string;
 }
 
 function fmt(amount: number) {
@@ -197,7 +196,7 @@ export default function InvoicePage() {
           </div>
         </div>
 
-        {/* Right: how to pay + notes + contact */}
+        {/* Right: how to pay */}
         <div className="portal-col-side">
           {isPaidInFull ? (
             <div style={s.section}>
@@ -211,41 +210,44 @@ export default function InvoicePage() {
             <div style={s.section}>
               <div style={s.eyebrow}>HOW TO PAY</div>
 
+              {/* Stripe — coming soon */}
+              <div style={s.stripeBlock}>
+                <div style={s.altLabel}>PAY ONLINE — STRIPE</div>
+                <div style={s.bodyText}>Online payment for your final balance is coming soon.</div>
+                <button disabled style={s.btnPayDisabled}>
+                  PAY REMAINING BALANCE →
+                </button>
+              </div>
+
               {/* Check */}
-              <div style={s.altLabel}>CHECK</div>
-              <div style={s.bodyText}>Make checks payable to:</div>
-              <div style={s.checkPayee}>ThreeFold Supply Co.</div>
-              <div style={{ ...s.bodyText, marginTop: "12px" }}>Mail checks to:</div>
-              <div style={s.checkAddress}>
-                1957 California St Apt 6<br />
-                Mountain View, CA 94040
+              <div style={s.altHeader}>OTHER PAYMENT OPTIONS</div>
+              <div style={s.checkBlock}>
+                <div style={s.altLabel}>CHECK</div>
+                <div style={s.bodyText}>Make checks payable to:</div>
+                <div style={s.checkPayee}>ThreeFold Supply Co.</div>
+                <div style={{ ...s.bodyText, marginTop: "16px" }}>Mail checks to:</div>
+                <div style={s.checkAddress}>
+                  1957 California St Apt 6<br />
+                  Mountain View, CA 94040
+                </div>
               </div>
             </div>
           )}
-
-          {data.notes && (
-            <>
-              <div className="col-rule" />
-              <div style={s.section}>
-                <div style={s.eyebrow}>NOTES</div>
-                <div style={s.notesBlock}>{data.notes}</div>
-              </div>
-            </>
-          )}
-
-          <div className="col-rule" />
-          <div style={s.eyebrow}>QUESTIONS?</div>
-          <div style={s.bodyText}>
-            Reach out to your Threefold representative directly.
-          </div>
-          <a
-            href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice — ${data.order_name || data.client_name}`}
-            style={s.btnOutline}
-          >
-            CONTACT THREEFOLD →
-          </a>
         </div>
       </div>
+
+      {/* Full-width: Questions */}
+      <div style={s.rule} />
+      <div style={s.eyebrow}>QUESTIONS?</div>
+      <div style={s.bodyText}>
+        Reach out to your Threefold representative directly.
+      </div>
+      <a
+        href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice — ${data.order_name || data.client_name}`}
+        style={s.btnOutline}
+      >
+        CONTACT THREEFOLD →
+      </a>
 
       {/* Full-width footer */}
       <div style={s.rule} />
@@ -352,6 +354,41 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     letterSpacing: "0.14em",
     color: "#1a5c3a",
+  },
+  stripeBlock: {
+    border: "1px solid #DDD6CB",
+    backgroundColor: "#F5F5F5",
+    padding: "20px 20px 24px",
+    marginBottom: "24px",
+  },
+  btnPayDisabled: {
+    display: "block",
+    width: "100%",
+    backgroundColor: "#BDBDBD",
+    color: "#fff",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.22em",
+    padding: "16px 32px",
+    border: "none",
+    cursor: "not-allowed",
+    textAlign: "center" as const,
+    marginTop: "12px",
+    opacity: 0.7,
+  },
+  altHeader: {
+    fontSize: "9px",
+    fontWeight: 700,
+    letterSpacing: "0.24em",
+    color: "#9B9084",
+    marginBottom: "16px",
+    marginTop: "32px",
+    textTransform: "uppercase" as const,
+  },
+  checkBlock: {
+    border: "1px solid #DDD6CB",
+    backgroundColor: "#FAF7F2",
+    padding: "20px 20px 24px",
   },
   altLabel: {
     fontSize: "10px",

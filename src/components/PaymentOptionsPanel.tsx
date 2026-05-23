@@ -5,7 +5,6 @@ interface PaymentOptionsPanelProps {
   onPayStripe: () => void;
   checkoutLoading: boolean;
   checkoutError?: string;
-  paymentInstructions?: string;
 }
 
 function fmt(amount: number) {
@@ -21,7 +20,6 @@ export default function PaymentOptionsPanel({
   onPayStripe,
   checkoutLoading,
   checkoutError,
-  paymentInstructions,
 }: PaymentOptionsPanelProps) {
   return (
     <div>
@@ -57,25 +55,16 @@ export default function PaymentOptionsPanel({
 
       {/* Check */}
       <div style={s.altHeader}>OTHER PAYMENT OPTIONS</div>
-      <div style={s.altBlock}>
+      <div style={s.checkBlock}>
         <div style={s.altLabel}>CHECK</div>
         <div style={s.optionBody}>Make checks payable to:</div>
         <div style={s.checkPayee}>ThreeFold Supply Co.</div>
-        <div style={{ ...s.optionBody, marginTop: "12px" }}>Mail checks to:</div>
+        <div style={{ ...s.optionBody, marginTop: "16px" }}>Mail checks to:</div>
         <div style={s.checkAddress}>
           1957 California St Apt 6<br />
           Mountain View, CA 94040
         </div>
       </div>
-
-      {/* Optional payment notes from the deposit record */}
-      {paymentInstructions && (
-        <>
-          <div style={{ height: "1px", backgroundColor: "#DDD6CB", margin: "28px 0 20px" }} />
-          <div style={s.eyebrow}>PAYMENT NOTES</div>
-          <div style={s.notesBlock}>{paymentInstructions}</div>
-        </>
-      )}
     </div>
   );
 }
@@ -143,8 +132,10 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: "16px",
     textTransform: "uppercase" as const,
   },
-  altBlock: {
-    paddingBottom: "16px",
+  checkBlock: {
+    border: "1px solid #DDD6CB",
+    backgroundColor: "#FAF7F2",
+    padding: "20px 20px 24px",
   },
   altLabel: {
     fontSize: "10px",

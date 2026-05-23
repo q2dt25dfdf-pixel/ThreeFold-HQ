@@ -60,6 +60,7 @@ export async function GET(
     quantity: d.quantity || '',
     items: Array.isArray(d.items) ? d.items.join(', ') : d.items || '',
     invoiceTotal: d.invoice_total || d.amount || '',
+    depositAmount: d.deposit_amount || '',
     depositPaid: d.deposit_paid || '',
     balanceDue: d.balance_due || '',
     stripeInvoiceUrl: d.stripe_invoice_url || '',

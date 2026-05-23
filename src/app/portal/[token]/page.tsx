@@ -92,6 +92,7 @@ interface PortalData {
   quantity: string | number
   items: string
   invoiceTotal: string | number
+  depositAmount: string | number
   depositPaid: string | number | boolean
   balanceDue: string | number
   stripeInvoiceUrl: string
@@ -252,10 +253,12 @@ export default function PortalPage() {
             {(() => {
               const totalVal = Number(data.invoiceTotal) || 0
               if (!totalVal) return null
+              const depositVal = Number(data.depositAmount) || 0
               const balanceVal = Number(data.balanceDue) || 0
               const depositIsPaid = data.depositPaid === true
               const hasBalance = balanceVal > 0
               const isPaidInFull = depositIsPaid && !hasBalance
+              const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
               return (<>
                 <div style={s.rule} />
                 <div style={s.section}>
@@ -263,19 +266,34 @@ export default function PortalPage() {
                   <div style={s.detailList}>
                     <div style={s.detailRow}>
                       <span style={s.detailKey}>TOTAL ORDER VALUE</span>
-                      <span style={s.detailVal}>${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span style={s.detailVal}>{fmt(totalVal)}</span>
                     </div>
-                    {depositIsPaid && (
-                      <div style={s.detailRow}>
+                    <div style={s.detailRow}>
+                      <div>
                         <span style={s.detailKey}>DEPOSIT</span>
-                        <span style={{ ...s.detailVal, color: '#1a6644' }}>PAID ✓</span>
                       </div>
-                    )}
+                      <div style={{ textAlign: 'right' as const }}>
+                        {depositVal > 0 && <div style={s.detailVal}>{fmt(depositVal)}</div>}
+                        {depositIsPaid && (
+                          <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.14em', color: '#1a6644', marginTop: '2px' }}>PAID ✓</div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={s.detailRow}>
+                      <span style={{ ...s.detailKey, color: isPaidInFull ? '#1a6644' : '#0a0a0a', fontWeight: 700 }}>
+                        BALANCE REMAINING
+                      </span>
+                      {isPaidInFull ? (
+                        <span style={{ ...s.detailVal, color: '#1a6644' }}>PAID IN FULL ✓</span>
+                      ) : (
+                        <span style={{ ...s.detailVal, fontSize: '16px' }}>{fmt(balanceVal)}</span>
+                      )}
+                    </div>
                   </div>
                   {hasBalance && (
                     <div style={s.paymentCalloutBalance}>
                       <span style={{ ...s.paymentCalloutLabel, color: '#7A4A00' }}>BALANCE DUE</span>
-                      <span style={s.paymentCalloutAmountBalance}>${balanceVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span style={s.paymentCalloutAmountBalance}>{fmt(balanceVal)}</span>
                     </div>
                   )}
                   {isPaidInFull && (

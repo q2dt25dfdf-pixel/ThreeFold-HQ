@@ -32,7 +32,6 @@ export async function GET(
       final_paid_date: (raw.final_paid_date ?? null) as string | null,
       final_due_date: (raw.final_due_date ?? null) as string | null,
       status: (raw.status ?? "Draft") as string,
-      notes: (raw.notes ?? "") as string,
     };
 
     return NextResponse.json(clientSafe);

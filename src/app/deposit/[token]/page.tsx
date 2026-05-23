@@ -277,7 +277,6 @@ export default function DepositPage() {
                 onPayStripe={() => void handlePayDeposit()}
                 checkoutLoading={checkoutLoading}
                 checkoutError={checkoutError || undefined}
-                paymentInstructions={data.payment_instructions || undefined}
               />
             </div>
           )}
