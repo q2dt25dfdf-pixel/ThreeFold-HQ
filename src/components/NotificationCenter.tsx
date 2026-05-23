@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, Check, X } from 'lucide-react'
+import { Bell, Check, Loader2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useSupabaseTable } from '@/lib/useSupabaseTable'
 
@@ -17,6 +17,8 @@ type Notification = {
   read: boolean
   read_at: string | null
 }
+
+const MAX_VISIBLE_TOASTS = 4
 
 function entityRoute(entity_type: string, entity_id: string): string | null {
   const routes: Record<string, string> = {
@@ -41,28 +43,24 @@ export default function NotificationCenter() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [toasts, setToasts] = useState<Notification[]>([])
 
-  // ISO timestamp of component mount — used to distinguish pre-existing vs genuinely new notifications
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const { data: notifications, upsertItem, setData } = useSupabaseTable<Notification>('notifications', [])
+  const { data: notifications, loading, upsertItem, setData } = useSupabaseTable<Notification>('notifications', [])
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Detect new notifications and queue them as toasts
   useEffect(() => {
     notifications.forEach(n => {
       if (seenIds.current.has(n.id)) return
       seenIds.current.add(n.id)
-      // Only toast notifications created after this tab opened
       if (n.created_at > mountTime.current) {
         setToasts(prev => [n, ...prev])
       }
     })
   }, [notifications])
 
-  // Close panel when clicking outside
   useEffect(() => {
     if (!panelOpen) return
     function handleClick(e: MouseEvent) {
@@ -107,8 +105,14 @@ export default function NotificationCenter() {
 
   if (!mounted) return null
 
+  const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS)
+  const hiddenToastCount = toasts.length - visibleToasts.length
+
   return createPortal(
     <>
+      {/* Spin keyframe for loading indicator */}
+      <style>{`@keyframes notif-spin { to { transform: rotate(360deg) } }`}</style>
+
       {/* ── Bell + panel ─────────────────────────────────────────────── */}
       <div
         ref={panelRef}
@@ -161,20 +165,23 @@ export default function NotificationCenter() {
           )}
         </button>
 
-        {/* Dropdown panel */}
+        {/* Dropdown panel — fixed so it never clips on mobile */}
         {panelOpen && (
           <div
             style={{
-              position: 'absolute',
-              top: '48px',
-              right: 0,
-              width: '320px',
-              maxWidth: 'calc(100vw - 2rem)',
+              position: 'fixed',
+              top: '60px',
+              right: '1rem',
+              width: 'min(320px, calc(100vw - 2rem))',
+              maxHeight: 'calc(100dvh - 80px)',
               background: '#0f172a',
               border: '1px solid #1e293b',
               borderRadius: '16px',
               boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)',
+              display: 'flex',
+              flexDirection: 'column',
               overflow: 'hidden',
+              zIndex: 60001,
             }}
           >
             {/* Panel header */}
@@ -185,114 +192,199 @@ export default function NotificationCenter() {
                 justifyContent: 'space-between',
                 padding: '12px 16px',
                 borderBottom: '1px solid #1e293b',
+                flexShrink: 0,
               }}
             >
               <span style={{ fontSize: '13px', fontWeight: 700, color: 'white', letterSpacing: '0.01em' }}>
                 Notifications
               </span>
-              {unreadCount > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void markAllRead()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <Check size={11} />
+                    Mark all read
+                  </button>
+                )}
+                {/* Close button — visible and easy to tap on mobile */}
                 <button
                   type="button"
-                  onClick={() => void markAllRead()}
+                  onClick={() => setPanelOpen(false)}
+                  aria-label="Close notifications"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
+                    justifyContent: 'center',
+                    width: '28px',
+                    height: '28px',
                     background: 'none',
                     border: 'none',
-                    color: '#94a3b8',
-                    fontSize: '11px',
-                    fontWeight: 600,
+                    color: '#475569',
                     cursor: 'pointer',
-                    padding: '4px 8px',
                     borderRadius: '8px',
                   }}
                 >
-                  <Check size={11} />
-                  Mark all read
+                  <X size={14} />
                 </button>
-              )}
+              </div>
             </div>
 
-            {/* Notification list */}
-            <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
-              {sorted.length === 0 ? (
-                <div style={{ padding: '32px 16px', textAlign: 'center', color: '#475569', fontSize: '13px' }}>
+            {/* Panel body */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {loading ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '32px 16px',
+                    color: '#475569',
+                  }}
+                >
+                  <Loader2 size={18} style={{ animation: 'notif-spin 1s linear infinite' }} />
+                </div>
+              ) : sorted.length === 0 ? (
+                <div
+                  style={{
+                    padding: '32px 16px',
+                    textAlign: 'center',
+                    color: '#475569',
+                    fontSize: '13px',
+                  }}
+                >
                   No notifications yet
                 </div>
               ) : (
-                sorted.map((n, i) => {
-                  const route = entityRoute(n.entity_type, n.entity_id)
-                  const isLast = i === sorted.length - 1
-                  return (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => void handlePanelItemClick(n)}
-                      disabled={!route}
+                <>
+                  {unreadCount === 0 && (
+                    <div
                       style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: '12px 16px',
-                        textAlign: 'left',
-                        background: n.read ? 'transparent' : 'rgba(255,255,255,0.04)',
-                        border: 'none',
-                        borderBottom: isLast ? 'none' : '1px solid #1e293b',
-                        cursor: route ? 'pointer' : 'default',
+                        padding: '8px 16px 4px',
+                        textAlign: 'center',
+                        color: '#334155',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                        {!n.read && (
-                          <span
-                            style={{
-                              marginTop: '5px',
-                              flexShrink: 0,
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              background: '#f87171',
-                              display: 'block',
-                            }}
-                          />
-                        )}
-                        <div style={{ minWidth: 0, paddingLeft: n.read ? '14px' : 0 }}>
-                          <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'white' }}>
-                            {n.title}
-                          </p>
-                          <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {n.message}
-                          </p>
-                          <p style={{ margin: '4px 0 0', fontSize: '10px', color: '#475569' }}>
-                            {timeAgo(n.created_at)}
-                          </p>
+                      All caught up
+                    </div>
+                  )}
+                  {sorted.map((n, i) => {
+                    const route = entityRoute(n.entity_type, n.entity_id)
+                    const isLast = i === sorted.length - 1
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => void handlePanelItemClick(n)}
+                        disabled={!route}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          padding: '12px 16px',
+                          textAlign: 'left',
+                          background: n.read ? 'transparent' : 'rgba(255,255,255,0.04)',
+                          border: 'none',
+                          borderBottom: isLast ? 'none' : '1px solid #1e293b',
+                          cursor: route ? 'pointer' : 'default',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          {!n.read && (
+                            <span
+                              style={{
+                                marginTop: '5px',
+                                flexShrink: 0,
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                background: '#f87171',
+                                display: 'block',
+                              }}
+                            />
+                          )}
+                          <div style={{ minWidth: 0, paddingLeft: n.read ? '14px' : 0 }}>
+                            <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'white' }}>
+                              {n.title}
+                            </p>
+                            <p
+                              style={{
+                                margin: '2px 0 0',
+                                fontSize: '11px',
+                                color: '#94a3b8',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {n.message}
+                            </p>
+                            <p style={{ margin: '4px 0 0', fontSize: '10px', color: '#475569' }}>
+                              {timeAgo(n.created_at)}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  )
-                })
+                      </button>
+                    )
+                  })}
+                </>
               )}
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Toast stack ───────────────────────────────────────────────── */}
-      {toasts.length > 0 && (
+      {/* ── Toast stack — bottom-right, max 4 visible ─────────────────── */}
+      {visibleToasts.length > 0 && (
         <div
           style={{
             position: 'fixed',
-            top: '64px',
+            bottom: '24px',
             right: '1rem',
             zIndex: 59999,
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
-            width: '320px',
-            maxWidth: 'calc(100vw - 2rem)',
+            width: 'min(320px, calc(100vw - 2rem))',
             pointerEvents: 'none',
           }}
         >
-          {toasts.map(t => (
+          {hiddenToastCount > 0 && (
+            <div
+              style={{
+                padding: '8px 14px',
+                background: '#1e293b',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#94a3b8',
+                textAlign: 'center',
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+              }}
+              onClick={() => setToasts([])}
+            >
+              +{hiddenToastCount} more · dismiss all
+            </div>
+          )}
+          {visibleToasts.map(t => (
             <div
               key={t.id}
               style={{
@@ -342,7 +434,16 @@ export default function NotificationCenter() {
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
                   {t.title}
                 </p>
-                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <p
+                  style={{
+                    margin: '2px 0 0',
+                    fontSize: '12px',
+                    color: '#64748b',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {t.message}
                 </p>
               </button>
