@@ -9,7 +9,7 @@ type DashboardHeroProps = {
 export default function DashboardHero({ todayLabel }: DashboardHeroProps) {
   return (
     <section
-      className="relative -mx-4 -mt-20 min-h-[420px] overflow-hidden rounded-none border border-slate-800/80 bg-[#020817] px-5 pb-7 pt-24 text-white shadow-[0_30px_90px_rgba(2,8,23,0.34)] sm:-mx-6 sm:min-h-[440px] md:mx-0 md:mt-0 md:aspect-[5/2] md:min-h-[380px] md:max-h-[600px] md:rounded-[2.25rem] md:px-12 md:py-10"
+      className="relative -mx-4 -mt-20 min-h-[420px] overflow-hidden rounded-none border border-slate-800/80 bg-[#020817] px-5 pb-7 pt-24 text-white shadow-[0_30px_90px_rgba(2,8,23,0.34)] sm:-mx-6 sm:min-h-[440px] md:mx-0 md:mt-0 md:w-full md:aspect-[5/2] md:min-h-[380px] md:rounded-[2.25rem] md:px-12 md:py-10"
       aria-label="Threefold operations dashboard hero"
     >
       <Image
