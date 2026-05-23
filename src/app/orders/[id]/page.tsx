@@ -326,6 +326,42 @@ export default function OrderDetailPage() {
     return byId || byName;
   });
 
+  // Authoritative amounts cross-referenced from deposit request
+  const [authAmounts, setAuthAmounts] = useState<{ total: number; deposit: number; balance: number } | null>(null);
+
+  useEffect(() => {
+    const depositRequestId =
+      ((invoice as Record<string, unknown> | undefined)?.deposit_request_id as string | undefined) ||
+      ((order as Record<string, unknown> | undefined)?.deposit_request_id as string | undefined);
+
+    if (depositRequestId) {
+      void supabase
+        .from("deposit_requests")
+        .select("data")
+        .eq("id", depositRequestId)
+        .limit(1)
+        .then(({ data: rows }) => {
+          if (rows && rows.length > 0) {
+            const dep = rows[0].data as Record<string, unknown>;
+            const t = parseAmount(dep.total_amount);
+            const d = parseAmount(dep.deposit_amount) > 0 ? parseAmount(dep.deposit_amount) : t * 0.5;
+            if (t > 0) { setAuthAmounts({ total: t, deposit: d, balance: Math.max(t - d, 0) }); return; }
+          }
+          // Deposit request missing or has no total — fall back to stored values
+          const t = parseAmount(invoice?.total_amount) || parseAmount((order as Record<string, unknown> | undefined)?.amount as unknown) || 0;
+          const d = parseAmount(invoice?.deposit_amount) > 0 ? parseAmount(invoice?.deposit_amount) : t * 0.5;
+          setAuthAmounts({ total: t, deposit: d, balance: Math.max(t - d, 0) });
+        });
+    } else if (invoice || order) {
+      const t = parseAmount(invoice?.total_amount) || parseAmount((order as Record<string, unknown> | undefined)?.amount as unknown) || 0;
+      const d = parseAmount(invoice?.deposit_amount) > 0 ? parseAmount(invoice?.deposit_amount) : t * 0.5;
+      setAuthAmounts({ total: t, deposit: d, balance: Math.max(t - d, 0) });
+    } else {
+      setAuthAmounts(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice?.id, order?.id]);
+
   // Edit modal state (preserved exactly)
   const [orderDraft, setOrderDraft] = useState<Order | null>(null);
   const [editAmountCents, setEditAmountCents] = useState("");
@@ -665,9 +701,9 @@ export default function OrderDetailPage() {
 
   const currentStageIndex = statusToStageIndex(order.status);
   const commButtons = buildCommButtons(order);
-  const totalAmount = parseAmount(invoice?.total_amount);
-  const depositAmount = parseAmount(invoice?.deposit_amount);
-  const balanceRemaining = parseAmount(invoice?.balance_remaining);
+  const totalAmount = authAmounts?.total ?? parseAmount(invoice?.total_amount);
+  const depositAmount = authAmounts?.deposit ?? parseAmount(invoice?.deposit_amount);
+  const balanceRemaining = authAmounts?.balance ?? parseAmount(invoice?.balance_remaining);
   const activeVersions = designVersionDrafts
     .filter((v) => !v.archived)
     .sort((a, b) => {
@@ -713,8 +749,27 @@ export default function OrderDetailPage() {
     }
     setCreatingInvoice(true);
     const clientName = linkedClient?.name || order.client || "";
-    const total = Number(order.amount) || 0;
-    const deposit = total * 0.5;
+
+    // Use authoritative amounts from deposit request when available; fall back to order.amount
+    let total = authAmounts?.total || Number(order.amount) || 0;
+    let deposit = authAmounts?.deposit || total * 0.5;
+
+    const orderDepositRequestId = (order as Record<string, unknown>).deposit_request_id as string | undefined;
+    if (!authAmounts && orderDepositRequestId) {
+      const { data: depRows } = await supabase
+        .from("deposit_requests")
+        .select("data")
+        .eq("id", orderDepositRequestId)
+        .limit(1);
+      if (depRows && depRows.length > 0) {
+        const dep = depRows[0].data as Record<string, unknown>;
+        const t = parseAmount(dep.total_amount);
+        const d = parseAmount(dep.deposit_amount);
+        if (t > 0) total = t;
+        if (d > 0) deposit = d;
+      }
+    }
+
     const newInvoice: Invoice = {
       id: `invoice-${Date.now()}`,
       client: clientName,
@@ -726,7 +781,7 @@ export default function OrderDetailPage() {
       total_amount: total,
       deposit_amount: deposit,
       deposit_paid: false,
-      balance_remaining: deposit,
+      balance_remaining: Math.max(total - deposit, 0),
       final_paid: false,
       status: "Draft",
       notes: "",
