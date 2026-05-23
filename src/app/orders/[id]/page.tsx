@@ -354,6 +354,7 @@ export default function OrderDetailPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [portalCopied, setPortalCopied] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [generatingInvoicePreview, setGeneratingInvoicePreview] = useState(false);
 
   // Timeline
   const [stageSaving, setStageSaving] = useState(false);
@@ -683,6 +684,24 @@ export default function OrderDetailPage() {
     ? (typeof window !== "undefined" ? window.location.origin : "") + `/portal/${portalToken}`
     : null;
 
+  const openInvoicePreview = async () => {
+    if (!invoice || generatingInvoicePreview) return;
+    setGeneratingInvoicePreview(true);
+    try {
+      const res = await fetch("/api/invoice/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      });
+      const d = await res.json() as { publicLink?: string; error?: string };
+      if (d.publicLink) window.open(d.publicLink, "_blank");
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setGeneratingInvoicePreview(false);
+    }
+  };
+
   const createAndOpenInvoice = async () => {
     // If an invoice already exists, open it directly instead of creating a duplicate.
     if (invoice) {
@@ -750,6 +769,22 @@ export default function OrderDetailPage() {
         >
           <FileText className="h-3.5 w-3.5 shrink-0" />
           {creatingInvoice ? "Creating…" : invoice ? "Open Invoice" : "Create Invoice"}
+        </button>
+
+        {/* Preview Invoice */}
+        <button
+          type="button"
+          disabled={!invoice || generatingInvoicePreview}
+          title={!invoice ? "Create an invoice first" : "Preview the client-facing invoice page"}
+          onClick={() => void openInvoicePreview()}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold transition md:min-h-0 ${
+            !invoice || generatingInvoicePreview
+              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+          }`}
+        >
+          <Eye className="h-3.5 w-3.5 shrink-0" />
+          {generatingInvoicePreview ? "Opening…" : "Preview Invoice"}
         </button>
 
         {/* Copy Portal Link */}
