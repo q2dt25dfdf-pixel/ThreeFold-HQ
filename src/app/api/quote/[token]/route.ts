@@ -25,7 +25,7 @@ export async function GET(
       line_items: raw.line_items ?? null,
       total_amount: raw.total_amount,
       expiration_date: raw.expiration_date,
-      notes: raw.notes,
+      notes: raw.notes === "No additional notes yet." ? "" : (raw.notes ?? ""),
       status: raw.status,
       created_at: raw.created_at,
     };

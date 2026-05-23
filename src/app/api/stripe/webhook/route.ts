@@ -69,13 +69,58 @@ async function updateDepositRequest(
     .eq("id", depositRequestId);
 }
 
-async function handleSessionCompleted(session: CheckoutSession) {
-  const depositRequestId = session.metadata?.deposit_request_id;
-  if (!depositRequestId) return;
+async function updateFinanceRecord(
+  financeId: string,
+  fields: Record<string, unknown>,
+) {
+  const db = getSupabaseAdmin();
+  const { data: rows } = await db
+    .from("finances")
+    .select("id,data")
+    .eq("id", financeId)
+    .limit(1);
 
+  if (!rows || rows.length === 0) return;
+
+  const existing = rows[0].data as Record<string, unknown>;
+  const updated = { ...existing, ...fields };
+
+  await db
+    .from("finances")
+    .update({ data: updated })
+    .eq("id", financeId);
+}
+
+async function handleSessionCompleted(session: CheckoutSession) {
   const paymentIntentId = typeof session.payment_intent === "string"
     ? session.payment_intent
     : null;
+
+  const financeId = session.metadata?.finance_id;
+  if (financeId) {
+    const paidAt = new Date().toISOString();
+    if (session.payment_status === "paid") {
+      await updateFinanceRecord(financeId, {
+        final_paid: true,
+        final_paid_date: paidAt.slice(0, 10),
+        balance_remaining: 0,
+        status: "Paid",
+        stripe_final_session_id: session.id,
+        stripe_final_payment_intent_id: paymentIntentId,
+        final_paid_at: paidAt,
+      });
+    } else {
+      await updateFinanceRecord(financeId, {
+        stripe_final_session_id: session.id,
+        stripe_final_payment_intent_id: paymentIntentId,
+        final_payment_initiated_at: paidAt,
+      });
+    }
+    return;
+  }
+
+  const depositRequestId = session.metadata?.deposit_request_id;
+  if (!depositRequestId) return;
 
   if (session.payment_status === "paid") {
     // Card payment — confirmed immediately
@@ -97,12 +142,26 @@ async function handleSessionCompleted(session: CheckoutSession) {
 }
 
 async function handleAsyncPaymentSucceeded(session: CheckoutSession) {
-  const depositRequestId = session.metadata?.deposit_request_id;
-  if (!depositRequestId) return;
-
   const paymentIntentId = typeof session.payment_intent === "string"
     ? session.payment_intent
     : null;
+
+  const financeId = session.metadata?.finance_id;
+  if (financeId) {
+    const paidAt = new Date().toISOString();
+    await updateFinanceRecord(financeId, {
+      final_paid: true,
+      final_paid_date: paidAt.slice(0, 10),
+      balance_remaining: 0,
+      status: "Paid",
+      stripe_final_payment_intent_id: paymentIntentId,
+      final_paid_at: paidAt,
+    });
+    return;
+  }
+
+  const depositRequestId = session.metadata?.deposit_request_id;
+  if (!depositRequestId) return;
 
   await updateDepositRequest(depositRequestId, {
     status: "paid",
@@ -112,6 +171,14 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession) {
 }
 
 async function handleAsyncPaymentFailed(session: CheckoutSession) {
+  const financeId = session.metadata?.finance_id;
+  if (financeId) {
+    await updateFinanceRecord(financeId, {
+      final_payment_failed_at: new Date().toISOString(),
+    });
+    return;
+  }
+
   const depositRequestId = session.metadata?.deposit_request_id;
   if (!depositRequestId) return;
 

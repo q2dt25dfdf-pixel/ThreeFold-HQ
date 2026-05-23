@@ -81,6 +81,14 @@ interface DesignVersion {
   is_final?: boolean
 }
 
+interface LineItem {
+  name: string
+  description: string
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+}
+
 interface PortalData {
   orderId: string
   clientName: string
@@ -101,6 +109,7 @@ interface PortalData {
   intakeSummary: IntakeSummary | null
   lastUpdated: string
   clientUpdates: ClientUpdate[]
+  lineItems: LineItem[]
 }
 
 const PHASES = ['Production','Quality Check','Ready','Delivered']
@@ -263,6 +272,32 @@ export default function PortalPage() {
                 <div style={s.rule} />
                 <div style={s.section}>
                   <div style={s.eyebrow}>PAYMENT</div>
+                  {data.lineItems?.length > 0 && (
+                    <>
+                      <div style={s.lineItemsHeader}>ORDER BREAKDOWN</div>
+                      <div style={s.detailList}>
+                        {data.lineItems.map((li, i) => (
+                          <div key={i} style={s.detailRow}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={s.detailKey}>{li.name.toUpperCase()}</div>
+                              {li.description && (
+                                <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: '0.04em', marginTop: '2px' }}>
+                                  {li.description}
+                                </div>
+                              )}
+                              <div style={{ ...s.detailKey, marginTop: '3px' }}>
+                                {li.quantity} × {fmt(li.unitPrice)}
+                              </div>
+                            </div>
+                            <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: '16px' }}>
+                              {fmt(li.lineTotal)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={s.lineItemsDivider} />
+                    </>
+                  )}
                   <div style={s.detailList}>
                     <div style={s.detailRow}>
                       <span style={s.detailKey}>TOTAL ORDER VALUE</span>
@@ -540,6 +575,8 @@ const s: Record<string, React.CSSProperties> = {
   intakeFileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', border: '1px solid #DDD6CB', padding: '12px 16px', backgroundColor: '#FAF7F2' },
   intakeFileName: { fontSize: '13px', fontWeight: 600, color: '#0a0a0a', letterSpacing: '0.02em', marginBottom: '2px' },
   intakeFileMeta: { fontSize: '10px', color: '#6F685D', letterSpacing: '0.12em' },
+  lineItemsHeader: { fontSize: '9px', fontWeight: 700, letterSpacing: '0.24em', color: '#9B9084', textTransform: 'uppercase' as const, marginBottom: '8px' },
+  lineItemsDivider: { height: '1px', backgroundColor: '#DDD6CB', margin: '16px 0 4px' },
   paymentCalloutBalance: { marginTop: '12px', border: '1px solid #D4A96A', backgroundColor: '#FDF6EC', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   paymentCalloutPaid: { marginTop: '12px', border: '1px solid #8BC4A4', backgroundColor: '#EBF5EF', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   paymentCalloutLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em' },

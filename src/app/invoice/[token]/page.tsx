@@ -39,9 +39,20 @@ export default function InvoicePage() {
   const [data, setData] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [invoiceToken, setInvoiceToken] = useState("");
+  const [paymentParam, setPaymentParam] = useState<"success" | "cancelled" | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
 
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
+    setInvoiceToken(token);
+
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get("payment");
+    if (p === "success") setPaymentParam("success");
+    if (p === "cancelled") setPaymentParam("cancelled");
+
     if (!token) return;
 
     fetch(`/api/invoice/${token}`)
@@ -53,6 +64,30 @@ export default function InvoicePage() {
       .catch(() => setError("Failed to load invoice"))
       .finally(() => setLoading(false));
   }, []);
+
+  const handlePayInvoice = async () => {
+    if (!invoiceToken || checkoutLoading) return;
+    setCheckoutLoading(true);
+    setCheckoutError("");
+
+    try {
+      const res = await fetch("/api/stripe/create-invoice-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceToken }),
+      });
+      const d = await res.json() as { url?: string; error?: string };
+      if (d.error || !d.url) {
+        setCheckoutError(d.error ?? "Could not start checkout. Please try again.");
+        setCheckoutLoading(false);
+        return;
+      }
+      window.location.href = d.url;
+    } catch {
+      setCheckoutError("Could not connect to payment. Please try again.");
+      setCheckoutLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -206,16 +241,43 @@ export default function InvoicePage() {
                 your business — it&apos;s been a pleasure working with you.
               </div>
             </div>
+          ) : paymentParam === "success" ? (
+            <div style={s.section}>
+              <div style={s.eyebrow}>PAYMENT RECEIVED</div>
+              <div style={s.bodyText}>
+                Your payment is being confirmed. Bank transfers may take a moment to
+                process — this page will reflect the updated status once confirmed.
+                No further action is needed.
+              </div>
+            </div>
           ) : (
             <div style={s.section}>
               <div style={s.eyebrow}>HOW TO PAY</div>
 
-              {/* Stripe — coming soon */}
+              {/* Stripe */}
               <div style={s.stripeBlock}>
                 <div style={s.altLabel}>PAY ONLINE — STRIPE</div>
-                <div style={s.bodyText}>Online payment for your final balance is coming soon.</div>
-                <button disabled style={s.btnPayDisabled}>
-                  PAY REMAINING BALANCE →
+                <div style={s.bodyText}>
+                  Pay securely by card or bank account through Stripe.
+                </div>
+                <div style={s.feeNotice}>
+                  <strong>Important: Card payments include a 3% processing fee.</strong>{" "}
+                  Bank account payments through Stripe do not.
+                </div>
+                {checkoutError && (
+                  <div style={s.errorText}>{checkoutError}</div>
+                )}
+                {paymentParam === "cancelled" && !checkoutError && (
+                  <div style={s.errorText}>Payment was not completed. You can try again below.</div>
+                )}
+                <button
+                  onClick={() => void handlePayInvoice()}
+                  disabled={checkoutLoading}
+                  style={checkoutLoading ? { ...s.btnPay, opacity: 0.6, cursor: "not-allowed" } : s.btnPay}
+                >
+                  {checkoutLoading
+                    ? "REDIRECTING TO CHECKOUT…"
+                    : `PAY REMAINING BALANCE — ${fmt(data.balance_remaining)} →`}
                 </button>
               </div>
 
@@ -356,25 +418,38 @@ const s: Record<string, React.CSSProperties> = {
     color: "#1a5c3a",
   },
   stripeBlock: {
-    border: "1px solid #DDD6CB",
-    backgroundColor: "#F5F5F5",
+    border: "1px solid #D4A96A",
+    backgroundColor: "#FDF6EC",
     padding: "20px 20px 24px",
     marginBottom: "24px",
   },
-  btnPayDisabled: {
+  feeNotice: {
+    fontSize: "12px",
+    color: "#4a3200",
+    lineHeight: 1.65,
+    marginTop: "4px",
+    marginBottom: "16px",
+    paddingTop: "10px",
+    borderTop: "1px solid #e0c98a",
+  },
+  errorText: {
+    fontSize: "12px",
+    color: "#b91c1c",
+    marginBottom: "10px",
+  },
+  btnPay: {
     display: "block",
     width: "100%",
-    backgroundColor: "#BDBDBD",
+    backgroundColor: "#C49A2B",
     color: "#fff",
     fontSize: "10px",
     fontWeight: 700,
     letterSpacing: "0.22em",
     padding: "16px 32px",
     border: "none",
-    cursor: "not-allowed",
+    cursor: "pointer",
     textAlign: "center" as const,
-    marginTop: "12px",
-    opacity: 0.7,
+    marginTop: "4px",
   },
   altHeader: {
     fontSize: "9px",

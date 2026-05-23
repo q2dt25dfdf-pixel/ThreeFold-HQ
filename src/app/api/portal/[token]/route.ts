@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSignedUrls, getDesignSignedUrls } from '@/lib/getSignedUrl'
 
 export async function GET(
@@ -49,6 +50,38 @@ export async function GET(
     .map((u) => ({ id: String(u.id ?? crypto.randomUUID()), date: String(u.date), text: String(u.text) }))
     .sort((a, b) => b.date.localeCompare(a.date))
 
+  // Line items: prefer order-level data, then fall back to related quote
+  type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown }
+  let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number }[] = []
+
+  if (Array.isArray(d.line_items) && (d.line_items as RawLineItem[]).length > 0) {
+    lineItems = (d.line_items as RawLineItem[]).map((li) => ({
+      name: String(li.name ?? ''),
+      description: String(li.description ?? ''),
+      quantity: Number(li.quantity ?? 0),
+      unitPrice: Number(li.unitPrice ?? 0),
+      lineTotal: Number(li.lineTotal ?? 0),
+    }))
+  } else if (d.quote_id) {
+    const { data: quoteRows } = await getSupabaseAdmin()
+      .from('quotes')
+      .select('data')
+      .eq('id', d.quote_id as string)
+      .limit(1)
+    if (quoteRows && quoteRows.length > 0) {
+      const qd = quoteRows[0].data as Record<string, unknown>
+      if (Array.isArray(qd.line_items)) {
+        lineItems = (qd.line_items as RawLineItem[]).map((li) => ({
+          name: String(li.name ?? ''),
+          description: String(li.description ?? ''),
+          quantity: Number(li.quantity ?? 0),
+          unitPrice: Number(li.unitPrice ?? 0),
+          lineTotal: Number(li.lineTotal ?? 0),
+        }))
+      }
+    }
+  }
+
   const clientSafeData = {
     orderId: order.id,
     clientName: d.client || d.client_name || d.company_name || '',
@@ -76,6 +109,7 @@ export async function GET(
     clientNotes: d.client_notes || '',
     lastUpdated: String(d.portal_generated_at ?? '') || '',
     clientUpdates,
+    lineItems,
   }
 
   // Intake summary — client-safe fields only, private files excluded

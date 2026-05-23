@@ -136,7 +136,7 @@ export default function LeadFormModal({ open, mode, lead, initialStage = "New Le
       stage,
       status,
       followUpDate: followUpDate || "TBD",
-      notes: notes.trim() || "No additional notes yet.",
+      notes: notes.trim(),
       communicationHistory: lead?.communicationHistory ?? [],
     }), onClose);
   };
