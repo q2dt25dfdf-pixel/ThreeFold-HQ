@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Plus, Send, X } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { openEmailCompose } from "@/lib/emailCompose";
+import { calcGrandTotal, calcSalesTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 
 interface QuoteResult {
@@ -78,13 +79,18 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const removeItem = (idx: number) => setLineItems((prev) => prev.filter((_, i) => i !== idx));
 
   const subTotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const taxRate = salesTaxRate();
+  const salesTaxAmount = calcSalesTax(subTotal, taxRate);
+  const grandTotal = calcGrandTotal(subTotal, taxRate);
   const hasValidItems = lineItems.some((i) => i.name.trim() && i.quantity > 0);
 
   const handlePreviewEmail = () => {
     if (!lead || !hasValidItems) return;
 
     const validItems = lineItems.filter((i) => i.name.trim());
-    const totalAmount = validItems.reduce((sum, i) => sum + i.lineTotal, 0);
+    const computedSubtotal = validItems.reduce((sum, i) => sum + i.lineTotal, 0);
+    const computedTax = calcSalesTax(computedSubtotal, taxRate);
+    const computedGrandTotal = computedSubtotal + computedTax;
 
     setStep("generating");
 
@@ -95,7 +101,9 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         leadId: lead.id,
         clientName: lead.company,
         clientEmail: lead.email,
-        totalAmount,
+        subtotal: computedSubtotal,
+        salesTaxRate: taxRate,
+        totalAmount: computedGrandTotal,
         lineItems: validItems,
         items: validItems.map((i) => i.name),
         notes: lead.notes ?? "",
@@ -112,7 +120,9 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         setQuoteResult(data);
 
         const contactName = lead.contact || lead.company;
-        const totalFormatted = fmtCurrency(totalAmount);
+        const subtotalFormatted = fmtCurrency(computedSubtotal);
+        const taxFormatted = fmtCurrency(computedTax);
+        const grandTotalFormatted = fmtCurrency(computedGrandTotal);
         const expFormatted = fmtDate(data.expirationDate);
         const itemSummary = validItems
           .map((i) => `• ${i.name} (×${i.quantity})`)
@@ -120,7 +130,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
 
         setEmailSubject(`Your Custom Quote — ${data.quoteNumber} | Threefold Supply Co.`);
         setEmailBody(
-          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nItems included:\n${itemSummary}\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${totalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
+          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nItems included:\n${itemSummary}\n\nQuote Number: ${data.quoteNumber}\nSubtotal: ${subtotalFormatted}\nCA Sales Tax (${fmtTaxRate(taxRate)}): ${taxFormatted}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
         );
         setStep("preview");
       })
@@ -306,10 +316,18 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           </button>
 
           {/* Totals */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total</span>
-              <span className="text-xl font-bold text-slate-950">{fmtCurrency(subTotal)}</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Subtotal</span>
+              <span className="text-sm font-semibold text-slate-950">{fmtCurrency(subTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">CA Sales Tax ({fmtTaxRate(taxRate)})</span>
+              <span className="text-sm font-semibold text-slate-500">{fmtCurrency(salesTaxAmount)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Total</span>
+              <span className="text-xl font-bold text-slate-950">{fmtCurrency(grandTotal)}</span>
             </div>
           </div>
         </div>

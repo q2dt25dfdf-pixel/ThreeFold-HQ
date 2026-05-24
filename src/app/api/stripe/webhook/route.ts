@@ -153,6 +153,13 @@ async function fulfillDepositPaid(
   const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
   const clientName = (depData.client_name ?? "") as string;
 
+  // Proportional tax collected with deposit
+  const depSalesTaxAmount = Number(depData.sales_tax_amount ?? 0);
+  const depGrandTotal = Number(depData.grand_total ?? totalAmount);
+  const depositTaxCollected = depGrandTotal > 0 && depSalesTaxAmount > 0
+    ? Math.round((depositAmount / depGrandTotal) * depSalesTaxAmount * 100) / 100
+    : 0;
+
   // 5. Find existing finance record linked to this deposit
   const { data: finRows } = await db
     .from("finances")
@@ -165,12 +172,19 @@ async function fulfillDepositPaid(
     const fin = finRows[0];
     const fd = fin.data as Record<string, unknown>;
     const isFinalAlreadyPaid = fd.final_paid === true;
+    const finSalesTaxAmount = Number(fd.sales_tax_amount ?? depSalesTaxAmount);
+    const finGrandTotal = Number(fd.grand_total ?? depGrandTotal);
+    const finDepositTax = finGrandTotal > 0 && finSalesTaxAmount > 0
+      ? Math.round((depositAmount / finGrandTotal) * finSalesTaxAmount * 100) / 100
+      : depositTaxCollected;
+    const updatedTaxCollected = isFinalAlreadyPaid ? finSalesTaxAmount : finDepositTax;
     await db.from("finances").update({
       data: {
         ...fd,
         deposit_paid: true,
         deposit_paid_date: today,
         status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
+        ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
       },
     }).eq("id", fin.id);
     console.log(`[webhook] finances ${fin.id} → deposit_paid=true`);
@@ -194,6 +208,7 @@ async function fulfillDepositPaid(
     await bootstrapOrderAndFinance({
       depositRequestId,
       depData,
+      depositTaxCollected,
       leadId: effectiveLeadId,
       clientName,
       totalAmount,
@@ -318,12 +333,14 @@ type BootstrapOpts = {
   balanceRemaining: number;
   today: string;
   paidAt: string;
+  depositTaxCollected?: number;
 };
 
 async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
   const {
     depositRequestId, depData, leadId, clientName,
     totalAmount, depositAmount, balanceRemaining, today, paidAt,
+    depositTaxCollected,
   } = opts;
 
   const db = getSupabaseAdmin();
@@ -439,30 +456,40 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     .limit(1);
 
   if (!existingFin || existingFin.length === 0) {
-    await db.from("finances").upsert({
+    const salesTaxAmount = Number(depData.sales_tax_amount ?? 0);
+    const financeData: Record<string, unknown> = {
       id: invoiceId,
-      data: {
-        id: invoiceId,
-        client: clientName,
-        client_name: clientName,
-        client_email: (leadData.email ?? depData.client_email ?? "") as string,
-        orderName,
-        order_name: orderName,
-        order_id: orderId,
-        lead_id: leadId,
-        quote_id: (leadData.quote_id ?? depData.quote_id ?? "") as string,
-        deposit_request_id: depositRequestId,
-        total_amount: totalAmount,
-        amount: totalAmount,
-        deposit_amount: depositAmount,
-        deposit_paid: true,
-        deposit_paid_date: today,
-        balance_remaining: balanceRemaining,
-        final_paid: false,
-        status: "Deposit Paid",
-        created_at: paidAt,
-      },
-    });
+      client: clientName,
+      client_name: clientName,
+      client_email: (leadData.email ?? depData.client_email ?? "") as string,
+      orderName,
+      order_name: orderName,
+      order_id: orderId,
+      lead_id: leadId,
+      quote_id: (leadData.quote_id ?? depData.quote_id ?? "") as string,
+      deposit_request_id: depositRequestId,
+      total_amount: totalAmount,
+      amount: totalAmount,
+      deposit_amount: depositAmount,
+      deposit_paid: true,
+      deposit_paid_date: today,
+      balance_remaining: balanceRemaining,
+      final_paid: false,
+      status: "Deposit Paid",
+      created_at: paidAt,
+    };
+    if (depData.subtotal != null) financeData.subtotal = depData.subtotal;
+    if (depData.sales_tax_rate != null) financeData.sales_tax_rate = depData.sales_tax_rate;
+    if (salesTaxAmount > 0) {
+      financeData.sales_tax_amount = salesTaxAmount;
+      financeData.grand_total = depData.grand_total ?? totalAmount;
+      const taxOnDeposit = depositTaxCollected ?? 0;
+      if (taxOnDeposit > 0) {
+        financeData.tax_collected_amount = taxOnDeposit;
+        financeData.tax_collected_at = today;
+      }
+    }
+    await db.from("finances").upsert({ id: invoiceId, data: financeData });
     console.log(`[webhook] created finance ${invoiceId} for order ${orderId}`);
   } else {
     console.log(`[webhook] finance ${invoiceId} already exists — skipping create`);
@@ -536,6 +563,17 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
     if (session.payment_status === "paid") {
       // Card: confirmed immediately
       console.log(`[webhook] final invoice ${financeId} → Paid (${meta.payment_method ?? "card"})`);
+      // Compute remaining tax for this final payment
+      const { data: finRows } = await getSupabaseAdmin().from("finances").select("data").eq("id", financeId).limit(1);
+      const finData = (finRows?.[0]?.data ?? {}) as Record<string, unknown>;
+      const finSalesTax = Number(finData.sales_tax_amount ?? 0);
+      const finTaxAlreadyCollected = Number(finData.tax_collected_amount ?? 0);
+      const finalTaxFields: Record<string, unknown> = {};
+      if (finSalesTax > 0) {
+        const remainingTax = Math.max(Math.round((finSalesTax - finTaxAlreadyCollected) * 100) / 100, 0);
+        finalTaxFields.tax_collected_amount = finTaxAlreadyCollected + remainingTax;
+        finalTaxFields.tax_collected_at = paidAt.slice(0, 10);
+      }
       await updateRecord("finances", financeId, {
         final_paid: true,
         final_paid_date: paidAt.slice(0, 10),
@@ -544,6 +582,7 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         stripe_final_session_id: session.id,
         stripe_final_payment_intent_id: paymentIntentId,
         final_paid_at: paidAt,
+        ...finalTaxFields,
       });
       notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     } else {
@@ -601,6 +640,16 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
   if (financeId) {
     const paidAt = new Date().toISOString();
     console.log(`[webhook] final invoice ${financeId} → Paid (bank ACH settled)`);
+    const { data: asyncFinRows } = await getSupabaseAdmin().from("finances").select("data").eq("id", financeId).limit(1);
+    const asyncFinData = (asyncFinRows?.[0]?.data ?? {}) as Record<string, unknown>;
+    const asyncFinSalesTax = Number(asyncFinData.sales_tax_amount ?? 0);
+    const asyncFinTaxCollected = Number(asyncFinData.tax_collected_amount ?? 0);
+    const asyncFinalTaxFields: Record<string, unknown> = {};
+    if (asyncFinSalesTax > 0) {
+      const remainingTax = Math.max(Math.round((asyncFinSalesTax - asyncFinTaxCollected) * 100) / 100, 0);
+      asyncFinalTaxFields.tax_collected_amount = asyncFinTaxCollected + remainingTax;
+      asyncFinalTaxFields.tax_collected_at = paidAt.slice(0, 10);
+    }
     await updateRecord("finances", financeId, {
       final_paid: true,
       final_paid_date: paidAt.slice(0, 10),
@@ -608,6 +657,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       status: "Paid",
       stripe_final_payment_intent_id: paymentIntentId,
       final_paid_at: paidAt,
+      ...asyncFinalTaxFields,
     });
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     notifyAchPayment("cleared", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH cleared notification failed:", err));

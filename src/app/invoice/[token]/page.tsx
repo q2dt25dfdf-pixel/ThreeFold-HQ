@@ -18,6 +18,10 @@ interface InvoiceData {
   id: string;
   order_name: string;
   client_name: string;
+  subtotal?: number | null;
+  sales_tax_rate?: number | null;
+  sales_tax_amount?: number | null;
+  grand_total?: number | null;
   total_amount: number;
   deposit_amount: number;
   deposit_paid: boolean;
@@ -144,6 +148,8 @@ export default function InvoicePage() {
 
   const isPaidInFull = data.final_paid;
   const isDepositPaid = data.deposit_paid;
+  const hasTax = (data.sales_tax_amount ?? 0) > 0;
+  const grandTotalDisplay = data.grand_total ?? data.total_amount;
   const isOverdue = data.final_due_date
     ? !isPaidInFull && new Date(data.final_due_date + "T23:59:59") < new Date()
     : false;
@@ -180,7 +186,7 @@ export default function InvoicePage() {
         )}
         <div style={s.chip}>
           <div style={s.chipLabel}>TOTAL</div>
-          <div style={s.chipValue}>{fmt(data.total_amount)}</div>
+          <div style={s.chipValue}>{fmt(grandTotalDisplay)}</div>
         </div>
         <div style={s.chip}>
           <div style={s.chipLabel}>STATUS</div>
@@ -234,10 +240,27 @@ export default function InvoicePage() {
               PAYMENT SUMMARY
             </div>
             <div style={s.detailList}>
-              <div style={s.detailRow}>
-                <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
-                <span style={s.detailVal}>{fmt(data.total_amount)}</span>
-              </div>
+              {hasTax ? (
+                <>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>SUBTOTAL</span>
+                    <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                  </div>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>CA SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "8.75%"})</span>
+                    <span style={s.detailVal}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                  </div>
+                  <div style={s.detailRow}>
+                    <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
+                    <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
+                  </div>
+                </>
+              ) : (
+                <div style={s.detailRow}>
+                  <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
+                  <span style={s.detailVal}>{fmt(data.total_amount)}</span>
+                </div>
+              )}
               <div style={s.detailRow}>
                 <div style={{ flex: 1 }}>
                   <span style={s.detailKey}>DEPOSIT</span>

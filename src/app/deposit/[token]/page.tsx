@@ -19,6 +19,10 @@ interface DepositData {
   deposit_request_number: string;
   client_name: string;
   client_email: string;
+  subtotal?: number | null;
+  sales_tax_rate?: number | null;
+  sales_tax_amount?: number | null;
+  grand_total?: number | null;
   total_amount: number;
   deposit_amount: number;
   balance_remaining: number;
@@ -135,8 +139,10 @@ export default function DepositPage() {
 
   const isPaid = data.status === "paid";
   const isPending = data.status === "pending";
-  const depositPercent = data.total_amount > 0
-    ? Math.round((data.deposit_amount / data.total_amount) * 100)
+  const hasTax = (data.sales_tax_amount ?? 0) > 0;
+  const grandTotalDisplay = data.grand_total ?? data.total_amount;
+  const depositPercent = grandTotalDisplay > 0
+    ? Math.round((data.deposit_amount / grandTotalDisplay) * 100)
     : 50;
 
   return (
@@ -208,10 +214,27 @@ export default function DepositPage() {
               PAYMENT BREAKDOWN
             </div>
             <div style={s.detailList}>
-              <div style={s.detailRow}>
-                <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
-                <span style={s.detailVal}>{fmt(data.total_amount)}</span>
-              </div>
+              {hasTax ? (
+                <>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>SUBTOTAL</span>
+                    <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                  </div>
+                  <div style={s.detailRow}>
+                    <span style={s.detailKey}>CA SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "8.75%"})</span>
+                    <span style={s.detailVal}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                  </div>
+                  <div style={s.detailRow}>
+                    <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
+                    <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
+                  </div>
+                </>
+              ) : (
+                <div style={s.detailRow}>
+                  <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
+                  <span style={s.detailVal}>{fmt(data.total_amount)}</span>
+                </div>
+              )}
               <div style={s.detailRow}>
                 <span style={s.detailKey}>DEPOSIT REQUIRED ({depositPercent}%)</span>
                 <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>

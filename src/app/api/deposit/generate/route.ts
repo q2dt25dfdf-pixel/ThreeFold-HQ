@@ -22,6 +22,10 @@ export async function POST(request: NextRequest) {
       lineItems,
       paymentInstructions,
       notes,
+      subtotal,
+      salesTaxRate,
+      salesTaxAmount,
+      grandTotal,
     } = await request.json() as {
       leadId: string;
       quoteId?: string;
@@ -32,6 +36,10 @@ export async function POST(request: NextRequest) {
       lineItems?: LineItem[] | null;
       paymentInstructions?: string;
       notes?: string;
+      subtotal?: number;
+      salesTaxRate?: number;
+      salesTaxAmount?: number;
+      grandTotal?: number;
     };
 
     if (!leadId) {
@@ -49,17 +57,19 @@ export async function POST(request: NextRequest) {
     const origin = request.nextUrl.origin;
     const publicLink = `${origin}/deposit/${token}`;
 
-    const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
+    // Use grandTotal as the authoritative total when tax fields are present
+    const effectiveTotal = grandTotal ?? totalAmount ?? 0;
+    const balanceRemaining = Math.max(effectiveTotal - depositAmount, 0);
     const depositRequestId = `deposit-${leadId}-${Date.now()}`;
 
-    const depositData = {
+    const depositData: Record<string, unknown> = {
       id: depositRequestId,
       deposit_request_number: depositRequestNumber,
       lead_id: leadId,
       quote_id: quoteId ?? null,
       client_name: clientName ?? "",
       client_email: clientEmail ?? "",
-      total_amount: totalAmount ?? 0,
+      total_amount: effectiveTotal,
       deposit_amount: depositAmount ?? 0,
       balance_remaining: balanceRemaining,
       line_items: lineItems ?? null,
@@ -73,6 +83,11 @@ export async function POST(request: NextRequest) {
       email_message_id: null as string | null,
       created_at: new Date().toISOString(),
     };
+
+    if (subtotal != null) depositData.subtotal = subtotal;
+    if (salesTaxRate != null) depositData.sales_tax_rate = salesTaxRate;
+    if (salesTaxAmount != null) depositData.sales_tax_amount = salesTaxAmount;
+    if (grandTotal != null) depositData.grand_total = grandTotal;
 
     const { error } = await db
       .from("deposit_requests")

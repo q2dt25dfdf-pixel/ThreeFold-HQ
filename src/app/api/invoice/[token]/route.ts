@@ -26,6 +26,11 @@ export async function GET(
     type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown };
     let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number }[] = [];
 
+    let subtotalVal: number | null = null;
+    let salesTaxRateVal: number | null = null;
+    let salesTaxAmountVal: number | null = null;
+    let grandTotalVal: number | null = null;
+
     if (raw.deposit_request_id) {
       const { data: depRows } = await getSupabaseAdmin()
         .from("deposit_requests")
@@ -38,6 +43,10 @@ export async function GET(
         const d = parseAmount(dep.deposit_amount);
         if (t > 0) totalAmount = t;
         if (d > 0) depositAmount = d;
+        if (dep.subtotal != null) subtotalVal = parseAmount(dep.subtotal);
+        if (dep.sales_tax_rate != null) salesTaxRateVal = Number(dep.sales_tax_rate);
+        if (dep.sales_tax_amount != null) salesTaxAmountVal = parseAmount(dep.sales_tax_amount);
+        if (dep.grand_total != null) grandTotalVal = parseAmount(dep.grand_total);
         if (Array.isArray(dep.line_items)) {
           lineItems = (dep.line_items as RawLineItem[]).map((li) => ({
             name: String(li.name ?? ""),
@@ -49,6 +58,12 @@ export async function GET(
         }
       }
     }
+
+    // Also read tax fields stored directly on the finance record (populated by invoice/generate)
+    if (subtotalVal === null && raw.subtotal != null) subtotalVal = parseAmount(raw.subtotal);
+    if (salesTaxRateVal === null && raw.sales_tax_rate != null) salesTaxRateVal = Number(raw.sales_tax_rate);
+    if (salesTaxAmountVal === null && raw.sales_tax_amount != null) salesTaxAmountVal = parseAmount(raw.sales_tax_amount);
+    if (grandTotalVal === null && raw.grand_total != null) grandTotalVal = parseAmount(raw.grand_total);
 
     // Fall back to line items stored directly on the finance record
     if (lineItems.length === 0 && Array.isArray(raw.line_items)) {
@@ -67,6 +82,10 @@ export async function GET(
       id: raw.id,
       order_name: (raw.order_name ?? raw.orderName ?? "") as string,
       client_name: (raw.client_name ?? raw.client ?? "") as string,
+      subtotal: subtotalVal,
+      sales_tax_rate: salesTaxRateVal,
+      sales_tax_amount: salesTaxAmountVal,
+      grand_total: grandTotalVal,
       total_amount: totalAmount,
       deposit_amount: depositAmount,
       deposit_paid: raw.deposit_paid === true,

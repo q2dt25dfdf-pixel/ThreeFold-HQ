@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { openEmailCompose } from "@/lib/emailCompose";
+import { fmtTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 
 interface DepositResult {
@@ -27,6 +28,10 @@ type QuoteSnapshot = {
   quoteNumber: string;
   lineItems: QuoteItem[];
   totalAmount: number;
+  subtotal?: number;
+  salesTaxRate?: number;
+  salesTaxAmount?: number;
+  grandTotal?: number;
 };
 
 type Step = "configure" | "generating" | "preview" | "sending" | "sent" | "error";
@@ -89,15 +94,20 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
       setQuoteLoading(true);
       fetch(`/api/quote/by-id?id=${encodeURIComponent(lead.quote_id)}`)
         .then((r) => r.json())
-        .then((d: { quoteId?: string; quoteNumber?: string; lineItems?: QuoteItem[] | null; totalAmount?: number; error?: string }) => {
+        .then((d: { quoteId?: string; quoteNumber?: string; lineItems?: QuoteItem[] | null; totalAmount?: number; subtotal?: number; salesTaxRate?: number; salesTaxAmount?: number; grandTotal?: number; error?: string }) => {
           if (!d.error && d.lineItems && d.lineItems.length > 0 && d.quoteId && d.quoteNumber && d.totalAmount != null) {
+            const effectiveTotal = d.grandTotal ?? d.totalAmount;
             setQuoteData({
               quoteId: d.quoteId,
               quoteNumber: d.quoteNumber,
               lineItems: d.lineItems,
-              totalAmount: d.totalAmount,
+              totalAmount: effectiveTotal,
+              subtotal: d.subtotal,
+              salesTaxRate: d.salesTaxRate ?? undefined,
+              salesTaxAmount: d.salesTaxAmount ?? undefined,
+              grandTotal: d.grandTotal,
             });
-            setTotalAmount(d.totalAmount);
+            setTotalAmount(effectiveTotal);
           }
         })
         .catch(() => { /* silently fall back to lead value */ })
@@ -123,6 +133,10 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           lineItems: quoteData?.lineItems ?? null,
           paymentInstructions,
           notes: "",
+          ...(quoteData?.subtotal != null && { subtotal: quoteData.subtotal }),
+          ...(quoteData?.salesTaxRate != null && { salesTaxRate: quoteData.salesTaxRate }),
+          ...(quoteData?.salesTaxAmount != null && { salesTaxAmount: quoteData.salesTaxAmount }),
+          ...(quoteData?.grandTotal != null && { grandTotal: quoteData.grandTotal }),
         }),
       });
 
@@ -141,9 +155,15 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         ? `\n\nItems included:\n${quoteData.lineItems.map((i) => `• ${i.name} (×${i.quantity})`).join("\n")}`
         : "";
 
+      const taxLine = quoteData?.salesTaxAmount != null && quoteData.salesTaxAmount > 0
+        ? `\nCA Sales Tax (${fmtTaxRate(quoteData.salesTaxRate)}): ${fmtCurrency(quoteData.salesTaxAmount)}`
+        : "";
+      const subtotalLine = quoteData?.subtotal != null && quoteData.subtotal !== data.totalAmount
+        ? `\nSubtotal: ${fmtCurrency(quoteData.subtotal)}${taxLine}`
+        : "";
       setEmailSubject(`Your Deposit Request — ${data.depositRequestNumber} | Threefold Supply Co.`);
       setEmailBody(
-        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.${itemSummary}\n\nDeposit Request #: ${data.depositRequestNumber}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nPlease note: Card payments include a 3% processing fee. Bank account payments do not.\n\nView your full deposit request here:\n${data.publicLink}${paymentInstructions ? `\n\n${paymentInstructions}` : ""}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\nBest,`,
+        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.${itemSummary}\n\nDeposit Request #: ${data.depositRequestNumber}${subtotalLine}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nPlease note: Card payments include a 3% processing fee. Bank account payments do not.\n\nView your full deposit request here:\n${data.publicLink}${paymentInstructions ? `\n\n${paymentInstructions}` : ""}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\nBest,`,
       );
       setStep("preview");
     } catch (err: unknown) {
@@ -314,9 +334,21 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
                   </div>
                 ))}
               </div>
+              {quoteData.subtotal != null && quoteData.salesTaxAmount != null && quoteData.salesTaxAmount > 0 && (
+                <div className="mt-3 border-t border-slate-200 pt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Subtotal</span>
+                    <span className="text-xs font-semibold text-slate-600">{fmtCurrency(quoteData.subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">CA Tax ({fmtTaxRate(quoteData.salesTaxRate)})</span>
+                    <span className="text-xs font-semibold text-slate-500">{fmtCurrency(quoteData.salesTaxAmount)}</span>
+                  </div>
+                </div>
+              )}
               <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
                 <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                  Quote Total
+                  {quoteData.salesTaxAmount ? "Grand Total" : "Quote Total"}
                 </span>
                 <span className="font-bold text-slate-950">{fmtCurrency(quoteData.totalAmount)}</span>
               </div>

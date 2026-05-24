@@ -29,3 +29,20 @@ export function calcCollected(invoice: Record<string, unknown>): number {
   if (invoice.deposit_paid === true) return calcDeposit(invoice);
   return 0;
 }
+
+/** Pre-tax subtotal. Uses explicit subtotal field; falls back to total_amount for old records. */
+export function calcSubtotal(record: Record<string, unknown>): number {
+  const explicit = parseAmount(record.subtotal);
+  return explicit > 0 ? explicit : parseAmount(record.total_amount ?? record.amount);
+}
+
+/** Sales tax amount stored on record. Returns 0 for old records without tax fields. */
+export function calcRecordTax(record: Record<string, unknown>): number {
+  return parseAmount(record.sales_tax_amount);
+}
+
+/** Grand total (subtotal + tax). Falls back to total_amount for old records. */
+export function calcGrandTotalFromRecord(record: Record<string, unknown>): number {
+  const explicit = parseAmount(record.grand_total);
+  return explicit > 0 ? explicit : parseAmount(record.total_amount ?? record.amount);
+}

@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
       quoteId: raw.id,
       quoteNumber: raw.quote_number,
       lineItems: raw.line_items ?? null,
-      totalAmount: raw.total_amount,
+      subtotal: raw.subtotal ?? raw.total_amount,
+      salesTaxRate: raw.sales_tax_rate ?? null,
+      salesTaxAmount: raw.sales_tax_amount ?? null,
+      grandTotal: raw.grand_total ?? raw.total_amount,
+      totalAmount: raw.grand_total ?? raw.total_amount,
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
+import { calcGrandTotal, calcSalesTax, salesTaxRate } from "@/lib/salesTax";
 
 type LineItem = {
   name: string;
@@ -13,7 +14,7 @@ type LineItem = {
 
 export async function POST(request: NextRequest) {
   try {
-    const { leadId, clientName, clientEmail, totalAmount, lineItems, items, notes } =
+    const { leadId, clientName, clientEmail, totalAmount, lineItems, items, notes, subtotal: bodySubtotal, salesTaxRate: bodyTaxRate } =
       await request.json() as {
         leadId: string;
         clientName: string;
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
         lineItems?: LineItem[];
         items: string[];
         notes: string;
+        subtotal?: number;
+        salesTaxRate?: number;
       };
 
     if (!leadId) {
@@ -41,11 +44,15 @@ export async function POST(request: NextRequest) {
 
     const expirationDateStr = addDaysToISODate(businessTodayISO(), 30);
 
-    // Derive total from line items when provided; fall back to caller-supplied value
-    const computedTotal =
+    // Derive subtotal from line items when provided; fall back to caller-supplied value
+    const computedSubtotal =
       lineItems && lineItems.length > 0
         ? lineItems.reduce((sum, item) => sum + item.lineTotal, 0)
-        : (totalAmount ?? 0);
+        : (bodySubtotal ?? totalAmount ?? 0);
+
+    const taxRate = bodyTaxRate ?? salesTaxRate();
+    const salesTaxAmount = calcSalesTax(computedSubtotal, taxRate);
+    const grandTotal = calcGrandTotal(computedSubtotal, taxRate);
 
     const quoteId = `quote-${leadId}-${Date.now()}`;
     const quoteData = {
@@ -56,7 +63,11 @@ export async function POST(request: NextRequest) {
       client_email: clientEmail ?? "",
       items: items ?? [],
       line_items: lineItems ?? null,
-      total_amount: computedTotal,
+      subtotal: computedSubtotal,
+      sales_tax_rate: taxRate,
+      sales_tax_amount: salesTaxAmount,
+      grand_total: grandTotal,
+      total_amount: grandTotal,
       expiration_date: expirationDateStr,
       public_token: token,
       public_link: publicLink,

@@ -95,6 +95,10 @@ interface PortalData {
   quantity: string | number
   items: string
   invoiceTotal: string | number
+  subtotal?: number | null
+  salesTaxRate?: number | null
+  salesTaxAmount?: number | null
+  grandTotal?: number | null
   depositAmount: string | number
   depositPaid: boolean
   finalPaid: boolean
@@ -288,7 +292,8 @@ export default function PortalPage() {
   const fileUrl = (v: DesignVersion) => v.drive_url || v.file_url || ''
   const fmtCurrency = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  const totalVal = Number(data.invoiceTotal) || 0
+  const totalVal = Number(data.grandTotal ?? data.invoiceTotal) || 0
+  const hasTax = (data.salesTaxAmount ?? 0) > 0
   const depositVal = Number(data.depositAmount) || 0
   const balanceVal = Number(data.balanceDue) || 0
   const depositIsPaid = data.depositPaid === true
@@ -504,6 +509,18 @@ export default function PortalPage() {
                   PAYMENT SUMMARY
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {hasTax && (
+                    <>
+                      <div style={s.cardRow}>
+                        <span style={s.cardRowLabel}>SUBTOTAL</span>
+                        <span style={{ ...s.cardRowValue, fontSize: '16px' }}>{fmtCurrency(data.subtotal ?? 0)}</span>
+                      </div>
+                      <div style={s.cardRow}>
+                        <span style={s.cardRowLabel}>CA SALES TAX ({data.salesTaxRate != null ? `${Math.round(data.salesTaxRate * 10000) / 100}%` : '8.75%'})</span>
+                        <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
+                      </div>
+                    </>
+                  )}
                   <div style={s.cardRow}>
                     <span style={s.cardRowLabel}>TOTAL PROJECT VALUE</span>
                     <span style={s.cardRowValue}>{fmtCurrency(totalVal)}</span>
@@ -574,6 +591,14 @@ export default function PortalPage() {
                       </span>
                     </div>
                   ))}
+                  {hasTax && (
+                    <>
+                      <div style={s.cardRow}>
+                        <span style={{ ...s.cardRowLabel, color: C.textSecondary }}>CA SALES TAX</span>
+                        <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
+                      </div>
+                    </>
+                  )}
                   <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
                     <span style={{ ...s.cardRowLabel, color: C.textSecondary, fontWeight: 700 }}>ORDER TOTAL</span>
                     <span style={{ ...s.cardRowValue, color: C.gold, fontSize: '22px' }}>

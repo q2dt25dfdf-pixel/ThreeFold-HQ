@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       ? parseAmount(raw.deposit_amount)
       : totalAmount * 0.5;
 
+    let taxFields: Record<string, unknown> = {};
     if (raw.deposit_request_id) {
       const { data: depRows } = await db
         .from("deposit_requests")
@@ -41,6 +42,10 @@ export async function POST(request: NextRequest) {
         const d = parseAmount(dep.deposit_amount);
         if (t > 0) totalAmount = t;
         if (d > 0) depositAmount = d;
+        if (dep.subtotal != null) taxFields.subtotal = dep.subtotal;
+        if (dep.sales_tax_rate != null) taxFields.sales_tax_rate = dep.sales_tax_rate;
+        if (dep.sales_tax_amount != null) taxFields.sales_tax_amount = dep.sales_tax_amount;
+        if (dep.grand_total != null) taxFields.grand_total = dep.grand_total;
       }
     }
 
@@ -74,7 +79,7 @@ export async function POST(request: NextRequest) {
     const origin = request.nextUrl.origin;
     const publicLink = `${origin}/invoice/${token}`;
 
-    const updatedData = { ...raw, public_token: token, public_link: publicLink };
+    const updatedData = { ...raw, public_token: token, public_link: publicLink, ...taxFields };
     const { error: updateError } = await db
       .from("finances")
       .upsert({ id: invoiceId, data: updatedData });

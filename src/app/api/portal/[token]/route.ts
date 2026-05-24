@@ -57,6 +57,11 @@ export async function GET(
   // Authoritative amounts — deposit_request first, then invoice, then order.amount
   const totalAmount = Number(depData?.total_amount ?? inv?.total_amount ?? d.amount ?? 0)
   const depositAmountVal = Number(depData?.deposit_amount ?? inv?.deposit_amount ?? 0)
+  const subtotalVal = Number(depData?.subtotal ?? inv?.subtotal ?? 0) || null
+  const salesTaxAmountVal = Number(depData?.sales_tax_amount ?? inv?.sales_tax_amount ?? 0) || null
+  const salesTaxRateVal = depData?.sales_tax_rate != null ? Number(depData.sales_tax_rate)
+    : inv?.sales_tax_rate != null ? Number(inv.sales_tax_rate) : null
+  const grandTotalVal = Number(depData?.grand_total ?? inv?.grand_total ?? 0) || null
 
   // Payment status from the finance record (updated by Stripe webhook or manual marking)
   const depositIsPaid = inv?.deposit_paid === true || inv?.deposit_paid === 'true'
@@ -141,7 +146,11 @@ export async function GET(
     estimatedDelivery: d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
     quantity: d.quantity || '',
     items: Array.isArray(d.items) ? d.items.join(', ') : d.items || '',
-    invoiceTotal: totalAmount > 0 ? totalAmount : '',
+    invoiceTotal: (grandTotalVal ?? totalAmount) > 0 ? (grandTotalVal ?? totalAmount) : '',
+    subtotal: subtotalVal,
+    salesTaxRate: salesTaxRateVal,
+    salesTaxAmount: salesTaxAmountVal,
+    grandTotal: grandTotalVal,
     depositAmount: depositAmountVal > 0 ? depositAmountVal : '',
     depositPaid: depositIsPaid,
     finalPaid: finalIsPaid,

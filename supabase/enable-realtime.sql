@@ -10,3 +10,4 @@ alter publication supabase_realtime add table vendors;
 alter publication supabase_realtime add table tasks;
 alter publication supabase_realtime add table calendar_events;
 alter publication supabase_realtime add table notes;
+alter publication supabase_realtime add table sales_tax_payments;
