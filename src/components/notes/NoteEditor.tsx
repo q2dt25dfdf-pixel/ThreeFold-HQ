@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, useEditorState, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Highlight from "@tiptap/extension-highlight";
@@ -52,8 +52,8 @@ function ToolbarButton({
       aria-pressed={active}
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
         active
-          ? "bg-slate-900 text-white"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          ? "bg-slate-900 text-white ring-1 ring-slate-700 ring-offset-1"
+          : "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
       } disabled:cursor-not-allowed disabled:opacity-40`}
     >
       {children}
@@ -103,6 +103,54 @@ export default function NoteEditor({ initialContent, onUpdate }: Props) {
     },
   });
 
+  // Reactive toolbar state — re-computes on every editor transaction so that
+  // active states (bold, italic, checklist, etc.) stay in sync with the cursor
+  // position and applied marks without needing a full component re-render cycle.
+  const toolbarState = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      if (!e) {
+        return {
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          isHighlight: false,
+          isBulletList: false,
+          isOrderedList: false,
+          isTaskList: false,
+          isLink: false,
+          canUndo: false,
+          canRedo: false,
+        };
+      }
+      return {
+        isBold: e.isActive("bold"),
+        isItalic: e.isActive("italic"),
+        isUnderline: e.isActive("underline"),
+        isHighlight: e.isActive("highlight"),
+        isBulletList: e.isActive("bulletList"),
+        isOrderedList: e.isActive("orderedList"),
+        isTaskList: e.isActive("taskList"),
+        isLink: e.isActive("link"),
+        canUndo: e.can().undo(),
+        canRedo: e.can().redo(),
+      };
+    },
+  });
+
+  const ts = toolbarState ?? {
+    isBold: false,
+    isItalic: false,
+    isUnderline: false,
+    isHighlight: false,
+    isBulletList: false,
+    isOrderedList: false,
+    isTaskList: false,
+    isLink: false,
+    canUndo: false,
+    canRedo: false,
+  };
+
   const handleLinkClick = useCallback(() => {
     if (!editor) return;
     if (editor.isActive("link")) {
@@ -151,28 +199,28 @@ export default function NoteEditor({ initialContent, onUpdate }: Props) {
         {/* Text formatting group */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
-          active={editor.isActive("bold")}
+          active={ts.isBold}
           title="Bold (Ctrl+B)"
         >
           <Bold className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          active={editor.isActive("italic")}
+          active={ts.isItalic}
           title="Italic (Ctrl+I)"
         >
           <Italic className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          active={editor.isActive("underline")}
+          active={ts.isUnderline}
           title="Underline (Ctrl+U)"
         >
           <UnderlineIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHighlight().run()}
-          active={editor.isActive("highlight")}
+          active={ts.isHighlight}
           title="Highlight"
         >
           <Highlighter className="h-4 w-4" />
@@ -183,21 +231,21 @@ export default function NoteEditor({ initialContent, onUpdate }: Props) {
         {/* List group */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          active={editor.isActive("bulletList")}
+          active={ts.isBulletList}
           title="Bullet list"
         >
           <List className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          active={editor.isActive("orderedList")}
+          active={ts.isOrderedList}
           title="Numbered list"
         >
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleTaskList().run()}
-          active={editor.isActive("taskList")}
+          active={ts.isTaskList}
           title="Checklist"
         >
           <ListChecks className="h-4 w-4" />
@@ -208,10 +256,10 @@ export default function NoteEditor({ initialContent, onUpdate }: Props) {
         {/* Link */}
         <ToolbarButton
           onClick={handleLinkClick}
-          active={editor.isActive("link")}
-          title={editor.isActive("link") ? "Remove link" : "Add link"}
+          active={ts.isLink}
+          title={ts.isLink ? "Remove link" : "Add link"}
         >
-          {editor.isActive("link") ? (
+          {ts.isLink ? (
             <Link2Off className="h-4 w-4" />
           ) : (
             <Link2 className="h-4 w-4" />
@@ -223,14 +271,14 @@ export default function NoteEditor({ initialContent, onUpdate }: Props) {
         {/* Undo / Redo */}
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
+          disabled={!ts.canUndo}
           title="Undo (Ctrl+Z)"
         >
           <Undo2 className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
+          disabled={!ts.canRedo}
           title="Redo (Ctrl+Shift+Z)"
         >
           <Redo2 className="h-4 w-4" />
