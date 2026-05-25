@@ -73,8 +73,9 @@ type EventType =
 interface CalendarEvent {
   id: string;
   title: string;
-  date: string;   // YYYY-MM-DD
-  time?: string;  // HH:MM (24-hour)
+  date: string;     // YYYY-MM-DD
+  time?: string;    // HH:MM (24-hour)
+  endTime?: string; // HH:MM (24-hour) — Cal.com end time
   assignedTo: Assignee[];
   type: EventType;
   priority?: "High" | "Medium" | "Low";
@@ -230,8 +231,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { triggerEvent, payload } = body;
+
+  // Ping / test payloads from Cal.com have no uid or startTime — acknowledge safely
   if (!payload?.uid || !payload?.startTime) {
-    return NextResponse.json({ error: "Missing required fields (uid, startTime)" }, { status: 400 });
+    return NextResponse.json({ ok: true, message: "Webhook endpoint is live. Waiting for real booking payload." });
   }
 
   const supabase = getSupabaseAdmin();
@@ -242,14 +245,17 @@ export async function POST(request: NextRequest) {
   // ── BOOKING_CREATED ──────────────────────────────────────────────────────
   if (triggerEvent === "BOOKING_CREATED") {
     const { date, time } = extractDateAndTime(payload.startTime, tz);
+    const endTime = payload.endTime ? extractDateAndTime(payload.endTime, tz).time : undefined;
 
     const event: CalendarEvent = {
       id: eventId,
       title: `Client Meeting: ${clientName}`,
       date,
       time,
+      endTime,
       assignedTo: ["Alliyah", "Hannah", "Jordan"],
       type: "Client Meeting",
+      priority: "High",
       notes: buildNotes(payload),
       source: "cal.com",
     };
@@ -269,14 +275,17 @@ export async function POST(request: NextRequest) {
   // ── BOOKING_RESCHEDULED ──────────────────────────────────────────────────
   if (triggerEvent === "BOOKING_RESCHEDULED") {
     const { date, time } = extractDateAndTime(payload.startTime, tz);
+    const endTime = payload.endTime ? extractDateAndTime(payload.endTime, tz).time : undefined;
 
     const event: CalendarEvent = {
       id: eventId,
       title: `Client Meeting: ${clientName}`,
       date,
       time,
+      endTime,
       assignedTo: ["Alliyah", "Hannah", "Jordan"],
       type: "Client Meeting",
+      priority: "High",
       notes: buildNotes(payload),
       source: "cal.com",
     };

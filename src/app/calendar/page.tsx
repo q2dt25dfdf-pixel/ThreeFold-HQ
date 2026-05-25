@@ -17,6 +17,7 @@ type CalendarEvent = {
   title: string;
   date: string;
   time?: string;
+  endTime?: string;
   assignedTo: Assignee[];
   type: EventType;
   priority?: Priority;
@@ -97,6 +98,12 @@ function formatAssignedTo(assignedTo: Assignee[]): string {
   if (assignedTo.length === 0) return "Unassigned";
   if (ASSIGNEES.every((a) => assignedTo.includes(a))) return "Team";
   return assignedTo.join(", ");
+}
+
+function formatTimeRange(event: CalendarEvent): string {
+  if (!event.time) return "";
+  if (!event.endTime) return event.time;
+  return `${event.time} to ${event.endTime}`;
 }
 
 function formatDate(date: Date) {
@@ -883,9 +890,9 @@ export default function CalendarPage() {
       {selectedEvent && eventDraft && (
         <ModalShell
           title={editingEvent ? "Edit event" : selectedEvent.title}
-          subtitle={!editingEvent ? `${selectedEvent.date}${selectedEvent.time ? ` at ${selectedEvent.time}` : ""} · ${formatAssignedTo(selectedEvent.assignedTo)}` : undefined}
+          subtitle={!editingEvent ? `${selectedEvent.date}${selectedEvent.time ? ` · ${formatTimeRange(selectedEvent)}` : ""} · ${formatAssignedTo(selectedEvent.assignedTo)}` : undefined}
           onClose={closeEvent}
-          maxWidth="max-w-lg"
+          maxWidth="max-w-2xl"
           footer={
             <div className="space-y-3">
               <FieldError message={formError} />
@@ -951,10 +958,30 @@ export default function CalendarPage() {
                 </div>
               </div>
             )}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
-              <textarea rows={4} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.notes ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, notes: e.target.value })} />
-            </div>
+            {editingEvent ? (
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
+                <textarea
+                  rows={8}
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  value={eventDraft.notes ?? ""}
+                  onChange={(e) => setEventDraft({ ...eventDraft, notes: e.target.value })}
+                />
+              </div>
+            ) : (
+              <div>
+                <p className="mb-1.5 text-xs font-semibold text-slate-700 md:text-sm">Notes</p>
+                <div
+                  className="max-h-56 min-h-[4rem] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 md:text-sm"
+                  style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+                >
+                  {eventDraft.notes?.trim()
+                    ? eventDraft.notes
+                    : <span className="italic text-slate-400">No notes.</span>
+                  }
+                </div>
+              </div>
+            )}
           </div>
         </ModalShell>
       )}
