@@ -20,9 +20,12 @@ interface QuoteData {
   client_email: string;
   items: string[];
   line_items?: LineItem[] | null;
+  subtotal?: number | null;
+  sales_tax_rate?: number | null;
+  sales_tax_amount?: number | null;
+  grand_total?: number | null;
   total_amount: number;
   expiration_date: string;
-  notes: string;
   status: string;
   created_at: string;
 }
@@ -108,6 +111,12 @@ export default function QuotePage() {
     ? new Date(data.expiration_date + "T23:59:59") < new Date()
     : false;
 
+  const hasTax = (data.sales_tax_amount ?? 0) > 0;
+  const grandTotalDisplay = data.grand_total ?? data.total_amount;
+  const taxRateDisplay = data.sales_tax_rate != null
+    ? `${Math.round(data.sales_tax_rate * 10000) / 100}%`
+    : "9.375%";
+
   return (
     <PortalShell>
       <style>{QUOTE_CSS}</style>
@@ -130,7 +139,7 @@ export default function QuotePage() {
         </div>
         <div style={s.chip}>
           <div style={s.chipLabel}>TOTAL</div>
-          <div style={s.chipValue}>{fmt(data.total_amount)}</div>
+          <div style={s.chipValue}>{fmt(grandTotalDisplay)}</div>
         </div>
         {data.expiration_date && (
           <div style={s.chip}>
@@ -178,12 +187,24 @@ export default function QuotePage() {
                       </span>
                     </div>
                   ))}
+                  {hasTax && (
+                    <>
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>SUBTOTAL</span>
+                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                      </div>
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
+                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                      </div>
+                    </>
+                  )}
                   <div style={{ ...s.detailRow, marginTop: "4px" }}>
                     <span style={{ ...s.detailKey, color: C.textSecondary, fontWeight: 700 }}>
                       TOTAL PROJECT VALUE
                     </span>
                     <span style={{ ...s.detailVal, fontSize: "20px" }}>
-                      {fmt(data.total_amount)}
+                      {fmt(grandTotalDisplay)}
                     </span>
                   </div>
                 </>
@@ -196,12 +217,24 @@ export default function QuotePage() {
                         <span style={s.detailVal}>—</span>
                       </div>
                     ))}
+                  {hasTax && (
+                    <>
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>SUBTOTAL</span>
+                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                      </div>
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
+                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                      </div>
+                    </>
+                  )}
                   <div style={{ ...s.detailRow, marginTop: "4px" }}>
                     <span style={{ ...s.detailKey, color: C.textSecondary, fontWeight: 700 }}>
                       TOTAL PROJECT VALUE
                     </span>
                     <span style={{ ...s.detailVal, fontSize: "20px" }}>
-                      {fmt(data.total_amount)}
+                      {fmt(grandTotalDisplay)}
                     </span>
                   </div>
                 </>
@@ -210,7 +243,7 @@ export default function QuotePage() {
 
             <div style={s.paymentCallout}>
               <span style={s.paymentCalloutLabel}>QUOTE TOTAL</span>
-              <span style={s.paymentCalloutAmount}>{fmt(data.total_amount)}</span>
+              <span style={s.paymentCalloutAmount}>{fmt(grandTotalDisplay)}</span>
             </div>
           </div>
         </div>
@@ -223,9 +256,7 @@ export default function QuotePage() {
               Review this quote and reach out to approve it. Once approved, we
               will send a deposit request to get your project into production.
             </div>
-            {data.notes && (
-              <div style={s.notesBlock}>{data.notes}</div>
-            )}
+
           </div>
 
           <div className="dk-card">
