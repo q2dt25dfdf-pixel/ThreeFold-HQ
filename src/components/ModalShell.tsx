@@ -10,6 +10,7 @@ type Props = {
   title: ReactNode;
   subtitle?: string;
   maxWidth?: string;
+  maxHeight?: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
@@ -19,6 +20,7 @@ export default function ModalShell({
   title,
   subtitle,
   maxWidth = "max-w-2xl",
+  maxHeight = "max-h-[90vh]",
   onClose,
   children,
   footer,
@@ -91,7 +93,7 @@ export default function ModalShell({
         style={{ position: "fixed", inset: 0, zIndex: 100000 }}
       >
         <div
-          className={`modal-enter max-h-[90vh] w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 shadow-2xl`}
+          className={`modal-enter ${maxHeight} w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 shadow-2xl`}
         >
           <div className="mb-6">{header}</div>
           {children}

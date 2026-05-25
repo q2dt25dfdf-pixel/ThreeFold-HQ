@@ -43,6 +43,8 @@ interface CalBookingPayload {
   videoCallData?: CalVideoCallData;
   metadata?: { videoCallUrl?: string };
   responses?: Record<string, CalResponse>;
+  // Legacy Cal.com v1 custom inputs
+  customInputs?: Array<{ label: string; value: string | boolean }>;
 }
 
 interface CalWebhookBody {
@@ -128,38 +130,77 @@ function responseValue(r: CalResponse): string {
   return String(v);
 }
 
-function buildNotes(payload: CalBookingPayload, cancelled = false): string {
-  const lines: string[] = [];
-
-  if (cancelled) {
-    lines.push("CANCELLED via Cal.com");
-    if (payload.cancellationReason) {
-      lines.push(`Cancellation reason: ${payload.cancellationReason}`);
-    }
-    lines.push("");
-  }
-
-  const attendee = payload.attendees?.[0];
-  if (attendee?.name) lines.push(`Client: ${attendee.name}`);
-  if (attendee?.email) lines.push(`Email: ${attendee.email}`);
-
-  // Company — scan responses for a company/business/organization field
+// Finds the client's free-text notes from booking form responses.
+// Checks standard key names first, then label text, then legacy customInputs.
+function findClientNotes(payload: CalBookingPayload): string {
   const entries = Object.entries(payload.responses ?? {});
-  const companyEntry = entries.find(([key, r]) => {
-    const label = (r.label ?? "").toLowerCase();
-    const k = key.toLowerCase();
+
+  // Exact key match (Cal.com uses "notes" for the standard additional notes field)
+  const byKey = entries.find(([key]) => {
+    const k = key.toLowerCase().replace(/[_-\s]/g, "");
     return (
-      k.includes("company") ||
-      k.includes("business") ||
-      k.includes("organization") ||
-      label.includes("company") ||
-      label.includes("business") ||
-      label.includes("organization")
+      k === "notes" ||
+      k === "additionalnotes" ||
+      k === "message" ||
+      k === "comments" ||
+      k === "anythingelse"
     );
   });
-  if (companyEntry) {
-    const v = responseValue(companyEntry[1]);
-    if (v) lines.push(`Company: ${v}`);
+  if (byKey) {
+    const v = responseValue(byKey[1]);
+    if (v) return v;
+  }
+
+  // Label-based fallback
+  const byLabel = entries.find(([, r]) => {
+    const label = (r.label ?? "").toLowerCase();
+    return (
+      label.includes("additional") ||
+      label.includes("note") ||
+      label.includes("message") ||
+      label.includes("comment") ||
+      label.includes("anything else") ||
+      label.includes("tell us")
+    );
+  });
+  if (byLabel) {
+    const v = responseValue(byLabel[1]);
+    if (v) return v;
+  }
+
+  // Legacy Cal.com v1 customInputs
+  if (Array.isArray(payload.customInputs)) {
+    const found = payload.customInputs.find((ci) => {
+      const label = (ci.label ?? "").toLowerCase();
+      return (
+        label.includes("note") ||
+        label.includes("additional") ||
+        label.includes("message") ||
+        label.includes("comment")
+      );
+    });
+    if (found?.value) return String(found.value);
+  }
+
+  return "";
+}
+
+function buildNotes(payload: CalBookingPayload, cancelled = false): string {
+  const parts: string[] = [];
+
+  if (cancelled) {
+    parts.push("CANCELLED via Cal.com");
+    if (payload.cancellationReason) {
+      parts.push(`Reason: ${payload.cancellationReason}`);
+    }
+  }
+
+  // Client email
+  const email = payload.attendees?.[0]?.email;
+  if (email) {
+    if (parts.length > 0) parts.push("");
+    parts.push("Client Email:");
+    parts.push(email);
   }
 
   // Meeting / video call link
@@ -167,44 +208,21 @@ function buildNotes(payload: CalBookingPayload, cancelled = false): string {
     payload.videoCallData?.url ??
     payload.metadata?.videoCallUrl ??
     (payload.location?.startsWith("http") ? payload.location : undefined);
-  if (meetingLink) lines.push(`Meeting link: ${meetingLink}`);
-
-  // Cal.com booking deep-link
-  if (payload.uid) {
-    lines.push(`Cal.com booking: https://app.cal.com/bookings/${payload.uid}`);
+  if (meetingLink) {
+    if (parts.length > 0) parts.push("");
+    parts.push("Meeting Link:");
+    parts.push(meetingLink);
   }
 
-  // Remaining form responses (skip name, email, company already captured)
-  const skipKeys = new Set(["name", "email", "guests", "notes", "location"]);
-  const extra = entries.filter(([key, r]) => {
-    const label = (r.label ?? "").toLowerCase();
-    return (
-      !skipKeys.has(key.toLowerCase()) &&
-      companyEntry?.[0] !== key &&
-      !label.includes("company") &&
-      !label.includes("business") &&
-      !label.includes("organization")
-    );
-  });
-
-  if (extra.length > 0) {
-    lines.push("");
-    lines.push("Additional info:");
-    for (const [, r] of extra) {
-      const v = responseValue(r);
-      if (v) lines.push(`${r.label}: ${v}`);
-    }
+  // Client's free-text notes from the booking form
+  const clientNotes = findClientNotes(payload);
+  if (clientNotes) {
+    if (parts.length > 0) parts.push("");
+    parts.push("Client Notes:");
+    parts.push(clientNotes);
   }
 
-  if (payload.description) {
-    lines.push("");
-    lines.push(`Description: ${payload.description}`);
-  }
-
-  lines.push("");
-  lines.push("Source: Cal.com");
-
-  return lines.filter((l, i, arr) => !(l === "" && arr[i - 1] === "")).join("\n").trim();
+  return parts.join("\n").trim();
 }
 
 // ---------------------------------------------------------------------------

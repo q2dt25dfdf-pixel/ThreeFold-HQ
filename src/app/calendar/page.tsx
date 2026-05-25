@@ -106,6 +106,27 @@ function formatTimeRange(event: CalendarEvent): string {
   return `${event.time} to ${event.endTime}`;
 }
 
+function renderNotesWithLinks(text: string) {
+  const URL_RE = /https?:\/\/[^\s)\]>"']+/g;
+  const parts = text.split(URL_RE);
+  const urls = text.match(URL_RE) ?? [];
+  return (
+    <>
+      {parts.map((part, i) => (
+        <span key={i}>
+          {part}
+          {i < urls.length && (
+            <a href={urls[i]} target="_blank" rel="noreferrer"
+              className="text-blue-600 underline break-all hover:text-blue-800">
+              {urls[i]}
+            </a>
+          )}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function formatDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -892,7 +913,8 @@ export default function CalendarPage() {
           title={editingEvent ? "Edit event" : selectedEvent.title}
           subtitle={!editingEvent ? `${selectedEvent.date}${selectedEvent.time ? ` · ${formatTimeRange(selectedEvent)}` : ""} · ${formatAssignedTo(selectedEvent.assignedTo)}` : undefined}
           onClose={closeEvent}
-          maxWidth="max-w-2xl"
+          maxWidth="max-w-[75vw]"
+          maxHeight="max-h-[85vh]"
           footer={
             <div className="space-y-3">
               <FieldError message={formError} />
@@ -972,11 +994,11 @@ export default function CalendarPage() {
               <div>
                 <p className="mb-1.5 text-xs font-semibold text-slate-700 md:text-sm">Notes</p>
                 <div
-                  className="max-h-56 min-h-[4rem] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 md:text-sm"
+                  className="max-h-[45vh] min-h-[8rem] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 md:text-sm"
                   style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
                 >
                   {eventDraft.notes?.trim()
-                    ? eventDraft.notes
+                    ? renderNotesWithLinks(eventDraft.notes)
                     : <span className="italic text-slate-400">No notes.</span>
                   }
                 </div>
