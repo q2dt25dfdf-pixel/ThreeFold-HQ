@@ -12,6 +12,7 @@ interface QuoteResult {
   quoteNumber: string;
   publicLink: string;
   expirationDate: string;
+  grandTotal?: number;
 }
 
 interface Props {
@@ -23,6 +24,14 @@ interface Props {
 
 type Step = "details" | "generating" | "preview" | "sending" | "sent" | "error";
 type CopyTarget = "subject" | "body" | "link";
+
+const QUOTE_ITEM_PRESETS = [
+  {
+    name: "Custom Performance Dri-Fit Tee",
+    description:
+      "Premium moisture-wicking performance apparel custom designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
+  },
+] as const;
 
 function newItem(): QuoteItem {
   return { name: "", description: "", quantity: 1, unitPrice: 0, lineTotal: 0 };
@@ -75,6 +84,24 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     );
   };
 
+  // Selects a preset item name and auto-fills its description.
+  // Manual edits to description afterwards are independent of this.
+  const selectPresetItem = (idx: number, name: string) => {
+    const preset = QUOTE_ITEM_PRESETS.find((p) => p.name === name);
+    setLineItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        const updated = {
+          ...item,
+          name,
+          ...(preset ? { description: preset.description } : {}),
+        };
+        updated.lineTotal = updated.quantity * updated.unitPrice;
+        return updated;
+      }),
+    );
+  };
+
   const addItem = () => setLineItems((prev) => [...prev, newItem()]);
   const removeItem = (idx: number) => setLineItems((prev) => prev.filter((_, i) => i !== idx));
 
@@ -117,20 +144,15 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           return;
         }
 
-        setQuoteResult(data);
+        setQuoteResult({ ...data, grandTotal: computedGrandTotal });
 
         const contactName = lead.contact || lead.company;
-        const subtotalFormatted = fmtCurrency(computedSubtotal);
-        const taxFormatted = fmtCurrency(computedTax);
         const grandTotalFormatted = fmtCurrency(computedGrandTotal);
         const expFormatted = fmtDate(data.expirationDate);
-        const itemSummary = validItems
-          .map((i) => `• ${i.name} (×${i.quantity})`)
-          .join("\n");
 
         setEmailSubject(`Your Custom Quote — ${data.quoteNumber} | Threefold Supply Co.`);
         setEmailBody(
-          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've put together a custom quote for your project.\n\nItems included:\n${itemSummary}\n\nQuote Number: ${data.quoteNumber}\nSubtotal: ${subtotalFormatted}\nCA Sales Tax (${fmtTaxRate(taxRate)}): ${taxFormatted}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
+          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote — including pricing breakdown — here:\n${data.publicLink}\n\nThis quote is valid for 30 days. If you have any questions or are ready to move forward, just reply to this email.\n\nBest,`,
         );
         setStep("preview");
       })
@@ -241,13 +263,18 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                 <div className="grid gap-2 sm:grid-cols-[5fr_7fr]">
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Item name</label>
-                    <input
-                      type="text"
+                    <select
                       value={item.name}
-                      onChange={(e) => updateItem(idx, "name", e.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
-                      placeholder="e.g. Premium Heavyweight Tee"
-                    />
+                      onChange={(e) => selectPresetItem(idx, e.target.value)}
+                      className="w-full cursor-pointer rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                    >
+                      <option value="">Select an item…</option>
+                      {QUOTE_ITEM_PRESETS.map((preset) => (
+                        <option key={preset.name} value={preset.name}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Description</label>
@@ -322,7 +349,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
               <span className="text-sm font-semibold text-slate-950">{fmtCurrency(subTotal)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">CA Sales Tax ({fmtTaxRate(taxRate)})</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Sales Tax ({fmtTaxRate(taxRate)})</span>
               <span className="text-sm font-semibold text-slate-500">{fmtCurrency(salesTaxAmount)}</span>
             </div>
             <div className="flex items-center justify-between border-t border-slate-200 pt-2">
