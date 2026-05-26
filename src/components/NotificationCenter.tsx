@@ -388,9 +388,9 @@ export default function NotificationCenter() {
                               }} />
                             )}
                             <div style={{ minWidth: 0, paddingLeft: n.read ? '18px' : 0 }}>
-                              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'white' }}>{n.title}</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94a3b8', lineHeight: 1.5 }}>{n.message}</p>
-                              <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#475569' }}>{timeAgo(n.created_at)}</p>
+                              <p style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'white', lineHeight: 1.3 }}>{n.title}</p>
+                              <p style={{ margin: '5px 0 0', fontSize: '14px', color: '#94a3b8', lineHeight: 1.6 }}>{n.message}</p>
+                              <p style={{ margin: '7px 0 0', fontSize: '12px', color: '#475569' }}>{timeAgo(n.created_at)}</p>
                             </div>
                           </div>
                         </button>
