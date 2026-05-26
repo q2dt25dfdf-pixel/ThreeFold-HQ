@@ -95,6 +95,15 @@ export default function NotificationCenter() {
   const [pushStatus, setPushStatus] = useState<PushStatusState>(PUSH_STATUS_INIT)
   const [pushEnabling, setPushEnabling] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
+  const [enableDebug, setEnableDebug] = useState<{
+    endpointReceived: boolean
+    authReceived: boolean
+    p256dhReceived: boolean
+    serviceRolePresent: boolean
+    insertAttempted: boolean
+    insertSucceeded: boolean
+    exactError: string | null
+  } | null>(null)
 
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
@@ -148,6 +157,7 @@ export default function NotificationCenter() {
   const enablePushNotifications = async () => {
     setPushEnabling(true)
     setPushError(null)
+    setEnableDebug(null)
     try {
       const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
       await navigator.serviceWorker.ready
@@ -170,9 +180,12 @@ export default function NotificationCenter() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub.toJSON() }),
       })
+      const json = await res.json().catch(() => ({})) as Record<string, unknown>
+      if (json.debug && typeof json.debug === 'object') {
+        setEnableDebug(json.debug as typeof enableDebug extends null ? never : NonNullable<typeof enableDebug>)
+      }
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as Record<string, unknown>
-        throw new Error(typeof err.error === 'string' ? err.error : `Server error ${res.status}`)
+        throw new Error(typeof json.error === 'string' ? json.error : `Server error ${res.status}`)
       }
       // Update state directly — don't re-check local SW, which is true regardless of DB save
       setPushStatus(s => ({ ...s, permission: 'granted', subscriptionExists: true, swReady: true }))
@@ -616,6 +629,28 @@ export default function NotificationCenter() {
                       )}
                       {pushError && (
                         <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word' }}>{pushError}</p>
+                      )}
+                      {enableDebug && (
+                        <div style={{ background: '#0f1e35', border: '1px solid #1e3a5c', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Subscribe debug</p>
+                          {([
+                            ['endpointReceived', 'Endpoint received'],
+                            ['authReceived', 'Auth key received'],
+                            ['p256dhReceived', 'p256dh key received'],
+                            ['serviceRolePresent', 'Service role key set'],
+                            ['insertAttempted', 'Insert attempted'],
+                            ['insertSucceeded', 'Insert succeeded'],
+                          ] as [keyof typeof enableDebug, string][]).map(([k, label]) => (
+                            <p key={k} style={{ margin: 0, fontSize: '11px', color: enableDebug[k] ? '#4ade80' : '#ef4444' }}>
+                              {enableDebug[k] ? '✓' : '✗'} {label}
+                            </p>
+                          ))}
+                          {enableDebug.exactError && (
+                            <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word', marginTop: '2px' }}>
+                              Error: {enableDebug.exactError}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </>
                   )
