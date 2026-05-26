@@ -82,6 +82,26 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, debug })
 }
 
+export async function GET(request: NextRequest) {
+  const endpoint = request.nextUrl.searchParams.get('endpoint')
+  if (!endpoint) return NextResponse.json({ exists: false })
+
+  let supabase
+  try {
+    supabase = getServiceClient()
+  } catch {
+    return NextResponse.json({ exists: false })
+  }
+
+  const { data } = await supabase
+    .from('push_subscriptions')
+    .select('id')
+    .eq('endpoint', endpoint)
+    .maybeSingle()
+
+  return NextResponse.json({ exists: !!data })
+}
+
 export async function DELETE(request: NextRequest) {
   const body = await request.json() as { endpoint?: string }
   if (!body.endpoint) return NextResponse.json({ error: 'Missing endpoint' }, { status: 400 })

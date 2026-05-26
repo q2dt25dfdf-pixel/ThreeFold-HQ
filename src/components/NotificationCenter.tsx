@@ -135,8 +135,17 @@ export default function NotificationCenter() {
         if (reg?.active) {
           swReady = true
           try {
-            const sub = await reg.pushManager.getSubscription()
-            subscriptionExists = !!sub
+            const localSub = await reg.pushManager.getSubscription()
+            if (localSub) {
+              // Verify this specific endpoint is actually saved in Supabase.
+              // Local browser subscription ≠ saved — they diverge when the DB
+              // insert failed or the row was deleted without unsubscribing locally.
+              const checkRes = await fetch(
+                `/api/push/subscribe?endpoint=${encodeURIComponent(localSub.endpoint)}`
+              )
+              const checkJson = await checkRes.json().catch(() => ({})) as { exists?: boolean }
+              subscriptionExists = checkJson.exists === true
+            }
           } catch { /* pushManager may not exist */ }
         }
       } catch { /* ignore */ }
@@ -194,6 +203,28 @@ export default function NotificationCenter() {
     } finally {
       setPushEnabling(false)
     }
+  }
+
+  const resetPushSubscription = async () => {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/')
+      if (reg) {
+        const localSub = await reg.pushManager.getSubscription()
+        if (localSub) {
+          await fetch('/api/push/subscribe', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: localSub.endpoint }),
+          })
+          await localSub.unsubscribe()
+        }
+      }
+    } catch (err) {
+      console.error('[push] reset error:', err)
+    }
+    setPushStatus(s => ({ ...s, subscriptionExists: false }))
+    setEnableDebug(null)
+    setPushError(null)
   }
 
   // Detect desktop breakpoint for toast sizing (mobile layout is not changed)
@@ -597,7 +628,7 @@ export default function NotificationCenter() {
                     statusText = 'Phone notifications are blocked in Settings.'
                     statusColor = '#ef4444'
                   } else if (isActive) {
-                    statusText = 'Phone notifications are active.'
+                    statusText = 'Phone notifications are active on this device.'
                     statusColor = '#4ade80'
                   } else if (permission === 'granted' && !subscriptionExists) {
                     statusText = 'Notifications allowed, but this device is not subscribed yet.'
@@ -625,6 +656,19 @@ export default function NotificationCenter() {
                           }}
                         >
                           {pushEnabling ? 'Enabling…' : `🔔 ${buttonLabel}`}
+                        </button>
+                      )}
+                      {isActive && (
+                        <button
+                          type="button"
+                          onClick={() => void resetPushSubscription()}
+                          style={{
+                            background: 'none', border: 'none', color: '#334155',
+                            fontSize: '11px', fontWeight: 500, cursor: 'pointer',
+                            padding: '2px 0', textAlign: 'left', alignSelf: 'flex-start',
+                          }}
+                        >
+                          Reset this device
                         </button>
                       )}
                       {pushError && (
