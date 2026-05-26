@@ -1,6 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
+function postNotification(payload: {
+  type: string; title: string; message: string; entity_type?: string; entity_id?: string;
+}): void {
+  fetch('/api/internal/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(err => console.error('[notify]', err))
+}
+
+function fmtEventDateTime(date: string, time?: string): string {
+  const [year, month, day] = date.split("-").map(Number)
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const dateStr = `${months[month - 1]} ${day}, ${year}`
+  if (!time) return dateStr
+  const [h, m] = time.split(":").map(Number)
+  const ampm = h >= 12 ? "PM" : "AM"
+  const h12 = h % 12 || 12
+  return `${dateStr} at ${h12}:${String(m).padStart(2, "0")} ${ampm}`
+}
 import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
@@ -425,7 +446,16 @@ export default function CalendarPage() {
     const newEvent = { id: `event-${Date.now()}`, ...form };
     await addSave.runSave(async () => {
       const response = await upsertItem(newEvent);
-      if (!response.error) setForm(freshForm());
+      if (!response.error) {
+        setForm(freshForm());
+        postNotification({
+          type: 'calendar_event_created',
+          title: 'Calendar Event Created',
+          message: `${newEvent.title} · ${fmtEventDateTime(newEvent.date, newEvent.time)}`,
+          entity_type: 'calendar',
+          entity_id: newEvent.id,
+        });
+      }
       return response;
     }, () => setShowAdd(false));
   };

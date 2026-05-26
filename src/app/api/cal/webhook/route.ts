@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { createNotification } from "@/lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Cal.com payload types
@@ -256,6 +257,17 @@ function buildNotes(payload: CalBookingPayload, cancelled = false): string {
   return parts.join("\n").trim();
 }
 
+function fmtEventDateTime(date: string, time?: string): string {
+  const [year, month, day] = date.split("-").map(Number)
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const dateStr = `${months[month - 1]} ${day}, ${year}`
+  if (!time) return dateStr
+  const [h, m] = time.split(":").map(Number)
+  const ampm = h >= 12 ? "PM" : "AM"
+  const h12 = h % 12 || 12
+  return `${dateStr} at ${h12}:${String(m).padStart(2, "0")} ${ampm}`
+}
+
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
@@ -296,6 +308,15 @@ export async function POST(request: NextRequest) {
     const { date, time } = extractDateAndTime(payload.startTime, tz);
     const endTime = payload.endTime ? extractDateAndTime(payload.endTime, tz).time : undefined;
 
+    // Check existence before upsert — Cal.com can deliver the same webhook
+    // more than once (retries). We only want to notify on the first delivery.
+    const { data: existingRow } = await supabase
+      .from("calendar_events")
+      .select("id")
+      .eq("id", eventId)
+      .maybeSingle();
+    const isNew = !existingRow;
+
     const event: CalendarEvent = {
       id: eventId,
       title: `Client Meeting: ${clientName}`,
@@ -316,6 +337,16 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("[cal/webhook] upsert failed:", error);
       return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+
+    if (isNew) {
+      createNotification({
+        type: "calendar_event_created",
+        title: "Calendar Event Created",
+        message: `${event.title} · ${fmtEventDateTime(date, time)}`,
+        entity_type: "calendar",
+        entity_id: eventId,
+      }).catch(err => console.error("[cal/webhook] notification error:", err));
     }
 
     return NextResponse.json({ ok: true, action: "created", id: eventId });

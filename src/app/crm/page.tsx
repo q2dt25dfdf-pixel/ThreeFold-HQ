@@ -634,6 +634,13 @@ function CRMContent() {
     if (leadResponse.error) return leadResponse;
 
     syncFollowUpTask(lead);
+    postNotification({
+      type: 'new_lead',
+      title: 'New Lead',
+      message: `${lead.company || lead.contact || 'New lead'} · New project request received.`,
+      entity_type: 'lead',
+      entity_id: lead.id,
+    });
     setToastMessage("Lead added to pipeline.");
     return leadResponse;
   };

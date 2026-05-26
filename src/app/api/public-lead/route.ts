@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { randomUUID } from 'crypto'
+import { createNotification } from '@/lib/notifications'
 
 function normalizeForMatch(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
@@ -165,6 +166,15 @@ export async function POST(request: Request) {
       console.error('Supabase insert error:', error)
       return NextResponse.json({ error: 'Failed to save lead' }, { status: 500, headers })
     }
+
+    // Fire notification — best-effort, never blocks the response
+    createNotification({
+      type: 'new_lead',
+      title: 'New Lead',
+      message: `${leadData.company || leadData.contact || 'New submission'} · New project request received.`,
+      entity_type: 'lead',
+      entity_id: id,
+    }).catch(err => console.error('[public-lead] notification error:', err))
 
     return NextResponse.json({ success: true, id, route: 'new_lead' }, { headers })
 
