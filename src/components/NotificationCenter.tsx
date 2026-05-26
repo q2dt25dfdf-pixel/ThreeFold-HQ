@@ -587,7 +587,7 @@ export default function NotificationCenter() {
                     statusText = 'Notifications are blocked in browser settings.'
                     statusColor = '#ef4444'
                   } else if (isActive) {
-                    statusText = 'Notifications are active on this device.'
+                    statusText = 'Notifications enabled.'
                     statusColor = '#4ade80'
                   } else if (permission === 'granted' && !subscriptionExists) {
                     statusText = 'Notifications allowed, but this device is not subscribed yet.'
