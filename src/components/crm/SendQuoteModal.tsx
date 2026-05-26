@@ -149,11 +149,21 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         const contactName = lead.contact || lead.company;
         const grandTotalFormatted = fmtCurrency(computedGrandTotal);
         const expFormatted = fmtDate(data.expirationDate);
+        const isRevised = lead.stage === "Quote Sent";
 
-        setEmailSubject(`Your Custom Quote — ${data.quoteNumber} | Threefold Supply Co.`);
-        setEmailBody(
-          `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote — including pricing breakdown — here:\n${data.publicLink}\n\nThis quote is valid for 30 days.\n\nTo move forward, we require a 50% deposit before production begins. The remaining 50% balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, simply reply to this email, give us a call, or send us a text. We'll prepare and send your deposit invoice separately and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\nBest,`,
-        );
+        const sharedTail = `This quote is valid for 30 days.\n\nTo move forward, we require a 50% deposit before production begins. The remaining 50% balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, simply reply to this email, give us a call, or send us a text. We'll prepare and send your deposit invoice separately and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\nBest,`;
+
+        if (isRevised) {
+          setEmailSubject(`Updated Quote from Threefold Supply Co.`);
+          setEmailBody(
+            `Hello ${contactName},\n\nWe've updated your quote based on the changes discussed and attached the revised pricing for your review.\n\nYou can view your updated quote and pricing breakdown here:\n${data.publicLink}\n\nPlease take a look and let us know if everything looks correct. If you'd like to make any additional adjustments, simply reply to this email and we'll be happy to update it further.\n\nOnce you're ready to move forward, you can approve the quote directly from the quote page.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\n${sharedTail}`,
+          );
+        } else {
+          setEmailSubject(`Your Custom Quote from Threefold Supply Co.`);
+          setEmailBody(
+            `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote — including pricing breakdown — here:\n${data.publicLink}\n\n${sharedTail}`,
+          );
+        }
         setStep("preview");
       })
       .catch((err: unknown) => {
