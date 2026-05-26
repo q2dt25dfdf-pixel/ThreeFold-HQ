@@ -238,7 +238,8 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
 
   const showSendDesign = current.stage === "Design Phase" && onSendDesign;
   const showSendQuote = current.stage === "Design Approved" && onSendQuote;
-  const showSendDeposit = current.stage === "Quote Sent" && onSendDepositRequest;
+  const showSendRevisedQuote = current.stage === "Quote Sent" && onSendQuote;
+  const showSendDeposit = current.stage === "Quote Approved" && onSendDepositRequest;
   const showCompleteFollowUp = canCompleteFollowUp && onCompleteFollowUp;
 
   const footer = (
@@ -260,6 +261,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-900 bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition lg:hidden"
         >
           Send Quote
+        </button>
+      )}
+      {showSendRevisedQuote && (
+        <button
+          type="button"
+          onClick={() => onSendQuote(current)}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-900 bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition lg:hidden"
+        >
+          Send Revised Quote
         </button>
       )}
       {showSendDeposit && (
@@ -326,6 +336,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               className="hidden min-h-11 items-center rounded-3xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition lg:inline-flex"
             >
               Send Quote
+            </button>
+          )}
+          {showSendRevisedQuote && (
+            <button
+              type="button"
+              onClick={() => onSendQuote(current)}
+              className="hidden min-h-11 items-center rounded-3xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition lg:inline-flex"
+            >
+              Send Revised Quote
             </button>
           )}
           {showSendDeposit && (

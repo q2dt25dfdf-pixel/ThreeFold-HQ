@@ -8,6 +8,7 @@ export type NotificationType =
   | 'new_client'
   | 'new_lead'
   | 'quote_sent'
+  | 'quote_approved'
   | 'deposit_request_sent'
   | 'design_approved'
   | 'order_created'

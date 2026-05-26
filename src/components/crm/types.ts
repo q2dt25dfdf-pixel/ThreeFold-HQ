@@ -5,6 +5,7 @@ export const pipelineStages = [
   "Client Review",
   "Design Approved",
   "Quote Sent",
+  "Quote Approved",
   "Deposit Paid",
 ] as const;
 
@@ -60,6 +61,7 @@ export type Lead = {
   // Quote & deposit tracking — set after each workflow step
   quote_id?: string;
   quote_number?: string;
+  approved_quote_id?: string;  // tracks which quote the client approved; separate from quote_id
   deposit_request_id?: string;
   deposit_request_number?: string;
 };
