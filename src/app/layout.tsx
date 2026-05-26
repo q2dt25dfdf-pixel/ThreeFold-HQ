@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "../components/layout/AppShell";
+import ServiceWorkerRegistrar from "../components/ServiceWorkerRegistrar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,11 +31,13 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Threefold HQ" />
         <meta name="theme-color" content="#0f172a" />
+        <link rel="apple-touch-icon" href="/logo.png" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-zinc-100 antialiased`}
         style={{ backgroundColor: "#f4f4f5" }}
       >
+        <ServiceWorkerRegistrar />
         <AppShell>{children}</AppShell>
       </body>
     </html>

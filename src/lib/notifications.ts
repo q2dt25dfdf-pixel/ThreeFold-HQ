@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from './supabase-admin'
+import { sendPushToAll } from './push-server'
 
 export type NotificationType =
   | 'deposit_received'
@@ -40,4 +41,12 @@ export async function createNotification(payload: NotificationPayload): Promise<
       read_at: null,
     },
   })
+
+  // Fire-and-forget push to all subscribed devices
+  sendPushToAll({
+    title: payload.title,
+    body: payload.message,
+    url: '/',
+    tag: `threefold-hq-${payload.type}`,
+  }).catch(err => console.error('[notifications] push error:', err))
 }

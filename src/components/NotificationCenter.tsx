@@ -1,10 +1,130 @@
 'use client'
 
-import { useMemo, useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, Check, Loader2, X } from 'lucide-react'
+import { Bell, Check, Loader2, X, Smartphone, SmartphoneNfc } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useSupabaseTable } from '@/lib/useSupabaseTable'
+
+// ── Push notification subscription helpers ────────────────────────────────────
+
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''
+
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = atob(base64)
+  const arr = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; i++) arr[i] = rawData.charCodeAt(i)
+  return arr.buffer as ArrayBuffer
+}
+
+type PushState =
+  | 'checking'
+  | 'unsupported'    // browser/OS doesn't support Push API
+  | 'ios-browser'    // iOS Safari but not installed to Home Screen
+  | 'denied'         // user denied permission
+  | 'unsubscribed'   // supported and permitted but not yet subscribed
+  | 'pending'        // awaiting permission prompt
+  | 'subscribing'    // saving subscription to server
+  | 'subscribed'     // all good
+  | 'error'
+
+function usePushSubscription() {
+  const [state, setState] = useState<PushState>('checking')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const subscriptionRef = useRef<PushSubscription | null>(null)
+
+  const check = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as { standalone?: boolean }).standalone === true
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setState(isIOS && !isStandalone ? 'ios-browser' : 'unsupported')
+      return
+    }
+    if (isIOS && !isStandalone) {
+      setState('ios-browser')
+      return
+    }
+
+    const permission = Notification.permission
+    if (permission === 'denied') { setState('denied'); return }
+
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) {
+        subscriptionRef.current = existing
+        setState('subscribed')
+      } else {
+        setState(permission === 'granted' ? 'unsubscribed' : 'unsubscribed')
+      }
+    } catch {
+      setState('unsubscribed')
+    }
+  }, [])
+
+  useEffect(() => { void check() }, [check])
+
+  const subscribe = useCallback(async () => {
+    if (!VAPID_PUBLIC_KEY) {
+      setErrorMsg('VAPID key not configured.')
+      setState('error')
+      return
+    }
+    setState('pending')
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') { setState('denied'); return }
+
+      setState('subscribing')
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      })
+      subscriptionRef.current = sub
+
+      const raw = sub.toJSON()
+      await fetch('/api/internal/push-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: raw.endpoint,
+          keys: raw.keys,
+          userAgent: navigator.userAgent,
+        }),
+      })
+      setState('subscribed')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+      setState('error')
+    }
+  }, [])
+
+  const unsubscribe = useCallback(async () => {
+    const sub = subscriptionRef.current
+    if (!sub) { setState('unsubscribed'); return }
+    try {
+      await fetch('/api/internal/push-subscription', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      })
+      await sub.unsubscribe()
+      subscriptionRef.current = null
+      setState('unsubscribed')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+    }
+  }, [])
+
+  return { state, errorMsg, subscribe, unsubscribe }
+}
 
 type Notification = {
   id: string
@@ -52,6 +172,10 @@ export default function NotificationCenter() {
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
   const [testError, setTestError] = useState<string | null>(null)
+  const [pushTestSending, setPushTestSending] = useState(false)
+  const [pushTestMsg, setPushTestMsg] = useState<string | null>(null)
+
+  const { state: pushState, errorMsg: pushError, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushSubscription()
 
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
@@ -257,6 +381,25 @@ export default function NotificationCenter() {
     }
   }
 
+  const sendTestPush = async () => {
+    if (pushTestSending) return
+    setPushTestSending(true)
+    setPushTestMsg(null)
+    try {
+      const res = await fetch('/api/internal/push-test', { method: 'POST' })
+      const json = await res.json().catch(() => ({})) as Record<string, unknown>
+      if (!res.ok) {
+        setPushTestMsg(`Failed: ${typeof json.error === 'string' ? json.error : `HTTP ${res.status}`}`)
+      } else {
+        setPushTestMsg('Test push sent — check your device.')
+      }
+    } catch (err) {
+      setPushTestMsg(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setPushTestSending(false)
+    }
+  }
+
   if (!mounted) return null
 
   const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS)
@@ -431,20 +574,129 @@ export default function NotificationCenter() {
               )}
             </div>
 
-            {/* Panel footer — test button */}
-            <div style={{ borderTop: '1px solid #1e293b', padding: '10px 20px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-              <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
-                background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
-                fontSize: '12px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
-                padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em',
-              }}>
-                {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
-              </button>
-              {testError && (
-                <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center', maxWidth: '320px' }}>
-                  {testError}
+            {/* Panel footer — push settings + test buttons */}
+            <div style={{ borderTop: '1px solid #1e293b', padding: '12px 16px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+              {/* ── Push notification section ── */}
+              {pushState === 'ios-browser' && (
+                <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '10px', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <Smartphone size={14} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#fbbf24' }}>Add to Home Screen first</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', lineHeight: 1.5 }}>
+                    To enable push notifications on iPhone, tap the Share button in Safari → "Add to Home Screen", then open the app from your Home Screen.
+                  </p>
+                </div>
+              )}
+
+              {pushState === 'unsupported' && (
+                <p style={{ margin: 0, fontSize: '11px', color: '#475569', textAlign: 'center' }}>
+                  Phone notifications are not supported on this device or browser.
                 </p>
               )}
+
+              {pushState === 'denied' && (
+                <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <Smartphone size={14} style={{ color: '#f87171', flexShrink: 0 }} />
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#f87171' }}>Notifications blocked</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', lineHeight: 1.5 }}>
+                    To re-enable, go to iPhone Settings → Threefold HQ → Notifications → Allow Notifications.
+                  </p>
+                </div>
+              )}
+
+              {(pushState === 'unsubscribed' || pushState === 'pending' || pushState === 'subscribing' || pushState === 'error') && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => void subscribePush()}
+                    disabled={pushState === 'pending' || pushState === 'subscribing'}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                      color: '#818cf8', fontSize: '12px', fontWeight: 600,
+                      cursor: pushState === 'pending' || pushState === 'subscribing' ? 'default' : 'pointer',
+                      padding: '7px 12px', borderRadius: '8px', letterSpacing: '0.02em',
+                    }}
+                  >
+                    <SmartphoneNfc size={13} />
+                    {pushState === 'pending' ? 'Waiting for permission…' :
+                     pushState === 'subscribing' ? 'Enabling…' :
+                     'Enable phone notifications'}
+                  </button>
+                  {pushState === 'error' && pushError && (
+                    <p style={{ margin: 0, fontSize: '11px', color: '#f87171', textAlign: 'center' }}>{pushError}</p>
+                  )}
+                </div>
+              )}
+
+              {pushState === 'subscribed' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4ade80', fontSize: '12px', fontWeight: 600 }}>
+                      <SmartphoneNfc size={13} />
+                      Phone notifications on
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void unsubscribePush()}
+                      style={{
+                        background: 'none', border: 'none', color: '#475569',
+                        fontSize: '11px', cursor: 'pointer', padding: '4px 6px',
+                        borderRadius: '6px', textDecoration: 'underline',
+                      }}
+                    >
+                      Disable
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                    <button
+                      type="button"
+                      onClick={() => void sendTestPush()}
+                      disabled={pushTestSending}
+                      style={{
+                        background: 'none', border: 'none',
+                        color: pushTestSending ? '#334155' : '#475569',
+                        fontSize: '11px', fontWeight: 500,
+                        cursor: pushTestSending ? 'default' : 'pointer',
+                        padding: '4px 8px', borderRadius: '6px',
+                      }}
+                    >
+                      {pushTestSending ? 'Sending…' : '📱 Send test push'}
+                    </button>
+                    {pushTestMsg && (
+                      <p style={{ margin: 0, fontSize: '10px', color: pushTestMsg.startsWith('Failed') || pushTestMsg.startsWith('Error') ? '#f87171' : '#4ade80', textAlign: 'center' }}>
+                        {pushTestMsg}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {pushState === 'checking' && (
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <Loader2 size={14} style={{ color: '#475569', animation: 'notif-spin 1s linear infinite' }} />
+                </div>
+              )}
+
+              {/* ── In-app test button ── */}
+              <div style={{ borderTop: '1px solid #1e293b', paddingTop: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
+                  background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
+                  fontSize: '12px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
+                  padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em',
+                }}>
+                  {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
+                </button>
+                {testError && (
+                  <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center', maxWidth: '320px' }}>
+                    {testError}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
