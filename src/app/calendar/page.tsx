@@ -913,8 +913,8 @@ export default function CalendarPage() {
           title={editingEvent ? "Edit event" : selectedEvent.title}
           subtitle={!editingEvent ? `${selectedEvent.date}${selectedEvent.time ? ` · ${formatTimeRange(selectedEvent)}` : ""} · ${formatAssignedTo(selectedEvent.assignedTo)}` : undefined}
           onClose={closeEvent}
-          maxWidth="max-w-[75vw]"
-          maxHeight="max-h-[85vh]"
+          maxWidth="max-w-3xl"
+          maxHeight="max-h-[calc(100vh-64px)]"
           footer={
             <div className="space-y-3">
               <FieldError message={formError} />
