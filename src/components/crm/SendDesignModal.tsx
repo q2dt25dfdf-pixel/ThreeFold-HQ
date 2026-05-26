@@ -22,7 +22,6 @@ type CopyTarget = "subject" | "body";
 
 export default function SendDesignModal({ open, lead, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("compose");
-  const [consultationLink, setConsultationLink] = useState("");
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -32,7 +31,6 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
   useEffect(() => {
     if (!open || !lead) return;
     setStep("compose");
-    setConsultationLink("");
     setErrorMsg("");
     setCopied("");
     setEmailTo(lead.email ?? "");
@@ -41,7 +39,7 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
   const firstName = (lead?.contact || lead?.company || "").split(" ")[0] || "there";
 
   const buildPreview = () => {
-    const link = consultationLink.trim() || "[Design consultation link]";
+    const link = "https://cal.com/threefold-fwkchj/designconsultation";
     setEmailSubject("Your First Apparel Concepts");
     setEmailBody(
       `Hi ${firstName},\n\nThank you for taking the time to share your logo, ideas, and the story behind your company with us.\n\nAttached are the first apparel concepts we've created based on everything you told us about your team, brand, and what you'd like your apparel to represent. These are intended as initial creative directions designed to spark conversation and help us refine the collection into something that truly feels like your company.\n\nAs you review the designs, we'd love to hear what stands out to you, what you'd like to see more of, what doesn't resonate, and any new ideas that come to mind. The best designs come from collaboration, and this stage is all about shaping the artwork together.\n\nIf you'd like to walk through the concepts live, discuss the thinking behind the designs, or brainstorm revisions together, you can schedule a video call here:\n\n${link}\n\nOf course, you're also welcome to simply reply to this email, call, or text us with your feedback, whatever is easiest for you.\n\nWe're excited to hear your thoughts and continue building something unique for your team.\n\nBest,`,
@@ -171,23 +169,6 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
               First name used in email
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-950">{firstName}</p>
-          </div>
-
-          {/* Consultation link */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-600">
-              Design Consultation Link
-            </label>
-            <input
-              type="url"
-              value={consultationLink}
-              onChange={(e) => setConsultationLink(e.target.value)}
-              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-500"
-              placeholder="https://cal.com/threefold/design-review"
-            />
-            <p className="text-xs text-slate-400">
-              Leave blank to use a placeholder — you can edit the body before sending.
-            </p>
           </div>
 
           {/* Reminder note */}
