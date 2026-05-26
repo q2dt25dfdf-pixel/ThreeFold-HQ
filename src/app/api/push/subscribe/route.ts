@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 // push_subscriptions table columns (confirmed via live schema probe):
-//   endpoint text, auth text, p256dh text, user_agent text, created_at, updated_at
-// endpoint is the natural unique key.
+//   id text PK (must be supplied — no default), endpoint text, auth text,
+//   p256dh text, user_agent text, created_at, updated_at
+// endpoint is the natural unique key; id is generated server-side.
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/rest\/v1\/?$/, '')
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
 
   debug.insertAttempted = true
   const { error } = await supabase.from('push_subscriptions').insert({
+    id: crypto.randomUUID(),
     endpoint,
     auth,
     p256dh,
