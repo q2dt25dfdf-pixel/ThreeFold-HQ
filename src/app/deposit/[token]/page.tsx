@@ -64,6 +64,7 @@ export default function DepositPage() {
   const [paymentParam, setPaymentParam] = useState<"success" | "cancelled" | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
@@ -214,27 +215,10 @@ export default function DepositPage() {
               PAYMENT BREAKDOWN
             </div>
             <div style={s.detailList}>
-              {hasTax ? (
-                <>
-                  <div style={s.detailRow}>
-                    <span style={s.detailKey}>SUBTOTAL</span>
-                    <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                  </div>
-                  <div style={s.detailRow}>
-                    <span style={s.detailKey}>CA SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "8.75%"})</span>
-                    <span style={s.detailVal}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                  </div>
-                  <div style={s.detailRow}>
-                    <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
-                    <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
-                  </div>
-                </>
-              ) : (
-                <div style={s.detailRow}>
-                  <span style={s.detailKey}>TOTAL PROJECT VALUE</span>
-                  <span style={s.detailVal}>{fmt(data.total_amount)}</span>
-                </div>
-              )}
+              <div style={s.detailRow}>
+                <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
+                <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
+              </div>
               <div style={s.detailRow}>
                 <span style={s.detailKey}>DEPOSIT REQUIRED ({depositPercent}%)</span>
                 <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
@@ -243,6 +227,32 @@ export default function DepositPage() {
                 <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
                 <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
               </div>
+              {hasTax && (
+                <>
+                  <button
+                    onClick={() => setShowBreakdown((v) => !v)}
+                    style={s.breakdownToggle}
+                  >
+                    {showBreakdown ? "▾" : "▸"} VIEW FULL PRICING BREAKDOWN
+                  </button>
+                  {showBreakdown && (
+                    <div style={s.breakdownExpanded}>
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>SUBTOTAL</span>
+                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                      </div>
+                      <div style={s.detailRow}>
+                        <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
+                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                      </div>
+                      <div style={{ ...s.detailRow, borderBottom: "none" }}>
+                        <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL</span>
+                        <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {!isPaid ? (
@@ -426,5 +436,26 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     color: C.textSecondary,
     lineHeight: 1.6,
+  },
+  breakdownToggle: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.14em",
+    color: C.textMuted,
+    textTransform: "uppercase" as const,
+    padding: "14px 0 4px",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    width: "100%",
+    textAlign: "left" as const,
+  },
+  breakdownExpanded: {
+    borderTop: `1px solid ${C.border}`,
+    marginTop: "4px",
+    paddingTop: "4px",
   },
 };

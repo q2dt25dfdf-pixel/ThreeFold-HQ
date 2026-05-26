@@ -60,7 +60,7 @@ export default function PaymentOptionsPanel({
       </div>
 
       <div style={s.feeNotice}>
-        Card payments include a 3% processing fee. Bank account payments do not.
+        * Card payments include a 3% processing fee. Bank account payments do not.
       </div>
 
       {checkoutError && <div style={s.errorText}>{checkoutError}</div>}
@@ -145,10 +145,12 @@ const s: Record<string, React.CSSProperties> = {
     borderTop: `1px dashed ${C.greenBorder}`,
   },
   feeNotice: {
-    fontSize: "13px",
+    fontSize: "11px",
+    fontStyle: "italic",
     color: C.textMuted,
-    lineHeight: 1.65,
+    lineHeight: 1.6,
     marginBottom: "20px",
+    opacity: 0.8,
   },
   errorText: {
     fontSize: "13px",

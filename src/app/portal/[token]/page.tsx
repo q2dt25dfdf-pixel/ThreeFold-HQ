@@ -250,6 +250,7 @@ export default function PortalPage() {
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showBreakdown, setShowBreakdown] = useState(false)
 
   useEffect(() => {
     const t = window.location.pathname.split('/').pop() || ''
@@ -509,32 +510,20 @@ export default function PortalPage() {
                   PAYMENT SUMMARY
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {hasTax && (
-                    <>
-                      <div style={s.cardRow}>
-                        <span style={s.cardRowLabel}>SUBTOTAL</span>
-                        <span style={{ ...s.cardRowValue, fontSize: '16px' }}>{fmtCurrency(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.cardRow}>
-                        <span style={s.cardRowLabel}>CA SALES TAX ({data.salesTaxRate != null ? `${Math.round(data.salesTaxRate * 10000) / 100}%` : '8.75%'})</span>
-                        <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
-                      </div>
-                    </>
-                  )}
                   <div style={s.cardRow}>
-                    <span style={s.cardRowLabel}>TOTAL PROJECT VALUE</span>
+                    <span style={{ ...s.cardRowLabel, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
                     <span style={s.cardRowValue}>{fmtCurrency(totalVal)}</span>
                   </div>
                   <div style={s.cardRow}>
-                    <span style={s.cardRowLabel}>DEPOSIT PAID</span>
+                    <span style={s.cardRowLabel}>AMOUNT PAID</span>
                     <span style={{ ...s.cardRowValue, color: depositIsPaid ? C.green : undefined }}>
                       {depositVal > 0 ? fmtCurrency(depositVal) : '—'}
                       {depositIsPaid && <span style={{ fontSize: '13px', marginLeft: '6px' }}>✓</span>}
                     </span>
                   </div>
-                  <div style={s.cardRow}>
+                  <div style={{ ...s.cardRow, borderBottom: hasTax ? undefined : 'none', paddingBottom: hasTax ? undefined : '4px' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={s.cardRowLabel}>REMAINING PAYMENT</div>
+                      <div style={s.cardRowLabel}>REMAINING BALANCE</div>
                       {!isPaidInFull && (
                         <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '5px', lineHeight: 1.5, maxWidth: '220px' }}>
                           Final payment is due once your order is complete and ready for delivery.
@@ -545,17 +534,32 @@ export default function PortalPage() {
                       {isPaidInFull ? 'PAID IN FULL ✓' : fmtCurrency(balanceVal)}
                     </span>
                   </div>
-                  <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
-                    <span style={s.cardRowLabel}>PAYMENT STATUS</span>
-                    <span style={{
-                      ...s.cardRowValue,
-                      fontSize: '13px',
-                      letterSpacing: '0.1em',
-                      color: isPaidInFull ? C.green : depositIsPaid ? C.gold : C.textPrimary,
-                    }}>
-                      {(data.paymentStatus || 'AWAITING DEPOSIT').toUpperCase()}
-                    </span>
-                  </div>
+                  {hasTax && (
+                    <>
+                      <button
+                        onClick={() => setShowBreakdown((v) => !v)}
+                        style={s.breakdownToggle}
+                      >
+                        {showBreakdown ? '▾' : '▸'} VIEW FULL PRICING BREAKDOWN
+                      </button>
+                      {showBreakdown && (
+                        <div style={s.breakdownExpanded}>
+                          <div style={s.cardRow}>
+                            <span style={s.cardRowLabel}>SUBTOTAL</span>
+                            <span style={{ ...s.cardRowValue, fontSize: '16px' }}>{fmtCurrency(data.subtotal ?? 0)}</span>
+                          </div>
+                          <div style={s.cardRow}>
+                            <span style={s.cardRowLabel}>SALES TAX ({data.salesTaxRate != null ? `${Math.round(data.salesTaxRate * 10000) / 100}%` : '9.375%'})</span>
+                            <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
+                          </div>
+                          <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
+                            <span style={{ ...s.cardRowLabel, fontWeight: 700 }}>TOTAL</span>
+                            <span style={s.cardRowValue}>{fmtCurrency(totalVal)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
                 {data.stripeInvoiceUrl && (
                   <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
@@ -594,7 +598,7 @@ export default function PortalPage() {
                   {hasTax && (
                     <>
                       <div style={s.cardRow}>
-                        <span style={{ ...s.cardRowLabel, color: C.textSecondary }}>CA SALES TAX</span>
+                        <span style={{ ...s.cardRowLabel, color: C.textSecondary }}>SALES TAX</span>
                         <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
                       </div>
                     </>
@@ -869,5 +873,26 @@ const s: Record<string, React.CSSProperties> = {
   intakeFileRow: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
     border: `1px solid ${C.border}`, padding: '12px 16px', backgroundColor: C.bgCard, borderRadius: '6px',
+  },
+  breakdownToggle: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '0.14em',
+    color: C.textMuted,
+    textTransform: 'uppercase' as const,
+    padding: '14px 0 4px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    width: '100%',
+    textAlign: 'left' as const,
+  },
+  breakdownExpanded: {
+    borderTop: `1px solid ${C.border}`,
+    marginTop: '4px',
+    paddingTop: '4px',
   },
 }

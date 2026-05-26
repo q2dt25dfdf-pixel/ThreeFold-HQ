@@ -156,7 +156,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         : "";
 
       const taxLine = quoteData?.salesTaxAmount != null && quoteData.salesTaxAmount > 0
-        ? `\nCA Sales Tax (${fmtTaxRate(quoteData.salesTaxRate)}): ${fmtCurrency(quoteData.salesTaxAmount)}`
+        ? `\nSales Tax (${fmtTaxRate(quoteData.salesTaxRate)}): ${fmtCurrency(quoteData.salesTaxAmount)}`
         : "";
       const subtotalLine = quoteData?.subtotal != null && quoteData.subtotal !== data.totalAmount
         ? `\nSubtotal: ${fmtCurrency(quoteData.subtotal)}${taxLine}`

@@ -10,12 +10,10 @@ import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
-import { calcDepositTax, calcFinalTax, fmtTaxRate, nextQuarterlyDueDate, salesTaxRate } from "@/lib/salesTax";
+import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   Cell,
   Pie,
   PieChart,
@@ -390,63 +388,6 @@ function FinancesContent() {
 
   const taxDue = Math.max(taxCollectedYTD - taxPaidYTD, 0);
 
-  const lastTaxPayment = useMemo(() => {
-    return [...taxPayments]
-      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
-      [0] ?? null;
-  }, [taxPayments]);
-
-  const nextTaxDueDate = nextQuarterlyDueDate(businessTodayISO());
-
-  const monthlyTaxCollected = useMemo(() => {
-    return monthLabels.map((month, idx) => {
-      const collected = normalizedInvoices.reduce((sum, inv) => {
-        const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
-        if (taxAmt <= 0) return sum;
-        const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
-        const depositAmt = parseAmount(inv.deposit_amount);
-        if (inv.final_paid && invoiceMonthIndex(inv) === idx) return sum + taxAmt;
-        if (inv.deposit_paid && !inv.final_paid) {
-          const depositMonth = new Date((inv.deposit_paid_date ?? "") + "T12:00:00").getMonth();
-          if (depositMonth === idx) return sum + calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
-        }
-        return sum;
-      }, 0);
-      const paid = taxPayments
-        .filter((p) => new Date((p.date ?? "") + "T12:00:00").getMonth() === idx)
-        .reduce((sum, p) => sum + parseAmount(p.amount ?? 0), 0);
-      return { month, collected, paid };
-    });
-  }, [normalizedInvoices, taxPayments]);
-
-  const taxLedger = useMemo(() => {
-    const collected: { date: string; type: "collected"; label: string; amount: number; invoiceId?: string }[] = [];
-    for (const inv of normalizedInvoices) {
-      const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
-      if (taxAmt <= 0) continue;
-      const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
-      const depositAmt = parseAmount(inv.deposit_amount);
-      const clientLabel = inv.client_name || inv.client || "Invoice";
-      if (inv.deposit_paid && inv.deposit_paid_date) {
-        const depTax = calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
-        if (depTax > 0) collected.push({ date: inv.deposit_paid_date, type: "collected", label: `${clientLabel} — deposit`, amount: depTax, invoiceId: inv.id });
-      }
-      if (inv.final_paid && inv.final_paid_date) {
-        const depTax = inv.deposit_paid ? calcDepositTax(taxAmt, depositAmt, grandTotalAmt) : 0;
-        const finalTax = calcFinalTax(taxAmt, depTax);
-        if (finalTax > 0) collected.push({ date: inv.final_paid_date, type: "collected", label: `${clientLabel} — final`, amount: finalTax, invoiceId: inv.id });
-      }
-    }
-    const remitted = taxPayments.map((p) => ({
-      date: p.date ?? "",
-      type: "remitted" as const,
-      label: p.period ? `State — ${p.period}` : "State payment",
-      amount: parseAmount(p.amount ?? 0),
-      notes: p.notes,
-      paymentId: p.id,
-    }));
-    return [...collected, ...remitted].sort((a, b) => b.date.localeCompare(a.date));
-  }, [normalizedInvoices, taxPayments]);
 
   const handleAddTaxPayment = async () => {
     const amt = parseFloat(taxForm.amount);
@@ -1110,137 +1051,52 @@ function FinancesContent() {
         </div>
       </section>
 
-      {/* ── Sales Tax Reserve ──────────────────────────────────────────────── */}
-      <section className="space-y-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      {/* ── Sales Tax Tracking (compact) ──────────────────────────────────── */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">California Sales Tax</p>
-            <h2 className="mt-2 text-base md:text-xl font-semibold text-slate-950">Sales Tax Reserve</h2>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Rate: {fmtTaxRate(configuredTaxRate)} · Collected vs. remitted to state</p>
+            <h2 className="text-base md:text-lg font-semibold text-slate-950">Sales Tax Tracking</h2>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">Rate: {fmtTaxRate(configuredTaxRate)}</p>
           </div>
           <button
-            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
+            className="min-h-10 w-full rounded-3xl border border-slate-300 px-5 py-2 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
             onClick={() => { setTaxForm({ amount: "", date: businessTodayISO(), period: "", notes: "" }); setTaxFormError(""); setShowTaxModal(true); }}
           >
             Record Tax Payment
           </button>
         </div>
 
-        {/* Summary cards */}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {[
-            { label: "Tax Due Now", value: currency.format(taxDue), highlight: taxDue > 0 },
-            { label: "Collected YTD", value: currency.format(taxCollectedYTD), highlight: false },
-            { label: "Paid YTD", value: currency.format(taxPaidYTD), highlight: false },
-            { label: "Last Payment", value: lastTaxPayment ? `${currency.format(parseAmount(lastTaxPayment.amount))} · ${new Date(lastTaxPayment.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "—", highlight: false },
-            { label: "Next Due", value: new Date(nextTaxDueDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), highlight: false },
-          ].map((card) => (
-            <div key={card.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-              <p className={`text-xl font-bold tracking-tight md:text-2xl ${card.highlight ? "text-rose-600" : "text-slate-950"}`}>{card.value}</p>
-              <p className="mt-2 text-xs md:text-sm text-slate-600">{card.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Charts */}
-        <div className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
-          {/* Monthly bar chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-            <h3 className="text-base md:text-lg font-semibold text-slate-950">Monthly tax activity</h3>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Tax collected vs. paid to state by month.</p>
-            <div className="mt-4 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyTaxCollected} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(v) => `$${Math.round(Number(v))}`} width={44} />
-                  <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} contentStyle={{ borderRadius: 16, borderColor: "#e2e8f0" }} />
-                  <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="paid" name="Paid to State" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <div>
+            <p className={`text-2xl font-bold tracking-tight md:text-3xl ${taxDue > 0 ? "text-rose-600" : "text-slate-950"}`}>{currency.format(taxDue)}</p>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">Sales Tax Owed</p>
           </div>
-
-          {/* Donut chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-            <h3 className="text-base md:text-lg font-semibold text-slate-950">Reserve status</h3>
-            <div className="relative mt-4 h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: "Paid to State", value: taxPaidYTD || 0 },
-                      { name: "Reserve Due", value: taxDue || 0 },
-                      ...((taxCollectedYTD === 0 && taxPaidYTD === 0) ? [{ name: "No data", value: 1 }] : []),
-                    ]}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={60}
-                    outerRadius={88}
-                    paddingAngle={taxCollectedYTD > 0 ? 4 : 0}
-                    strokeWidth={0}
-                  >
-                    <Cell fill="#10b981" />
-                    <Cell fill="#f59e0b" />
-                    <Cell fill="#e2e8f0" />
-                  </Pie>
-                  <Tooltip formatter={(v) => currency.format(Number(v ?? 0))} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <p className="text-lg md:text-2xl font-bold text-slate-950">{currency.format(taxCollectedYTD)}</p>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Collected</p>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {[
-                { name: "Paid to State", color: "#10b981", value: currency.format(taxPaidYTD) },
-                { name: "Reserve Due", color: "#f59e0b", value: currency.format(taxDue) },
-              ].map((item) => (
-                <div key={item.name} className="flex items-center gap-2 text-xs md:text-sm text-slate-600">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} aria-hidden="true" />
-                  <span>{item.name}</span>
-                  <span className="ml-auto font-semibold text-slate-950">{item.value}</span>
-                </div>
-              ))}
-            </div>
+          <div>
+            <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(taxCollectedYTD)}</p>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">Collected This Year</p>
           </div>
         </div>
 
-        {/* Tax Ledger */}
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <h3 className="mb-4 text-base md:text-lg font-semibold text-slate-950">Sales Tax Ledger</h3>
-          {taxLedger.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500 md:text-sm">No tax activity yet. Tax will appear here once invoices with sales tax are paid.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs md:text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-3 text-left font-semibold uppercase tracking-[0.16em] text-slate-500">Date</th>
-                    <th className="pb-3 text-left font-semibold uppercase tracking-[0.16em] text-slate-500">Type</th>
-                    <th className="pb-3 text-left font-semibold uppercase tracking-[0.16em] text-slate-500">Description</th>
-                    <th className="pb-3 text-right font-semibold uppercase tracking-[0.16em] text-slate-500">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {taxLedger.map((entry, idx) => (
-                    <tr key={idx} className="border-b border-slate-100 last:border-0">
-                      <td className="py-3 text-slate-600">{entry.date ? new Date(entry.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
-                      <td className="py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${entry.type === "collected" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                          {entry.type === "collected" ? "Collected" : "Remitted"}
-                        </span>
-                      </td>
-                      <td className="py-3 text-slate-700">{entry.label}</td>
-                      <td className="py-3 text-right font-semibold text-slate-950">{currency.format(entry.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {taxPayments.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Payment history</p>
+            <div className="space-y-2.5">
+              {[...taxPayments]
+                .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+                .slice(0, 5)
+                .map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-3 text-xs md:text-sm">
+                    <div className="flex items-center gap-2.5 text-slate-600 min-w-0">
+                      <span className="shrink-0">{p.date ? new Date(p.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</span>
+                      {p.period && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 shrink-0">{p.period}</span>}
+                      {p.notes && <span className="truncate text-slate-400">{p.notes}</span>}
+                    </div>
+                    <span className="shrink-0 font-semibold text-slate-950">{currency.format(parseAmount(p.amount ?? 0))}</span>
+                  </div>
+                ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* Tax payment modal */}

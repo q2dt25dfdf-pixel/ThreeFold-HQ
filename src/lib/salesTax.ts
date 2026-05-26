@@ -1,4 +1,4 @@
-export const DEFAULT_SALES_TAX_RATE = 0.0875; // California base rate
+export const DEFAULT_SALES_TAX_RATE = 0.09375; // Milpitas/Bay Area rate
 
 export function salesTaxRate(): number {
   const configured = Number(process.env.NEXT_PUBLIC_SALES_TAX_RATE);
@@ -31,7 +31,7 @@ export function calcFinalTax(salesTaxAmount: number, depositTaxCollected: number
   return Math.max(Math.round((salesTaxAmount - depositTaxCollected) * 100) / 100, 0);
 }
 
-/** Format a rate as a display percentage string, e.g. "8.75%". */
+/** Format a rate as a display percentage string, e.g. "9.375%". */
 export function fmtTaxRate(rate?: number): string {
   const r = (rate ?? salesTaxRate()) * 100;
   return r % 1 === 0 ? `${r}%` : `${r.toFixed(2).replace(/\.?0+$/, "")}%`;
