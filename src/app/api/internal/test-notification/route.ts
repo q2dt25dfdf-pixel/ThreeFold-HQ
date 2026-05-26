@@ -30,15 +30,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 
-    // Also send a push notification to all subscribed devices
+    // Send push to all subscribed devices and return the result
     console.log('[test-notification] firing push to all subscriptions…')
-    await sendPushToAll({
+    const pushResult = await sendPushToAll({
       title: notification.title,
       message: notification.message,
       url: '/',
     })
+    console.log('[test-notification] push result:', JSON.stringify(pushResult))
 
-    return NextResponse.json({ success: true, notification })
+    return NextResponse.json({ success: true, notification, push: pushResult })
   } catch (err) {
     console.error('[test-notification]', err)
     return NextResponse.json({ success: false, error: String(err) }, { status: 500 })

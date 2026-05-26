@@ -83,6 +83,15 @@ export default function NotificationCenter() {
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
   const [testError, setTestError] = useState<string | null>(null)
+  const [pushResult, setPushResult] = useState<{
+    configured: boolean
+    subscriptionsFound: number
+    attempted: number
+    sent: number
+    failed: number
+    failures: { endpointHost: string; statusCode: number | null; message: string }[]
+    skippedReason?: string
+  } | null>(null)
   const [pushStatus, setPushStatus] = useState<PushStatusState>(PUSH_STATUS_INIT)
   const [pushEnabling, setPushEnabling] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
@@ -318,6 +327,7 @@ export default function NotificationCenter() {
     if (sending) return
     setSending(true)
     setTestError(null)
+    setPushResult(null)
 
     const id = `notif-test-${Date.now()}`
     const n: Notification = {
@@ -347,13 +357,16 @@ export default function NotificationCenter() {
         return
       }
 
-      // DB insert confirmed — now show locally and sync
+      // Capture push result from server response
+      if (json.push && typeof json.push === 'object') {
+        setPushResult(json.push as typeof pushResult)
+      }
+
+      // DB insert confirmed — show locally and sync
       seenIds.current.add(id)
       setLocalNotifs(prev => [n, ...prev])
       setToasts(prev => [n, ...prev])
-      // Instant same-browser tab sync
       bcRef.current?.postMessage({ type: 'new-notification', notification: n })
-      // Reload replaces local copy with canonical DB row
       reload().catch(err => console.error('[test-notification] reload error', err))
 
     } catch (err) {
@@ -603,18 +616,46 @@ export default function NotificationCenter() {
               </div>
 
               {/* ── Test notification ────────────────────────────────────── */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderTop: '1px solid #1e293b', paddingTop: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #1e293b', paddingTop: '10px' }}>
                 <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
                   background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
                   fontSize: '12px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
-                  padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em',
+                  padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em', alignSelf: 'center',
                 }}>
-                  {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
+                  {sending ? 'Sending…' : '⚡ Send test notification'}
                 </button>
+
                 {testError && (
-                  <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center', maxWidth: '320px' }}>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center' }}>
                     {testError}
                   </p>
+                )}
+
+                {pushResult && (
+                  <div style={{ background: '#0f1e35', border: '1px solid #1e3a5c', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Push result</p>
+
+                    {pushResult.skippedReason ? (
+                      <p style={{ margin: 0, fontSize: '12px', color: '#f59e0b' }}>⚠ Skipped: {pushResult.skippedReason}</p>
+                    ) : (
+                      <>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                          Subscriptions found: <span style={{ color: 'white', fontWeight: 600 }}>{pushResult.subscriptionsFound}</span>
+                        </p>
+                        <p style={{ margin: 0, fontSize: '12px', color: pushResult.sent > 0 ? '#4ade80' : '#ef4444' }}>
+                          {pushResult.sent > 0 ? `✓ Sent to ${pushResult.sent} device${pushResult.sent !== 1 ? 's' : ''}` : `✗ Sent: 0`}
+                        </p>
+                        {pushResult.failed > 0 && (
+                          <p style={{ margin: 0, fontSize: '12px', color: '#ef4444' }}>✗ Failed: {pushResult.failed}</p>
+                        )}
+                        {pushResult.failures.map((f, i) => (
+                          <p key={i} style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-all' }}>
+                            {f.endpointHost} — HTTP {f.statusCode ?? '?'}: {f.message}
+                          </p>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
