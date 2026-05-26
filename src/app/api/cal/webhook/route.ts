@@ -130,20 +130,31 @@ function responseValue(r: CalResponse): string {
   return String(v);
 }
 
+// Standard Cal.com field slugs that are NOT free-text notes — skip during broad fallback.
+const STANDARD_FIELD_SLUGS = new Set([
+  "name", "firstname", "lastname", "email", "phone", "phonenumber",
+  "location", "guests", "guestsemail", "rescheduledreason", "reschedule",
+  "smsremindernumber", "timezone", "language", "title", "company",
+  "jobtitle", "numberofseats",
+]);
+
 // Finds the client's free-text notes from booking form responses.
-// Checks standard key names first, then label text, then legacy customInputs.
+// Checks standard key names → label text → legacy customInputs → any non-standard field.
 function findClientNotes(payload: CalBookingPayload): string {
   const entries = Object.entries(payload.responses ?? {});
 
   // Exact key match (Cal.com uses "notes" for the standard additional notes field)
   const byKey = entries.find(([key]) => {
-    const k = key.toLowerCase().replace(/[_-\s]/g, "");
+    const k = key.toLowerCase().replace(/[_\-\s]/g, "");
     return (
       k === "notes" ||
       k === "additionalnotes" ||
       k === "message" ||
       k === "comments" ||
-      k === "anythingelse"
+      k === "anythingelse" ||
+      k === "moreinfo" ||
+      k === "othernotes" ||
+      k === "question"
     );
   });
   if (byKey) {
@@ -160,7 +171,9 @@ function findClientNotes(payload: CalBookingPayload): string {
       label.includes("message") ||
       label.includes("comment") ||
       label.includes("anything else") ||
-      label.includes("tell us")
+      label.includes("tell us") ||
+      label.includes("more info") ||
+      label.includes("other")
     );
   });
   if (byLabel) {
@@ -182,6 +195,15 @@ function findClientNotes(payload: CalBookingPayload): string {
     if (found?.value) return String(found.value);
   }
 
+  // Broad fallback: pick up any non-standard field with a string value.
+  // Catches custom booking questions that use unique slugs or labels.
+  for (const [key, r] of entries) {
+    const slug = key.toLowerCase().replace(/[_\-\s]/g, "");
+    if (STANDARD_FIELD_SLUGS.has(slug)) continue;
+    const v = responseValue(r);
+    if (v) return v;
+  }
+
   return "";
 }
 
@@ -193,34 +215,43 @@ function buildNotes(payload: CalBookingPayload, cancelled = false): string {
     if (payload.cancellationReason) {
       parts.push(`Reason: ${payload.cancellationReason}`);
     }
+    parts.push("");
   }
 
-  // Client email
+  // Structured header — compact Key: value lines
+  const clientName = payload.attendees?.[0]?.name;
+  if (clientName) parts.push(`Client: ${clientName}`);
+
   const email = payload.attendees?.[0]?.email;
-  if (email) {
-    if (parts.length > 0) parts.push("");
-    parts.push("Client Email:");
-    parts.push(email);
-  }
+  if (email) parts.push(`Email: ${email}`);
 
-  // Meeting / video call link
   const meetingLink =
     payload.videoCallData?.url ??
     payload.metadata?.videoCallUrl ??
     (payload.location?.startsWith("http") ? payload.location : undefined);
-  if (meetingLink) {
-    if (parts.length > 0) parts.push("");
-    parts.push("Meeting Link:");
-    parts.push(meetingLink);
+  if (meetingLink) parts.push(`Meeting link: ${meetingLink}`);
+
+  if (payload.uid) {
+    parts.push(`Cal.com booking: https://app.cal.com/booking/${payload.uid}`);
   }
 
-  // Client's free-text notes from the booking form
+  // Additional notes from the booking form — omitted entirely if blank
   const clientNotes = findClientNotes(payload);
   if (clientNotes) {
-    if (parts.length > 0) parts.push("");
-    parts.push("Client Notes:");
+    parts.push("");
+    parts.push("Additional notes:");
     parts.push(clientNotes);
   }
+
+  // Event description from Cal.com (e.g. event type description)
+  if (payload.description?.trim()) {
+    parts.push("");
+    parts.push("Description:");
+    parts.push(payload.description.trim());
+  }
+
+  parts.push("");
+  parts.push("Source: Cal.com");
 
   return parts.join("\n").trim();
 }
