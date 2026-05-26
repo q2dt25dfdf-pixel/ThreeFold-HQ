@@ -648,15 +648,6 @@ function CRMContent() {
   const handleSaveDetailLead = async (updated: Lead) => {
     await upsertItem(updated);
     syncFollowUpTask(updated);
-    if (updated.stage === "Design Approved" && viewLead?.stage !== "Design Approved") {
-      postNotification({
-        type: 'design_approved',
-        title: 'Design Approved',
-        message: `${updated.company} · Design approved and ready for next step.`,
-        entity_type: 'lead',
-        entity_id: updated.id,
-      });
-    }
     if (isDepositPaid(updated.stage as string) && !isDepositPaid(viewLead?.stage as string ?? "")) {
       await handleApproveLead(updated);
     }
@@ -665,15 +656,6 @@ function CRMContent() {
   const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
     const updated = { ...lead, stage: targetStage };
     await upsertItem(updated);
-    if (targetStage === "Design Approved") {
-      postNotification({
-        type: 'design_approved',
-        title: 'Design Approved',
-        message: `${lead.company} · Design approved and ready for next step.`,
-        entity_type: 'lead',
-        entity_id: lead.id,
-      });
-    }
     if (targetStage === "Deposit Paid") {
       await handleApproveLead(updated);
     }

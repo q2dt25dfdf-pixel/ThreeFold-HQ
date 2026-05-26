@@ -84,6 +84,7 @@ interface CalendarEvent {
   priority?: "High" | "Medium" | "Low";
   notes?: string;
   source?: string;
+  cancelled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +358,16 @@ export async function POST(request: NextRequest) {
     const { date, time } = extractDateAndTime(payload.startTime, tz);
     const endTime = payload.endTime ? extractDateAndTime(payload.endTime, tz).time : undefined;
 
+    // Check the new eventId to detect duplicate webhook delivery.
+    // If the row already exists with this exact date/time, it's a retry — skip notification.
+    const { data: currentRow } = await supabase
+      .from("calendar_events")
+      .select("id,data")
+      .eq("id", eventId)
+      .maybeSingle();
+    const current = currentRow?.data as CalendarEvent | undefined;
+    const dateTimeChanged = !current || current.date !== date || current.time !== time;
+
     const event: CalendarEvent = {
       id: eventId,
       title: `Client Meeting: ${clientName}`,
@@ -387,6 +398,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
+    if (dateTimeChanged) {
+      createNotification({
+        type: "calendar_event_rescheduled",
+        title: "Calendar Event Rescheduled",
+        message: `${event.title} · Moved to ${fmtEventDateTime(date, time)}`,
+        entity_type: "calendar",
+        entity_id: eventId,
+      }).catch(err => console.error("[cal/webhook] reschedule notification error:", err));
+    }
+
     return NextResponse.json({ ok: true, action: "rescheduled", id: eventId });
   }
 
@@ -400,9 +421,13 @@ export async function POST(request: NextRequest) {
 
     if (rows && rows.length > 0) {
       const existing = rows[0].data as CalendarEvent;
+      // Guard against duplicate webhook delivery — only notify on first cancellation
+      const alreadyCancelled = !!existing.cancelled;
+
       const updated: CalendarEvent = {
         ...existing,
         notes: buildNotes(payload, true),
+        cancelled: true,
       };
       const { error } = await supabase
         .from("calendar_events")
@@ -411,6 +436,16 @@ export async function POST(request: NextRequest) {
       if (error) {
         console.error("[cal/webhook] cancel update failed:", error);
         return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      if (!alreadyCancelled) {
+        createNotification({
+          type: "calendar_event_cancelled",
+          title: "Calendar Event Cancelled",
+          message: `${existing.title} · Meeting cancelled.`,
+          entity_type: "calendar",
+          entity_id: eventId,
+        }).catch(err => console.error("[cal/webhook] cancellation notification error:", err));
       }
     }
 

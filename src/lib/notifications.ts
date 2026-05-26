@@ -17,6 +17,8 @@ export type NotificationType =
   | 'ach_payment_cleared'
   | 'ach_payment_failed'
   | 'calendar_event_created'
+  | 'calendar_event_rescheduled'
+  | 'calendar_event_cancelled'
 
 export interface NotificationPayload {
   type: NotificationType

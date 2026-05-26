@@ -462,8 +462,20 @@ export default function CalendarPage() {
 
   const handleDeleteEvent = (id: string) => {
     if (!window.confirm("Delete this item?")) return;
+    const event = rawEvents.find(e => e.id === id);
+    const title = event?.title ?? 'Calendar event';
     setDeletingId(id);
-    void deleteItem(id).finally(() => setDeletingId(""));
+    void deleteItem(id)
+      .then(() => {
+        postNotification({
+          type: 'calendar_event_cancelled',
+          title: 'Calendar Event Cancelled',
+          message: `${title} · Meeting cancelled.`,
+          entity_type: 'calendar',
+          entity_id: id,
+        });
+      })
+      .finally(() => setDeletingId(""));
     setSelectedEvent(null);
     setEventDraft(null);
     setEditingEvent(false);
@@ -490,9 +502,24 @@ export default function CalendarPage() {
     if (!eventDraft.title.trim()) { setFormError("Event title is required."); return; }
     if (!eventDraft.date) { setFormError("Event date is required."); return; }
     setFormError("");
+    // Capture before save — selectedEvent holds the pre-edit values
+    const dateOrTimeChanged = selectedEvent != null && (
+      eventDraft.date !== selectedEvent.date || eventDraft.time !== selectedEvent.time
+    );
     await eventSave.runSave(async () => {
       const response = await upsertItem(eventDraft);
-      if (!response.error) setSelectedEvent(eventDraft);
+      if (!response.error) {
+        setSelectedEvent(eventDraft);
+        if (dateOrTimeChanged) {
+          postNotification({
+            type: 'calendar_event_rescheduled',
+            title: 'Calendar Event Rescheduled',
+            message: `${eventDraft.title} · Moved to ${fmtEventDateTime(eventDraft.date, eventDraft.time)}`,
+            entity_type: 'calendar',
+            entity_id: eventDraft.id,
+          });
+        }
+      }
       return response;
     }, () => closeEvent());
   };
