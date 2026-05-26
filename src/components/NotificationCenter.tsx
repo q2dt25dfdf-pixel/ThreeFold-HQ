@@ -18,6 +18,37 @@ type Notification = {
   read_at: string | null
 }
 
+// ── Push notification helpers ─────────────────────────────────────────────
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = atob(base64)
+  const buf = new ArrayBuffer(rawData.length)
+  const out = new Uint8Array(buf)
+  for (let i = 0; i < rawData.length; i++) out[i] = rawData.charCodeAt(i)
+  return out
+}
+
+type PushStatusState = {
+  checking: boolean
+  isSecureCtx: boolean
+  isPWA: boolean
+  isIOS: boolean
+  swSupported: boolean
+  swReady: boolean
+  pushSupported: boolean
+  vapidKeyLoaded: boolean
+  permission: string
+  subscriptionExists: boolean
+}
+
+const PUSH_STATUS_INIT: PushStatusState = {
+  checking: true, isSecureCtx: false, isPWA: false, isIOS: false,
+  swSupported: false, swReady: false, pushSupported: false,
+  vapidKeyLoaded: false, permission: 'default', subscriptionExists: false,
+}
+
 const MAX_VISIBLE_TOASTS = 4
 // Fallback poll interval — BroadcastChannel handles instant cross-tab;
 // polling catches anything that slips through (e.g. different browsers, realtime gaps)
@@ -52,6 +83,9 @@ export default function NotificationCenter() {
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
   const [testError, setTestError] = useState<string | null>(null)
+  const [pushStatus, setPushStatus] = useState<PushStatusState>(PUSH_STATUS_INIT)
+  const [pushEnabling, setPushEnabling] = useState(false)
+  const [pushError, setPushError] = useState<string | null>(null)
 
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
@@ -62,6 +96,77 @@ export default function NotificationCenter() {
     useSupabaseTable<Notification>('notifications', [])
 
   useEffect(() => { setMounted(true) }, [])
+
+  // ── Push notification status detection ────────────────────────────────────
+  const checkPushStatus = async () => {
+    const isSecureCtx = typeof window !== 'undefined' && window.isSecureContext
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    const isPWA =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as { standalone?: boolean }).standalone === true
+    const swSupported = 'serviceWorker' in navigator
+    const pushSupported = 'PushManager' in window
+    const vapidKeyLoaded = !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    const permission = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+
+    let swReady = false
+    let subscriptionExists = false
+    if (swSupported) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/')
+        if (reg?.active) {
+          swReady = true
+          try {
+            const sub = await reg.pushManager.getSubscription()
+            subscriptionExists = !!sub
+          } catch { /* pushManager may not exist */ }
+        }
+      } catch { /* ignore */ }
+    }
+    setPushStatus({
+      checking: false, isSecureCtx, isPWA, isIOS, swSupported, swReady,
+      pushSupported, vapidKeyLoaded, permission, subscriptionExists,
+    })
+  }
+
+  useEffect(() => {
+    checkPushStatus().catch(() => setPushStatus(s => ({ ...s, checking: false })))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const enablePushNotifications = async () => {
+    setPushEnabling(true)
+    setPushError(null)
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') {
+        setPushError('Permission not granted — enable notifications in browser settings.')
+        setPushStatus(s => ({ ...s, permission }))
+        return
+      }
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidKey) { setPushError('VAPID public key not configured.'); return }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      })
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: sub }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as Record<string, unknown>
+        throw new Error(typeof err.error === 'string' ? err.error : `Server error ${res.status}`)
+      }
+      await checkPushStatus()
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPushEnabling(false)
+    }
+  }
 
   // Detect desktop breakpoint for toast sizing (mobile layout is not changed)
   useEffect(() => {
@@ -431,20 +536,87 @@ export default function NotificationCenter() {
               )}
             </div>
 
-            {/* Panel footer — test button */}
-            <div style={{ borderTop: '1px solid #1e293b', padding: '10px 20px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-              <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
-                background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
-                fontSize: '12px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
-                padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em',
-              }}>
-                {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
-              </button>
-              {testError && (
-                <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center', maxWidth: '320px' }}>
-                  {testError}
+            {/* Panel footer */}
+            <div style={{ borderTop: '1px solid #1e293b', padding: '14px 20px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+              {/* ── Push notification status ─────────────────────────────── */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  Push Notifications
                 </p>
-              )}
+                {pushStatus.checking ? (
+                  <p style={{ margin: 0, fontSize: '11px', color: '#475569' }}>Checking…</p>
+                ) : (
+                  <>
+                    {/* Status grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 10px' }}>
+                      {([
+                        ['HTTPS', pushStatus.isSecureCtx],
+                        ['PWA installed', pushStatus.isPWA],
+                        ['Service worker', pushStatus.swReady],
+                        ['Push API', pushStatus.pushSupported],
+                        ['VAPID key', pushStatus.vapidKeyLoaded],
+                        ['Subscribed', pushStatus.subscriptionExists],
+                      ] as [string, boolean][]).map(([label, ok]) => (
+                        <span key={label} style={{ fontSize: '11px', color: ok ? '#4ade80' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontWeight: 700 }}>{ok ? '✓' : '✗'}</span>
+                          <span style={{ color: '#64748b' }}>{label}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      Permission: <span style={{ color: pushStatus.permission === 'granted' ? '#4ade80' : pushStatus.permission === 'denied' ? '#ef4444' : '#f59e0b', fontWeight: 600 }}>{pushStatus.permission}</span>
+                    </span>
+
+                    {/* Action */}
+                    {(() => {
+                      const { isPWA, isIOS, swSupported, pushSupported, vapidKeyLoaded, permission, subscriptionExists, isSecureCtx } = pushStatus
+                      if (!isSecureCtx) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Requires HTTPS.</p>
+                      if (!pushSupported) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Push not supported in this browser.</p>
+                      if (!swSupported) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Service workers not supported.</p>
+                      if (!vapidKeyLoaded) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>VAPID key missing — check Vercel env vars.</p>
+                      if (isIOS && !isPWA) return <p style={{ margin: 0, fontSize: '11px', color: '#f59e0b' }}>Add to Home Screen first, then enable push.</p>
+                      if (permission === 'denied') return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Blocked — enable notifications in browser settings.</p>
+                      if (permission === 'granted' && subscriptionExists) return <p style={{ margin: 0, fontSize: '11px', color: '#4ade80' }}>Phone notifications active ✓</p>
+                      const label = permission === 'granted' && !subscriptionExists ? 'Re-enable Push Notifications' : 'Enable Phone Notifications'
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => void enablePushNotifications()}
+                          disabled={pushEnabling}
+                          style={{
+                            background: pushEnabling ? '#1e293b' : '#1d4ed8',
+                            border: 'none', borderRadius: '10px', color: 'white',
+                            fontSize: '12px', fontWeight: 700, cursor: pushEnabling ? 'default' : 'pointer',
+                            padding: '8px 14px', textAlign: 'center', width: '100%',
+                          }}
+                        >
+                          {pushEnabling ? 'Enabling…' : `🔔 ${label}`}
+                        </button>
+                      )
+                    })()}
+                    {pushError && (
+                      <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word' }}>{pushError}</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* ── Test notification ────────────────────────────────────── */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderTop: '1px solid #1e293b', paddingTop: '10px' }}>
+                <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
+                  background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
+                  fontSize: '12px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
+                  padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em',
+                }}>
+                  {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
+                </button>
+                {testError && (
+                  <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center', maxWidth: '320px' }}>
+                    {testError}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
