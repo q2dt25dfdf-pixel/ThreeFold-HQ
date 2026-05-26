@@ -287,17 +287,17 @@ export default function NotificationCenter() {
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
           style={{
             position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '40px', height: '40px', borderRadius: '12px', background: '#0f172a',
-            color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+            width: '52px', height: '52px', borderRadius: '16px', background: '#0f172a',
+            color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
           }}
         >
-          <Bell size={18} />
+          <Bell size={24} />
           {unreadCount > 0 && (
             <span aria-hidden="true" style={{
-              position: 'absolute', top: '6px', right: '6px', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', minWidth: '16px',
-              height: '16px', padding: '0 3px', borderRadius: '9999px',
-              background: '#ef4444', color: 'white', fontSize: '9px', fontWeight: 700, lineHeight: 1,
+              position: 'absolute', top: '8px', right: '8px', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', minWidth: '20px',
+              height: '20px', padding: '0 5px', borderRadius: '9999px',
+              background: '#ef4444', color: 'white', fontSize: '11px', fontWeight: 700, lineHeight: 1,
             }}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
@@ -307,37 +307,37 @@ export default function NotificationCenter() {
         {/* Notification panel */}
         {panelOpen && (
           <div style={{
-            position: 'fixed', top: '60px', right: '1rem',
-            width: 'min(340px, calc(100vw - 2rem))', maxHeight: 'calc(100dvh - 80px)',
-            background: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', display: 'flex',
+            position: 'fixed', top: '76px', right: '1rem',
+            width: 'min(440px, calc(100vw - 2rem))', maxHeight: 'calc(100dvh - 96px)',
+            background: '#0f172a', border: '1px solid #1e293b', borderRadius: '20px',
+            boxShadow: '0 25px 60px -8px rgba(0,0,0,0.65)', display: 'flex',
             flexDirection: 'column', overflow: 'hidden', zIndex: 60001,
           }}>
             {/* Panel header */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '12px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0,
+              padding: '16px 20px', borderBottom: '1px solid #1e293b', flexShrink: 0,
             }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'white', letterSpacing: '0.01em' }}>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: 'white', letterSpacing: '0.01em' }}>
                 Notifications
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {unreadCount > 0 && (
                   <button type="button" onClick={() => void markAllRead()} style={{
-                    display: 'flex', alignItems: 'center', gap: '4px', background: 'none',
-                    border: 'none', color: '#94a3b8', fontSize: '11px', fontWeight: 600,
-                    cursor: 'pointer', padding: '4px 8px', borderRadius: '8px',
+                    display: 'flex', alignItems: 'center', gap: '6px', background: 'none',
+                    border: 'none', color: '#94a3b8', fontSize: '12px', fontWeight: 600,
+                    cursor: 'pointer', padding: '6px 10px', borderRadius: '8px',
                   }}>
-                    <Check size={11} />
+                    <Check size={13} />
                     Mark all read
                   </button>
                 )}
                 <button type="button" onClick={() => setPanelOpen(false)} aria-label="Close" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px',
-                  height: '28px', background: 'none', border: 'none', color: '#475569',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px',
+                  height: '32px', background: 'none', border: 'none', color: '#475569',
                   cursor: 'pointer', borderRadius: '8px',
                 }}>
-                  <X size={14} />
+                  <X size={16} />
                 </button>
               </div>
             </div>
@@ -345,17 +345,17 @@ export default function NotificationCenter() {
             {/* Panel body */}
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
               {loading && allNotifications.length === 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 16px', color: '#475569' }}>
-                  <Loader2 size={18} style={{ animation: 'notif-spin 1s linear infinite' }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', color: '#475569' }}>
+                  <Loader2 size={22} style={{ animation: 'notif-spin 1s linear infinite' }} />
                 </div>
               ) : sorted.length === 0 ? (
-                <div style={{ padding: '32px 16px', textAlign: 'center', color: '#475569', fontSize: '13px' }}>
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
                   No notifications yet
                 </div>
               ) : (
                 <>
                   {unreadCount === 0 && (
-                    <div style={{ padding: '8px 16px 4px', textAlign: 'center', color: '#334155', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '10px 20px 6px', textAlign: 'center', color: '#334155', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                       All caught up
                     </div>
                   )}
@@ -365,7 +365,7 @@ export default function NotificationCenter() {
                     return (
                       <div key={n.id} style={{
                         display: 'flex', alignItems: 'stretch',
-                        background: n.read ? 'transparent' : 'rgba(255,255,255,0.04)',
+                        background: n.read ? 'transparent' : 'rgba(255,255,255,0.05)',
                         borderBottom: isLast ? 'none' : '1px solid #1e293b',
                       }}>
                         {/* Clickable content → navigate */}
@@ -375,28 +375,28 @@ export default function NotificationCenter() {
                           disabled={!route}
                           title={route ? 'Open related record' : undefined}
                           style={{
-                            flex: 1, minWidth: 0, padding: '12px 8px 12px 16px',
+                            flex: 1, minWidth: 0, padding: '16px 10px 16px 20px',
                             textAlign: 'left', background: 'none', border: 'none',
                             cursor: route ? 'pointer' : 'default',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                             {!n.read && (
                               <span style={{
-                                marginTop: '5px', flexShrink: 0, width: '6px', height: '6px',
+                                marginTop: '6px', flexShrink: 0, width: '8px', height: '8px',
                                 borderRadius: '50%', background: '#f87171', display: 'block',
                               }} />
                             )}
-                            <div style={{ minWidth: 0, paddingLeft: n.read ? '14px' : 0 }}>
-                              <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'white' }}>{n.title}</p>
-                              <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.message}</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '10px', color: '#475569' }}>{timeAgo(n.created_at)}</p>
+                            <div style={{ minWidth: 0, paddingLeft: n.read ? '18px' : 0 }}>
+                              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'white' }}>{n.title}</p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94a3b8', lineHeight: 1.5 }}>{n.message}</p>
+                              <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#475569' }}>{timeAgo(n.created_at)}</p>
                             </div>
                           </div>
                         </button>
 
                         {/* Per-item actions: mark read + dismiss */}
-                        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', padding: '8px 10px 8px 2px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px', padding: '10px 14px 10px 4px', flexShrink: 0 }}>
                           {!n.read && (
                             <button
                               type="button"
@@ -404,11 +404,11 @@ export default function NotificationCenter() {
                               title="Mark as read"
                               style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: '24px', height: '24px', borderRadius: '6px', background: 'none',
+                                width: '30px', height: '30px', borderRadius: '8px', background: 'none',
                                 border: '1px solid #1e293b', color: '#475569', cursor: 'pointer',
                               }}
                             >
-                              <Check size={11} />
+                              <Check size={13} />
                             </button>
                           )}
                           <button
@@ -417,11 +417,11 @@ export default function NotificationCenter() {
                             title="Dismiss"
                             style={{
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              width: '24px', height: '24px', borderRadius: '6px', background: 'none',
+                              width: '30px', height: '30px', borderRadius: '8px', background: 'none',
                               border: '1px solid #1e293b', color: '#475569', cursor: 'pointer',
                             }}
                           >
-                            <X size={11} />
+                            <X size={13} />
                           </button>
                         </div>
                       </div>
@@ -432,16 +432,16 @@ export default function NotificationCenter() {
             </div>
 
             {/* Panel footer — test button */}
-            <div style={{ borderTop: '1px solid #1e293b', padding: '8px 16px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+            <div style={{ borderTop: '1px solid #1e293b', padding: '10px 20px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <button type="button" onClick={() => void sendTestNotification()} disabled={sending} style={{
                 background: 'none', border: 'none', color: sending ? '#334155' : '#475569',
-                fontSize: '10px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
-                padding: '4px 8px', borderRadius: '6px', letterSpacing: '0.02em',
+                fontSize: '12px', fontWeight: 500, cursor: sending ? 'default' : 'pointer',
+                padding: '6px 10px', borderRadius: '8px', letterSpacing: '0.02em',
               }}>
                 {sending ? 'Inserting to DB…' : '⚡ Send test notification'}
               </button>
               {testError && (
-                <p style={{ margin: 0, fontSize: '10px', color: '#ef4444', textAlign: 'center', maxWidth: '260px' }}>
+                <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center', maxWidth: '320px' }}>
                   {testError}
                 </p>
               )}

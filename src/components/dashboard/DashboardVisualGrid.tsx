@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -237,15 +237,30 @@ function RevenueProgressCard({ metric }: { metric: RevenueProgressMetric }) {
   );
 }
 
+const funnelColors = [
+  "#1e3a8a",
+  "#1e40af",
+  "#1d4ed8",
+  "#2563eb",
+  "#4f46e5",
+  "#6d28d9",
+  "#7c3aed",
+];
+
 function PipelineOverviewCard({ data }: { data: ChartDatum[] }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const router = useRouter();
+
   const total = data.reduce((sum, item) => sum + item.value, 0);
   const pipelineValue = data.reduce((sum, item) => sum + (item.amount ?? 0), 0);
-  const maxAmount = Math.max(1, ...data.map((item) => item.amount ?? 0));
+  const n = data.length;
+
+  const hovered = hoveredIdx !== null ? data[hoveredIdx] : null;
 
   return (
     <Card title="Pipeline Overview" href="/crm" icon={<GitBranch className="h-4 w-4" aria-hidden="true" />} actionLabel="CRM">
       {total === 0 ? <EmptyState label="No open pipeline data yet." /> : (
-        <div className="space-y-5">
+        <div className="flex flex-col gap-3">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className={labelClass}>Estimated pipeline value</p>
@@ -257,34 +272,61 @@ function PipelineOverviewCard({ data }: { data: ChartDatum[] }) {
             </div>
           </div>
 
-          <ChartFrame className="space-y-2.5">
-            {data.map((item, index) => {
-              const width = Math.max(48, 100 - index * 10);
-              const amountWidth = Math.max(10, ((item.amount ?? 0) / maxAmount) * 100);
+          <div className="flex flex-col items-center gap-[3px]">
+            {data.map((item, idx) => {
+              const widthPct = n > 1 ? 100 - (idx / (n - 1)) * 72 : 100;
+              const color = funnelColors[idx % funnelColors.length];
+              const isHovered = hoveredIdx === idx;
+              const isDimmed = hoveredIdx !== null && !isHovered;
               return (
-                <div key={item.name} className="grid grid-cols-[minmax(78px,0.8fr)_minmax(130px,1.5fr)_auto] items-center gap-3 text-xs">
-                  <span className="min-w-0 truncate font-semibold text-slate-600">{item.name}</span>
-                  <div className="relative min-w-0">
-                    <div
-                      className="h-11 rounded-lg shadow-[0_12px_26px_rgba(37,99,235,0.18)]"
-                      style={{
-                        width: `${width}%`,
-                        background: `linear-gradient(90deg, ${funnelPalette[index % funnelPalette.length]}, ${funnelPalette[Math.min(index + 1, funnelPalette.length - 1)]})`,
-                        clipPath: "polygon(6% 0, 100% 0, 94% 100%, 0 100%)",
-                      }}
-                    />
-                    <div className="absolute bottom-1.5 left-3 right-6 h-1 rounded-full bg-white/[0.18]">
-                      <div className="h-full rounded-full bg-white/[0.55]" style={{ width: `${amountWidth}%` }} />
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-slate-950">{item.value}</p>
-                    {(item.amount ?? 0) > 0 && <p className="text-[10px] font-medium text-slate-400">{formatCurrency(item.amount ?? 0)}</p>}
-                  </div>
-                </div>
+                <button
+                  key={item.name}
+                  onClick={() => router.push("/crm")}
+                  onMouseEnter={() => setHoveredIdx(idx)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                  style={{
+                    width: `${widthPct}%`,
+                    background: color,
+                    opacity: isDimmed ? 0.35 : 1,
+                    boxShadow: isHovered
+                      ? `0 0 0 2px white, 0 0 0 3.5px ${color}, 0 8px 24px ${color}55`
+                      : `0 2px 8px ${color}40`,
+                    transform: isHovered ? "scaleX(1.02)" : "scaleX(1)",
+                    transition: "opacity 0.15s, box-shadow 0.15s, transform 0.12s",
+                  }}
+                  className="flex h-10 cursor-pointer items-center justify-between rounded-2xl border-0 px-3 text-white"
+                >
+                  <span className="truncate text-[10px] font-bold tracking-[0.12em] uppercase opacity-90">{item.name}</span>
+                  <span className="ml-2 shrink-0 text-[11px] font-bold">{item.value}</span>
+                </button>
               );
             })}
-          </ChartFrame>
+          </div>
+
+          <div className="min-h-[52px] rounded-lg bg-slate-50 px-3 py-2.5">
+            {hovered ? (
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Stage</p>
+                  <p className="mt-0.5 text-[11px] font-bold leading-tight text-slate-800">{hovered.name}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Leads</p>
+                  <p className="mt-0.5 text-[11px] font-bold text-slate-800">{hovered.value}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Value</p>
+                  <p className="mt-0.5 text-[11px] font-bold text-slate-800">{(hovered.amount ?? 0) > 0 ? formatCurrency(hovered.amount ?? 0) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Share</p>
+                  <p className="mt-0.5 text-[11px] font-bold text-slate-800">{total > 0 ? `${Math.round((hovered.value / total) * 100)}%` : "—"}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-[10px] font-medium text-slate-400">Hover a stage to see details</p>
+            )}
+          </div>
         </div>
       )}
     </Card>

@@ -18,8 +18,8 @@ export default function DashboardHero({ todayLabel }: DashboardHeroProps) {
         aria-hidden="true"
         fill
         priority
-        sizes="(min-width: 1024px) 1200px, 100vw"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center md:object-contain md:object-center"
+        sizes="(min-width: 1280px) 1920px, (min-width: 768px) 1440px, 100vw"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
       />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(2,8,23,0.96)_0%,rgba(2,8,23,0.78)_27%,rgba(2,8,23,0.28)_52%,rgba(2,8,23,0.02)_100%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_38%,rgba(37,99,235,0.18),transparent_30%),linear-gradient(180deg,rgba(2,8,23,0.03)_0%,rgba(2,8,23,0.18)_100%)]" />
