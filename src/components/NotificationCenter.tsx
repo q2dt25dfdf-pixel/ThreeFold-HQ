@@ -163,16 +163,19 @@ export default function NotificationCenter() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
+      // sub.toJSON() is required — PushSubscription.keys is non-enumerable and
+      // won't serialize via plain JSON.stringify, so auth/p256dh would be missing.
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub }),
+        body: JSON.stringify({ subscription: sub.toJSON() }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as Record<string, unknown>
         throw new Error(typeof err.error === 'string' ? err.error : `Server error ${res.status}`)
       }
-      await checkPushStatus()
+      // Update state directly — don't re-check local SW, which is true regardless of DB save
+      setPushStatus(s => ({ ...s, permission: 'granted', subscriptionExists: true, swReady: true }))
     } catch (err) {
       setPushError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -583,10 +586,14 @@ export default function NotificationCenter() {
                   } else if (isActive) {
                     statusText = 'Phone notifications are active.'
                     statusColor = '#4ade80'
+                  } else if (permission === 'granted' && !subscriptionExists) {
+                    statusText = 'Notifications allowed, but this device is not subscribed yet.'
+                    statusColor = '#f59e0b'
+                    showButton = canEnable
+                    buttonLabel = 'Subscribe This Device'
                   } else {
                     statusText = 'Phone notifications are ready to enable.'
                     showButton = canEnable
-                    if (permission === 'granted' && !subscriptionExists) buttonLabel = 'Re-enable Phone Notifications'
                   }
 
                   return (
