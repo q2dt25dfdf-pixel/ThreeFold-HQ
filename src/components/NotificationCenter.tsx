@@ -123,10 +123,13 @@ export default function NotificationCenter() {
         }
       } catch { /* ignore */ }
     }
-    setPushStatus({
+
+    const next: PushStatusState = {
       checking: false, isSecureCtx, isPWA, isIOS, swSupported, swReady,
       pushSupported, vapidKeyLoaded, permission, subscriptionExists,
-    })
+    }
+    console.log('[push-status]', next)
+    setPushStatus(next)
   }
 
   useEffect(() => {
@@ -539,47 +542,44 @@ export default function NotificationCenter() {
             {/* Panel footer */}
             <div style={{ borderTop: '1px solid #1e293b', padding: '14px 20px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-              {/* ── Push notification status ─────────────────────────────── */}
+              {/* ── Phone Notifications ──────────────────────────────────── */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  Push Notifications
+                  Phone Notifications
                 </p>
                 {pushStatus.checking ? (
-                  <p style={{ margin: 0, fontSize: '11px', color: '#475569' }}>Checking…</p>
-                ) : (
-                  <>
-                    {/* Status grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 10px' }}>
-                      {([
-                        ['HTTPS', pushStatus.isSecureCtx],
-                        ['PWA installed', pushStatus.isPWA],
-                        ['Service worker', pushStatus.swReady],
-                        ['Push API', pushStatus.pushSupported],
-                        ['VAPID key', pushStatus.vapidKeyLoaded],
-                        ['Subscribed', pushStatus.subscriptionExists],
-                      ] as [string, boolean][]).map(([label, ok]) => (
-                        <span key={label} style={{ fontSize: '11px', color: ok ? '#4ade80' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontWeight: 700 }}>{ok ? '✓' : '✗'}</span>
-                          <span style={{ color: '#64748b' }}>{label}</span>
-                        </span>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      Permission: <span style={{ color: pushStatus.permission === 'granted' ? '#4ade80' : pushStatus.permission === 'denied' ? '#ef4444' : '#f59e0b', fontWeight: 600 }}>{pushStatus.permission}</span>
-                    </span>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#475569' }}>Checking…</p>
+                ) : (() => {
+                  const { isPWA, isIOS, swSupported, pushSupported, vapidKeyLoaded, permission, subscriptionExists } = pushStatus
+                  const canEnable = pushSupported && swSupported && vapidKeyLoaded && permission !== 'denied' && !(isIOS && !isPWA)
+                  const isActive = permission === 'granted' && subscriptionExists
 
-                    {/* Action */}
-                    {(() => {
-                      const { isPWA, isIOS, swSupported, pushSupported, vapidKeyLoaded, permission, subscriptionExists, isSecureCtx } = pushStatus
-                      if (!isSecureCtx) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Requires HTTPS.</p>
-                      if (!pushSupported) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Push not supported in this browser.</p>
-                      if (!swSupported) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Service workers not supported.</p>
-                      if (!vapidKeyLoaded) return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>VAPID key missing — check Vercel env vars.</p>
-                      if (isIOS && !isPWA) return <p style={{ margin: 0, fontSize: '11px', color: '#f59e0b' }}>Add to Home Screen first, then enable push.</p>
-                      if (permission === 'denied') return <p style={{ margin: 0, fontSize: '11px', color: '#ef4444' }}>Blocked — enable notifications in browser settings.</p>
-                      if (permission === 'granted' && subscriptionExists) return <p style={{ margin: 0, fontSize: '11px', color: '#4ade80' }}>Phone notifications active ✓</p>
-                      const label = permission === 'granted' && !subscriptionExists ? 'Re-enable Push Notifications' : 'Enable Phone Notifications'
-                      return (
+                  let statusText: string
+                  let statusColor = '#64748b'
+                  let showButton = false
+                  let buttonLabel = 'Enable Phone Notifications'
+
+                  if (!pushSupported || !swSupported || !vapidKeyLoaded) {
+                    statusText = 'Phone notifications are unavailable.'
+                  } else if (isIOS && !isPWA) {
+                    statusText = 'Add to Home Screen to enable phone notifications.'
+                    statusColor = '#f59e0b'
+                  } else if (permission === 'denied') {
+                    statusText = 'Phone notifications are blocked in Settings.'
+                    statusColor = '#ef4444'
+                  } else if (isActive) {
+                    statusText = 'Phone notifications are active.'
+                    statusColor = '#4ade80'
+                  } else {
+                    statusText = 'Phone notifications are ready to enable.'
+                    showButton = canEnable
+                    if (permission === 'granted' && !subscriptionExists) buttonLabel = 'Re-enable Phone Notifications'
+                  }
+
+                  return (
+                    <>
+                      <p style={{ margin: 0, fontSize: '12px', color: statusColor, lineHeight: 1.5 }}>{statusText}</p>
+                      {showButton && (
                         <button
                           type="button"
                           onClick={() => void enablePushNotifications()}
@@ -591,15 +591,15 @@ export default function NotificationCenter() {
                             padding: '8px 14px', textAlign: 'center', width: '100%',
                           }}
                         >
-                          {pushEnabling ? 'Enabling…' : `🔔 ${label}`}
+                          {pushEnabling ? 'Enabling…' : `🔔 ${buttonLabel}`}
                         </button>
-                      )
-                    })()}
-                    {pushError && (
-                      <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word' }}>{pushError}</p>
-                    )}
-                  </>
-                )}
+                      )}
+                      {pushError && (
+                        <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word' }}>{pushError}</p>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
 
               {/* ── Test notification ────────────────────────────────────── */}
