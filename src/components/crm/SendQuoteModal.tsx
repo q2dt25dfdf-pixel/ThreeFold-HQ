@@ -30,6 +30,7 @@ const QUOTE_ITEM_PRESETS = [
     name: "Custom Performance Dri-Fit Tee",
     description:
       "Premium moisture-wicking performance apparel custom designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
+    unitPrice: 40,
   },
 ] as const;
 
@@ -94,7 +95,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         const updated = {
           ...item,
           name,
-          ...(preset ? { description: preset.description } : {}),
+          ...(preset ? { description: preset.description, unitPrice: preset.unitPrice } : {}),
         };
         updated.lineTotal = updated.quantity * updated.unitPrice;
         return updated;
