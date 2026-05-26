@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from './supabase-admin'
+import { sendPushToAll } from './sendPush'
 
 export type NotificationType =
   | 'deposit_received'
@@ -26,7 +27,7 @@ export interface NotificationPayload {
 export async function createNotification(payload: NotificationPayload): Promise<void> {
   const db = getSupabaseAdmin()
   const id = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-  await db.from('notifications').insert({
+  const { error } = await db.from('notifications').insert({
     id,
     data: {
       id,
@@ -39,5 +40,15 @@ export async function createNotification(payload: NotificationPayload): Promise<
       read: false,
       read_at: null,
     },
+  })
+  if (error) {
+    console.error('[createNotification] DB insert failed:', error)
+  } else {
+    console.log(`[createNotification] saved: ${payload.type} — ${payload.title}`)
+  }
+
+  // Fire push notifications to all subscribed devices (best-effort, non-blocking)
+  sendPushToAll({ title: payload.title, message: payload.message }).catch((err) => {
+    console.error('[createNotification] push error:', err)
   })
 }
