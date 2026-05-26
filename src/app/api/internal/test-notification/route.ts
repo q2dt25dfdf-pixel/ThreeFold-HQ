@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { sendPushToAll } from '@/lib/sendPush'
 
 export async function POST(request: Request) {
   try {
@@ -28,6 +29,14 @@ export async function POST(request: Request) {
       console.error('[test-notification] insert error', error)
       return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
+
+    // Also send a push notification to all subscribed devices
+    console.log('[test-notification] firing push to all subscriptions…')
+    await sendPushToAll({
+      title: notification.title,
+      message: notification.message,
+      url: '/',
+    })
 
     return NextResponse.json({ success: true, notification })
   } catch (err) {
