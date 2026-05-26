@@ -7,6 +7,7 @@ import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
+import SendDesignModal from "../../components/crm/SendDesignModal";
 import SendQuoteModal from "../../components/crm/SendQuoteModal";
 import SendDepositModal from "../../components/crm/SendDepositModal";
 import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
@@ -290,6 +291,7 @@ function CRMContent() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
   const [viewLeadId, setViewLeadId] = useState<string | null>(null);
+  const [designLead, setDesignLead] = useState<Lead | null>(null);
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
   const [depositLead, setDepositLead] = useState<Lead | null>(null);
   const [completingLead, setCompletingLead] = useState<Lead | null>(null);
@@ -676,17 +678,50 @@ function CRMContent() {
     if (viewLeadId === lead.id) setViewLeadId(null);
   };
 
+  const handleOpenSendDesign = (lead: Lead) => {
+    setViewLeadId(null);
+    setDesignLead(lead);
+  };
+
+  const handleDesignSent = async (lead: Lead) => {
+    const updated: Lead = {
+      ...lead,
+      stage: "Client Review",
+      communicationHistory: [
+        {
+          id: `comm-design-${Date.now()}`,
+          type: "Email",
+          date: businessTodayISO(),
+          owner: lead.owner || "Alliyah",
+          summary: `Design concepts sent. Awaiting client feedback.`,
+        },
+        ...lead.communicationHistory,
+      ],
+    };
+    await upsertItem(updated);
+    syncFollowUpTask(updated);
+    postNotification({
+      type: 'design_sent',
+      title: 'Design Sent',
+      message: `${lead.company} · Design concepts sent. Lead moved to Client Review.`,
+      entity_type: 'lead',
+      entity_id: lead.id,
+    });
+    setToastMessage(`Design concepts sent to ${lead.email}. Lead moved to Client Review.`);
+  };
+
   const handleOpenSendQuote = (lead: Lead) => {
     setViewLeadId(null);
     setQuoteLead(lead);
   };
 
-  const handleQuoteSent = async (lead: Lead, result: { quoteId: string; quoteNumber: string; publicLink: string }) => {
+  const handleQuoteSent = async (lead: Lead, result: { quoteId: string; quoteNumber: string; publicLink: string; grandTotal?: number }) => {
     const updated: Lead = {
       ...lead,
       stage: "Quote Sent",
       quote_id: result.quoteId,
       quote_number: result.quoteNumber,
+      ...(result.grandTotal != null && result.grandTotal > 0 ? { value: result.grandTotal } : {}),
       communicationHistory: [
         {
           id: `comm-quote-${Date.now()}`,
@@ -955,8 +990,19 @@ function CRMContent() {
         onQuestionnaire={() => {
           if (viewLead) { setViewLeadId(null); router.push(`/crm/leads/${viewLead.id}`); }
         }}
+        onSendDesign={handleOpenSendDesign}
         onSendQuote={handleOpenSendQuote}
         onSendDepositRequest={handleOpenSendDeposit}
+      />
+
+      <SendDesignModal
+        open={Boolean(designLead)}
+        lead={designLead}
+        onClose={() => setDesignLead(null)}
+        onSent={() => {
+          if (designLead) void handleDesignSent(designLead);
+          setDesignLead(null);
+        }}
       />
 
       <SendQuoteModal

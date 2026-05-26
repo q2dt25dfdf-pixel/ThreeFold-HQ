@@ -21,6 +21,7 @@ interface Props {
   duplicateMatch?: DuplicateMatch | null;
   onViewClient?: () => void;
   onQuestionnaire?: () => void;
+  onSendDesign?: (lead: Lead) => void;
   onSendQuote?: (lead: Lead) => void;
   onSendDepositRequest?: (lead: Lead) => void;
   onCompleteFollowUp?: (lead: Lead) => void;
@@ -160,7 +161,7 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendDesign, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
@@ -235,6 +236,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400";
   const clientBtnLabel = hasClient ? "View Client Record" : "Client record pending";
 
+  const showSendDesign = current.stage === "Design Phase" && onSendDesign;
   const showSendQuote = current.stage === "Design Approved" && onSendQuote;
   const showSendDeposit = current.stage === "Quote Sent" && onSendDepositRequest;
   const showCompleteFollowUp = canCompleteFollowUp && onCompleteFollowUp;
@@ -242,6 +244,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const footer = (
     <div className="flex flex-col gap-3">
       {/* Mobile: workflow action buttons */}
+      {showSendDesign && (
+        <button
+          type="button"
+          onClick={() => onSendDesign(current)}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-violet-300 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-800 hover:bg-violet-100 transition lg:hidden"
+        >
+          Send Design
+        </button>
+      )}
       {showSendQuote && (
         <button
           type="button"
@@ -299,6 +310,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
         </button>
         <div className="flex items-center gap-3">
           {/* Desktop: workflow action buttons */}
+          {showSendDesign && (
+            <button
+              type="button"
+              onClick={() => onSendDesign(current)}
+              className="hidden min-h-11 items-center rounded-3xl border border-violet-300 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 transition lg:inline-flex"
+            >
+              Send Design
+            </button>
+          )}
           {showSendQuote && (
             <button
               type="button"
