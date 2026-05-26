@@ -82,28 +82,8 @@ export default function NotificationCenter() {
   // Client-side-only notifications (test button, BC-received, optimistic inserts)
   const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [sending, setSending] = useState(false)
-  const [testError, setTestError] = useState<string | null>(null)
-  const [pushResult, setPushResult] = useState<{
-    configured: boolean
-    subscriptionsFound: number
-    attempted: number
-    sent: number
-    failed: number
-    failures: { endpointHost: string; statusCode: number | null; message: string }[]
-    skippedReason?: string
-  } | null>(null)
   const [pushStatus, setPushStatus] = useState<PushStatusState>(PUSH_STATUS_INIT)
   const [pushEnabling, setPushEnabling] = useState(false)
-  const [pushError, setPushError] = useState<string | null>(null)
-  const [enableDebug, setEnableDebug] = useState<{
-    endpointReceived: boolean
-    authReceived: boolean
-    p256dhReceived: boolean
-    serviceRolePresent: boolean
-    insertAttempted: boolean
-    insertSucceeded: boolean
-    exactError: string | null
-  } | null>(null)
 
   const mountTime = useRef(new Date().toISOString())
   const seenIds = useRef<Set<string>>(new Set())
@@ -165,19 +145,16 @@ export default function NotificationCenter() {
 
   const enablePushNotifications = async () => {
     setPushEnabling(true)
-    setPushError(null)
-    setEnableDebug(null)
     try {
       const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
       await navigator.serviceWorker.ready
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
-        setPushError('Permission not granted — enable notifications in browser settings.')
         setPushStatus(s => ({ ...s, permission }))
         return
       }
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidKey) { setPushError('VAPID public key not configured.'); return }
+      if (!vapidKey) return
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
@@ -189,17 +166,12 @@ export default function NotificationCenter() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub.toJSON() }),
       })
-      const json = await res.json().catch(() => ({})) as Record<string, unknown>
-      if (json.debug && typeof json.debug === 'object') {
-        setEnableDebug(json.debug as typeof enableDebug extends null ? never : NonNullable<typeof enableDebug>)
+      if (res.ok) {
+        // Update state directly — don't re-check local SW, which is true regardless of DB save
+        setPushStatus(s => ({ ...s, permission: 'granted', subscriptionExists: true, swReady: true }))
       }
-      if (!res.ok) {
-        throw new Error(typeof json.error === 'string' ? json.error : `Server error ${res.status}`)
-      }
-      // Update state directly — don't re-check local SW, which is true regardless of DB save
-      setPushStatus(s => ({ ...s, permission: 'granted', subscriptionExists: true, swReady: true }))
     } catch (err) {
-      setPushError(err instanceof Error ? err.message : String(err))
+      console.error('[push] enable error:', err)
     } finally {
       setPushEnabling(false)
     }
@@ -223,8 +195,6 @@ export default function NotificationCenter() {
       console.error('[push] reset error:', err)
     }
     setPushStatus(s => ({ ...s, subscriptionExists: false }))
-    setEnableDebug(null)
-    setPushError(null)
   }
 
   // Detect desktop breakpoint for toast sizing (mobile layout is not changed)
@@ -373,8 +343,6 @@ export default function NotificationCenter() {
   const sendTestNotification = async () => {
     if (sending) return
     setSending(true)
-    setTestError(null)
-    setPushResult(null)
 
     const id = `notif-test-${Date.now()}`
     const n: Notification = {
@@ -398,15 +366,8 @@ export default function NotificationCenter() {
       const json = await res.json().catch(() => ({})) as Record<string, unknown>
 
       if (!res.ok) {
-        const msg = typeof json.error === 'string' ? json.error : `HTTP ${res.status}`
-        console.error('[test-notification] DB insert failed:', msg, json)
-        setTestError(`Insert failed: ${msg}`)
+        console.error('[test-notification] failed:', json)
         return
-      }
-
-      // Capture push result from server response
-      if (json.push && typeof json.push === 'object') {
-        setPushResult(json.push as typeof pushResult)
       }
 
       // DB insert confirmed — show locally and sync
@@ -417,9 +378,7 @@ export default function NotificationCenter() {
       reload().catch(err => console.error('[test-notification] reload error', err))
 
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('[test-notification] fetch error', err)
-      setTestError(`Network error: ${msg}`)
     } finally {
       setSending(false)
     }
@@ -617,18 +576,18 @@ export default function NotificationCenter() {
                   let statusText: string
                   let statusColor = '#64748b'
                   let showButton = false
-                  let buttonLabel = 'Enable Phone Notifications'
+                  let buttonLabel = 'Enable Notifications'
 
                   if (!pushSupported || !swSupported || !vapidKeyLoaded) {
-                    statusText = 'Phone notifications are unavailable.'
+                    statusText = 'Notifications are disabled.'
                   } else if (isIOS && !isPWA) {
-                    statusText = 'Add to Home Screen to enable phone notifications.'
+                    statusText = 'Add to Home Screen to enable notifications.'
                     statusColor = '#f59e0b'
                   } else if (permission === 'denied') {
-                    statusText = 'Phone notifications are blocked in Settings.'
+                    statusText = 'Notifications are blocked in browser settings.'
                     statusColor = '#ef4444'
                   } else if (isActive) {
-                    statusText = 'Phone notifications are active on this device.'
+                    statusText = 'Notifications are active on this device.'
                     statusColor = '#4ade80'
                   } else if (permission === 'granted' && !subscriptionExists) {
                     statusText = 'Notifications allowed, but this device is not subscribed yet.'
@@ -636,7 +595,7 @@ export default function NotificationCenter() {
                     showButton = canEnable
                     buttonLabel = 'Subscribe This Device'
                   } else {
-                    statusText = 'Phone notifications are ready to enable.'
+                    statusText = 'Notifications are ready to enable.'
                     showButton = canEnable
                   }
 
@@ -658,44 +617,6 @@ export default function NotificationCenter() {
                           {pushEnabling ? 'Enabling…' : `🔔 ${buttonLabel}`}
                         </button>
                       )}
-                      {isActive && (
-                        <button
-                          type="button"
-                          onClick={() => void resetPushSubscription()}
-                          style={{
-                            background: 'none', border: 'none', color: '#334155',
-                            fontSize: '11px', fontWeight: 500, cursor: 'pointer',
-                            padding: '2px 0', textAlign: 'left', alignSelf: 'flex-start',
-                          }}
-                        >
-                          Reset this device
-                        </button>
-                      )}
-                      {pushError && (
-                        <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word' }}>{pushError}</p>
-                      )}
-                      {enableDebug && (
-                        <div style={{ background: '#0f1e35', border: '1px solid #1e3a5c', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Subscribe debug</p>
-                          {([
-                            ['endpointReceived', 'Endpoint received'],
-                            ['authReceived', 'Auth key received'],
-                            ['p256dhReceived', 'p256dh key received'],
-                            ['serviceRolePresent', 'Service role key set'],
-                            ['insertAttempted', 'Insert attempted'],
-                            ['insertSucceeded', 'Insert succeeded'],
-                          ] as [keyof typeof enableDebug, string][]).map(([k, label]) => (
-                            <p key={k} style={{ margin: 0, fontSize: '11px', color: enableDebug[k] ? '#4ade80' : '#ef4444' }}>
-                              {enableDebug[k] ? '✓' : '✗'} {label}
-                            </p>
-                          ))}
-                          {enableDebug.exactError && (
-                            <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-word', marginTop: '2px' }}>
-                              Error: {enableDebug.exactError}
-                            </p>
-                          )}
-                        </div>
-                      )}
                     </>
                   )
                 })()}
@@ -710,39 +631,6 @@ export default function NotificationCenter() {
                 }}>
                   {sending ? 'Sending…' : '⚡ Send test notification'}
                 </button>
-
-                {testError && (
-                  <p style={{ margin: 0, fontSize: '11px', color: '#ef4444', textAlign: 'center' }}>
-                    {testError}
-                  </p>
-                )}
-
-                {pushResult && (
-                  <div style={{ background: '#0f1e35', border: '1px solid #1e3a5c', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                    <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Push result</p>
-
-                    {pushResult.skippedReason ? (
-                      <p style={{ margin: 0, fontSize: '12px', color: '#f59e0b' }}>⚠ Skipped: {pushResult.skippedReason}</p>
-                    ) : (
-                      <>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                          Subscriptions found: <span style={{ color: 'white', fontWeight: 600 }}>{pushResult.subscriptionsFound}</span>
-                        </p>
-                        <p style={{ margin: 0, fontSize: '12px', color: pushResult.sent > 0 ? '#4ade80' : '#ef4444' }}>
-                          {pushResult.sent > 0 ? `✓ Sent to ${pushResult.sent} device${pushResult.sent !== 1 ? 's' : ''}` : `✗ Sent: 0`}
-                        </p>
-                        {pushResult.failed > 0 && (
-                          <p style={{ margin: 0, fontSize: '12px', color: '#ef4444' }}>✗ Failed: {pushResult.failed}</p>
-                        )}
-                        {pushResult.failures.map((f, i) => (
-                          <p key={i} style={{ margin: 0, fontSize: '11px', color: '#ef4444', wordBreak: 'break-all' }}>
-                            {f.endpointHost} — HTTP {f.statusCode ?? '?'}: {f.message}
-                          </p>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>
