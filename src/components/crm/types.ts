@@ -85,6 +85,7 @@ export type QuoteItem = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  originalUnitPrice?: number;
 };
 
 export type DuplicateMatchType = "likely_existing" | "possible_duplicate";

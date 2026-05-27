@@ -95,7 +95,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         const updated = {
           ...item,
           name,
-          ...(preset ? { description: preset.description, unitPrice: preset.unitPrice } : {}),
+          ...(preset ? { description: preset.description, unitPrice: preset.unitPrice, originalUnitPrice: preset.unitPrice } : {}),
         };
         updated.lineTotal = updated.quantity * updated.unitPrice;
         return updated;

@@ -82,6 +82,7 @@ interface LineItem {
   quantity: number
   unitPrice: number
   lineTotal: number
+  originalUnitPrice?: number
 }
 
 interface PortalData {
@@ -587,8 +588,23 @@ export default function PortalPage() {
                           <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>{li.description}</div>
                         )}
                         <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>
-                          {li.quantity} × {fmtCurrency(li.unitPrice)}
+                          {li.quantity} ×{' '}
+                          {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice ? (
+                            <>
+                              <span style={{ textDecoration: 'line-through', marginRight: '6px' }}>
+                                {fmtCurrency(li.originalUnitPrice)}
+                              </span>
+                              {fmtCurrency(li.unitPrice)}
+                            </>
+                          ) : (
+                            fmtCurrency(li.unitPrice)
+                          )}
                         </div>
+                        {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice && (
+                          <div style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.05em', marginTop: '3px' }}>
+                            Custom Pricing Applied
+                          </div>
+                        )}
                       </div>
                       <span style={{ ...s.cardRowValue, flexShrink: 0, marginLeft: '16px' }}>
                         {fmtCurrency(li.lineTotal)}

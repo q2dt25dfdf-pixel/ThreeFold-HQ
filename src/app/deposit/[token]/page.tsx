@@ -12,6 +12,7 @@ interface LineItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  originalUnitPrice?: number;
 }
 
 interface DepositData {
@@ -195,8 +196,23 @@ export default function DepositPage() {
                         </div>
                       )}
                       <div style={{ ...s.detailKey, marginTop: "4px" }}>
-                        {item.quantity} × {fmt(item.unitPrice)}
+                        {item.quantity} ×{" "}
+                        {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice ? (
+                          <>
+                            <span style={{ textDecoration: "line-through", color: C.textMuted, marginRight: "6px" }}>
+                              {fmt(item.originalUnitPrice)}
+                            </span>
+                            {fmt(item.unitPrice)}
+                          </>
+                        ) : (
+                          fmt(item.unitPrice)
+                        )}
                       </div>
+                      {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
+                        <div style={{ fontSize: "10px", color: C.textMuted, letterSpacing: "0.05em", marginTop: "3px", textTransform: "none" as const }}>
+                          Custom Pricing Applied
+                        </div>
+                      )}
                     </div>
                     <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
                       {fmt(item.lineTotal)}

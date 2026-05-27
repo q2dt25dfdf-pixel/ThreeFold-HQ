@@ -10,6 +10,7 @@ type LineItem = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  originalUnitPrice?: number;
 };
 
 export async function POST(request: NextRequest) {

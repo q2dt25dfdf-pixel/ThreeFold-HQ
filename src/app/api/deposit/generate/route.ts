@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
       quantity: number;
       unitPrice: number;
       lineTotal: number;
+      originalUnitPrice?: number;
     };
 
     const {

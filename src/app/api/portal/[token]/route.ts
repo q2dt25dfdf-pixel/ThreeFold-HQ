@@ -105,8 +105,8 @@ export async function GET(
     .sort((a, b) => b.date.localeCompare(a.date))
 
   // Line items: prefer order-level data, then fall back to related quote
-  type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown }
-  let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number }[] = []
+  type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; originalUnitPrice?: unknown }
+  let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number; originalUnitPrice?: number }[] = []
 
   if (Array.isArray(d.line_items) && (d.line_items as RawLineItem[]).length > 0) {
     lineItems = (d.line_items as RawLineItem[]).map((li) => ({
@@ -115,6 +115,7 @@ export async function GET(
       quantity: Number(li.quantity ?? 0),
       unitPrice: Number(li.unitPrice ?? 0),
       lineTotal: Number(li.lineTotal ?? 0),
+      ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
     }))
   } else if (d.quote_id) {
     const { data: quoteRows } = await db
@@ -131,6 +132,7 @@ export async function GET(
           quantity: Number(li.quantity ?? 0),
           unitPrice: Number(li.unitPrice ?? 0),
           lineTotal: Number(li.lineTotal ?? 0),
+          ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
         }))
       }
     }

@@ -23,8 +23,8 @@ export async function GET(
     // Use deposit request as authoritative source for amounts and line items when available
     let totalAmount = calcTotal(raw);
     let depositAmount = calcDeposit(raw);
-    type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown };
-    let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number }[] = [];
+    type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; originalUnitPrice?: unknown };
+    let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number; originalUnitPrice?: number }[] = [];
 
     let subtotalVal: number | null = null;
     let salesTaxRateVal: number | null = null;
@@ -54,6 +54,7 @@ export async function GET(
             quantity: Number(li.quantity ?? 0),
             unitPrice: Number(li.unitPrice ?? 0),
             lineTotal: Number(li.lineTotal ?? 0),
+            ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
           }));
         }
       }
@@ -73,6 +74,7 @@ export async function GET(
         quantity: Number(li.quantity ?? 0),
         unitPrice: Number(li.unitPrice ?? 0),
         lineTotal: Number(li.lineTotal ?? 0),
+        ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
       }));
     }
 
