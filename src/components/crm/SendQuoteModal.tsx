@@ -299,7 +299,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                   </div>
                 </div>
                 {/* Qty + Unit price + Line total + Delete */}
-                <div className="mt-2 flex items-end gap-2">
+                <div className="mt-2 flex items-start gap-2">
                   <div className="flex-1">
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Qty</label>
                     <input
