@@ -40,6 +40,28 @@ function formatLeadValue(value: Lead["value"]) {
   return value;
 }
 
+function formatActivityDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - date.getTime()) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 30) return `${diffDays}d`;
+  if (diffDays < 84) return `${Math.floor(diffDays / 7)}w`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const ACTIVITY_EMOJI: Record<string, string> = {
+  Call: "📞",
+  Email: "✉️",
+  Text: "💬",
+  Meeting: "📅",
+  "In Person": "🤝",
+  Other: "📋",
+};
+
 export default function LeadCard({
   lead,
   stageIndex,
@@ -54,6 +76,11 @@ export default function LeadCard({
 }: LeadCardProps) {
   const canMoveBack = stageIndex > 0;
   const canMoveForward = stageIndex < totalStages - 1;
+
+  const history = lead.communicationHistory ?? [];
+  const latestActivity = history.length > 0
+    ? [...history].sort((a, b) => b.date.localeCompare(a.date))[0]
+    : null;
 
   return (
     <article
@@ -82,6 +109,11 @@ export default function LeadCard({
             )}
           </div>
           <div className="text-xs text-slate-600">{lead.contact}</div>
+          <div className="text-xs text-slate-400">
+            {latestActivity
+              ? `${ACTIVITY_EMOJI[latestActivity.type] ?? "•"} ${latestActivity.type} · ${formatActivityDate(latestActivity.date)}`
+              : "No activity"}
+          </div>
         </div>
         <div className="flex flex-shrink-0 items-start gap-2 text-right">
           <div>

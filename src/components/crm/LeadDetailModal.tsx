@@ -171,10 +171,12 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const [logDate, setLogDate] = useState(() => businessTodayISO());
   const [logNote, setLogNote] = useState("");
   const [logError, setLogError] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setData(null);
     setLogDate(businessTodayISO());
+    setEditingIndex(null);
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
@@ -209,16 +211,54 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
       return;
     }
     setLogError("");
-    const entry: CommunicationEntry = {
-      id: `comm-${Date.now()}`,
-      type: logType,
-      date: logDate,
-      owner: logOwner,
-      summary: logNote.trim(),
-    };
-    patch({ communicationHistory: [entry, ...current.communicationHistory] });
+    if (editingIndex !== null) {
+      const updated = current.communicationHistory.map((e, i) =>
+        i === editingIndex
+          ? { ...e, type: logType, date: logDate, owner: logOwner, summary: logNote.trim() }
+          : e
+      );
+      patch({ communicationHistory: updated });
+      setEditingIndex(null);
+      setLogType("Call");
+      setLogOwner("Alliyah");
+    } else {
+      const entry: CommunicationEntry = {
+        id: `comm-${Date.now()}`,
+        type: logType,
+        date: logDate,
+        owner: logOwner,
+        summary: logNote.trim(),
+      };
+      patch({ communicationHistory: [entry, ...current.communicationHistory] });
+    }
     setLogNote("");
     setLogDate(businessTodayISO());
+  };
+
+  const startEdit = (index: number) => {
+    const entry = current.communicationHistory[index];
+    setEditingIndex(index);
+    setLogType(entry.type);
+    setLogOwner(entry.owner);
+    setLogDate(entry.date);
+    setLogNote(entry.summary);
+    setLogError("");
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setLogNote("");
+    setLogDate(businessTodayISO());
+    setLogType("Call");
+    setLogOwner("Alliyah");
+    setLogError("");
+  };
+
+  const deleteEntry = (index: number) => {
+    if (!window.confirm("Delete this activity entry?")) return;
+    const updated = current.communicationHistory.filter((_, i) => i !== index);
+    patch({ communicationHistory: updated });
+    if (editingIndex === index) cancelEdit();
   };
 
   const typeColors: Record<CommunicationEntry["type"], string> = {
@@ -512,13 +552,24 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                   }}
                 />
                 <FieldError message={logError} />
+                {editingIndex !== null && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="min-h-11 w-full rounded-3xl border border-slate-300 bg-white py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
+                  >
+                    Cancel edit
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={addActivityEntry}
                   disabled={!logNote.trim()}
                   className="min-h-11 w-full rounded-3xl bg-slate-900 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
                 >
-                  Log activity · {new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  {editingIndex !== null
+                    ? `Update activity · ${new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                    : `Log activity · ${new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
                 </button>
               </div>
 
@@ -527,13 +578,32 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 {current.communicationHistory.length === 0 && (
                   <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No activity logged yet.</p>
                 )}
-                {current.communicationHistory.map((entry) => (
-                  <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                {current.communicationHistory.map((entry, i) => (
+                  <div
+                    key={entry.id || i}
+                    className={`rounded-2xl border bg-white p-4 ${editingIndex === i ? "border-slate-400 ring-1 ring-slate-300" : "border-slate-200"}`}
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${typeColors[entry.type]}`}>
                         {entry.type}
                       </span>
-                      <span className="shrink-0 text-xs text-slate-600">{entry.date} · {entry.owner}</span>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-xs text-slate-600">{entry.date} · {entry.owner}</span>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(i)}
+                          className="text-[11px] text-slate-400 underline hover:text-slate-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteEntry(i)}
+                          className="text-[11px] text-rose-400 underline hover:text-rose-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <p className="mt-2 break-words text-sm text-slate-700">{entry.summary}</p>
                   </div>
