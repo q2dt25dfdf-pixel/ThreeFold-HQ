@@ -1,5 +1,36 @@
-import type { Lead, PipelineStage, DuplicateMatch } from "./types";
+import type { Lead, PipelineStage, DuplicateMatch, CommunicationEntry } from "./types";
 import { AlertTriangle, CheckCircle, Trash2 } from "lucide-react";
+
+const activityIcons: Record<CommunicationEntry["type"], string> = {
+  Call: "📞",
+  Email: "✉️",
+  Text: "💬",
+  Meeting: "🤝",
+  "In Person": "🚶",
+  Other: "📝",
+};
+
+function getRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const diffMs = Date.now() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffSeconds < 60) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function getLatestActivity(history: CommunicationEntry[] | undefined): CommunicationEntry | null {
+  if (!history || history.length === 0) return null;
+  return [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+}
 
 interface LeadCardProps {
   lead: Lead;
@@ -82,6 +113,15 @@ export default function LeadCard({
             )}
           </div>
           <div className="text-xs text-slate-600">{lead.contact}</div>
+          <div className="truncate text-xs text-slate-400">
+            {(() => {
+              const latest = getLatestActivity(lead.communicationHistory);
+              if (!latest) return "No activity";
+              const icon = activityIcons[latest.type] ?? "📝";
+              const rel = getRelativeTime(latest.date);
+              return `${icon} ${latest.type}${rel ? ` · ${rel}` : ""}`;
+            })()}
+          </div>
         </div>
         <div className="flex flex-shrink-0 items-start gap-2 text-right">
           <div>
