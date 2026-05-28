@@ -10,7 +10,22 @@ const activityIcons: Record<CommunicationEntry["type"], string> = {
   Other: "📝",
 };
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 function getRelativeTime(dateStr: string): string {
+  if (DATE_ONLY.test(dateStr)) {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d, 12);
+    const now = new Date();
+    const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+    const diffDays = Math.round((todayNoon.getTime() - date.getTime()) / 86_400_000);
+    if (diffDays <= 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+  // Full timestamp path (future-proof if time is ever stored)
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return "";
   const diffMs = Date.now() - date.getTime();
