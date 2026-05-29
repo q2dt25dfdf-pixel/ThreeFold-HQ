@@ -93,13 +93,13 @@ export default function LeadCard({
           onOpen(lead);
         }
       }}
-      className="group w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5"
+      className="group w-full rounded-3xl border border-slate-200 bg-white p-3 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:rounded-[2rem] md:p-5"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`inline-block whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.06em] ${stageBadgeStyles[lead.stage]}`}>
+        <div className="min-w-0 flex-1 space-y-1 md:space-y-1.5">
+          <h3 className="truncate text-[13px] font-semibold leading-5 text-slate-950 md:text-sm">{lead.company}</h3>
+          <div className="flex flex-wrap items-center gap-1">
+            <span className={`inline-block max-w-full truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase leading-[1.2] tracking-[0.06em] md:px-3 md:py-1 md:text-[11px] ${stageBadgeStyles[lead.stage]}`}>
               {lead.stage}
             </span>
             {(lead as Lead & { source?: string }).source === "Website" && (
@@ -108,17 +108,17 @@ export default function LeadCard({
               </span>
             )}
           </div>
-          <div className="text-xs text-slate-600">{lead.contact}</div>
-          <div className="text-xs text-slate-400">
+          <div className="truncate text-[11px] text-slate-600 md:text-xs">{lead.contact}</div>
+          <div className="truncate text-[11px] text-slate-400 md:text-xs">
             {latestActivity
               ? `${ACTIVITY_EMOJI[latestActivity.type] ?? "•"} ${latestActivity.type} · ${formatActivityDate(latestActivity.date)}`
               : "No activity"}
           </div>
         </div>
-        <div className="flex flex-shrink-0 items-start gap-2 text-right">
-          <div>
-            <div className="text-base font-semibold text-slate-950">{formatLeadValue(lead.value)}</div>
-            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Value</div>
+        <div className="flex flex-shrink-0 items-start gap-1.5 text-right md:gap-2">
+          <div className="min-w-0">
+            <div className="max-w-20 truncate text-sm font-semibold text-slate-950 md:max-w-none md:text-base">{formatLeadValue(lead.value)}</div>
+            <div className="text-[9px] uppercase tracking-[0.2em] text-slate-400 md:text-[10px] md:tracking-[0.22em]">Value</div>
           </div>
           <button
             type="button"
@@ -135,12 +135,12 @@ export default function LeadCard({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2 grid-cols-2">
-        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-xs">
-          <div className="font-semibold text-slate-900">Follow-up</div>
-          <div className="mt-0.5 text-xs text-slate-600">{lead.followUpDate}</div>
+      <div className="mt-2 grid grid-cols-2 gap-2 md:mt-3">
+        <div className="min-w-0 rounded-2xl bg-slate-50 px-3 py-2 text-xs">
+          <div className="truncate font-semibold text-slate-900">Follow-up</div>
+          <div className="mt-0.5 truncate text-[11px] text-slate-600 md:text-xs">{lead.followUpDate}</div>
         </div>
-        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-xs">
+        <div className="min-w-0 rounded-2xl bg-slate-50 px-3 py-2 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-semibold text-white">
               {lead.owner[0]}
@@ -152,7 +152,7 @@ export default function LeadCard({
       {canCompleteFollowUp && onCompleteFollowUp && (
         <button
           type="button"
-          className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+          className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 md:mt-3"
           onClick={(event) => {
             event.stopPropagation();
             onCompleteFollowUp(lead);
@@ -163,7 +163,7 @@ export default function LeadCard({
         </button>
       )}
       {duplicateMatch && (
-        <div className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${
+        <div className={`mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold md:mt-3 ${
           duplicateMatch.matchType === "likely_existing"
             ? "bg-amber-100 text-amber-800"
             : "bg-yellow-50 text-yellow-700 border border-yellow-200"

@@ -916,11 +916,11 @@ function CRMContent() {
       })()}
 
       <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8 lg:pb-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:gap-4 lg:items-start lg:pr-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:gap-4 lg:items-start lg:pr-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
             return (
-            <div key={stage} className="w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4">
-              <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
+            <div key={stage} className="w-full rounded-3xl border border-slate-200 bg-white p-2.5 shadow-sm md:p-4 lg:w-[295px] lg:shrink-0 lg:rounded-[2rem]">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200/60 pb-3 md:pb-4">
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
                   <p className="mt-1 text-xs text-slate-500">{stageLeads.length} lead{stageLeads.length === 1 ? "" : "s"}</p>
@@ -939,7 +939,7 @@ function CRMContent() {
                   </button>
                 </div>
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="mt-3 space-y-2.5 md:mt-4 md:space-y-3">
                 {stageLeads.length ? (
                   stageLeads.map((lead) => (
                     <LeadCard

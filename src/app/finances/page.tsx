@@ -1275,17 +1275,17 @@ function FinancesContent() {
         </div>
       </div>
 
-      <div className="-mx-2 overflow-x-auto px-2">
-        <div className="flex min-w-max gap-2 rounded-3xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <div className="inline-flex min-w-max items-center gap-1 border-b border-slate-200 pb-1">
           {financeTabs.map((tab) => (
             <button
               key={tab.value}
               type="button"
               onClick={() => updateTab(tab.value)}
-              className={`min-h-11 rounded-3xl px-4 py-2 text-xs font-semibold transition md:text-sm ${
+              className={`min-h-11 rounded-2xl px-4 py-2 text-xs font-semibold transition md:text-sm ${
                 activeTab === tab.value
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-white"
               }`}
             >
               {tab.label}
@@ -1322,51 +1322,57 @@ function FinancesContent() {
 
       {/* ── Internal Financial Summary ─────────────────────────────────────── */}
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-950 md:text-lg">Internal Financial Summary</h2>
-          <p className="mt-1 text-[10px] text-slate-400">
-            Based on current stored invoice, order, and expense data only. Does not include unsaved or external data.
-          </p>
+        <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Internal Financial Summary</h2>
+            <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Stored invoice, order, and expense data</p>
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {/* Paid Revenue */}
-          <div className="rounded-2xl bg-emerald-50 px-4 py-4">
-            <p className="text-xl font-bold tracking-tight text-emerald-700 md:text-2xl">{currency.format(revenueCollected)}</p>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 md:py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">Cash In</p>
+            <p className="mt-2 text-xl font-bold tracking-tight text-emerald-700 md:text-2xl">{currency.format(revenueCollected)}</p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Paid Revenue</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Cash collected: deposits + final payments received</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Deposits + final payments</p>
           </div>
           {/* Open Invoices */}
-          <div className={`rounded-2xl px-4 py-4 ${outstandingBalance > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${outstandingBalance > 0 ? "border-amber-100 bg-amber-50" : "border-slate-100 bg-slate-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${outstandingBalance > 0 ? "text-amber-700" : "text-slate-500"}`}>Receivables</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${outstandingBalance > 0 ? "text-amber-700" : "text-slate-500"}`}>
               {currency.format(outstandingBalance)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Open Invoices</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Balance remaining on invoices not yet paid in full</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Remaining balances</p>
           </div>
           {/* Total Vendor Costs */}
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 md:py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Vendor</p>
             <p className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">{currency.format(totalVendorCosts)}</p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Total Vendor Costs</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Sum of all vendor costs recorded on orders</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Recorded on orders</p>
           </div>
           {/* Unpaid Vendor Costs */}
-          <div className={`rounded-2xl px-4 py-4 ${unpaidVendorCosts > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${unpaidVendorCosts > 0 ? "border-rose-100 bg-rose-50" : "border-slate-100 bg-slate-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${unpaidVendorCosts > 0 ? "text-rose-700" : "text-slate-500"}`}>Vendor</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${unpaidVendorCosts > 0 ? "text-rose-700" : "text-slate-500"}`}>
               {currency.format(unpaidVendorCosts)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Unpaid Vendor Costs</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Vendor costs where payment status is not marked paid</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Not marked paid</p>
           </div>
           {/* Estimated Gross Profit */}
-          <div className={`rounded-2xl px-4 py-4 ${estimatedGrossProfit >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${estimatedGrossProfit >= 0 ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${estimatedGrossProfit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>Margin</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${estimatedGrossProfit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
               {currency.format(estimatedGrossProfit)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Est. Gross Profit</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Paid revenue minus paid vendor costs</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Revenue - paid vendor costs</p>
           </div>
           {/* Sales Tax Owed */}
-          <div className={`rounded-2xl px-4 py-4 ${taxDue > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${taxDue > 0 ? "border-rose-100 bg-rose-50" : "border-slate-100 bg-slate-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${taxDue > 0 ? "text-rose-700" : "text-slate-500"}`}>Tax</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${taxDue > 0 ? "text-rose-700" : "text-slate-950"}`}>
               {currency.format(taxDue)}
             </p>
@@ -1381,28 +1387,31 @@ function FinancesContent() {
             )}
           </div>
           {/* Paid Expenses */}
-          <div className={`rounded-2xl px-4 py-4 ${paidExpenses > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${paidExpenses > 0 ? "border-rose-100 bg-rose-50" : "border-slate-100 bg-slate-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${paidExpenses > 0 ? "text-rose-700" : "text-slate-500"}`}>Expense</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${paidExpenses > 0 ? "text-rose-700" : "text-slate-500"}`}>
               {currency.format(paidExpenses)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Paid Expenses</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">General business expenses marked paid</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Marked paid</p>
           </div>
           {/* Unpaid Expenses */}
-          <div className={`rounded-2xl px-4 py-4 ${unpaidExpenses > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${unpaidExpenses > 0 ? "border-amber-100 bg-amber-50" : "border-slate-100 bg-slate-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${unpaidExpenses > 0 ? "text-amber-700" : "text-slate-500"}`}>Expense</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${unpaidExpenses > 0 ? "text-amber-700" : "text-slate-500"}`}>
               {currency.format(unpaidExpenses)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Unpaid Expenses</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">General business expenses not yet paid</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Not yet paid</p>
           </div>
           {/* Net Position */}
-          <div className={`rounded-2xl px-4 py-4 ${netPosition >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
+          <div className={`rounded-2xl border px-4 py-3 md:py-4 ${netPosition >= 0 ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${netPosition >= 0 ? "text-emerald-700" : "text-rose-700"}`}>Position</p>
             <p className={`text-xl font-bold tracking-tight md:text-2xl ${netPosition >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
               {currency.format(netPosition)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-700">Net Position</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Paid revenue − paid vendor costs − paid expenses</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Revenue - costs - expenses</p>
           </div>
         </div>
         {ordersWithoutVendorCost > 0 && (
@@ -1638,13 +1647,13 @@ function FinancesContent() {
             </button>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((invoice) => (
             <article
               key={invoice.id}
               role="button"
               tabIndex={0}
-              className={`rounded-[2rem] border bg-white p-4 text-left shadow-sm transition hover:shadow-md md:p-5 ${invoice.final_paid ? "border-emerald-200 hover:border-emerald-300" : "border-slate-200 hover:border-slate-300"}`}
+              className={`max-w-full overflow-hidden rounded-[2rem] border bg-white p-4 text-left shadow-sm transition hover:shadow-md md:p-5 ${invoice.final_paid ? "border-emerald-200 hover:border-emerald-300" : "border-slate-200 hover:border-slate-300"}`}
               onClick={() => openEditInvoice(invoice)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -1653,46 +1662,46 @@ function FinancesContent() {
                 }
               }}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-slate-500 md:text-sm">{invoiceClientName(invoice)}</p>
                   <h3 className="mt-1 truncate text-base font-semibold text-slate-950 md:text-lg">{invoiceOrderName(invoice) || "Untitled invoice"}</h3>
                 </div>
-                <span className={"shrink-0 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] " + statusColors[invoice.status]}>
+                <span className={"max-w-full self-start truncate rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:shrink-0 md:text-xs " + statusColors[invoice.status]}>
                   {invoice.status}
                 </span>
               </div>
 
               <div className="mt-4 space-y-2 text-xs text-slate-600 md:text-sm">
                 {invoice.final_paid ? (
-                  <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-2.5">
-                    <span className="font-semibold text-emerald-700">Paid in full</span>
-                    <span className="font-semibold text-emerald-700">{currencyInputValue(invoice.total_amount)}</span>
+                  <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-3 py-2.5 md:px-4">
+                    <span className="min-w-0 truncate font-semibold text-emerald-700">Paid in full</span>
+                    <span className="min-w-0 max-w-[55%] truncate text-right font-semibold text-emerald-700">{currencyInputValue(invoice.total_amount)}</span>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                      <span>Order total</span>
-                      <span className="font-semibold text-slate-950">{currencyInputValue(invoice.total_amount)}</span>
+                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 md:px-4">
+                      <span className="min-w-0 truncate">Order total</span>
+                      <span className="min-w-0 max-w-[55%] truncate text-right font-semibold text-slate-950">{currencyInputValue(invoice.total_amount)}</span>
                     </div>
                     {invoiceBalance(invoice) > 0 && (
-                      <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-2">
-                        <span className="text-amber-700">Balance due</span>
-                        <span className="font-semibold text-amber-700">{currencyInputValue(invoice.balance_remaining)}</span>
+                      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-amber-50 px-3 py-2 md:px-4">
+                        <span className="min-w-0 truncate text-amber-700">Balance due</span>
+                        <span className="min-w-0 max-w-[55%] truncate text-right font-semibold text-amber-700">{currencyInputValue(invoice.balance_remaining)}</span>
                       </div>
                     )}
                   </>
                 )}
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                  <span>Deposit</span>
-                  <span className={invoice.deposit_paid ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
+                <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 md:px-4">
+                  <span className="min-w-0 truncate">Deposit</span>
+                  <span className={(invoice.deposit_paid ? "font-semibold text-emerald-700" : "font-semibold text-amber-700") + " min-w-0 max-w-[65%] truncate text-right"}>
                     {invoice.deposit_paid ? "Received" : "Due"} · {currencyInputValue(invoice.deposit_amount)}
                   </span>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-slate-500">{invoice.final_due_date ? "Due " + invoice.final_due_date : "No due date set"}</span>
+              <div className="mt-4 flex min-w-0 items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-xs font-semibold text-slate-500">{invoice.final_due_date ? "Due " + invoice.final_due_date : "No due date set"}</span>
                 <button
                   type="button"
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"
