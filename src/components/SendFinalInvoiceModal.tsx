@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
+import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openEmailCompose } from "@/lib/emailCompose";
 import { parseAmount } from "@/lib/invoiceCalc";
 
@@ -20,6 +21,7 @@ interface Props {
   open: boolean;
   invoice: Invoice | null;
   onClose: () => void;
+  onSent?: (sender: string, publicLink: string) => void;
 }
 
 type Step = "generating" | "preview" | "sending" | "sent" | "error";
@@ -33,7 +35,7 @@ function fmtCurrency(n: number) {
   }).format(n);
 }
 
-export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props) {
+export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("generating");
   const [publicLink, setPublicLink] = useState("");
   const [emailTo, setEmailTo] = useState("");
@@ -41,6 +43,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
   const [emailBody, setEmailBody] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState<CopyTarget | "">("");
+  const [sender, setSender] = useState<Sender | "">("");
 
   useEffect(() => {
     if (!open || !invoice) return;
@@ -48,6 +51,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
     setPublicLink("");
     setErrorMsg("");
     setCopied("");
+    setSender("");
 
     const clientName = invoice.client_name || invoice.client || "there";
     const projectName = invoice.order_name || invoice.orderName || "your order";
@@ -83,6 +87,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
   }, [open, invoice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSend = () => {
+    if (!sender) return;
     setStep("sending");
     try {
       openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
@@ -95,11 +100,12 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
           body: JSON.stringify({
             type: 'final_invoice_sent',
             title: 'Final Invoice Sent',
-            message: `${clientName} · Final invoice delivered.`,
+            message: `${clientName} · Final invoice sent by ${sender}.`,
             entity_type: 'finance',
             entity_id: invoice.id,
           }),
         }).catch(err => console.error('[notify]', err));
+        onSent?.(sender, publicLink);
       }
       window.setTimeout(onClose, 2000);
     } catch (err: unknown) {
@@ -118,22 +124,30 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose }: Props)
 
   const footer =
     step === "preview" ? (
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSend}
-          className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-        >
-          <Send size={14} />
-          Send Final Invoice
-        </button>
+      <div className="flex flex-col gap-3">
+        <SenderPicker
+          label="Who is sending this final invoice?"
+          value={sender}
+          onChange={setSender}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!sender}
+            className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+          >
+            <Send size={14} />
+            Send Final Invoice
+          </button>
+        </div>
       </div>
     ) : step === "error" ? (
       <div className="flex justify-end">

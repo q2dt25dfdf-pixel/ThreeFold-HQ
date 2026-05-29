@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
+import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openEmailCompose } from "@/lib/emailCompose";
 import { fmtTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
@@ -20,7 +21,7 @@ interface Props {
   open: boolean;
   lead: Lead | null;
   onClose: () => void;
-  onSent: (result: DepositResult) => void;
+  onSent: (result: DepositResult, sender: string) => void;
 }
 
 type QuoteSnapshot = {
@@ -69,6 +70,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   const [emailBody, setEmailBody] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState<CopyTarget | "">("");
+  const [sender, setSender] = useState<Sender | "">("");
 
   const depositFieldsInvalid =
     quoteLoading ||
@@ -84,6 +86,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
     setDepositResult(null);
     setErrorMsg("");
     setCopied("");
+    setSender("");
     setEmailTo(lead.email ?? "");
     setTotalAmount(parseLeadValue(lead.value));
     setDepositPercent(50);
@@ -173,13 +176,13 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   };
 
   const handleSend = async () => {
-    if (!depositResult) return;
+    if (!depositResult || !sender) return;
     setStep("sending");
     try {
       openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
       setStep("sent");
       setTimeout(() => {
-        onSent(depositResult);
+        onSent(depositResult, sender);
         onClose();
       }, 2000);
     } catch (err: unknown) {
@@ -217,22 +220,30 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         </button>
       </div>
     ) : step === "preview" ? (
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setStep("configure")}
-          className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          ← Back
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleSend()}
-          className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-        >
-          <Send size={14} />
-          Send Deposit Request
-        </button>
+      <div className="flex flex-col gap-3">
+        <SenderPicker
+          label="Who is sending this deposit request?"
+          value={sender}
+          onChange={setSender}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setStep("configure")}
+            className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSend()}
+            disabled={!sender}
+            className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+          >
+            <Send size={14} />
+            Send Deposit Request
+          </button>
+        </div>
       </div>
     ) : step === "error" ? (
       <div className="flex items-center justify-between gap-3">

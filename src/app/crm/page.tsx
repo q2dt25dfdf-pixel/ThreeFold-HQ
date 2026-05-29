@@ -704,7 +704,8 @@ function CRMContent() {
     setQuoteLead(lead);
   };
 
-  const handleQuoteSent = async (lead: Lead, result: { quoteId: string; quoteNumber: string; publicLink: string; grandTotal?: number }) => {
+  const handleQuoteSent = async (lead: Lead, result: { quoteId: string; quoteNumber: string; publicLink: string; grandTotal?: number }, sender: string) => {
+    const isRevised = lead.stage === "Quote Sent";
     const updated: Lead = {
       ...lead,
       stage: "Quote Sent",
@@ -716,8 +717,8 @@ function CRMContent() {
           id: `comm-quote-${Date.now()}`,
           type: "Email",
           date: businessTodayISO(),
-          owner: lead.owner || "Alliyah",
-          summary: `Quote sent. Quote #${result.quoteNumber}. View: ${result.publicLink}`,
+          owner: sender,
+          summary: `${isRevised ? "Revised quote" : "Quote"} sent by ${sender}. Quote #${result.quoteNumber}. Portal: ${result.publicLink}`,
         },
         ...lead.communicationHistory,
       ],
@@ -739,7 +740,7 @@ function CRMContent() {
     setDepositLead(lead);
   };
 
-  const handleDepositSent = async (lead: Lead, result: { depositRequestId: string; depositRequestNumber: string; publicLink: string }) => {
+  const handleDepositSent = async (lead: Lead, result: { depositRequestId: string; depositRequestNumber: string; publicLink: string }, sender: string) => {
     const updated: Lead = {
       ...lead,
       deposit_request_id: result.depositRequestId,
@@ -749,8 +750,8 @@ function CRMContent() {
           id: `comm-deposit-${Date.now()}`,
           type: "Email",
           date: businessTodayISO(),
-          owner: lead.owner || "Alliyah",
-          summary: `Deposit request sent. Request #${result.depositRequestNumber}. View: ${result.publicLink}`,
+          owner: sender,
+          summary: `Deposit request sent by ${sender}. Request #${result.depositRequestNumber}. Portal: ${result.publicLink}`,
         },
         ...lead.communicationHistory,
       ],
@@ -998,8 +999,8 @@ function CRMContent() {
         open={Boolean(quoteLead)}
         lead={quoteLead}
         onClose={() => setQuoteLead(null)}
-        onSent={(result) => {
-          if (quoteLead) void handleQuoteSent(quoteLead, result);
+        onSent={(result, sender) => {
+          if (quoteLead) void handleQuoteSent(quoteLead, result, sender);
           setQuoteLead(null);
         }}
       />
@@ -1008,8 +1009,8 @@ function CRMContent() {
         open={Boolean(depositLead)}
         lead={depositLead}
         onClose={() => setDepositLead(null)}
-        onSent={(result) => {
-          if (depositLead) void handleDepositSent(depositLead, result);
+        onSent={(result, sender) => {
+          if (depositLead) void handleDepositSent(depositLead, result, sender);
           setDepositLead(null);
         }}
       />
