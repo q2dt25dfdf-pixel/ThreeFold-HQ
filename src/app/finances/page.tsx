@@ -93,6 +93,81 @@ type Order = {
   vendor_payment_status?: string;
 };
 
+// ── Expense types and constants ──────────────────────────────────────────────
+
+type ExpensePaymentStatus = "paid" | "unpaid";
+type ExpenseReimbursementStatus = "not_needed" | "needs_reimbursement" | "reimbursed";
+
+type Expense = {
+  id: string;
+  expense_date: string;
+  vendor_name: string;
+  category: string;
+  amount_cents: number;
+  paid_by: string;
+  payment_status: ExpensePaymentStatus;
+  reimbursement_status: ExpenseReimbursementStatus;
+  notes?: string;
+  related_order_id?: string;
+  receipt_url?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+const EXPENSE_CATEGORIES = [
+  "Materials",
+  "Packaging",
+  "Tools",
+  "Software",
+  "Samples",
+  "Supplies",
+  "Shipping",
+  "Other",
+] as const;
+
+const EXPENSE_PAID_BY_OPTIONS = ["Alliyah", "Hannah", "Jordan", "Company Account"] as const;
+
+const EXPENSE_REIMBURSEMENT_LABELS: Record<ExpenseReimbursementStatus, string> = {
+  not_needed: "Not needed",
+  needs_reimbursement: "Needs reimbursement",
+  reimbursed: "Reimbursed",
+};
+
+const emptyExpenseForm = {
+  expense_date: "",
+  vendor_name: "",
+  category: "",
+  amountStr: "",
+  paid_by: "",
+  payment_status: "unpaid" as ExpensePaymentStatus,
+  reimbursement_status: "not_needed" as ExpenseReimbursementStatus,
+  notes: "",
+  receipt_url: "",
+  related_order_id: "",
+};
+
+function formatExpenseDate(dateStr: string): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T12:00:00");
+  return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function expenseCategoryBadgeClass(category: string): string {
+  const map: Record<string, string> = {
+    Materials: "bg-blue-100 text-blue-700",
+    Packaging: "bg-purple-100 text-purple-700",
+    Tools: "bg-orange-100 text-orange-700",
+    Software: "bg-indigo-100 text-indigo-700",
+    Samples: "bg-teal-100 text-teal-700",
+    Supplies: "bg-amber-100 text-amber-700",
+    Shipping: "bg-cyan-100 text-cyan-700",
+    Other: "bg-slate-100 text-slate-600",
+  };
+  return map[category] ?? "bg-slate-100 text-slate-600";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
 const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
@@ -304,6 +379,7 @@ function FinancesContent() {
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
+  const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
   const [filter, setFilter] = useState<InvoiceStatus | "All" | "Unpaid">(() => {
     const p = searchParams.get("filter") ?? "";
     if (p.toLowerCase() === "unpaid") return "Unpaid";
@@ -321,6 +397,14 @@ function FinancesContent() {
   const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  // Expense state
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [expenseForm, setExpenseForm] = useState(emptyExpenseForm);
+  const [expenseFormError, setExpenseFormError] = useState("");
+  const [deletingExpenseId, setDeletingExpenseId] = useState("");
+  const [expenseFilter, setExpenseFilter] = useState({ status: "all", paidBy: "", category: "" });
+  const expenseSave = useSaveState();
   // Sales tax state
   const [showTaxModal, setShowTaxModal] = useState(false);
   const [taxForm, setTaxForm] = useState({ amount: "", date: businessTodayISO(), period: "", notes: "" });
@@ -407,6 +491,28 @@ function FinancesContent() {
     (inv) => (inv.deposit_paid || inv.final_paid) && !parseAmount(inv.sales_tax_amount ?? 0),
   );
 
+  // ── Expense metrics ────────────────────────────────────────────────────────
+  // Paid = payment_status "paid". Missing fields default safely.
+  // Reimbursed personal expenses are NOT double-counted — each expense is one record.
+  const paidExpenses = expenses
+    .filter((e) => e.payment_status === "paid")
+    .reduce((sum, e) => sum + Math.round(e.amount_cents ?? 0) / 100, 0);
+  const unpaidExpenses = expenses
+    .filter((e) => e.payment_status !== "paid")
+    .reduce((sum, e) => sum + Math.round(e.amount_cents ?? 0) / 100, 0);
+  // Net Position = what's actually in the business after covering paid vendor costs + paid expenses
+  const netPosition = revenueCollected - paidVendorCosts - paidExpenses;
+
+  const visibleExpenses = expenses
+    .filter((e) => {
+      if (expenseFilter.status === "paid" && e.payment_status !== "paid") return false;
+      if (expenseFilter.status === "unpaid" && e.payment_status !== "unpaid") return false;
+      if (expenseFilter.paidBy && e.paid_by !== expenseFilter.paidBy) return false;
+      if (expenseFilter.category && e.category !== expenseFilter.category) return false;
+      return true;
+    })
+    .sort((a, b) => (b.expense_date ?? "").localeCompare(a.expense_date ?? ""));
+
   const handleAddTaxPayment = async () => {
     const amt = parseFloat(taxForm.amount);
     if (!amt || amt <= 0) { setTaxFormError("Enter a valid amount."); return; }
@@ -424,6 +530,94 @@ function FinancesContent() {
       }),
       () => { setTimeout(() => { setShowTaxModal(false); setTaxForm({ amount: "", date: businessTodayISO(), period: "", notes: "" }); taxSave.resetSaveState(); }, 1200); },
     );
+  };
+
+  const openAddExpenseModal = () => {
+    setExpenseForm({ ...emptyExpenseForm, expense_date: businessTodayISO() });
+    setEditingExpense(null);
+    setExpenseFormError("");
+    expenseSave.resetSaveState();
+    setShowExpenseModal(true);
+  };
+
+  const openEditExpenseModal = (expense: Expense) => {
+    setEditingExpense(expense);
+    setExpenseForm({
+      expense_date: expense.expense_date ?? "",
+      vendor_name: expense.vendor_name ?? "",
+      category: expense.category ?? "",
+      amountStr: (expense.amount_cents ?? 0) > 0 ? ((expense.amount_cents ?? 0) / 100).toFixed(2) : "",
+      paid_by: expense.paid_by ?? "",
+      payment_status: expense.payment_status ?? "unpaid",
+      reimbursement_status: expense.reimbursement_status ?? "not_needed",
+      notes: expense.notes ?? "",
+      receipt_url: expense.receipt_url ?? "",
+      related_order_id: expense.related_order_id ?? "",
+    });
+    setExpenseFormError("");
+    expenseSave.resetSaveState();
+    setShowExpenseModal(true);
+  };
+
+  const closeExpenseModal = () => {
+    setShowExpenseModal(false);
+    setEditingExpense(null);
+    setExpenseFormError("");
+    expenseSave.resetSaveState();
+  };
+
+  const handleSaveExpense = async () => {
+    if (!expenseForm.expense_date) { setExpenseFormError("Date is required."); return; }
+    if (!expenseForm.vendor_name.trim()) { setExpenseFormError("Vendor / source is required."); return; }
+    if (!expenseForm.category) { setExpenseFormError("Category is required."); return; }
+    const parsed = parseFloat(expenseForm.amountStr);
+    if (!expenseForm.amountStr || isNaN(parsed) || parsed <= 0) { setExpenseFormError("Amount must be greater than $0."); return; }
+    if (!expenseForm.paid_by) { setExpenseFormError("Paid by is required."); return; }
+    setExpenseFormError("");
+    const cents = Math.round(parsed * 100);
+    const now = new Date().toISOString();
+    if (editingExpense) {
+      const updated: Expense = {
+        ...editingExpense,
+        expense_date: expenseForm.expense_date,
+        vendor_name: expenseForm.vendor_name.trim(),
+        category: expenseForm.category,
+        amount_cents: cents,
+        paid_by: expenseForm.paid_by,
+        payment_status: expenseForm.payment_status,
+        reimbursement_status: expenseForm.reimbursement_status,
+        notes: expenseForm.notes,
+        receipt_url: expenseForm.receipt_url,
+        related_order_id: expenseForm.related_order_id,
+        updated_at: now,
+      };
+      await expenseSave.runSave(() => upsertExpense(updated), closeExpenseModal);
+    } else {
+      const newExp: Expense = {
+        id: `expense-${Date.now()}`,
+        expense_date: expenseForm.expense_date,
+        vendor_name: expenseForm.vendor_name.trim(),
+        category: expenseForm.category,
+        amount_cents: cents,
+        paid_by: expenseForm.paid_by,
+        payment_status: expenseForm.payment_status,
+        reimbursement_status: expenseForm.reimbursement_status,
+        notes: expenseForm.notes,
+        receipt_url: expenseForm.receipt_url,
+        related_order_id: expenseForm.related_order_id,
+        created_at: now,
+        updated_at: now,
+      };
+      await expenseSave.runSave(() => upsertExpense(newExp), closeExpenseModal);
+    }
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!window.confirm("Delete this expense? This cannot be undone.")) return;
+    setDeletingExpenseId(id);
+    await deleteExpense(id);
+    setDeletingExpenseId("");
+    if (editingExpense?.id === id) closeExpenseModal();
   };
 
   const monthlyRevenue = useMemo(() => {
@@ -898,7 +1092,7 @@ function FinancesContent() {
         <div className="mb-4">
           <h2 className="text-base font-semibold text-slate-950 md:text-lg">Internal Financial Summary</h2>
           <p className="mt-1 text-[10px] text-slate-400">
-            Based on current stored invoice and order data only. Vendor costs come from individual order records. Does not include unsaved or external data.
+            Based on current stored invoice, order, and expense data only. Does not include unsaved or external data.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -953,11 +1147,157 @@ function FinancesContent() {
               </p>
             )}
           </div>
+          {/* Paid Expenses */}
+          <div className={`rounded-2xl px-4 py-4 ${paidExpenses > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${paidExpenses > 0 ? "text-rose-700" : "text-slate-500"}`}>
+              {currency.format(paidExpenses)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Paid Expenses</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">General business expenses marked paid</p>
+          </div>
+          {/* Unpaid Expenses */}
+          <div className={`rounded-2xl px-4 py-4 ${unpaidExpenses > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${unpaidExpenses > 0 ? "text-amber-700" : "text-slate-500"}`}>
+              {currency.format(unpaidExpenses)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Unpaid Expenses</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">General business expenses not yet paid</p>
+          </div>
+          {/* Net Position */}
+          <div className={`rounded-2xl px-4 py-4 ${netPosition >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${netPosition >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              {currency.format(netPosition)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Net Position</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Paid revenue − paid vendor costs − paid expenses</p>
+          </div>
         </div>
         {ordersWithoutVendorCost > 0 && (
           <p className="mt-3 text-[10px] text-slate-400">
             {ordersWithoutVendorCost} active order{ordersWithoutVendorCost !== 1 ? "s" : ""} have no vendor cost recorded — vendor cost totals may be understated.
           </p>
+        )}
+      </section>
+
+      {/* ── Expenses ──────────────────────────────────────────────────────────── */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Expenses</h2>
+            <p className="mt-1 text-[10px] text-slate-400">
+              General business costs not tied to a specific client order (materials, packaging, software, tools, etc.).
+            </p>
+          </div>
+          <button
+            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 sm:w-auto md:text-sm"
+            onClick={openAddExpenseModal}
+          >
+            Add Expense
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          <select
+            className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            value={expenseFilter.status}
+            onChange={(e) => setExpenseFilter((f) => ({ ...f, status: e.target.value }))}
+          >
+            <option value="all">All statuses</option>
+            <option value="paid">Paid</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+          <select
+            className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            value={expenseFilter.paidBy}
+            onChange={(e) => setExpenseFilter((f) => ({ ...f, paidBy: e.target.value }))}
+          >
+            <option value="">All paid by</option>
+            {EXPENSE_PAID_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select
+            className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            value={expenseFilter.category}
+            onChange={(e) => setExpenseFilter((f) => ({ ...f, category: e.target.value }))}
+          >
+            <option value="">All categories</option>
+            {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {(expenseFilter.status !== "all" || expenseFilter.paidBy || expenseFilter.category) && (
+            <button
+              className="min-h-10 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+              onClick={() => setExpenseFilter({ status: "all", paidBy: "", category: "" })}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {expensesError && (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+            {expensesError}
+          </div>
+        )}
+
+        {visibleExpenses.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-400">
+            {expenses.length === 0 ? "No expenses recorded yet. Add your first expense above." : "No expenses match the current filters."}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {visibleExpenses.map((expense) => (
+              <div
+                key={expense.id}
+                className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-start sm:justify-between"
+              >
+                {/* Left: info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-slate-400">{formatExpenseDate(expense.expense_date)}</span>
+                    {expense.category && (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expenseCategoryBadgeClass(expense.category)}`}>
+                        {expense.category}
+                      </span>
+                    )}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expense.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      {expense.payment_status === "paid" ? "Paid" : "Unpaid"}
+                    </span>
+                    {expense.reimbursement_status !== "not_needed" && (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expense.reimbursement_status === "reimbursed" ? "bg-slate-100 text-slate-500" : "bg-purple-100 text-purple-700"}`}>
+                        {EXPENSE_REIMBURSEMENT_LABELS[expense.reimbursement_status] ?? expense.reimbursement_status}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{expense.vendor_name || "—"}</p>
+                  <p className="mt-0.5 text-base font-bold text-slate-950">{currency.format((expense.amount_cents ?? 0) / 100)}</p>
+                  {expense.paid_by && (
+                    <p className="mt-0.5 text-[10px] text-slate-400">Paid by {expense.paid_by}</p>
+                  )}
+                  {expense.notes && (
+                    <p className="mt-1 text-xs text-slate-500 line-clamp-2">{expense.notes}</p>
+                  )}
+                </div>
+                {/* Right: actions */}
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditExpenseModal(expense)}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingExpenseId === expense.id}
+                    onClick={() => void handleDeleteExpense(expense.id)}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-rose-100 bg-white px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
@@ -1295,6 +1635,143 @@ function FinancesContent() {
           }
         >
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
+        </ModalShell>
+      )}
+      {/* Expense add / edit modal */}
+      {showExpenseModal && (
+        <ModalShell
+          title={editingExpense ? "Edit Expense" : "Add Expense"}
+          onClose={closeExpenseModal}
+          maxWidth="max-w-md"
+          footer={
+            <div className="space-y-3">
+              <FieldError message={expenseFormError} />
+              <div className="flex gap-3">
+                <SaveButton state={expenseSave.saveState} onClick={() => void handleSaveExpense()} mode={editingExpense ? undefined : "add"} className="flex-1 py-3" />
+                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" onClick={closeExpenseModal}>
+                  Cancel
+                </button>
+              </div>
+              {editingExpense && (
+                <button
+                  type="button"
+                  disabled={deletingExpenseId === editingExpense.id}
+                  className="min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 md:text-sm disabled:opacity-50"
+                  onClick={() => void handleDeleteExpense(editingExpense.id)}
+                >
+                  Delete expense
+                </button>
+              )}
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date <span className="text-rose-500">*</span></label>
+                <input
+                  type="date"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  value={expenseForm.expense_date}
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, expense_date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full rounded-2xl border border-slate-300 py-3 pl-8 pr-4 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                    value={expenseForm.amountStr}
+                    onChange={(e) => setExpenseForm((f) => ({ ...f, amountStr: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Vendor / Source <span className="text-rose-500">*</span></label>
+              <input
+                type="text"
+                placeholder="e.g. Amazon, Uline, Canva..."
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={expenseForm.vendor_name}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, vendor_name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Category <span className="text-rose-500">*</span></label>
+              <select
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={expenseForm.category}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, category: e.target.value }))}
+              >
+                <option value="">Select category...</option>
+                {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Paid By <span className="text-rose-500">*</span></label>
+                <select
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  value={expenseForm.paid_by}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, paid_by: e.target.value }))}
+                >
+                  <option value="">Select...</option>
+                  {EXPENSE_PAID_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Payment Status</label>
+                <select
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  value={expenseForm.payment_status}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, payment_status: e.target.value as ExpensePaymentStatus }))}
+                >
+                  <option value="unpaid">Unpaid</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Reimbursement</label>
+              <select
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={expenseForm.reimbursement_status}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, reimbursement_status: e.target.value as ExpenseReimbursementStatus }))}
+              >
+                <option value="not_needed">Not needed</option>
+                <option value="needs_reimbursement">Needs reimbursement</option>
+                <option value="reimbursed">Reimbursed</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes <span className="font-normal text-slate-400">(optional)</span></label>
+              <textarea
+                rows={2}
+                placeholder="Invoice number, description, context..."
+                className="w-full resize-none rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={expenseForm.notes}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Receipt URL <span className="font-normal text-slate-400">(optional)</span></label>
+              <input
+                type="url"
+                placeholder="https://..."
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={expenseForm.receipt_url}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, receipt_url: e.target.value }))}
+              />
+            </div>
+          </div>
         </ModalShell>
       )}
     </div>
