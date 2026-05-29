@@ -55,12 +55,56 @@ type Invoice = {
 
 type SalesTaxPayment = {
   id: string;
-  amount: number;
-  date: string;
-  period: string;
-  notes: string;
-  created_at: string;
+  // New format fields (written by the enhanced form)
+  payment_date?: string;
+  period_start?: string;
+  period_end?: string;
+  amount_cents?: number;
+  paid_by?: string;
+  confirmation_number?: string;
+  notes?: string;
+  created_at?: string;
+  // Old format fields — kept for backward compat with existing records
+  amount?: number;
+  date?: string;
+  period?: string;
 };
+
+/** Canonical dollar amount — handles both new (amount_cents) and old (amount) records. */
+function taxPaymentDollars(p: SalesTaxPayment): number {
+  if (p.amount_cents != null) return p.amount_cents / 100;
+  return parseAmount(p.amount ?? 0);
+}
+
+/** Canonical payment date — handles both new (payment_date) and old (date) records. */
+function taxPaymentDateStr(p: SalesTaxPayment): string {
+  return p.payment_date ?? p.date ?? "";
+}
+
+/** Quarter number (1–4) for an ISO date string within a given year string, or null. */
+function dateToQuarter(dateStr: string | undefined, year: string): number | null {
+  if (!dateStr?.startsWith(year)) return null;
+  const m = parseInt(dateStr.slice(5, 7), 10);
+  if (m <= 3) return 1;
+  if (m <= 6) return 2;
+  if (m <= 9) return 3;
+  return 4;
+}
+
+/** Which quarter a tax payment covers for the given year.
+ *  Checks period_start first, then payment date, then parses the period text label. */
+function taxPaymentQuarter(p: SalesTaxPayment, year: string): number | null {
+  const q1 = dateToQuarter(p.period_start, year);
+  if (q1) return q1;
+  const q2 = dateToQuarter(taxPaymentDateStr(p), year);
+  if (q2) return q2;
+  const label = p.period ?? "";
+  if (label.includes(year) || !label.match(/\d{4}/)) {
+    const m = label.match(/Q([1-4])/i);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
 
 type Client = {
   id: string;
@@ -378,7 +422,7 @@ function FinancesContent() {
   const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
-  const { data: taxPayments, upsertItem: upsertTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
+  const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
   const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
   const [filter, setFilter] = useState<InvoiceStatus | "All" | "Unpaid">(() => {
     const p = searchParams.get("filter") ?? "";
@@ -406,8 +450,11 @@ function FinancesContent() {
   const [expenseFilter, setExpenseFilter] = useState({ status: "all", paidBy: "", category: "" });
   const expenseSave = useSaveState();
   // Sales tax state
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedTaxYear, setSelectedTaxYear] = useState(currentYear);
   const [showTaxModal, setShowTaxModal] = useState(false);
-  const [taxForm, setTaxForm] = useState({ amount: "", date: businessTodayISO(), period: "", notes: "" });
+  const [editingTaxPayment, setEditingTaxPayment] = useState<SalesTaxPayment | null>(null);
+  const [taxForm, setTaxForm] = useState({ payment_date: businessTodayISO(), period_label: "", amount: "", paid_by: "", confirmation_number: "", notes: "" });
   const [taxFormError, setTaxFormError] = useState("");
   const taxSave = useSaveState();
   const normalizedInvoices = useMemo(() => invoices.map((invoice) => normalizeInvoice(invoice)), [invoices]);
@@ -456,7 +503,6 @@ function FinancesContent() {
   const ordersWithoutVendorCost = activeOrders.filter((o) => !o.vendor_cost_cents).length;
 
   // ── Sales tax metrics ────────────────────────────────────────────────────────
-  const currentYear = new Date().getFullYear().toString();
   const configuredTaxRate = salesTaxRate();
 
   const taxCollectedYTD = useMemo(() => {
@@ -480,8 +526,8 @@ function FinancesContent() {
 
   const taxPaidYTD = useMemo(() => {
     return taxPayments
-      .filter((p) => (p.date ?? "").startsWith(currentYear))
-      .reduce((sum, p) => sum + parseAmount(p.amount ?? 0), 0);
+      .filter((p) => taxPaymentDateStr(p).startsWith(currentYear))
+      .reduce((sum, p) => sum + taxPaymentDollars(p), 0);
   }, [taxPayments, currentYear]);
 
   const taxDue = Math.max(taxCollectedYTD - taxPaidYTD, 0);
@@ -490,6 +536,87 @@ function FinancesContent() {
   const hasTaxGap = normalizedInvoices.some(
     (inv) => (inv.deposit_paid || inv.final_paid) && !parseAmount(inv.sales_tax_amount ?? 0),
   );
+
+  // ── Per-year / quarterly tax metrics (driven by selectedTaxYear) ─────────
+  const taxCollectedForYear = useMemo(() => {
+    return normalizedInvoices.reduce((sum, inv) => {
+      const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
+      if (taxAmt <= 0) return sum;
+      const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
+      const depositAmt = parseAmount(inv.deposit_amount);
+      if (inv.final_paid && inv.final_paid_date?.startsWith(selectedTaxYear)) {
+        return sum + taxAmt;
+      }
+      if (inv.deposit_paid && inv.deposit_paid_date?.startsWith(selectedTaxYear) && !inv.final_paid) {
+        return sum + calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
+      }
+      if (inv.final_paid && !inv.final_paid_date?.startsWith(selectedTaxYear) && inv.deposit_paid && inv.deposit_paid_date?.startsWith(selectedTaxYear)) {
+        return sum + calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
+      }
+      return sum;
+    }, 0);
+  }, [normalizedInvoices, selectedTaxYear]);
+
+  const taxPaidForYear = useMemo(() => {
+    return taxPayments
+      .filter((p) => taxPaymentDateStr(p).startsWith(selectedTaxYear))
+      .reduce((sum, p) => sum + taxPaymentDollars(p), 0);
+  }, [taxPayments, selectedTaxYear]);
+
+  const taxDueForYear = Math.max(taxCollectedForYear - taxPaidForYear, 0);
+
+  const quarterlyTax = useMemo(() => {
+    const quarters = [1, 2, 3, 4].map((q) => ({
+      q,
+      label: `Q${q}`,
+      months: q === 1 ? "Jan–Mar" : q === 2 ? "Apr–Jun" : q === 3 ? "Jul–Sep" : "Oct–Dec",
+      collected: 0,
+      paid: 0,
+    }));
+
+    normalizedInvoices.forEach((inv) => {
+      const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
+      if (taxAmt <= 0) return;
+      const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
+      const depositAmt = parseAmount(inv.deposit_amount);
+      const depositTax = calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
+      const finalQ = dateToQuarter(inv.final_paid_date, selectedTaxYear);
+      const depositQ = dateToQuarter(inv.deposit_paid_date, selectedTaxYear);
+
+      if (finalQ && inv.final_paid) {
+        if (depositQ && depositQ !== finalQ && inv.deposit_paid) {
+          quarters[depositQ - 1].collected += depositTax;
+          quarters[finalQ - 1].collected += taxAmt - depositTax;
+        } else {
+          quarters[finalQ - 1].collected += taxAmt;
+        }
+      } else if (depositQ && inv.deposit_paid && !inv.final_paid) {
+        quarters[depositQ - 1].collected += depositTax;
+      } else if (inv.final_paid && !finalQ && depositQ && inv.deposit_paid) {
+        quarters[depositQ - 1].collected += depositTax;
+      }
+    });
+
+    taxPayments.forEach((p) => {
+      const q = taxPaymentQuarter(p, selectedTaxYear);
+      if (q) quarters[q - 1].paid += taxPaymentDollars(p);
+    });
+
+    return quarters;
+  }, [normalizedInvoices, taxPayments, selectedTaxYear]);
+
+  const taxYearOptions = useMemo(() => {
+    const years = new Set<string>([currentYear]);
+    taxPayments.forEach((p) => {
+      const d = taxPaymentDateStr(p);
+      if (d.length >= 4) years.add(d.slice(0, 4));
+    });
+    normalizedInvoices.forEach((inv) => {
+      if (inv.deposit_paid_date) years.add(inv.deposit_paid_date.slice(0, 4));
+      if (inv.final_paid_date) years.add(inv.final_paid_date.slice(0, 4));
+    });
+    return [...years].filter((y) => /^\d{4}$/.test(y)).sort().reverse();
+  }, [taxPayments, normalizedInvoices, currentYear]);
 
   // ── Expense metrics ────────────────────────────────────────────────────────
   // Paid = payment_status "paid". Missing fields default safely.
@@ -513,23 +640,73 @@ function FinancesContent() {
     })
     .sort((a, b) => (b.expense_date ?? "").localeCompare(a.expense_date ?? ""));
 
-  const handleAddTaxPayment = async () => {
-    const amt = parseFloat(taxForm.amount);
-    if (!amt || amt <= 0) { setTaxFormError("Enter a valid amount."); return; }
-    if (!taxForm.date) { setTaxFormError("Date is required."); return; }
+  const openAddTaxModal = () => {
+    setEditingTaxPayment(null);
+    setTaxForm({ payment_date: businessTodayISO(), period_label: "", amount: "", paid_by: "", confirmation_number: "", notes: "" });
     setTaxFormError("");
-    const id = `stp-${Date.now()}`;
-    await taxSave.runSave(
-      () => upsertTaxPayment({
-        id,
-        amount: amt,
-        date: taxForm.date,
-        period: taxForm.period,
-        notes: taxForm.notes,
-        created_at: new Date().toISOString(),
-      }),
-      () => { setTimeout(() => { setShowTaxModal(false); setTaxForm({ amount: "", date: businessTodayISO(), period: "", notes: "" }); taxSave.resetSaveState(); }, 1200); },
-    );
+    taxSave.resetSaveState();
+    setShowTaxModal(true);
+  };
+
+  const openEditTaxModal = (payment: SalesTaxPayment) => {
+    setEditingTaxPayment(payment);
+    setTaxForm({
+      payment_date: taxPaymentDateStr(payment) || businessTodayISO(),
+      period_label: payment.period ?? "",
+      amount: taxPaymentDollars(payment) > 0 ? taxPaymentDollars(payment).toFixed(2) : "",
+      paid_by: payment.paid_by ?? "",
+      confirmation_number: payment.confirmation_number ?? "",
+      notes: payment.notes ?? "",
+    });
+    setTaxFormError("");
+    taxSave.resetSaveState();
+    setShowTaxModal(true);
+  };
+
+  const closeTaxModal = () => {
+    setShowTaxModal(false);
+    setEditingTaxPayment(null);
+    setTaxFormError("");
+    taxSave.resetSaveState();
+  };
+
+  const handleSaveTaxPayment = async () => {
+    const amt = parseFloat(taxForm.amount);
+    if (!taxForm.amount || isNaN(amt) || amt <= 0) { setTaxFormError("Amount must be greater than $0."); return; }
+    if (!taxForm.payment_date) { setTaxFormError("Date paid is required."); return; }
+    setTaxFormError("");
+    const cents = Math.round(amt * 100);
+    const now = new Date().toISOString();
+    if (editingTaxPayment) {
+      const updated: SalesTaxPayment = {
+        ...editingTaxPayment,
+        payment_date: taxForm.payment_date,
+        amount_cents: cents,
+        paid_by: taxForm.paid_by || undefined,
+        confirmation_number: taxForm.confirmation_number || undefined,
+        notes: taxForm.notes || undefined,
+        period: taxForm.period_label || undefined,
+      };
+      await taxSave.runSave(() => upsertTaxPayment(updated), closeTaxModal);
+    } else {
+      const newPayment: SalesTaxPayment = {
+        id: `stp-${Date.now()}`,
+        payment_date: taxForm.payment_date,
+        amount_cents: cents,
+        paid_by: taxForm.paid_by || undefined,
+        confirmation_number: taxForm.confirmation_number || undefined,
+        notes: taxForm.notes || undefined,
+        period: taxForm.period_label || undefined,
+        created_at: now,
+      };
+      await taxSave.runSave(() => upsertTaxPayment(newPayment), closeTaxModal);
+    }
+  };
+
+  const handleDeleteTaxPayment = async (id: string) => {
+    if (!window.confirm("Delete this tax payment record? This cannot be undone.")) return;
+    await deleteTaxPayment(id);
+    if (editingTaxPayment?.id === id) closeTaxModal();
   };
 
   const openAddExpenseModal = () => {
@@ -1477,77 +1654,189 @@ function FinancesContent() {
         </div>
       </section>
 
-      {/* ── Sales Tax Tracking (compact) ──────────────────────────────────── */}
+      {/* ── Sales Tax Dashboard ───────────────────────────────────────────────── */}
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Header */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base md:text-lg font-semibold text-slate-950">Sales Tax Tracking</h2>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Rate: {fmtTaxRate(configuredTaxRate)}</p>
+            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Sales Tax Dashboard</h2>
+            <p className="mt-1 text-xs text-slate-500">Rate: {fmtTaxRate(configuredTaxRate)} · CA / Bay Area</p>
           </div>
-          <button
-            className="min-h-10 w-full rounded-3xl border border-slate-300 px-5 py-2 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
-            onClick={() => { setTaxForm({ amount: "", date: businessTodayISO(), period: "", notes: "" }); setTaxFormError(""); setShowTaxModal(true); }}
-          >
-            Record Tax Payment
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+              value={selectedTaxYear}
+              onChange={(e) => setSelectedTaxYear(e.target.value)}
+            >
+              {taxYearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button
+              className="min-h-10 rounded-3xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+              onClick={openAddTaxModal}
+            >
+              Record Payment
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <p className={`text-2xl font-bold tracking-tight md:text-3xl ${taxDue > 0 ? "text-rose-600" : "text-slate-950"}`}>{currency.format(taxDue)}</p>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Sales Tax Owed</p>
+        {/* 4 summary cards */}
+        <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="rounded-2xl bg-emerald-50 px-4 py-4">
+            <p className="text-xl font-bold tracking-tight text-emerald-700 md:text-2xl">{currency.format(taxCollectedForYear)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Collected</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{selectedTaxYear}</p>
           </div>
-          <div>
-            <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(taxCollectedYTD)}</p>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Collected This Year</p>
+          <div className="rounded-2xl bg-blue-50 px-4 py-4">
+            <p className="text-xl font-bold tracking-tight text-blue-700 md:text-2xl">{currency.format(taxPaidForYear)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Remitted</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{selectedTaxYear}</p>
+          </div>
+          <div className={`rounded-2xl px-4 py-4 ${taxDueForYear > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${taxDueForYear > 0 ? "text-rose-700" : "text-slate-500"}`}>{currency.format(taxDueForYear)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Owed</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{selectedTaxYear} outstanding</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">{fmtTaxRate(configuredTaxRate)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Rate</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">CA / Bay Area</p>
           </div>
         </div>
 
-        {taxPayments.length > 0 && (
-          <div className="mt-5 border-t border-slate-100 pt-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Payment history</p>
-            <div className="space-y-2.5">
+        {/* Quarterly breakdown */}
+        <div className="mb-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Quarterly Breakdown — {selectedTaxYear}</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {quarterlyTax.map((qt) => {
+              const due = Math.max(qt.collected - qt.paid, 0);
+              const isPaid = qt.paid >= qt.collected && qt.collected > 0;
+              return (
+                <div key={qt.q} className={`rounded-2xl border px-3 py-3 ${isPaid ? "border-emerald-200 bg-emerald-50" : due > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-slate-700">{qt.label}</span>
+                    {isPaid && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">Paid</span>}
+                    {!isPaid && due > 0 && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">Due</span>}
+                    {!isPaid && due === 0 && qt.collected === 0 && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">—</span>}
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-slate-400">{qt.months}</p>
+                  <p className="mt-2 text-sm font-bold text-slate-950">{currency.format(qt.collected)}</p>
+                  <p className="text-[10px] text-slate-500">collected</p>
+                  {qt.paid > 0 && (
+                    <>
+                      <p className="mt-1 text-sm font-semibold text-blue-700">{currency.format(qt.paid)}</p>
+                      <p className="text-[10px] text-slate-500">remitted</p>
+                    </>
+                  )}
+                  {due > 0 && (
+                    <>
+                      <p className="mt-1 text-sm font-semibold text-rose-700">{currency.format(due)}</p>
+                      <p className="text-[10px] text-slate-500">owed</p>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Payment history */}
+        <div className="border-t border-slate-100 pt-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Payment History</p>
+          {taxPayments.length === 0 ? (
+            <p className="text-center text-xs text-slate-400">No tax payments recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
               {[...taxPayments]
-                .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
-                .slice(0, 5)
+                .sort((a, b) => taxPaymentDateStr(b).localeCompare(taxPaymentDateStr(a)))
                 .map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 text-xs md:text-sm">
-                    <div className="flex items-center gap-2.5 text-slate-600 min-w-0">
-                      <span className="shrink-0">{p.date ? new Date(p.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</span>
-                      {p.period && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 shrink-0">{p.period}</span>}
-                      {p.notes && <span className="truncate text-slate-400">{p.notes}</span>}
+                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-semibold text-slate-700">
+                          {taxPaymentDateStr(p) ? new Date(taxPaymentDateStr(p) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                        </span>
+                        {(p.period ?? p.period_start) && (
+                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                            {p.period ?? `${p.period_start ?? ""} – ${p.period_end ?? ""}`.trim()}
+                          </span>
+                        )}
+                        {p.paid_by && <span className="text-[10px] text-slate-400">{p.paid_by}</span>}
+                        {p.confirmation_number && <span className="text-[10px] text-slate-400">#{p.confirmation_number}</span>}
+                      </div>
+                      {p.notes && <p className="mt-0.5 truncate text-[10px] text-slate-400">{p.notes}</p>}
                     </div>
-                    <span className="shrink-0 font-semibold text-slate-950">{currency.format(parseAmount(p.amount ?? 0))}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="font-semibold text-slate-950">{currency.format(taxPaymentDollars(p))}</span>
+                      <button
+                        type="button"
+                        onClick={() => openEditTaxModal(p)}
+                        className="inline-flex min-h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteTaxPayment(p.id)}
+                        className="inline-flex min-h-8 items-center rounded-xl border border-rose-100 bg-white px-2 py-1.5 text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
             </div>
-          </div>
+          )}
+        </div>
+
+        {hasTaxGap && (
+          <p className="mt-3 text-[10px] text-amber-700">
+            ⚠ Sales tax estimate may be incomplete — some paid invoices are missing tax data.
+          </p>
         )}
       </section>
 
       {/* Tax payment modal */}
       {showTaxModal && (
         <ModalShell
-          title="Record Tax Payment"
-          onClose={() => { setShowTaxModal(false); setTaxFormError(""); taxSave.resetSaveState(); }}
+          title={editingTaxPayment ? "Edit Tax Payment" : "Record Tax Payment"}
+          onClose={closeTaxModal}
           maxWidth="max-w-sm"
           footer={
             <div className="space-y-3">
               <FieldError message={taxFormError} />
               <div className="flex gap-3">
-                <SaveButton state={taxSave.saveState} onClick={handleAddTaxPayment} mode="add" className="flex-1 py-3" />
-                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => { setShowTaxModal(false); setTaxFormError(""); taxSave.resetSaveState(); }}>
+                <SaveButton state={taxSave.saveState} onClick={() => void handleSaveTaxPayment()} mode={editingTaxPayment ? undefined : "add"} className="flex-1 py-3" />
+                <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" onClick={closeTaxModal}>
                   Cancel
                 </button>
               </div>
+              {editingTaxPayment && (
+                <button
+                  type="button"
+                  className="min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 md:text-sm"
+                  onClick={() => void handleDeleteTaxPayment(editingTaxPayment.id)}
+                >
+                  Delete payment
+                </button>
+              )}
             </div>
           }
         >
-          <div className="flex flex-col gap-4">
+          <div className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount paid</label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date Paid <span className="text-rose-500">*</span></label>
+              <input
+                type="date"
+                value={taxForm.payment_date}
+                onClick={(e) => e.currentTarget.showPicker?.()}
+                onChange={(e) => setTaxForm((f) => ({ ...f, payment_date: e.target.value }))}
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount <span className="text-rose-500">*</span></label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500">$</span>
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">$</span>
                 <input
                   type="number"
                   min={0}
@@ -1555,27 +1844,43 @@ function FinancesContent() {
                   placeholder="0.00"
                   value={taxForm.amount}
                   onChange={(e) => setTaxForm((f) => ({ ...f, amount: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 pl-8 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  className="w-full rounded-2xl border border-slate-300 py-3 pl-8 pr-4 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date paid</label>
-              <input
-                type="date"
-                value={taxForm.date}
-                onClick={(e) => e.currentTarget.showPicker?.()}
-                onChange={(e) => setTaxForm((f) => ({ ...f, date: e.target.value }))}
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Tax Period <span className="font-normal text-slate-400">(optional)</span></label>
+              <select
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-              />
+                value={taxForm.period_label}
+                onChange={(e) => setTaxForm((f) => ({ ...f, period_label: e.target.value }))}
+              >
+                <option value="">Select period...</option>
+                {taxYearOptions.flatMap((y) =>
+                  ["Q1", "Q2", "Q3", "Q4"].map((q) => (
+                    <option key={`${y}-${q}`} value={`${y} ${q}`}>{y} {q}</option>
+                  ))
+                )}
+              </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Period <span className="font-normal text-slate-400">(optional)</span></label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Paid By <span className="font-normal text-slate-400">(optional)</span></label>
+              <select
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                value={taxForm.paid_by}
+                onChange={(e) => setTaxForm((f) => ({ ...f, paid_by: e.target.value }))}
+              >
+                <option value="">Select...</option>
+                {EXPENSE_PAID_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Confirmation # <span className="font-normal text-slate-400">(optional)</span></label>
               <input
                 type="text"
-                placeholder="e.g. 2026-Q2"
-                value={taxForm.period}
-                onChange={(e) => setTaxForm((f) => ({ ...f, period: e.target.value }))}
+                placeholder="e.g. CDTFA-12345"
+                value={taxForm.confirmation_number}
+                onChange={(e) => setTaxForm((f) => ({ ...f, confirmation_number: e.target.value }))}
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
               />
             </div>
