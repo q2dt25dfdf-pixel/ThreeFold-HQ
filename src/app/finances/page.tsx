@@ -89,6 +89,8 @@ type Order = {
   deposit_paid?: boolean;
   balance_due?: number;
   stripe_invoice_url?: string;
+  vendor_cost_cents?: number;
+  vendor_payment_status?: string;
 };
 
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
@@ -357,6 +359,18 @@ function FinancesContent() {
     .reduce((sum, invoice) => sum + invoiceTotal(invoice), 0);
   const overdueCount = normalizedInvoices.filter((invoice) => invoice.status === "Overdue").length;
 
+  // ── Vendor cost metrics ──────────────────────────────────────────────────────
+  // Only non-cancelled orders. Missing vendor_cost_cents treated as 0.
+  // Missing vendor_payment_status treated as "unpaid" (conservative).
+  const activeOrders = orders.filter((o) => (o.status as string).toLowerCase() !== "cancelled");
+  const totalVendorCosts = activeOrders.reduce((sum, o) => sum + (o.vendor_cost_cents ?? 0) / 100, 0);
+  const unpaidVendorCosts = activeOrders
+    .filter((o) => (o.vendor_payment_status ?? "unpaid") !== "paid")
+    .reduce((sum, o) => sum + (o.vendor_cost_cents ?? 0) / 100, 0);
+  const paidVendorCosts = totalVendorCosts - unpaidVendorCosts;
+  const estimatedGrossProfit = revenueCollected - paidVendorCosts;
+  const ordersWithoutVendorCost = activeOrders.filter((o) => !o.vendor_cost_cents).length;
+
   // ── Sales tax metrics ────────────────────────────────────────────────────────
   const currentYear = new Date().getFullYear().toString();
   const configuredTaxRate = salesTaxRate();
@@ -388,6 +402,10 @@ function FinancesContent() {
 
   const taxDue = Math.max(taxCollectedYTD - taxPaidYTD, 0);
 
+  // Warn if any paid invoices are missing sales_tax_amount — the YTD figure may undercount.
+  const hasTaxGap = normalizedInvoices.some(
+    (inv) => (inv.deposit_paid || inv.final_paid) && !parseAmount(inv.sales_tax_amount ?? 0),
+  );
 
   const handleAddTaxPayment = async () => {
     const amt = parseFloat(taxForm.amount);
@@ -873,6 +891,74 @@ function FinancesContent() {
             </div>
           );
         })}
+      </section>
+
+      {/* ── Internal Financial Summary ─────────────────────────────────────── */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-950 md:text-lg">Internal Financial Summary</h2>
+          <p className="mt-1 text-[10px] text-slate-400">
+            Based on current stored invoice and order data only. Vendor costs come from individual order records. Does not include unsaved or external data.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {/* Paid Revenue */}
+          <div className="rounded-2xl bg-emerald-50 px-4 py-4">
+            <p className="text-xl font-bold tracking-tight text-emerald-700 md:text-2xl">{currency.format(revenueCollected)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Paid Revenue</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Cash collected: deposits + final payments received</p>
+          </div>
+          {/* Open Invoices */}
+          <div className={`rounded-2xl px-4 py-4 ${outstandingBalance > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${outstandingBalance > 0 ? "text-amber-700" : "text-slate-500"}`}>
+              {currency.format(outstandingBalance)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Open Invoices</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Balance remaining on invoices not yet paid in full</p>
+          </div>
+          {/* Total Vendor Costs */}
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">{currency.format(totalVendorCosts)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Total Vendor Costs</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Sum of all vendor costs recorded on orders</p>
+          </div>
+          {/* Unpaid Vendor Costs */}
+          <div className={`rounded-2xl px-4 py-4 ${unpaidVendorCosts > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${unpaidVendorCosts > 0 ? "text-rose-700" : "text-slate-500"}`}>
+              {currency.format(unpaidVendorCosts)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Unpaid Vendor Costs</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Vendor costs where payment status is not marked paid</p>
+          </div>
+          {/* Estimated Gross Profit */}
+          <div className={`rounded-2xl px-4 py-4 ${estimatedGrossProfit >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${estimatedGrossProfit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              {currency.format(estimatedGrossProfit)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Est. Gross Profit</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Paid revenue minus paid vendor costs</p>
+          </div>
+          {/* Sales Tax Owed */}
+          <div className={`rounded-2xl px-4 py-4 ${taxDue > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+            <p className={`text-xl font-bold tracking-tight md:text-2xl ${taxDue > 0 ? "text-rose-700" : "text-slate-950"}`}>
+              {currency.format(taxDue)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700">Sales Tax Owed</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">
+              {currency.format(taxCollectedYTD)} collected YTD · {currency.format(taxPaidYTD)} remitted
+            </p>
+            {hasTaxGap && (
+              <p className="mt-1.5 text-[10px] font-medium text-amber-700">
+                ⚠ Sales tax estimate may be incomplete — some paid invoices are missing tax data.
+              </p>
+            )}
+          </div>
+        </div>
+        {ordersWithoutVendorCost > 0 && (
+          <p className="mt-3 text-[10px] text-slate-400">
+            {ordersWithoutVendorCost} active order{ordersWithoutVendorCost !== 1 ? "s" : ""} have no vendor cost recorded — vendor cost totals may be understated.
+          </p>
+        )}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
