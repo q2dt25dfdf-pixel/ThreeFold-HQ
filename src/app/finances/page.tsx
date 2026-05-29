@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
@@ -215,6 +215,18 @@ function expenseCategoryBadgeClass(category: string): string {
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
 const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
+type FinanceTab = "overview" | "invoices" | "expenses" | "sales-tax";
+
+const financeTabs: { value: FinanceTab; label: string }[] = [
+  { value: "overview", label: "Overview" },
+  { value: "invoices", label: "Invoices" },
+  { value: "expenses", label: "Expenses" },
+  { value: "sales-tax", label: "Sales Tax" },
+];
+
+function isFinanceTab(value: string | null): value is FinanceTab {
+  return financeTabs.some((tab) => tab.value === value);
+}
 
 const statusColors: Record<InvoiceStatus, string> = {
   Draft: "bg-slate-100 text-slate-700",
@@ -418,17 +430,26 @@ function applyOrderToInvoice<T extends InvoiceFields>(invoice: T, order: Order):
 }
 
 function FinancesContent() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const filterParam = searchParams.get("filter") ?? "";
+  const tabParam = searchParams.get("tab");
   const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
   const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
   const [filter, setFilter] = useState<InvoiceStatus | "All" | "Unpaid">(() => {
-    const p = searchParams.get("filter") ?? "";
+    const p = filterParam;
     if (p.toLowerCase() === "unpaid") return "Unpaid";
     if ((invoiceStatusOptions as string[]).includes(p)) return p as InvoiceStatus;
     return "All";
+  });
+  const [activeTab, setActiveTab] = useState<FinanceTab>(() => {
+    if (searchParams.get("invoice") || filterParam) return "invoices";
+    const tabParam = searchParams.get("tab");
+    return isFinanceTab(tabParam) ? tabParam : "overview";
   });
   const [query, setQuery] = useState("");
   const invoiceParamId = searchParams.get("invoice");
@@ -458,6 +479,34 @@ function FinancesContent() {
   const [taxFormError, setTaxFormError] = useState("");
   const taxSave = useSaveState();
   const normalizedInvoices = useMemo(() => invoices.map((invoice) => normalizeInvoice(invoice)), [invoices]);
+
+  const updateTab = (nextTab: FinanceTab) => {
+    setActiveTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("tab", nextTab);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  };
+
+  useEffect(() => {
+    if (filterParam.toLowerCase() === "unpaid") {
+      setFilter("Unpaid");
+      setActiveTab("invoices");
+      return;
+    }
+    if ((invoiceStatusOptions as string[]).includes(filterParam)) {
+      setFilter(filterParam as InvoiceStatus);
+      setActiveTab("invoices");
+    }
+  }, [filterParam]);
+
+  useEffect(() => {
+    if (invoiceParamId) setActiveTab("invoices");
+  }, [invoiceParamId]);
+
+  useEffect(() => {
+    if (invoiceParamId || filterParam) return;
+    if (isFinanceTab(tabParam)) setActiveTab(tabParam);
+  }, [filterParam, invoiceParamId, tabParam]);
 
   const syncInvoiceToOrder = async (invoice: InvoiceFields) => {
     const orderId = invoice.order_id;
@@ -1222,24 +1271,31 @@ function FinancesContent() {
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Finances</p>
-          <h1 className="mt-3 text-base md:text-xl font-semibold text-slate-950 md:text-3xl">Revenue & invoices</h1>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-          <label className="relative w-full md:w-auto">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
-            <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
-              placeholder="Search invoices..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto" onClick={openAddModal}>
-            Add invoice
-          </button>
+          <h1 className="mt-3 text-base md:text-xl font-semibold text-slate-950 md:text-3xl">Finances</h1>
         </div>
       </div>
 
+      <div className="-mx-2 overflow-x-auto px-2">
+        <div className="flex min-w-max gap-2 rounded-3xl border border-slate-200 bg-white p-1 shadow-sm">
+          {financeTabs.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => updateTab(tab.value)}
+              className={`min-h-11 rounded-3xl px-4 py-2 text-xs font-semibold transition md:text-sm ${
+                activeTab === tab.value
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "overview" && (
+        <>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Revenue Collected", value: currency.format(revenueCollected), trend: "up" },
@@ -1356,6 +1412,11 @@ function FinancesContent() {
         )}
       </section>
 
+        </>
+      )}
+
+      {activeTab === "expenses" && (
+        <>
       {/* ── Expenses ──────────────────────────────────────────────────────────── */}
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1477,7 +1538,11 @@ function FinancesContent() {
           </div>
         )}
       </section>
+        </>
+      )}
 
+      {activeTab === "overview" && (
+        <>
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <div className="mb-6 flex items-center justify-between gap-4">
@@ -1538,14 +1603,27 @@ function FinancesContent() {
           </div>
         </div>
       </section>
+        </>
+      )}
 
+      {activeTab === "invoices" && (
+        <>
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoices</h2>
             <p className="mt-1 text-xs md:text-sm text-slate-600">Click any row to edit invoice details.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
+            <label className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
+              <input
+                className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                placeholder="Search invoices..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
             <select
               className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
               value={filter}
@@ -1637,7 +1715,11 @@ function FinancesContent() {
           )}
         </div>
       </section>
+        </>
+      )}
 
+      {activeTab === "overview" && (
+        <>
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -1653,7 +1735,11 @@ function FinancesContent() {
           <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${goalPercent}%` }} />
         </div>
       </section>
+        </>
+      )}
 
+      {activeTab === "sales-tax" && (
+        <>
       {/* ── Sales Tax Dashboard ───────────────────────────────────────────────── */}
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         {/* Header */}
@@ -1794,6 +1880,8 @@ function FinancesContent() {
           </p>
         )}
       </section>
+        </>
+      )}
 
       {/* Tax payment modal */}
       {showTaxModal && (
