@@ -36,6 +36,12 @@ type Client = {
   phone?: string;
   owner?: string;
   address?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
   website?: string;
   orders: number;
   notes: string;
@@ -643,7 +649,6 @@ export default function ClientDetailPage() {
               {[
                 { label: "Name", key: "name" },
                 { label: "Company", key: "industry" },
-                { label: "Address", key: "address" },
                 { label: "Website", key: "website" },
                 { label: "Owner", key: "owner" },
                 { label: "Contact", key: "contact" },
@@ -651,14 +656,89 @@ export default function ClientDetailPage() {
                 { label: "Phone", key: "phone" },
               ].map((field) => (
                 <label key={field.key} className="block">
-                  <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">{field.label}</span>
-                  {field.key === "address" ? (
-                    <AddressAutocomplete className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft.address ?? "")} onChange={(value) => setClientDraft({ ...clientDraft, address: value })} />
-                  ) : (
-                    <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => { setClientDraft({ ...clientDraft, [field.key]: event.target.value }); if (clientFormError) setClientFormError(""); }} />
-                  )}
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">{field.label}</span>
+                  <input className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={String(clientDraft[field.key as keyof Client] ?? "")} onChange={(event) => { setClientDraft({ ...clientDraft, [field.key]: event.target.value }); if (clientFormError) setClientFormError(""); }} />
                 </label>
               ))}
+
+              {/* Address — autocomplete fills all structured fields in one update */}
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Business Address</span>
+                <AddressAutocomplete
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                  value={clientDraft.address ?? ""}
+                  onChange={(value) => setClientDraft({ ...clientDraft, address: value })}
+                  onSelectStructured={(s) => setClientDraft({
+                    ...clientDraft,
+                    address: s.display_name,
+                    address_line1: s.address_line1,
+                    city: s.city,
+                    state: s.state,
+                    zip: s.zip,
+                    country: s.country,
+                  })}
+                />
+              </div>
+
+              {/* Structured address fields */}
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">
+                  Address Line 2 <span className="font-normal text-slate-400">(Suite, Floor, Unit)</span>
+                </span>
+                <input
+                  type="text"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                  placeholder="Suite 100, Unit B..."
+                  value={clientDraft.address_line2 ?? ""}
+                  onChange={(e) => setClientDraft({ ...clientDraft, address_line2: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">City</span>
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                    placeholder="San Jose"
+                    value={clientDraft.city ?? ""}
+                    onChange={(e) => setClientDraft({ ...clientDraft, city: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">State</span>
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                    placeholder="CA"
+                    value={clientDraft.state ?? ""}
+                    onChange={(e) => setClientDraft({ ...clientDraft, state: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">ZIP</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                    placeholder="95128"
+                    value={clientDraft.zip ?? ""}
+                    onChange={(e) => setClientDraft({ ...clientDraft, zip: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">
+                  Country <span className="font-normal text-slate-400">(optional)</span>
+                </span>
+                <input
+                  type="text"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+                  placeholder="United States"
+                  value={clientDraft.country ?? ""}
+                  onChange={(e) => setClientDraft({ ...clientDraft, country: e.target.value })}
+                />
+              </div>
+
               <label className="block">
                 <span className="mb-1.5 block text-xs md:text-sm font-semibold text-slate-700">Status</span>
                 <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs md:text-sm text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={clientDraft.status} onChange={(event) => setClientDraft({ ...clientDraft, status: event.target.value as ClientStatus })}>

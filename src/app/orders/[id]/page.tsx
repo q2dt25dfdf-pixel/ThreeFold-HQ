@@ -72,6 +72,11 @@ type Order = {
   vendor_payment_status?: string;
   vendor_paid_by?: string;
   vendor_notes?: string;
+  delivery_address?: string;
+  delivery_city?: string;
+  delivery_state?: string;
+  delivery_zip?: string;
+  delivery_country?: string;
 };
 
 type ClientUpdate = { id: string; date: string; text: string };
@@ -424,6 +429,14 @@ export default function OrderDetailPage() {
   const [vendorNotes, setVendorNotes] = useState("");
   const vendorCostSave = useSaveState();
 
+  // Delivery Address
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryCity, setDeliveryCity] = useState("");
+  const [deliveryState, setDeliveryState] = useState("");
+  const [deliveryZip, setDeliveryZip] = useState("");
+  const [deliveryCountry, setDeliveryCountry] = useState("");
+  const deliveryAddressSave = useSaveState();
+
   // Design image uploads
   const [designImageUrls, setDesignImageUrls] = useState<Record<string, string>>({});
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
@@ -466,6 +479,11 @@ export default function OrderDetailPage() {
       setVendorPaymentStatus(order.vendor_payment_status ?? "unpaid");
       setVendorPaidBy(order.vendor_paid_by ?? "");
       setVendorNotes(order.vendor_notes ?? "");
+      setDeliveryAddress(order.delivery_address ?? "");
+      setDeliveryCity(order.delivery_city ?? "");
+      setDeliveryState(order.delivery_state ?? "");
+      setDeliveryZip(order.delivery_zip ?? "");
+      setDeliveryCountry(order.delivery_country ?? "");
       setInitialized(true);
     }
   }, [order, initialized]);
@@ -559,6 +577,20 @@ export default function OrderDetailPage() {
         vendor_payment_status: vendorPaymentStatus,
         vendor_paid_by: vendorPaidBy,
         vendor_notes: vendorNotes,
+      }),
+    );
+  };
+
+  const saveDeliveryAddress = () => {
+    if (!order) return;
+    deliveryAddressSave.runSave(() =>
+      upsertItem({
+        ...order,
+        delivery_address: deliveryAddress,
+        delivery_city: deliveryCity,
+        delivery_state: deliveryState,
+        delivery_zip: deliveryZip,
+        delivery_country: deliveryCountry,
       }),
     );
   };
@@ -1483,6 +1515,73 @@ export default function OrderDetailPage() {
     </div>
   );
 
+  const DeliveryAddressSection = (
+    <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Delivery Address</h2>
+      <p className="mb-4 text-[10px] text-slate-400">
+        Optional. If blank, client's business address is used for future tax lookup.
+      </p>
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Street Address</label>
+          <input
+            type="text"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+            placeholder="123 Main St"
+            value={deliveryAddress}
+            onChange={(e) => setDeliveryAddress(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">City</label>
+            <input
+              type="text"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+              placeholder="San Jose"
+              value={deliveryCity}
+              onChange={(e) => setDeliveryCity(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">State</label>
+            <input
+              type="text"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+              placeholder="CA"
+              value={deliveryState}
+              onChange={(e) => setDeliveryState(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">ZIP</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+              placeholder="95128"
+              value={deliveryZip}
+              onChange={(e) => setDeliveryZip(e.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Country <span className="font-normal text-slate-400">(optional)</span></label>
+          <input
+            type="text"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+            placeholder="United States"
+            value={deliveryCountry}
+            onChange={(e) => setDeliveryCountry(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end">
+          <SaveButton state={deliveryAddressSave.saveState} onClick={saveDeliveryAddress} mode="edit" className="w-full lg:w-auto" />
+        </div>
+      </div>
+    </div>
+  );
+
   const intakeGroups = [
     {
       title: "Contact",
@@ -1762,6 +1861,7 @@ export default function OrderDetailPage() {
         {PaymentStatusSection}
         {OrderDetailsSection}
         {VendorCostSection}
+        {DeliveryAddressSection}
         {IntakeSection}
         {CommunicationSection}
         {ClientUpdatesSection}
@@ -1775,6 +1875,7 @@ export default function OrderDetailPage() {
             {PaymentStatusSection}
             {OrderDetailsSection}
             {VendorCostSection}
+            {DeliveryAddressSection}
             {IntakeSection}
           </div>
           <div className="flex flex-col gap-6">
@@ -1793,6 +1894,7 @@ export default function OrderDetailPage() {
             {PaymentStatusSection}
             {OrderDetailsSection}
             {VendorCostSection}
+            {DeliveryAddressSection}
             {CommunicationSection}
             {ClientUpdatesSection}
           </div>

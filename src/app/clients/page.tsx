@@ -18,6 +18,12 @@ type Client = {
   email: string;
   phone: string;
   address: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
   website: string;
   orders: number;
   notes: string;
@@ -46,7 +52,7 @@ const defaultClients: Client[] = [
   },
 ];
 
-const emptyForm: ClientForm = { name: "", industry: "", contact: "", email: "", phone: "", address: "", website: "", orders: 0, notes: "", status: "Active" };
+const emptyForm: ClientForm = { name: "", industry: "", contact: "", email: "", phone: "", address: "", address_line1: "", address_line2: "", city: "", state: "", zip: "", country: "", website: "", orders: 0, notes: "", status: "Active" };
 function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: ClientForm) => void }) {
   return (
     <div className="space-y-6">
@@ -117,13 +123,79 @@ function FormFields({ form, setForm }: { form: ClientForm; setForm: (next: Clien
             <option>Other</option>
           </select>
         </label>
-        <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
-          Address
+        <div className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
+          Business Address
           <AddressAutocomplete
             className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             placeholder="Start typing an address..."
             value={form.address}
             onChange={(value) => setForm({ ...form, address: value })}
+            onSelectStructured={(s) => setForm({
+              ...form,
+              address: s.display_name,
+              address_line1: s.address_line1,
+              city: s.city,
+              state: s.state,
+              zip: s.zip,
+              country: s.country,
+            })}
+          />
+        </div>
+      </div>
+
+      {/* Structured address fields — auto-populated from autocomplete, also editable manually */}
+      <div className="space-y-3">
+        <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
+          Address Line 2 <span className="font-normal text-slate-400">(Suite, Floor, Unit — optional)</span>
+          <input
+            type="text"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+            placeholder="Suite 100, Unit B..."
+            value={form.address_line2 ?? ""}
+            onChange={(event) => setForm({ ...form, address_line2: event.target.value })}
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
+            City
+            <input
+              type="text"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+              placeholder="San Jose"
+              value={form.city ?? ""}
+              onChange={(event) => setForm({ ...form, city: event.target.value })}
+            />
+          </label>
+          <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
+            State
+            <input
+              type="text"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+              placeholder="CA"
+              value={form.state ?? ""}
+              onChange={(event) => setForm({ ...form, state: event.target.value })}
+            />
+          </label>
+          <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
+            ZIP
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+              placeholder="95128"
+              value={form.zip ?? ""}
+              onChange={(event) => setForm({ ...form, zip: event.target.value })}
+            />
+          </label>
+        </div>
+        <label className="block space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
+          Country <span className="font-normal text-slate-400">(optional)</span>
+          <input
+            type="text"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm"
+            placeholder="United States"
+            value={form.country ?? ""}
+            onChange={(event) => setForm({ ...form, country: event.target.value })}
           />
         </label>
       </div>
