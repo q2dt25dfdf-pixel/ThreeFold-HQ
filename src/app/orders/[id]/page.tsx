@@ -67,6 +67,11 @@ type Order = {
   portal_token?: string;
   portal_enabled?: boolean;
   deposit_request_id?: string;
+  vendor_cost_cents?: number;
+  vendor_invoice_status?: string;
+  vendor_payment_status?: string;
+  vendor_paid_by?: string;
+  vendor_notes?: string;
 };
 
 type ClientUpdate = { id: string; date: string; text: string };
@@ -129,6 +134,10 @@ const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
   "Approved",
   "Production Ready",
 ];
+
+const VENDOR_INVOICE_STATUSES = ["not_received", "received"] as const;
+const VENDOR_PAYMENT_STATUSES = ["unpaid", "paid"] as const;
+const VENDOR_PAID_BY_OPTIONS = ["", "Alliyah", "Hannah", "Jordan", "Company Account"] as const;
 
 function statusToStageIndex(status: string): number {
   const s = status?.trim().toLowerCase();
@@ -407,6 +416,14 @@ export default function OrderDetailPage() {
   const [newUpdateText, setNewUpdateText] = useState('');
   const clientUpdatesSave = useSaveState();
 
+  // Vendor Cost
+  const [vendorCostCents, setVendorCostCents] = useState("");
+  const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
+  const [vendorPaymentStatus, setVendorPaymentStatus] = useState("unpaid");
+  const [vendorPaidBy, setVendorPaidBy] = useState("");
+  const [vendorNotes, setVendorNotes] = useState("");
+  const vendorCostSave = useSaveState();
+
   // Design image uploads
   const [designImageUrls, setDesignImageUrls] = useState<Record<string, string>>({});
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
@@ -444,6 +461,11 @@ export default function OrderDetailPage() {
     if (order && !initialized) {
       setNextAction(order.nextAction ?? "");
       setInternalNotes(order.internalNotes ?? "");
+      setVendorCostCents(order.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
+      setVendorInvoiceStatus(order.vendor_invoice_status ?? "not_received");
+      setVendorPaymentStatus(order.vendor_payment_status ?? "unpaid");
+      setVendorPaidBy(order.vendor_paid_by ?? "");
+      setVendorNotes(order.vendor_notes ?? "");
       setInitialized(true);
     }
   }, [order, initialized]);
@@ -523,6 +545,22 @@ export default function OrderDetailPage() {
   const saveInternalNotes = () => {
     if (!order) return;
     notesSave.runSave(() => upsertItem({ ...order, internalNotes }));
+  };
+
+  const saveVendorCost = () => {
+    if (!order) return;
+    const cents = parseInt(vendorCostCents || "0", 10);
+    if (isNaN(cents) || cents < 0) return;
+    vendorCostSave.runSave(() =>
+      upsertItem({
+        ...order,
+        vendor_cost_cents: cents,
+        vendor_invoice_status: vendorInvoiceStatus,
+        vendor_payment_status: vendorPaymentStatus,
+        vendor_paid_by: vendorPaidBy,
+        vendor_notes: vendorNotes,
+      }),
+    );
   };
 
   const closeAddVersionModal = () => {
@@ -1336,6 +1374,115 @@ export default function OrderDetailPage() {
     </div>
   );
 
+  const vendorCostDisplay = vendorCostCents
+    ? formatCurrency(parseInt(vendorCostCents, 10) / 100)
+    : "$0.00";
+  const vendorInvoiceBadge =
+    vendorInvoiceStatus === "received"
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-slate-100 text-slate-500";
+  const vendorPaymentBadge =
+    vendorPaymentStatus === "paid"
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-amber-100 text-amber-700";
+
+  const VendorCostSection = (
+    <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Vendor Cost</h2>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorInvoiceBadge}`}>
+            {vendorInvoiceStatus === "received" ? "Invoice received" : "Invoice pending"}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorPaymentBadge}`}>
+            {vendorPaymentStatus === "paid" ? "Paid" : "Unpaid"}
+          </span>
+        </div>
+      </div>
+      <div className="mb-3 flex items-baseline gap-2">
+        <span className="text-xl font-bold text-slate-950">{vendorCostDisplay}</span>
+        {vendorPaidBy && (
+          <span className="text-xs text-slate-400">paid by {vendorPaidBy}</span>
+        )}
+      </div>
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cost (USD)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+            placeholder="$0.00"
+            value={centsToCurrency(vendorCostCents)}
+            onKeyDown={(e) => handleCurrencyKeyDown(e, setVendorCostCents)}
+            onPaste={(e) => {
+              e.preventDefault();
+              setVendorCostCents((c) => (c + e.clipboardData.getData("text").replace(/\D/g, "")).replace(/^0+(?=\d)/, ""));
+            }}
+            onChange={() => {}}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Vendor Invoice</label>
+            <select
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+              value={vendorInvoiceStatus}
+              onChange={(e) => setVendorInvoiceStatus(e.target.value)}
+            >
+              {VENDOR_INVOICE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s === "not_received" ? "Not received" : "Received"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Payment Status</label>
+            <select
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+              value={vendorPaymentStatus}
+              onChange={(e) => setVendorPaymentStatus(e.target.value)}
+            >
+              {VENDOR_PAYMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s === "unpaid" ? "Unpaid" : "Paid"}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Paid By</label>
+          <select
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+            value={vendorPaidBy}
+            onChange={(e) => setVendorPaidBy(e.target.value)}
+          >
+            {VENDOR_PAID_BY_OPTIONS.map((o) => (
+              <option key={o} value={o}>
+                {o === "" ? "—" : o}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Vendor Notes</label>
+          <textarea
+            rows={3}
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
+            placeholder="Invoice number, PO reference, payment details..."
+            value={vendorNotes}
+            onChange={(e) => setVendorNotes(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end">
+          <SaveButton state={vendorCostSave.saveState} onClick={saveVendorCost} mode="edit" className="w-full lg:w-auto" />
+        </div>
+      </div>
+    </div>
+  );
+
   const intakeGroups = [
     {
       title: "Contact",
@@ -1614,6 +1761,7 @@ export default function OrderDetailPage() {
         {DesignVersionsSection}
         {PaymentStatusSection}
         {OrderDetailsSection}
+        {VendorCostSection}
         {IntakeSection}
         {CommunicationSection}
         {ClientUpdatesSection}
@@ -1626,6 +1774,7 @@ export default function OrderDetailPage() {
           <div className="flex flex-col gap-6">
             {PaymentStatusSection}
             {OrderDetailsSection}
+            {VendorCostSection}
             {IntakeSection}
           </div>
           <div className="flex flex-col gap-6">
@@ -1643,6 +1792,7 @@ export default function OrderDetailPage() {
           <div className="flex flex-col gap-6">
             {PaymentStatusSection}
             {OrderDetailsSection}
+            {VendorCostSection}
             {CommunicationSection}
             {ClientUpdatesSection}
           </div>
