@@ -168,6 +168,18 @@ function isDepositPaid(stage: string): boolean {
   return stage === "Deposit Paid" || stage === "Approved";
 }
 
+const APPAREL_KEYWORDS = [
+  "shirt", "shirts", "t-shirt", "tee", "tees",
+  "apparel", "hoodie", "hoodies", "sweatshirt", "sweatshirts",
+] as const;
+
+function detectApparelVendor(lead: Lead): string {
+  const text = [lead.apparel_types ?? "", lead.notes ?? ""]
+    .join(" ")
+    .toLowerCase();
+  return APPAREL_KEYWORDS.some((kw) => text.includes(kw)) ? "PrintHead" : "";
+}
+
 // Map old stage names from existing Supabase records to the new pipeline
 const LEGACY_CRM_STAGES: Record<string, PipelineStage> = { Approved: "Deposit Paid" };
 function normalizeCRMStage(stage: string): PipelineStage {
@@ -511,6 +523,16 @@ function CRMContent() {
           .limit(1);
     const depositData = depositRows?.[0]?.data as DepositRow | undefined;
 
+    // Preserve any vendor already on this order (manual edits, prior runs); auto-detect only when blank
+    const { data: existingOrderRows } = await supabase
+      .from("orders")
+      .select("id,data")
+      .eq("id", orderId)
+      .limit(1);
+    const existingVendor =
+      (existingOrderRows?.[0]?.data as { vendor?: string } | undefined)?.vendor ?? "";
+    const vendorToAssign = existingVendor || detectApparelVendor(lead);
+
     const rawValue = lead.value;
     const leadTotal =
       typeof rawValue === "number"
@@ -533,7 +555,7 @@ function CRMContent() {
       client: lead.company,
       client_id: clientId,
       client_name: lead.company,
-      vendor: "",
+      vendor: vendorToAssign,
       items: [],
       quantity: 0,
       amount: totalAmount,
