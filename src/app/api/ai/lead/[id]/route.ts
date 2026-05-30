@@ -89,12 +89,26 @@ export async function GET(
     });
 
     // Project context from questionnaire — operational, not PII
-    const budget      = stringField(lead, "budget") || null;
-    const quantity    = stringField(lead, "quantity") || null;
-    const targetDate  = stringField(lead, "target_date") || null;
+    const budget       = stringField(lead, "budget") || null;
+    const quantity     = stringField(lead, "quantity") || null;
+    const targetDate   = stringField(lead, "target_date") || null;
     const apparelTypes = stringField(lead, "apparel_types") || null;
-    const source      = stringField(lead, "source") || null;
-    const value       = parseAmount(lead.value);
+    const source       = stringField(lead, "source") || null;
+    const value        = parseAmount(lead.value);
+
+    // Quote and deposit workflow context — no PII, no raw IDs, no public URLs.
+    // Derived entirely from fields already stored on the lead record.
+    const quoteNumber         = readField(lead, "quoteNumber", "quote_number") || null;
+    const hasApprovedQuote    = Boolean(readField(lead, "approvedQuoteId", "approved_quote_id"));
+    const hasSentQuote        = Boolean(readField(lead, "quoteId", "quote_id"));
+    const depositRequestNumber = readField(lead, "depositRequestNumber", "deposit_request_number") || null;
+    const depositRequested    = Boolean(readField(lead, "depositRequestId", "deposit_request_id"));
+
+    // Infer the most recent quote's status from lead fields (no extra DB fetch needed).
+    const latestQuoteStatus: string | null =
+      hasApprovedQuote ? "approved" :
+      hasSentQuote     ? "sent"     :
+      null;
 
     return okResponse({
       id: lead.id,
@@ -111,6 +125,11 @@ export async function GET(
       apparelTypes,
       communicationCount,
       openTaskCount: openTasks.length,
+      quoteNumber,
+      latestQuoteStatus,
+      quoteApproved: hasApprovedQuote,
+      depositRequested,
+      depositRequestNumber,
     });
   } catch (err) {
     console.error("[ai/lead]", err);

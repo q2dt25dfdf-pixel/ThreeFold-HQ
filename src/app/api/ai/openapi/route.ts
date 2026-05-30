@@ -849,7 +849,8 @@ const paths: Record<string, unknown> = {
       description:
         "Returns a safe operational summary for a single order by ID. " +
         "Includes: order name, status, delivery date, vendor name, quantity, items list, owner, " +
-        "vendor cost and payment status, open task count, and linked invoice payment state. " +
+        "vendor cost and payment status, portal enabled flag, open task count, and linked invoice " +
+        "payment state including balance remaining. " +
         "Excludes: notes, internal notes, delivery address, portal token, and client PII.",
       parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Order record ID." }],
       responses: {
@@ -876,20 +877,23 @@ const paths: Record<string, unknown> = {
                       vendorCost:            { type: "number", nullable: true },
                       vendorPaymentStatus:   { type: "string", nullable: true },
                       vendorInvoiceStatus:   { type: "string", nullable: true },
+                      portalEnabled:         { type: "boolean", description: "Whether the client portal is currently enabled for this order. The portal token itself is never returned." },
                       openTaskCount:         { type: "integer" },
                       invoice: {
                         nullable: true,
                         type: "object",
+                        description: "Linked invoice summary. null if no invoice is associated with this order.",
                         properties: {
-                          id:          { type: "string" },
-                          status:      { type: "string" },
-                          depositPaid: { type: "boolean" },
-                          finalPaid:   { type: "boolean" },
+                          id:               { type: "string" },
+                          status:           { type: "string" },
+                          depositPaid:      { type: "boolean" },
+                          finalPaid:        { type: "boolean" },
+                          balanceRemaining: { type: "number", description: "Remaining balance due from the client. 0 if fully paid. Use this for final invoice email drafts." },
                         },
-                        required: ["id", "status", "depositPaid", "finalPaid"],
+                        required: ["id", "status", "depositPaid", "finalPaid", "balanceRemaining"],
                       },
                     },
-                    required: ["id", "orderName", "status", "isActive", "items", "openTaskCount"],
+                    required: ["id", "orderName", "status", "isActive", "items", "portalEnabled", "openTaskCount"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },
@@ -910,8 +914,10 @@ const paths: Record<string, unknown> = {
       description:
         "Returns a safe operational summary for a single CRM lead by ID. " +
         "Includes: company (business name), pipeline stage, status, owner, follow-up date, deal value, " +
-        "source, project context (budget/quantity/target date/apparel types), communication count, and open task count. " +
-        "Excludes: contact person name, email, phone, notes, communication history summaries, and questionnaire files.",
+        "source, project context (budget/quantity/target date/apparel types), communication count, open task count, " +
+        "and quote/deposit workflow status (quote number, approval state, deposit request state). " +
+        "Excludes: contact person name, email, phone, notes, communication history summaries, questionnaire files, " +
+        "and all public quote/deposit/invoice URLs.",
       parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "CRM lead record ID." }],
       responses: {
         "200": {
@@ -925,22 +931,27 @@ const paths: Record<string, unknown> = {
                   data: {
                     type: "object",
                     properties: {
-                      id:                 { type: "string" },
-                      company:            { type: "string" },
-                      stage:              { type: "string" },
-                      status:             { type: "string" },
-                      owner:              { type: "string", nullable: true },
-                      followUpDate:       { type: "string", format: "date", nullable: true },
-                      value:              { type: "number", nullable: true },
-                      source:             { type: "string", nullable: true },
-                      budget:             { type: "string", nullable: true },
-                      quantity:           { type: "string", nullable: true },
-                      targetDate:         { type: "string", nullable: true },
-                      apparelTypes:       { type: "string", nullable: true },
-                      communicationCount: { type: "integer", description: "Number of logged communication entries. Content is never returned." },
-                      openTaskCount:      { type: "integer" },
+                      id:                   { type: "string" },
+                      company:              { type: "string" },
+                      stage:                { type: "string" },
+                      status:               { type: "string" },
+                      owner:                { type: "string", nullable: true },
+                      followUpDate:         { type: "string", format: "date", nullable: true },
+                      value:                { type: "number", nullable: true, description: "Project total value in USD. Updated when a quote is generated." },
+                      source:               { type: "string", nullable: true },
+                      budget:               { type: "string", nullable: true },
+                      quantity:             { type: "string", nullable: true },
+                      targetDate:           { type: "string", nullable: true },
+                      apparelTypes:         { type: "string", nullable: true },
+                      communicationCount:   { type: "integer", description: "Number of logged communication entries. Content is never returned." },
+                      openTaskCount:        { type: "integer" },
+                      quoteNumber:          { type: "string", nullable: true, description: "Most-recently-sent quote number (e.g. TF-Q-2026-0047). null if no quote has been generated." },
+                      latestQuoteStatus:    { type: "string", nullable: true, enum: ["sent", "approved", null], description: "'approved' if client approved a quote, 'sent' if a quote was sent but not yet approved, null if no quote exists." },
+                      quoteApproved:        { type: "boolean", description: "True if the client has approved at least one quote for this lead." },
+                      depositRequested:     { type: "boolean", description: "True if a deposit request has been generated and sent for this lead." },
+                      depositRequestNumber: { type: "string", nullable: true, description: "Most-recently-sent deposit request number (e.g. TF-D-2026-0023). null if no deposit request has been generated." },
                     },
-                    required: ["id", "company", "stage", "status", "communicationCount", "openTaskCount"],
+                    required: ["id", "company", "stage", "status", "communicationCount", "openTaskCount", "quoteApproved", "depositRequested"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },

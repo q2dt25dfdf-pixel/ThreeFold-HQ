@@ -1,9 +1,9 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
-import { stringField } from "@/lib/recordUtils";
+import { stringField, statusText } from "@/lib/recordUtils";
 import { INACTIVE_ORDER_STATUSES } from "@/lib/constants";
-import { statusText } from "@/lib/recordUtils";
+import { parseAmount } from "@/lib/invoiceCalc";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +53,8 @@ async function fetchTable(
  * Excludes PII: notes, internalNotes, delivery address, portal tokens,
  * intake_snapshot, design_versions, client_updates (text content).
  * Safe fields: order name, status, dates, vendor display name, quantity,
- * items list, owner, vendor cost/payment status, and invoice payment state.
+ * items list, owner, vendor cost/payment status, portal enabled flag,
+ * and invoice payment state including balance remaining.
  */
 export async function GET(
   request: Request,
@@ -100,6 +101,21 @@ export async function GET(
 
     const isActive = !INACTIVE_ORDER_STATUSES.has(statusText(order));
 
+    // Balance remaining: safely parsed from invoice record (no PII).
+    // portal_token is intentionally excluded — only the enabled flag is exposed.
+    const invoicePayload = relatedInvoice
+      ? {
+          id: relatedInvoice.id,
+          status: stringField(relatedInvoice, "status") || "Unknown",
+          depositPaid: relatedInvoice.deposit_paid === true,
+          finalPaid: relatedInvoice.final_paid === true,
+          balanceRemaining: (() => {
+            const n = parseAmount(relatedInvoice.balance_remaining);
+            return n > 0 ? Math.round(n * 100) / 100 : 0;
+          })(),
+        }
+      : null;
+
     return okResponse({
       id: order.id,
       orderName: stringField(order, "orderName") || stringField(order, "order_name") || "Order",
@@ -113,15 +129,9 @@ export async function GET(
       vendorCost,
       vendorPaymentStatus: stringField(order, "vendor_payment_status") || null,
       vendorInvoiceStatus: stringField(order, "vendor_invoice_status") || null,
+      portalEnabled: order.portal_enabled === true,
       openTaskCount: openTasks.length,
-      invoice: relatedInvoice
-        ? {
-            id: relatedInvoice.id,
-            status: stringField(relatedInvoice, "status") || "Unknown",
-            depositPaid: relatedInvoice.deposit_paid === true,
-            finalPaid: relatedInvoice.final_paid === true,
-          }
-        : null,
+      invoice: invoicePayload,
     });
   } catch (err) {
     console.error("[ai/order]", err);

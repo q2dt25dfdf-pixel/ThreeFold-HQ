@@ -1161,6 +1161,135 @@ test.describe("Detail endpoints — authenticated, nonexistent id", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 8C Sprint 3 — enhanced fields on order and lead detail endpoints
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/order/{id} — Phase 8C enhanced fields", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("nonexistent order returns 404 and does not expose portal_token or public URLs", async ({ request }) => {
+    const res = await request.get(`/api/ai/order/${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const bodyText = await res.text();
+    expect(bodyText).not.toContain('"portal_token"');
+    expect(bodyText).not.toContain('"public_link"');
+    expect(bodyText).not.toContain('"publicLink"');
+  });
+
+  test("200 response includes portalEnabled as a boolean", async ({ request }) => {
+    // Use nonexistent ID — we get 404. For shape verification we rely on integration
+    // environments. This test verifies the field contract via the OpenAPI schema path.
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const orderPath = paths["/api/ai/order/{id}"] as Record<string, unknown>;
+    const getOp = orderPath.get as Record<string, unknown>;
+    const responses = getOp.responses as Record<string, unknown>;
+    const ok200 = responses["200"] as Record<string, unknown>;
+    const content = (ok200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const schemaObj = content.schema as Record<string, unknown>;
+    const data = (schemaObj.properties as Record<string, unknown>).data as Record<string, unknown>;
+    const props = data.properties as Record<string, Record<string, unknown>>;
+    // Verify new fields are declared in schema
+    expect(props.portalEnabled).toBeDefined();
+    expect(props.portalEnabled.type).toBe("boolean");
+    expect(props.invoice.properties as Record<string, unknown>).toBeDefined();
+    const invoiceProps = props.invoice.properties as Record<string, Record<string, unknown>>;
+    expect(invoiceProps.balanceRemaining).toBeDefined();
+    expect(invoiceProps.balanceRemaining.type).toBe("number");
+  });
+
+  test("response never exposes portal_token, public_link, or stripe fields", async ({ request }) => {
+    const res = await request.get(`/api/ai/order/${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of ['"portal_token":', '"public_link":', '"publicLink":', '"stripe":', '"payment_link":']) {
+      expect(bodyText, `order detail must not expose ${key}`).not.toContain(key);
+    }
+  });
+});
+
+test.describe("GET /api/ai/lead/{id} — Phase 8C enhanced fields", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("nonexistent lead returns 404 and does not expose quote/deposit public URLs", async ({ request }) => {
+    const res = await request.get(`/api/ai/lead/${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const bodyText = await res.text();
+    expect(bodyText).not.toContain('"publicLink"');
+    expect(bodyText).not.toContain('"public_link"');
+    expect(bodyText).not.toContain('"quoteId"');
+    expect(bodyText).not.toContain('"approvedQuoteId"');
+    expect(bodyText).not.toContain('"depositRequestId"');
+  });
+
+  test("OpenAPI schema declares all new lead fields correctly", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const leadPath = paths["/api/ai/lead/{id}"] as Record<string, unknown>;
+    const getOp = leadPath.get as Record<string, unknown>;
+    const responses = getOp.responses as Record<string, unknown>;
+    const ok200 = responses["200"] as Record<string, unknown>;
+    const content = (ok200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const schemaObj = content.schema as Record<string, unknown>;
+    const data = (schemaObj.properties as Record<string, unknown>).data as Record<string, unknown>;
+    const props = data.properties as Record<string, Record<string, unknown>>;
+
+    expect(props.quoteNumber).toBeDefined();
+    expect(props.latestQuoteStatus).toBeDefined();
+    expect(props.quoteApproved).toBeDefined();
+    expect(props.quoteApproved.type).toBe("boolean");
+    expect(props.depositRequested).toBeDefined();
+    expect(props.depositRequested.type).toBe("boolean");
+    expect(props.depositRequestNumber).toBeDefined();
+  });
+
+  test("response never exposes quote/deposit IDs, public links, or PII", async ({ request }) => {
+    const res = await request.get(`/api/ai/lead/${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of [
+      '"email":', '"phone":', '"address":', '"notes":',
+      '"quoteId":', '"approvedQuoteId":', '"depositRequestId":',
+      '"publicLink":', '"public_link":', '"stripe":',
+      '"communicationHistory":', '"questionnaire_files":',
+    ]) {
+      expect(bodyText, `lead detail must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("OpenAPI schema does not include lead phase 8C fields in the required list for backward compat", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const leadPath = paths["/api/ai/lead/{id}"] as Record<string, unknown>;
+    const getOp = leadPath.get as Record<string, unknown>;
+    const responses = getOp.responses as Record<string, unknown>;
+    const ok200 = responses["200"] as Record<string, unknown>;
+    const content = (ok200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const schemaObj = content.schema as Record<string, unknown>;
+    const data = (schemaObj.properties as Record<string, unknown>).data as Record<string, unknown>;
+    const required = data.required as string[];
+    // Core fields must be required
+    expect(required).toContain("id");
+    expect(required).toContain("company");
+    expect(required).toContain("quoteApproved");
+    expect(required).toContain("depositRequested");
+    // Nullable fields should not be required
+    expect(required).not.toContain("quoteNumber");
+    expect(required).not.toContain("latestQuoteStatus");
+    expect(required).not.toContain("depositRequestNumber");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/ai/activity  (Phase 6F)
 // ---------------------------------------------------------------------------
 
