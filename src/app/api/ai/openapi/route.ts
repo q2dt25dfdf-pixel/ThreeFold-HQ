@@ -904,6 +904,96 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/task": {
+    post: {
+      operationId: "createTask",
+      summary: "Create a task after founder confirmation",
+      description:
+        "Creates one HQ task after explicit founder confirmation. " +
+        "Show a [JARVIS TASK PREVIEW] and wait for 'yes' before calling. " +
+        "Generic tasks appear on the HQ board. " +
+        "Lead-linked tasks (optional leadId) count in the lead's openTaskCount but are hidden from the board.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                title: {
+                  type: "string",
+                  description: "What needs to get done.",
+                },
+                assignedTo: {
+                  type: "string",
+                  enum: ["Alliyah", "Hannah", "Jordan", "All"],
+                  description: "Which founder (or All) this task is assigned to.",
+                },
+                dueDate: {
+                  type: "string",
+                  format: "date",
+                  description: "Due date in YYYY-MM-DD format.",
+                },
+                priority: {
+                  type: "string",
+                  enum: ["High", "Medium", "Low"],
+                  description: "Task priority. Defaults to Medium if omitted.",
+                },
+                notes: {
+                  type: "string",
+                  maxLength: 500,
+                  description: "Optional context notes.",
+                },
+                leadId: {
+                  type: "string",
+                  description: "Optional CRM lead ID. Links the task to a lead. Returns 404 if not found.",
+                },
+              },
+              required: ["title", "assignedTo", "dueDate"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Task created successfully.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      id:           { type: "string", description: "Generated task ID." },
+                      title:        { type: "string" },
+                      dueDate:      { type: "string", format: "date" },
+                      assignedTo:   { type: "string" },
+                      priority:     { type: "string" },
+                      notes:        { type: "string" },
+                      status:       { type: "string" },
+                      completed:    { type: "boolean" },
+                      boardVisible: { type: "boolean", description: "True if the task appears on the HQ task board." },
+                      leadId:       { type: "string", description: "Present only when a leadId was provided." },
+                      createdVia:   { type: "string", enum: ["jarvis"] },
+                    },
+                    required: ["id", "title", "dueDate", "assignedTo", "priority", "status", "completed", "boardVisible", "createdVia"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Validation error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead not found (when leadId is provided).", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",
