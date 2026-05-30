@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { sendPushToAll } from '@/lib/sendPush'
-import { validateInternalRequest } from '@/lib/internalAuth'
+import { validateSessionRequest } from '@/lib/sessionAuth'
 
 export async function POST(request: Request) {
-  const auth = validateInternalRequest(request)
+  const auth = await validateSessionRequest(request)
   if (!auth.ok) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: auth.status })
   }

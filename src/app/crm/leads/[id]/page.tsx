@@ -72,20 +72,25 @@ export default function LeadQuestionnairePage() {
     setFileUrlsLoaded(false)
     if (!files?.length) return
     const paths = files.map((f) => f.path).filter(Boolean)
-    fetch('/api/internal/signed-urls', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths }),
-    })
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((urls: Record<string, string>) => {
-        setFileUrls(urls)
-        setFileUrlsLoaded(true)
+    void supabase.auth.getSession().then(({ data: { session } }) =>
+      fetch('/api/internal/signed-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ paths }),
       })
-      .catch(() => {
-        setFileUrls({})
-        setFileUrlsLoaded(true)
-      })
+        .then((res) => (res.ok ? res.json() : {}))
+        .then((urls: Record<string, string>) => {
+          setFileUrls(urls)
+          setFileUrlsLoaded(true)
+        })
+        .catch(() => {
+          setFileUrls({})
+          setFileUrlsLoaded(true)
+        })
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id])
 

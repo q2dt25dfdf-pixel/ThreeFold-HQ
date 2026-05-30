@@ -144,17 +144,22 @@ export default function PortalSection({ orderId }: { orderId: string }) {
     try {
       openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody })
       setEmailStep('sent')
-      fetch('/api/internal/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'portal_email_sent',
-          title: 'Client Portal Email Sent',
-          message: `${clientName} · Portal access email delivered.`,
-          entity_type: 'order',
-          entity_id: orderId,
-        }),
-      }).catch(err => console.error('[notify]', err))
+      void supabase.auth.getSession().then(({ data: { session } }) =>
+        fetch('/api/internal/notify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({
+            type: 'portal_email_sent',
+            title: 'Client Portal Email Sent',
+            message: `${clientName} · Portal access email delivered.`,
+            entity_type: 'order',
+            entity_id: orderId,
+          }),
+        }).catch(err => console.error('[notify]', err))
+      )
       window.setTimeout(closeEmailModal, 2000)
     } catch (err: unknown) {
       setEmailError(String(err))

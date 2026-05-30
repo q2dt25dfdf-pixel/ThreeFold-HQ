@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { Bell, Check, Loader2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useSupabaseTable } from '@/lib/useSupabaseTable'
+import { supabase } from '@/lib/supabase'
 
 type Notification = {
   id: string
@@ -358,9 +359,13 @@ export default function NotificationCenter() {
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/internal/test-notification', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ id }),
       })
       const json = await res.json().catch(() => ({})) as Record<string, unknown>

@@ -6,6 +6,7 @@ import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openEmailCompose } from "@/lib/emailCompose";
 import { parseAmount } from "@/lib/invoiceCalc";
+import { supabase } from "@/lib/supabase";
 
 interface Invoice {
   id: string;
@@ -94,17 +95,22 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
       setStep("sent");
       if (invoice) {
         const clientName = invoice.client_name || invoice.client || "";
-        fetch('/api/internal/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'final_invoice_sent',
-            title: 'Final Invoice Sent',
-            message: `${clientName} · Final invoice sent by ${sender}.`,
-            entity_type: 'finance',
-            entity_id: invoice.id,
-          }),
-        }).catch(err => console.error('[notify]', err));
+        void supabase.auth.getSession().then(({ data: { session } }) =>
+          fetch('/api/internal/notify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
+            body: JSON.stringify({
+              type: 'final_invoice_sent',
+              title: 'Final Invoice Sent',
+              message: `${clientName} · Final invoice sent by ${sender}.`,
+              entity_type: 'finance',
+              entity_id: invoice.id,
+            }),
+          }).catch(err => console.error('[notify]', err))
+        );
         onSent?.(sender, publicLink);
       }
       window.setTimeout(onClose, 2000);

@@ -197,11 +197,16 @@ function postNotification(payload: {
   entity_type?: string;
   entity_id?: string;
 }): void {
-  fetch('/api/internal/notify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }).catch(err => console.error('[notify]', err));
+  void supabase.auth.getSession().then(({ data: { session } }) =>
+    fetch('/api/internal/notify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    }).catch(err => console.error('[notify]', err))
+  );
 }
 
 const initialLeads: Lead[] = [

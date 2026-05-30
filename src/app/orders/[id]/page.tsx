@@ -451,20 +451,25 @@ export default function OrderDetailPage() {
     setFileUrlsLoaded(false);
     if (!files?.length) return;
     const paths = files.map((f) => f.path).filter(Boolean);
-    fetch("/api/internal/signed-urls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paths }),
-    })
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((urls: Record<string, string>) => {
-        setFileUrls(urls);
-        setFileUrlsLoaded(true);
+    void supabase.auth.getSession().then(({ data: { session } }) =>
+      fetch("/api/internal/signed-urls", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ paths }),
       })
-      .catch(() => {
-        setFileUrls({});
-        setFileUrlsLoaded(true);
-      });
+        .then((res) => (res.ok ? res.json() : {}))
+        .then((urls: Record<string, string>) => {
+          setFileUrls(urls);
+          setFileUrlsLoaded(true);
+        })
+        .catch(() => {
+          setFileUrls({});
+          setFileUrlsLoaded(true);
+        })
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id]);
 
@@ -495,14 +500,19 @@ export default function OrderDetailPage() {
       .filter((v) => v.image_path)
       .map((v) => v.image_path!);
     if (!paths.length) return;
-    fetch('/api/internal/design-signed-urls', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths }),
-    })
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((urls: Record<string, string>) => setDesignImageUrls(urls))
-      .catch(() => {});
+    void supabase.auth.getSession().then(({ data: { session } }) =>
+      fetch('/api/internal/design-signed-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ paths }),
+      })
+        .then((r) => (r.ok ? r.json() : {}))
+        .then((urls: Record<string, string>) => setDesignImageUrls(urls))
+        .catch(() => {})
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [designVersionSource]);
 
@@ -673,9 +683,13 @@ export default function OrderDetailPage() {
 
     // Generate preview URL immediately so the thumbnail shows without waiting for re-render
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/internal/design-signed-urls', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ paths: [path] }),
       });
       if (res.ok) {
