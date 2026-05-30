@@ -244,6 +244,7 @@ export default function TasksPage() {
 
   const TaskCard = ({ task }: { task: Task }) => {
     const owner = taskAssignee(task);
+    const isOverdue = !task.completed && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate) && task.dueDate < businessTodayISO();
     return (
       <article
         role="button"
@@ -295,7 +296,12 @@ export default function TasksPage() {
           {owner === "All" && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">All</span>}
           <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${priorityColors[task.priority]}`}>{task.priority}</span>
         </div>
-        <p className="mt-2 text-xs text-slate-600">Due {task.dueDate}</p>
+        <p className={`mt-2 text-xs ${isOverdue ? "font-semibold text-rose-600" : "text-slate-600"}`}>
+          Due {task.dueDate}
+          {isOverdue && (
+            <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-rose-700">Overdue</span>
+          )}
+        </p>
       </article>
     );
   };
