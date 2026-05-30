@@ -369,11 +369,21 @@ export default function ClientsPage() {
                 index % 2 === 0 ? "bg-zinc-50" : "bg-white"
               } cursor-pointer`}
             >
-              <div className="text-xs md:text-sm font-semibold text-slate-950">{client.name}</div>
-              <div className="text-xs md:text-sm text-slate-600">{client.industry}</div>
-              <div className="text-xs md:text-sm text-slate-600">{client.contact}</div>
-              <div className="text-xs md:text-sm text-slate-600">{orderCountForClient(client.name)}</div>
-              <div>
+              <div className="text-xs font-semibold text-slate-950 md:text-sm">{client.name}</div>
+              <div className="flex items-center gap-2 text-xs text-slate-600 md:text-sm">
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Industry</span>
+                <span>{client.industry}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600 md:text-sm">
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Contact</span>
+                <span>{client.contact}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600 md:text-sm">
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Orders</span>
+                <span>{orderCountForClient(client.name)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Status</span>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${client.status === "Active" ? "bg-emerald-100 text-emerald-800" : client.status === "At Risk" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
                   {client.status}
                 </span>
