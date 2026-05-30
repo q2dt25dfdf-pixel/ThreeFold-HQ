@@ -1496,4 +1496,33 @@ test.describe("GET /api/ai/openapi", () => {
     // Literal string "AI_API_SECRET" may appear as a description but its value must not
     expect(bodyText).not.toMatch(/"value"\s*:\s*".+"/);
   });
+
+  test("no enum array contains null — GPT Actions compatibility", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    const body = await res.json() as unknown;
+
+    const violations: string[] = [];
+    function walk(node: unknown, path: string): void {
+      if (node === null || typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        node.forEach((item: unknown, i: number) => walk(item, `${path}[${i}]`));
+        return;
+      }
+      const obj = node as Record<string, unknown>;
+      if ("enum" in obj && Array.isArray(obj.enum)) {
+        for (const val of obj.enum as unknown[]) {
+          if (val === null) violations.push(`${path}.enum`);
+        }
+      }
+      for (const [key, val] of Object.entries(obj)) {
+        walk(val, `${path}.${key}`);
+      }
+    }
+    walk(body, "schema");
+
+    expect(
+      violations,
+      `GPT Actions incompatible — null inside enum at: ${violations.join(", ")}`,
+    ).toHaveLength(0);
+  });
 });

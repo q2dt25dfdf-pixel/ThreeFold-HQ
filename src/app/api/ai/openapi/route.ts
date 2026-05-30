@@ -946,7 +946,7 @@ const paths: Record<string, unknown> = {
                       communicationCount:   { type: "integer", description: "Number of logged communication entries. Content is never returned." },
                       openTaskCount:        { type: "integer" },
                       quoteNumber:          { type: "string", nullable: true, description: "Most-recently-sent quote number (e.g. TF-Q-2026-0047). null if no quote has been generated." },
-                      latestQuoteStatus:    { type: "string", nullable: true, enum: ["sent", "approved", null], description: "'approved' if client approved a quote, 'sent' if a quote was sent but not yet approved, null if no quote exists." },
+                      latestQuoteStatus:    { type: "string", nullable: true, enum: ["sent", "approved"], description: "'approved' if client approved a quote, 'sent' if a quote was sent but not yet approved, null if no quote has been sent." },
                       quoteApproved:        { type: "boolean", description: "True if the client has approved at least one quote for this lead." },
                       depositRequested:     { type: "boolean", description: "True if a deposit request has been generated and sent for this lead." },
                       depositRequestNumber: { type: "string", nullable: true, description: "Most-recently-sent deposit request number (e.g. TF-D-2026-0023). null if no deposit request has been generated." },
