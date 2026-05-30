@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createNotification, type NotificationPayload } from '@/lib/notifications'
+import { validateInternalRequest } from '@/lib/internalAuth'
 
 export async function POST(request: Request) {
+  const auth = validateInternalRequest(request)
+  if (!auth.ok) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: auth.status })
+  }
   try {
     const body = await request.json() as Partial<NotificationPayload>
     if (!body.type || !body.title) {

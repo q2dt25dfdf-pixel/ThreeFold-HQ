@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getDesignSignedUrls } from '@/lib/getSignedUrl'
+import { validateInternalRequest } from '@/lib/internalAuth'
 
 export async function POST(request: Request) {
+  const auth = validateInternalRequest(request)
+  if (!auth.ok) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: auth.status })
+  }
   try {
     const body = await request.json()
     const paths: string[] = Array.isArray(body.paths)

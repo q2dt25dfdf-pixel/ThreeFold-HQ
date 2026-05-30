@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { sendPushToAll } from '@/lib/sendPush'
+import { validateInternalRequest } from '@/lib/internalAuth'
 
 export async function POST(request: Request) {
+  const auth = validateInternalRequest(request)
+  if (!auth.ok) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: auth.status })
+  }
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const id =
