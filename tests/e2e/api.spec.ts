@@ -1497,6 +1497,25 @@ test.describe("GET /api/ai/openapi", () => {
     expect(bodyText).not.toMatch(/"value"\s*:\s*".+"/);
   });
 
+  test("every operation description is <= 300 chars — GPT Actions compatibility", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    const body = await res.json() as Record<string, unknown>;
+    const paths = body.paths as Record<string, Record<string, Record<string, unknown>>>;
+    const violations: string[] = [];
+    for (const [path, methods] of Object.entries(paths)) {
+      for (const [method, op] of Object.entries(methods)) {
+        const desc = (op as Record<string, unknown>).description;
+        if (typeof desc === "string" && desc.length > 300) {
+          violations.push(`${method.toUpperCase()} ${path}: ${desc.length} chars`);
+        }
+      }
+    }
+    expect(
+      violations,
+      `Operation descriptions exceed 300 chars:\n${violations.join("\n")}`,
+    ).toHaveLength(0);
+  });
+
   test("no enum array contains null — GPT Actions compatibility", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as unknown;

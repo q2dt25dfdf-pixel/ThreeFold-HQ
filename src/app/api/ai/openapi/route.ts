@@ -146,9 +146,8 @@ const paths: Record<string, unknown> = {
       operationId: "getSummary",
       summary: "All-up operational summary",
       description:
-        "High-level operational snapshot: open tasks, overdue counts, active orders, " +
-        "unpaid invoice balance, month-to-date revenue, sales tax owed, and open CRM pipeline value. " +
-        "Use this as the first call when answering 'how is the business doing today' questions. " +
+        "Operational snapshot: task counts, active orders, unpaid invoice balance, " +
+        "month-to-date revenue, sales tax owed, and open CRM pipeline value. " +
         "Returns aggregate counts only — no individual records, no PII.",
       responses: {
         "200": {
@@ -314,10 +313,9 @@ const paths: Record<string, unknown> = {
       operationId: "getCRM",
       summary: "CRM lead pipeline aggregates",
       description:
-        "Returns total/open/won lead counts, stale lead count, follow-up counts (due today, this week), " +
-        "total pipeline value, per-stage breakdown with values, per-founder breakdown, " +
-        "and up to 10 leads needing attention. " +
-        "Company (business) names are included; contact person names, emails, phones, and notes are excluded.",
+        "Lead pipeline aggregates: counts by stage and owner, follow-up counts, total pipeline value, " +
+        "stale lead count, and up to 10 leads needing attention. " +
+        "Business names only — no contact names, emails, phones, or notes.",
       responses: {
         "200": {
           description: "CRM aggregates.",
@@ -459,11 +457,10 @@ const paths: Record<string, unknown> = {
       operationId: "getReports",
       summary: "Morning Briefing, HQ Auditor, and End-of-Day Report",
       description:
-        "Returns all three operational reports in one call. " +
-        "morningBriefing: items needing attention today (overdue tasks, unpaid invoices, orders due soon, stale leads) with allClear flag. " +
-        "hqAuditor: system health check — data integrity issues (missing clients/vendors/dates, orphaned invoices) with systemHealthy flag. " +
-        "endOfDayReport: today's activity (payments received, tasks completed, contacts logged, expenses recorded) with hasActivity flag. " +
-        "Item names (order names, task titles, company names) are included; all PII and note content are excluded.",
+        "Three reports in one call: morningBriefing (items needing attention today, allClear flag), " +
+        "hqAuditor (data integrity issues, systemHealthy flag), " +
+        "endOfDayReport (today's activity summary, hasActivity flag). " +
+        "Item names included; all PII and note content excluded.",
       responses: {
         "200": {
           description: "All three reports.",
@@ -560,11 +557,9 @@ const paths: Record<string, unknown> = {
       operationId: "getFinances",
       summary: "Invoice, expense, and financial position aggregates",
       description:
-        "Returns invoice counts and dollar totals (total value, revenue collected, outstanding balance), " +
-        "YTD sales tax position (collected vs paid vs owed), per-status invoice breakdown, " +
-        "expense counts and totals by payment status and category, " +
-        "gross profit (revenue minus paid vendor costs), and net position (gross minus paid expenses). " +
-        "Order names are used as invoice labels; no client names, emails, Stripe links, or payment links are returned.",
+        "Invoice and expense aggregates: counts, totals, YTD sales tax, per-status breakdown, " +
+        "gross profit, and net position. " +
+        "Order names used as invoice labels — no client names, emails, Stripe links, or payment links.",
       responses: {
         "200": {
           description: "Finance aggregates.",
@@ -669,11 +664,10 @@ const paths: Record<string, unknown> = {
       operationId: "getActivity",
       summary: "Recent activity and follow-up history",
       description:
-        "Returns activity counts (today, this week, last 30 days) across two sources: " +
-        "client activity logs (calls, emails, meetings) and CRM communication history. " +
-        "Breakdown by activity type and by founder. Last 10 recent events (safe fields only). " +
-        "CRM follow-up counts (overdue, due today, due this week). " +
-        "IMPORTANT: Note and summary content is NEVER returned — only activity type, date, and owner.",
+        "Activity counts (today, this week, last 30 days) from client logs and CRM history. " +
+        "Breakdown by type and founder. Last 10 recent events. " +
+        "Follow-up counts (overdue, due today, due this week). " +
+        "Note content is never returned — only activity type, date, and owner.",
       responses: {
         "200": {
           description: "Activity aggregates.",
@@ -755,10 +749,10 @@ const paths: Record<string, unknown> = {
       operationId: "search",
       summary: "Search across clients, orders, leads, and vendors",
       description:
-        "Searches safe display fields (name, status, type — never email/phone/notes/contact) across all four entity types. " +
+        "Searches safe display fields across clients, orders, leads, and vendors. " +
         "Returns up to 5 results per type (20 total). " +
-        "Use the returned id with the corresponding detail endpoint (/api/ai/client/{id}, /api/ai/order/{id}, etc.) for full details. " +
-        "Requires a non-empty q parameter. Returns 400 if q is missing or empty.",
+        "Use the returned id with the corresponding detail endpoint for full record details. " +
+        "Returns 400 if q is missing or empty.",
       parameters: [
         {
           name: "q",
@@ -847,11 +841,10 @@ const paths: Record<string, unknown> = {
       operationId: "getOrder",
       summary: "Order detail summary",
       description:
-        "Returns a safe operational summary for a single order by ID. " +
-        "Includes: order name, status, delivery date, vendor name, quantity, items list, owner, " +
-        "vendor cost and payment status, portal enabled flag, open task count, and linked invoice " +
-        "payment state including balance remaining. " +
-        "Excludes: notes, internal notes, delivery address, portal token, and client PII.",
+        "Safe summary for one order: status, delivery date, vendor, quantity, items, owner, " +
+        "vendor cost, portal enabled flag, open task count, and invoice state " +
+        "(depositPaid, finalPaid, balanceRemaining). " +
+        "Excludes notes, delivery address, portal token, and client PII.",
       parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Order record ID." }],
       responses: {
         "200": {
@@ -912,12 +905,9 @@ const paths: Record<string, unknown> = {
       operationId: "getLead",
       summary: "CRM lead detail summary",
       description:
-        "Returns a safe operational summary for a single CRM lead by ID. " +
-        "Includes: company (business name), pipeline stage, status, owner, follow-up date, deal value, " +
-        "source, project context (budget/quantity/target date/apparel types), communication count, open task count, " +
-        "and quote/deposit workflow status (quote number, approval state, deposit request state). " +
-        "Excludes: contact person name, email, phone, notes, communication history summaries, questionnaire files, " +
-        "and all public quote/deposit/invoice URLs.",
+        "Safe summary for one CRM lead: stage, status, owner, follow-up date, deal value, source, " +
+        "project context, communication count, open task count, and quote/deposit workflow state. " +
+        "Excludes contact name, email, phone, notes, communication content, and all public URLs.",
       parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "CRM lead record ID." }],
       responses: {
         "200": {
