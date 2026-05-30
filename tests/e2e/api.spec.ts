@@ -1,5 +1,6 @@
 /**
  * Phase 4 — AI API endpoint smoke tests.
+ * Phase 6A — /api/ai/tasks and /api/ai/orders endpoint tests appended below.
  *
  * Uses Playwright's request fixture (pure HTTP, no browser).
  * Runs under the "api" project which has no browser setup and no auth dependency.
@@ -167,6 +168,257 @@ test.describe("GET /api/ai/summary — authenticated", () => {
 
   test("Cache-Control header includes no-store", async ({ request }) => {
     const res = await request.get(SUMMARY, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6A helpers
+// ---------------------------------------------------------------------------
+
+const TASKS = "/api/ai/tasks";
+const ORDERS = "/api/ai/orders";
+
+const SKIP_REASON =
+  "AI_API_SECRET not set in environment — set it in .env.test.local to run authenticated tests";
+
+function skipIfNoSecret() {
+  if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+}
+
+// Fields that must never appear as JSON keys in any AI response.
+const FORBIDDEN_KEYS = [
+  '"email":',
+  '"phone":',
+  '"address":',
+  '"notes":',
+  '"stripe":',
+  '"payment_link":',
+  '"client_email":',
+  '"client_phone":',
+  '"client_name":',
+];
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/tasks — unauthenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/tasks — unauthenticated", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(TASKS);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 401 with a malformed Bearer token", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: "Bearer invalid-test-token" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns 401 with Authorization header missing Bearer prefix", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: "not-a-bearer-token" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/tasks — authenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/tasks — authenticated", () => {
+  test.beforeEach(skipIfNoSecret);
+
+  test("returns 200 with the correct token", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected top-level keys and numeric counts", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Object.keys(data).sort()).toEqual(["byAssignee", "byPriority", "counts", "urgentTasks"]);
+
+    // counts — all numeric, all non-negative
+    const { counts } = data;
+    for (const key of ["total", "open", "overdue", "dueToday", "dueThisWeek"] as const) {
+      expect(typeof counts[key], `counts.${key}`).toBe("number");
+      expect(counts[key], `counts.${key}`).toBeGreaterThanOrEqual(0);
+    }
+    expect(counts.open).toBeLessThanOrEqual(counts.total);
+    expect(counts.overdue).toBeLessThanOrEqual(counts.open);
+
+    // byPriority
+    const { byPriority } = data;
+    for (const key of ["high", "medium", "low"] as const) {
+      expect(typeof byPriority[key], `byPriority.${key}`).toBe("number");
+      expect(byPriority[key]).toBeGreaterThanOrEqual(0);
+    }
+
+    // urgentTasks — bounded list of safe fields, no notes
+    expect(Array.isArray(data.urgentTasks)).toBe(true);
+    expect(data.urgentTasks.length).toBeLessThanOrEqual(10);
+    for (const task of data.urgentTasks as Record<string, unknown>[]) {
+      expect(Object.keys(task).sort()).toEqual(
+        ["assignedTo", "dueDate", "id", "priority", "title"],
+      );
+    }
+  });
+
+  test("response does not expose PII or raw field names", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_KEYS) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(TASKS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/orders — unauthenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/orders — unauthenticated", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(ORDERS);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 401 with a malformed Bearer token", async ({ request }) => {
+    const res = await request.get(ORDERS, {
+      headers: { Authorization: "Bearer invalid-test-token" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns 401 with Authorization header missing Bearer prefix", async ({ request }) => {
+    const res = await request.get(ORDERS, {
+      headers: { Authorization: "not-a-bearer-token" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/orders — authenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/orders — authenticated", () => {
+  test.beforeEach(skipIfNoSecret);
+
+  test("returns 200 with the correct token", async ({ request }) => {
+    const res = await request.get(ORDERS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(ORDERS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected top-level keys and numeric counts", async ({ request }) => {
+    const res = await request.get(ORDERS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Object.keys(data).sort()).toEqual([
+      "byStatus",
+      "counts",
+      "ordersNeedingAttention",
+    ]);
+
+    // counts — all numeric, all non-negative
+    const { counts } = data;
+    for (const key of ["total", "active", "overdue", "dueSoon", "recentlyDelivered"] as const) {
+      expect(typeof counts[key], `counts.${key}`).toBe("number");
+      expect(counts[key], `counts.${key}`).toBeGreaterThanOrEqual(0);
+    }
+    expect(counts.active).toBeLessThanOrEqual(counts.total);
+    expect(counts.overdue).toBeLessThanOrEqual(counts.active);
+
+    // byStatus — array of { status: string, count: number }
+    expect(Array.isArray(data.byStatus)).toBe(true);
+    for (const entry of data.byStatus as Record<string, unknown>[]) {
+      expect(typeof entry.status).toBe("string");
+      expect(typeof entry.count).toBe("number");
+      expect(entry.count).toBeGreaterThan(0);
+    }
+
+    // ordersNeedingAttention — bounded, safe fields only, no notes
+    expect(Array.isArray(data.ordersNeedingAttention)).toBe(true);
+    expect(data.ordersNeedingAttention.length).toBeLessThanOrEqual(10);
+    for (const order of data.ordersNeedingAttention as Record<string, unknown>[]) {
+      expect(Object.keys(order).sort()).toEqual([
+        "estimatedDeliveryDate",
+        "id",
+        "orderName",
+        "status",
+      ]);
+    }
+  });
+
+  test("response does not expose PII or raw field names", async ({ request }) => {
+    const res = await request.get(ORDERS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_KEYS) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(ORDERS, {
       headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
     });
     expect(res.headers()["cache-control"]).toContain("no-store");
