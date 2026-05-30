@@ -3,6 +3,7 @@
  * Phase 6A — /api/ai/tasks and /api/ai/orders endpoint tests appended below.
  * Phase 6B — /api/ai/crm and /api/ai/vendors endpoint tests appended below.
  * Phase 6C — /api/ai/reports endpoint tests appended below.
+ * Phase 6D — /api/ai/finances endpoint tests appended below.
  *
  * Uses Playwright's request fixture (pure HTTP, no browser).
  * Runs under the "api" project which has no browser setup and no auth dependency.
@@ -826,6 +827,165 @@ test.describe("GET /api/ai/reports — authenticated", () => {
 
   test("Cache-Control header includes no-store", async ({ request }) => {
     const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/finances  (Phase 6D)
+// ---------------------------------------------------------------------------
+
+const FINANCES = "/api/ai/finances";
+
+// Additional forbidden fields specific to the finances endpoint.
+const FORBIDDEN_FINANCES = [
+  ...FORBIDDEN_CRM_VENDOR,
+  '"stripe":',
+  '"stripe_invoice_url":',
+  '"payment_link":',
+  '"confirmation_number":',
+  '"receipt_url":',
+  '"client_email":',
+  '"client_phone":',
+  '"client_name":',
+];
+
+test.describe("GET /api/ai/finances — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(FINANCES);
+    expect(res.status()).toBe(401);
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(FINANCES, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(FINANCES, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/finances — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("returns 200 with valid token", async ({ request }) => {
+    const res = await request.get(FINANCES, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(FINANCES, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected top-level keys and numeric aggregates", async ({ request }) => {
+    const res = await request.get(FINANCES, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Object.keys(data).sort()).toEqual(["expenses", "invoices", "summary"]);
+
+    // Invoices section
+    const { invoices } = data;
+    expect(invoices.counts).toBeDefined();
+    for (const key of ["total", "outstanding", "paid", "overdue", "draft", "cancelled"] as const) {
+      expect(typeof invoices.counts[key], `invoices.counts.${key}`).toBe("number");
+      expect(invoices.counts[key]).toBeGreaterThanOrEqual(0);
+    }
+    expect(invoices.counts.outstanding + invoices.counts.paid).toBeLessThanOrEqual(invoices.counts.total);
+
+    expect(invoices.totals).toBeDefined();
+    for (const key of ["totalValue", "revenueCollected", "outstandingBalance"] as const) {
+      expect(typeof invoices.totals[key], `invoices.totals.${key}`).toBe("number");
+    }
+
+    expect(invoices.salesTax).toBeDefined();
+    for (const key of ["collectedYTD", "paidYTD", "dueYTD"] as const) {
+      expect(typeof invoices.salesTax[key], `invoices.salesTax.${key}`).toBe("number");
+      expect(invoices.salesTax[key]).toBeGreaterThanOrEqual(0);
+    }
+
+    expect(Array.isArray(invoices.byStatus)).toBe(true);
+    expect(Array.isArray(invoices.invoicesNeedingAttention)).toBe(true);
+    expect(invoices.invoicesNeedingAttention.length).toBeLessThanOrEqual(10);
+    for (const inv of invoices.invoicesNeedingAttention as Record<string, unknown>[]) {
+      expect(typeof inv.id).toBe("string");
+      expect(typeof inv.orderName).toBe("string");
+      expect(typeof inv.status).toBe("string");
+      expect(typeof inv.balance).toBe("number");
+      // Must NOT expose client PII
+      expect(inv).not.toHaveProperty("client");
+      expect(inv).not.toHaveProperty("email");
+      expect(inv).not.toHaveProperty("notes");
+      expect(inv).not.toHaveProperty("stripe_invoice_url");
+    }
+
+    // Expenses section
+    const { expenses } = data;
+    expect(expenses.counts).toBeDefined();
+    for (const key of ["total", "paid", "unpaid"] as const) {
+      expect(typeof expenses.counts[key], `expenses.counts.${key}`).toBe("number");
+      expect(expenses.counts[key]).toBeGreaterThanOrEqual(0);
+    }
+    expect(expenses.counts.paid + expenses.counts.unpaid).toBe(expenses.counts.total);
+
+    expect(expenses.totals).toBeDefined();
+    for (const key of ["total", "paid", "unpaid"] as const) {
+      expect(typeof expenses.totals[key], `expenses.totals.${key}`).toBe("number");
+      expect(expenses.totals[key]).toBeGreaterThanOrEqual(0);
+    }
+
+    expect(Array.isArray(expenses.byCategory)).toBe(true);
+    expect(Array.isArray(expenses.expensesNeedingAttention)).toBe(true);
+    expect(expenses.expensesNeedingAttention.length).toBeLessThanOrEqual(10);
+    for (const exp of expenses.expensesNeedingAttention as Record<string, unknown>[]) {
+      expect(typeof exp.id).toBe("string");
+      expect(typeof exp.name).toBe("string");
+      expect(typeof exp.amount).toBe("number");
+      // Must NOT expose PII or raw internal fields
+      expect(exp).not.toHaveProperty("notes");
+      expect(exp).not.toHaveProperty("receipt_url");
+    }
+
+    // Summary section
+    const { summary } = data;
+    for (const key of ["revenueCollected", "grossProfit", "netPosition", "taxDue"] as const) {
+      expect(typeof summary[key], `summary.${key}`).toBe("number");
+    }
+    // Sanity: taxDue must be non-negative
+    expect(summary.taxDue).toBeGreaterThanOrEqual(0);
+  });
+
+  test("response does not expose PII or sensitive raw field names", async ({ request }) => {
+    const res = await request.get(FINANCES, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_FINANCES) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(FINANCES, {
       headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
     });
     expect(res.headers()["cache-control"]).toContain("no-store");
