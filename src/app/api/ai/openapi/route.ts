@@ -748,11 +748,10 @@ const paths: Record<string, unknown> = {
       operationId: "addActivity",
       summary: "Log a client activity entry",
       description:
-        "Appends a single activity entry to the client_activity log for a known client. " +
-        "MUST only be called after the founder has explicitly confirmed the action in chat. " +
-        "Show the entry details (type, date, owner, note) and ask 'Shall I log this?' before calling. " +
-        "Append-only — never updates or deletes existing entries. " +
-        "Returns 404 if the clientId does not match an existing client record.",
+        "Logs one client activity entry after founder confirmation. " +
+        "Show details and ask 'Shall I log this?' first. " +
+        "Append-only — no updates or deletes. " +
+        "clientId must match an existing client; returns 404 if not found.",
       requestBody: {
         required: true,
         content: {
@@ -1087,6 +1086,24 @@ const paths: Record<string, unknown> = {
 };
 
 // ---------------------------------------------------------------------------
+// Validation — logs to stderr if any operation description exceeds 300 chars
+// (ChatGPT Actions rejects schemas with descriptions over 300 characters)
+// ---------------------------------------------------------------------------
+
+function warnLongDescriptions(schemaPaths: Record<string, unknown>): void {
+  for (const [path, methods] of Object.entries(schemaPaths as Record<string, Record<string, unknown>>)) {
+    for (const [method, op] of Object.entries(methods as Record<string, Record<string, unknown>>)) {
+      const desc = (op as { description?: string }).description;
+      if (desc && desc.length > 300) {
+        console.error(
+          `[openapi] description exceeds 300 chars (${desc.length}): ${method.toUpperCase()} ${path}`,
+        );
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Schema builder — injects server URL from request host
 // ---------------------------------------------------------------------------
 
@@ -1120,6 +1137,7 @@ export function GET(request: Request): Response {
   const protocol = host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https";
   const serverUrl = `${protocol}://${host}`;
 
+  warnLongDescriptions(paths);
   const body = JSON.stringify(buildSchema(serverUrl), null, 2);
 
   return new Response(body, {
