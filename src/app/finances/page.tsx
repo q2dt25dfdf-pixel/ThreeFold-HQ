@@ -1282,46 +1282,152 @@ function FinancesContent() {
       {/* ── Overview tab ─────────────────────────────────────────────────────── */}
       {activeTab === "overview" && (
       <>
-      {/* Hero: Gross Profit + Net Position */}
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div className={`rounded-[2rem] p-5 md:p-6 ${estimatedGrossProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"}`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Est. Gross Profit</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">{currency.format(estimatedGrossProfit)}</p>
-          <p className="mt-2 text-[10px] text-white/70">Revenue collected − paid vendor costs</p>
+      {/* ── Command center hero ───────────────────────────────────────────────── */}
+      <section className="overflow-hidden rounded-[2rem] bg-slate-900">
+        {/* Two hero metrics */}
+        <div className="grid divide-y divide-white/10 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          <div className="p-5 md:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">Est. Gross Profit</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${estimatedGrossProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              {currency.format(estimatedGrossProfit)}
+            </p>
+            <p className="mt-1.5 text-[10px] text-white/40">Revenue collected − paid vendor costs</p>
+            <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${estimatedGrossProfit > 0 ? "bg-emerald-500/20 text-emerald-300" : estimatedGrossProfit === 0 ? "bg-white/10 text-white/60" : "bg-rose-500/20 text-rose-300"}`}>
+              {estimatedGrossProfit > 0 ? "Profitable" : estimatedGrossProfit === 0 ? "Break even" : "Negative"}
+            </span>
+          </div>
+          <div className="p-5 md:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">Net Position</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${netPosition >= 0 ? "text-white" : "text-rose-400"}`}>
+              {currency.format(netPosition)}
+            </p>
+            <p className="mt-1.5 text-[10px] text-white/40">Revenue − all paid costs & expenses</p>
+            <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${netPosition >= 0 ? "bg-white/10 text-white/70" : "bg-rose-500/20 text-rose-300"}`}>
+              {netPosition >= 0 ? "On track" : "In the red"}
+            </span>
+          </div>
         </div>
-        <div className={`rounded-[2rem] p-5 md:p-6 ${netPosition >= 0 ? "bg-slate-900" : "bg-rose-700"}`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Net Position</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">{currency.format(netPosition)}</p>
-          <p className="mt-2 text-[10px] text-white/70">Revenue − vendor costs − expenses</p>
+        {/* Quick stats strip */}
+        <div className="grid grid-cols-3 divide-x divide-white/10 border-t border-white/10">
+          <div className="px-5 py-3">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-white/40">Revenue</p>
+            <p className="mt-0.5 text-xs font-semibold text-white/80">{currency.format(revenueCollected)}</p>
+          </div>
+          <div className="px-5 py-3">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-white/40">Total Costs</p>
+            <p className="mt-0.5 text-xs font-semibold text-white/80">{currency.format(paidVendorCosts + paidExpenses)}</p>
+          </div>
+          <div className="px-5 py-3">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-white/40">Tax Owed</p>
+            <p className={`mt-0.5 text-xs font-semibold ${taxDue > 0 ? "text-rose-400" : "text-white/80"}`}>{currency.format(taxDue)}</p>
+          </div>
         </div>
       </section>
 
-      {/* Business health row */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <p className="text-xs text-slate-500">Revenue Collected</p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(revenueCollected)}</p>
-          <p className="mt-1 text-[10px] text-slate-400">Cash in: deposits + final payments</p>
+      {/* ── Money flow ───────────────────────────────────────────────────────── */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <h2 className="mb-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Money Flow</h2>
+        <div className="space-y-4">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700">Revenue Collected</span>
+              <span className="text-xs font-bold text-emerald-600">{currency.format(revenueCollected)}</span>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: revenueCollected > 0 ? "100%" : "0%" }} />
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-slate-400">− Paid Vendor Costs</span>
+              <span className="text-xs font-semibold text-slate-500">{currency.format(paidVendorCosts)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-rose-400 transition-all" style={{ width: `${revenueCollected > 0 ? Math.min(100, Math.round((paidVendorCosts / revenueCollected) * 100)) : 0}%` }} />
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-slate-400">− Paid Expenses</span>
+              <span className="text-xs font-semibold text-slate-500">{currency.format(paidExpenses)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${revenueCollected > 0 ? Math.min(100, Math.round((paidExpenses / revenueCollected) * 100)) : 0}%` }} />
+            </div>
+          </div>
+          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${netPosition >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
+            <span className="text-xs font-semibold text-slate-700">= Net Position</span>
+            <span className={`text-base font-bold ${netPosition >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{currency.format(netPosition)}</span>
+          </div>
         </div>
-        <div className={`rounded-[2rem] border bg-white p-4 shadow-sm md:p-5 ${outstandingBalance > 0 ? "border-amber-200" : "border-slate-200"}`}>
-          <p className="text-xs text-slate-500">Outstanding Balance</p>
-          <p className={`mt-1.5 text-2xl font-bold tracking-tight md:text-3xl ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</p>
-          {overdueCount > 0 ? (
-            <p className="mt-1 text-[10px] font-semibold text-rose-600">{overdueCount} invoice{overdueCount !== 1 ? "s" : ""} overdue</p>
+        {revenueCollected === 0 && (
+          <p className="mt-4 text-[10px] text-slate-400">Bars will fill once invoices are marked paid.</p>
+        )}
+      </section>
+
+      {/* ── Business health row ───────────────────────────────────────────────── */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Revenue Collected */}
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Revenue Collected</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(revenueCollected)}</p>
+          {totalInvoiceValue > 0 ? (
+            <>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Math.round((revenueCollected / totalInvoiceValue) * 100))}%` }} />
+              </div>
+              <p className="mt-1.5 text-[10px] text-slate-400">{Math.min(100, Math.round((revenueCollected / totalInvoiceValue) * 100))}% of invoiced total</p>
+            </>
           ) : (
-            <p className="mt-1 text-[10px] text-slate-400">Balance due on open invoices</p>
+            <p className="mt-2 text-[10px] text-slate-400">No invoices yet</p>
           )}
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2 md:p-5 xl:col-span-1">
-          <p className="text-xs text-slate-500">Total Invoice Value</p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(totalInvoiceValue)}</p>
-          <p className="mt-1 text-[10px] text-slate-400">
-            {normalizedInvoices.length} invoice{normalizedInvoices.length !== 1 ? "s" : ""} · {normalizedInvoices.filter((i) => i.status !== "Cancelled").length} active
-          </p>
+        {/* Outstanding */}
+        <div className={`rounded-[2rem] border bg-white p-4 shadow-sm md:p-5 ${outstandingBalance > 0 ? "border-amber-200" : "border-slate-200"}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Outstanding</p>
+          <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</p>
+          {overdueCount > 0 ? (
+            <span className="mt-2 inline-block rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold text-rose-700">
+              {overdueCount} overdue
+            </span>
+          ) : outstandingBalance > 0 ? (
+            <p className="mt-2 text-[10px] text-slate-400">Balance on open invoices</p>
+          ) : (
+            <p className="mt-2 text-[10px] text-slate-400">All clear</p>
+          )}
+        </div>
+        {/* Invoice Value */}
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Total Invoice Value</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(totalInvoiceValue)}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+              {normalizedInvoices.length} invoice{normalizedInvoices.length !== 1 ? "s" : ""}
+            </span>
+            {overdueCount > 0 && (
+              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold text-rose-700">
+                {overdueCount} overdue
+              </span>
+            )}
+          </div>
+        </div>
+        {/* Revenue Goal */}
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Revenue Goal</p>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${goalPercent >= 100 ? "bg-emerald-100 text-emerald-700" : goalPercent >= 50 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+              {goalPercent}%
+            </span>
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(revenueCollected)}</p>
+          <p className="mt-1 text-[10px] text-slate-400">of {currency.format(goal)}</p>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${goalPercent}%` }} />
+          </div>
         </div>
       </section>
 
-      {/* Supporting financial details */}
+      {/* ── Supporting financial details ──────────────────────────────────────── */}
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Financial Details</h2>
         <div className="grid gap-3 sm:grid-cols-3">
