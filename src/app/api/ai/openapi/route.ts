@@ -824,6 +824,86 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/lead-activity": {
+    post: {
+      operationId: "addLeadActivity",
+      summary: "Log a CRM lead communication entry",
+      description:
+        "Appends one communication entry to a CRM lead's history after founder confirmation. " +
+        "Show details and ask 'Shall I log this?' first. " +
+        "Append-only. leadId must match an existing CRM lead; returns 404 if not found.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                leadId: {
+                  type: "string",
+                  description: "ID of the CRM lead. Obtain from search results or getLead.",
+                },
+                type: {
+                  type: "string",
+                  enum: ["Call", "Email", "Text", "Meeting", "In Person", "Other"],
+                  description: "Communication type.",
+                },
+                date: {
+                  type: "string",
+                  format: "date",
+                  description: "Date of the communication (YYYY-MM-DD). Cannot be in the future.",
+                },
+                owner: {
+                  type: "string",
+                  description: "Founder who had the communication (Alliyah, Hannah, or Jordan).",
+                },
+                summary: {
+                  type: "string",
+                  maxLength: 500,
+                  description: "Brief factual summary of what happened. No PII (email/phone/address).",
+                },
+              },
+              required: ["leadId", "type", "date", "owner", "summary"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Communication entry appended successfully.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      id:        { type: "string", description: "Generated entry ID." },
+                      leadId:    { type: "string" },
+                      type:      { type: "string" },
+                      date:      { type: "string", format: "date" },
+                      owner:     { type: "string" },
+                      summary:   { type: "string" },
+                      loggedVia: { type: "string", enum: ["jarvis"] },
+                    },
+                    required: ["id", "leadId", "type", "date", "owner", "summary", "loggedVia"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Validation error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",
