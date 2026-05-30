@@ -1299,3 +1299,72 @@ test.describe("GET /api/ai/activity — authenticated", () => {
     expect(res.headers()["cache-control"]).toContain("no-store");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 7B — /api/ai/openapi (public schema endpoint, no auth required)
+// ---------------------------------------------------------------------------
+
+const OPENAPI = "/api/ai/openapi";
+
+const EXPECTED_PATHS = [
+  "/api/ai/health",
+  "/api/ai/summary",
+  "/api/ai/tasks",
+  "/api/ai/orders",
+  "/api/ai/crm",
+  "/api/ai/vendors",
+  "/api/ai/reports",
+  "/api/ai/finances",
+  "/api/ai/activity",
+  "/api/ai/search",
+  "/api/ai/client/{id}",
+  "/api/ai/order/{id}",
+  "/api/ai/lead/{id}",
+  "/api/ai/vendor/{id}",
+];
+
+test.describe("GET /api/ai/openapi", () => {
+  test("returns 200 without any auth", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("application/json");
+  });
+
+  test("response has required OpenAPI top-level fields", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    const body = await res.json() as Record<string, unknown>;
+    expect(typeof body.openapi).toBe("string");
+    expect((body.openapi as string).startsWith("3.")).toBe(true);
+    expect(typeof body.info).toBe("object");
+    expect(typeof body.paths).toBe("object");
+    expect(typeof body.components).toBe("object");
+  });
+
+  test("schema includes all 14 AI endpoint paths", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    const body = await res.json() as Record<string, unknown>;
+    const paths = body.paths as Record<string, unknown>;
+    for (const p of EXPECTED_PATHS) {
+      expect(paths, `Missing path ${p}`).toHaveProperty(p);
+    }
+  });
+
+  test("Cache-Control header is public (not no-store)", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    const cc = res.headers()["cache-control"] ?? "";
+    expect(cc).toContain("public");
+    expect(cc).not.toContain("no-store");
+  });
+
+  test("schema does not contain any secret values", async ({ request }) => {
+    const res = await request.get(OPENAPI);
+    const bodyText = await res.text();
+    // AI_API_SECRET value must never appear in schema output
+    const secret = process.env.AI_API_SECRET;
+    if (secret) {
+      expect(bodyText).not.toContain(secret);
+    }
+    // Literal string "AI_API_SECRET" may appear as a description but its value must not
+    expect(bodyText).not.toMatch(/"value"\s*:\s*".+"/);
+  });
+});
