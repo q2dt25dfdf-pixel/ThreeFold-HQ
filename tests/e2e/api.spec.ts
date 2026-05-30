@@ -1,6 +1,8 @@
 /**
  * Phase 4 — AI API endpoint smoke tests.
  * Phase 6A — /api/ai/tasks and /api/ai/orders endpoint tests appended below.
+ * Phase 6B — /api/ai/crm and /api/ai/vendors endpoint tests appended below.
+ * Phase 6C — /api/ai/reports endpoint tests appended below.
  *
  * Uses Playwright's request fixture (pure HTTP, no browser).
  * Runs under the "api" project which has no browser setup and no auth dependency.
@@ -699,6 +701,131 @@ test.describe("GET /api/ai/vendors — authenticated", () => {
 
   test("Cache-Control header includes no-store", async ({ request }) => {
     const res = await request.get(VENDORS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/reports  (Phase 6C)
+// ---------------------------------------------------------------------------
+
+const REPORTS = "/api/ai/reports";
+
+test.describe("GET /api/ai/reports — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(REPORTS);
+    expect(res.status()).toBe(401);
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/reports — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("returns 200 with valid token", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected top-level report sections", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    // Top-level structure
+    expect(typeof data.date).toBe("string");
+    expect(data.morningBriefing).toBeDefined();
+    expect(data.hqAuditor).toBeDefined();
+    expect(data.endOfDayReport).toBeDefined();
+
+    // Morning Briefing shape
+    const mb = data.morningBriefing;
+    expect(typeof mb.allClear).toBe("boolean");
+    expect(typeof mb.totalItems).toBe("number");
+    expect(typeof mb.taxDue).toBe("number");
+    expect(Array.isArray(mb.sections)).toBe(true);
+    for (const section of mb.sections as Record<string, unknown>[]) {
+      expect(typeof section.key).toBe("string");
+      expect(typeof section.label).toBe("string");
+      expect(typeof section.count).toBe("number");
+      expect(["red", "amber", "blue"]).toContain(section.tone);
+      expect(Array.isArray(section.items)).toBe(true);
+    }
+
+    // HQ Auditor shape
+    const hq = data.hqAuditor;
+    expect(typeof hq.systemHealthy).toBe("boolean");
+    expect(typeof hq.totalCritical).toBe("number");
+    expect(typeof hq.totalWarnings).toBe("number");
+    expect(typeof hq.taxDue).toBe("number");
+    expect(Array.isArray(hq.critical)).toBe(true);
+    expect(Array.isArray(hq.warnings)).toBe(true);
+
+    // End-of-Day Report shape
+    const eod = data.endOfDayReport;
+    expect(typeof eod.hasActivity).toBe("boolean");
+    expect(typeof eod.revenueToday).toBe("number");
+    expect(typeof eod.expenseTotalToday).toBe("number");
+    expect(Array.isArray(eod.payments)).toBe(true);
+    expect(Array.isArray(eod.completedTasks)).toBe(true);
+    expect(Array.isArray(eod.contactsLogged)).toBe(true);
+    expect(Array.isArray(eod.expensesToday)).toBe(true);
+
+    // contactsLogged must not expose summary content
+    for (const c of eod.contactsLogged as Record<string, unknown>[]) {
+      expect(typeof c.leadId).toBe("string");
+      expect(typeof c.leadName).toBe("string");
+      expect(typeof c.contactType).toBe("string");
+      expect(c).not.toHaveProperty("summary");
+    }
+  });
+
+  test("response does not expose PII or raw field names", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_CRM_VENDOR) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+    // Additional reports-specific forbidden fields
+    for (const key of ['"summary":', '"stripe":', '"payment_link":'] as const) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(REPORTS, {
       headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
     });
     expect(res.headers()["cache-control"]).toContain("no-store");
