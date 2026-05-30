@@ -424,3 +424,283 @@ test.describe("GET /api/ai/orders — authenticated", () => {
     expect(res.headers()["cache-control"]).toContain("no-store");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6B — /api/ai/crm and /api/ai/vendors
+// ---------------------------------------------------------------------------
+
+const CRM = "/api/ai/crm";
+const VENDORS = "/api/ai/vendors";
+
+// PII fields that must not appear in CRM or vendor responses.
+// Extends the Phase 6A list with CRM/vendor-specific sensitive field names.
+const FORBIDDEN_CRM_VENDOR = [
+  '"email":',
+  '"phone":',
+  '"address":',
+  '"notes":',
+  '"stripe":',
+  '"payment_link":',
+  '"client_email":',
+  '"client_phone":',
+  '"contact":',           // contact person name in leads and vendors
+  '"communicationHistory":',  // CRM communication log
+  '"pricingNotes":',      // vendor pricing info
+  '"questionnaire_files":',   // CRM questionnaire attachments
+];
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/crm — unauthenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/crm — unauthenticated", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(CRM);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 401 with a malformed Bearer token", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: "Bearer invalid-test-token" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns 401 with Authorization header missing Bearer prefix", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: "not-a-bearer-token" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/crm — authenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/crm — authenticated", () => {
+  test.beforeEach(skipIfNoSecret);
+
+  test("returns 200 with the correct token", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected top-level keys and numeric counts", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Object.keys(data).sort()).toEqual([
+      "byOwner",
+      "byStage",
+      "counts",
+      "leadsNeedingAttention",
+      "pipelineValue",
+    ]);
+
+    // counts
+    const { counts } = data;
+    for (const key of [
+      "total", "open", "won", "stale", "followUpsDueToday", "followUpsDueThisWeek",
+    ] as const) {
+      expect(typeof counts[key], `counts.${key}`).toBe("number");
+      expect(counts[key], `counts.${key}`).toBeGreaterThanOrEqual(0);
+    }
+    expect(counts.open + counts.won).toBeLessThanOrEqual(counts.total);
+    expect(counts.stale).toBeLessThanOrEqual(counts.open);
+
+    // pipelineValue
+    expect(typeof data.pipelineValue).toBe("number");
+    expect(data.pipelineValue).toBeGreaterThanOrEqual(0);
+
+    // byStage — array of { stage, count, totalValue }
+    expect(Array.isArray(data.byStage)).toBe(true);
+    for (const entry of data.byStage as Record<string, unknown>[]) {
+      expect(typeof entry.stage).toBe("string");
+      expect(typeof entry.count).toBe("number");
+      expect(typeof entry.totalValue).toBe("number");
+    }
+
+    // leadsNeedingAttention — bounded, safe fields only
+    expect(Array.isArray(data.leadsNeedingAttention)).toBe(true);
+    expect(data.leadsNeedingAttention.length).toBeLessThanOrEqual(10);
+    for (const lead of data.leadsNeedingAttention as Record<string, unknown>[]) {
+      // Must have these safe fields
+      expect(typeof lead.id).toBe("string");
+      expect(typeof lead.company).toBe("string");
+      expect(typeof lead.stage).toBe("string");
+      expect(typeof lead.owner).toBe("string");
+      // Must NOT have PII fields
+      expect(lead).not.toHaveProperty("email");
+      expect(lead).not.toHaveProperty("phone");
+      expect(lead).not.toHaveProperty("contact");
+      expect(lead).not.toHaveProperty("notes");
+      expect(lead).not.toHaveProperty("communicationHistory");
+    }
+  });
+
+  test("response does not expose PII or raw field names", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_CRM_VENDOR) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(CRM, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/vendors — unauthenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/vendors — unauthenticated", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(VENDORS);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 401 with a malformed Bearer token", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: "Bearer invalid-test-token" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns 401 with Authorization header missing Bearer prefix", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: "not-a-bearer-token" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/vendors — authenticated
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/vendors — authenticated", () => {
+  test.beforeEach(skipIfNoSecret);
+
+  test("returns 200 with the correct token", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected top-level keys and numeric counts", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Object.keys(data).sort()).toEqual([
+      "byCategory",
+      "byType",
+      "counts",
+      "sampleTracking",
+      "vendorsNeedingAttention",
+    ]);
+
+    // counts
+    const { counts } = data;
+    for (const key of ["total", "active", "review", "inactive", "preferred", "approved"] as const) {
+      expect(typeof counts[key], `counts.${key}`).toBe("number");
+      expect(counts[key], `counts.${key}`).toBeGreaterThanOrEqual(0);
+    }
+    expect(counts.active + counts.review + counts.inactive).toBeLessThanOrEqual(counts.total);
+
+    // sampleTracking — all numeric
+    const { sampleTracking } = data;
+    for (const key of [
+      "notRequested", "requested", "ordered", "received", "approved", "rejected",
+    ] as const) {
+      expect(typeof sampleTracking[key], `sampleTracking.${key}`).toBe("number");
+      expect(sampleTracking[key]).toBeGreaterThanOrEqual(0);
+    }
+
+    // byCategory and byType — arrays of { category/type, count }
+    expect(Array.isArray(data.byCategory)).toBe(true);
+    expect(Array.isArray(data.byType)).toBe(true);
+
+    // vendorsNeedingAttention — bounded, safe fields only
+    expect(Array.isArray(data.vendorsNeedingAttention)).toBe(true);
+    expect(data.vendorsNeedingAttention.length).toBeLessThanOrEqual(10);
+    for (const vendor of data.vendorsNeedingAttention as Record<string, unknown>[]) {
+      expect(typeof vendor.id).toBe("string");
+      expect(typeof vendor.name).toBe("string");
+      expect(typeof vendor.type).toBe("string");
+      expect(typeof vendor.status).toBe("string");
+      // Must NOT have PII fields
+      expect(vendor).not.toHaveProperty("email");
+      expect(vendor).not.toHaveProperty("phone");
+      expect(vendor).not.toHaveProperty("address");
+      expect(vendor).not.toHaveProperty("contact");
+      expect(vendor).not.toHaveProperty("notes");
+      expect(vendor).not.toHaveProperty("pricingNotes");
+    }
+  });
+
+  test("response does not expose PII or raw field names", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_CRM_VENDOR) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(VENDORS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
