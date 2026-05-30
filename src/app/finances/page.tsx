@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -1282,120 +1282,101 @@ function FinancesContent() {
       {/* ── Overview tab ─────────────────────────────────────────────────────── */}
       {activeTab === "overview" && (
       <>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: "Revenue Collected", value: currency.format(revenueCollected), trend: "up" },
-          { label: "Outstanding Balance", value: currency.format(outstandingBalance), trend: outstandingBalance > 0 ? "down" : "up" },
-          { label: "Total Invoice Value", value: currency.format(totalInvoiceValue), trend: "up" },
-          { label: "Overdue Count", value: overdueCount.toString(), trend: overdueCount > 0 ? "down" : "up" },
-        ].map((card) => {
-          const TrendIcon = card.trend === "up" ? TrendingUp : TrendingDown;
-          return (
-            <div key={card.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xl font-bold tracking-tight text-slate-950 md:text-3xl">{card.value}</p>
-                  <p className="mt-2 text-xs md:text-sm text-slate-600">{card.label}</p>
-                </div>
-                <span className={`rounded-2xl p-2 ${card.label === "Overdue Count" || card.trend === "down" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
-                  <TrendIcon className="h-5 w-5" aria-hidden="true" />
-                </span>
-              </div>
-            </div>
-          );
-        })}
+      {/* Hero: Gross Profit + Net Position */}
+      <section className="grid gap-4 sm:grid-cols-2">
+        <div className={`rounded-[2rem] p-5 md:p-6 ${estimatedGrossProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Est. Gross Profit</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">{currency.format(estimatedGrossProfit)}</p>
+          <p className="mt-2 text-[10px] text-white/70">Revenue collected − paid vendor costs</p>
+        </div>
+        <div className={`rounded-[2rem] p-5 md:p-6 ${netPosition >= 0 ? "bg-slate-900" : "bg-rose-700"}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Net Position</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">{currency.format(netPosition)}</p>
+          <p className="mt-2 text-[10px] text-white/70">Revenue − vendor costs − expenses</p>
+        </div>
       </section>
 
-      {/* ── Internal Financial Summary ─────────────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-950 md:text-lg">Internal Financial Summary</h2>
+      {/* Business health row */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-slate-500">Revenue Collected</p>
+          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(revenueCollected)}</p>
+          <p className="mt-1 text-[10px] text-slate-400">Cash in: deposits + final payments</p>
+        </div>
+        <div className={`rounded-[2rem] border bg-white p-4 shadow-sm md:p-5 ${outstandingBalance > 0 ? "border-amber-200" : "border-slate-200"}`}>
+          <p className="text-xs text-slate-500">Outstanding Balance</p>
+          <p className={`mt-1.5 text-2xl font-bold tracking-tight md:text-3xl ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</p>
+          {overdueCount > 0 ? (
+            <p className="mt-1 text-[10px] font-semibold text-rose-600">{overdueCount} invoice{overdueCount !== 1 ? "s" : ""} overdue</p>
+          ) : (
+            <p className="mt-1 text-[10px] text-slate-400">Balance due on open invoices</p>
+          )}
+        </div>
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2 md:p-5 xl:col-span-1">
+          <p className="text-xs text-slate-500">Total Invoice Value</p>
+          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{currency.format(totalInvoiceValue)}</p>
           <p className="mt-1 text-[10px] text-slate-400">
-            Based on current stored invoice, order, and expense data only. Does not include unsaved or external data.
+            {normalizedInvoices.length} invoice{normalizedInvoices.length !== 1 ? "s" : ""} · {normalizedInvoices.filter((i) => i.status !== "Cancelled").length} active
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {/* Paid Revenue */}
-          <div className="rounded-2xl bg-emerald-50 px-4 py-4">
-            <p className="text-xl font-bold tracking-tight text-emerald-700 md:text-2xl">{currency.format(revenueCollected)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Paid Revenue</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Cash collected: deposits + final payments received</p>
-          </div>
-          {/* Open Invoices */}
-          <div className={`rounded-2xl px-4 py-4 ${outstandingBalance > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${outstandingBalance > 0 ? "text-amber-700" : "text-slate-500"}`}>
-              {currency.format(outstandingBalance)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Open Invoices</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Balance remaining on invoices not yet paid in full</p>
-          </div>
-          {/* Total Vendor Costs */}
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">{currency.format(totalVendorCosts)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Total Vendor Costs</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Sum of all vendor costs recorded on orders</p>
-          </div>
-          {/* Unpaid Vendor Costs */}
-          <div className={`rounded-2xl px-4 py-4 ${unpaidVendorCosts > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${unpaidVendorCosts > 0 ? "text-rose-700" : "text-slate-500"}`}>
-              {currency.format(unpaidVendorCosts)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Unpaid Vendor Costs</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Vendor costs where payment status is not marked paid</p>
-          </div>
-          {/* Estimated Gross Profit */}
-          <div className={`rounded-2xl px-4 py-4 ${estimatedGrossProfit >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${estimatedGrossProfit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-              {currency.format(estimatedGrossProfit)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Est. Gross Profit</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Paid revenue minus paid vendor costs</p>
-          </div>
-          {/* Sales Tax Owed */}
-          <div className={`rounded-2xl px-4 py-4 ${taxDue > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${taxDue > 0 ? "text-rose-700" : "text-slate-950"}`}>
-              {currency.format(taxDue)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Sales Tax Owed</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">
-              {currency.format(taxCollectedYTD)} collected YTD · {currency.format(taxPaidYTD)} remitted
-            </p>
-            {hasTaxGap && (
-              <p className="mt-1.5 text-[10px] font-medium text-amber-700">
-                ⚠ Sales tax estimate may be incomplete — some paid invoices are missing tax data.
-              </p>
+      </section>
+
+      {/* Supporting financial details */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Financial Details</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {/* Vendor Costs */}
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Vendor Costs</p>
+            <p className="mt-2 text-xl font-bold text-slate-950">{currency.format(totalVendorCosts)}</p>
+            <div className="mt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-500">Paid</span>
+                <span className="font-semibold text-slate-700">{currency.format(paidVendorCosts)}</span>
+              </div>
+              <div className={`flex items-center justify-between text-[10px] ${unpaidVendorCosts > 0 ? "text-rose-600" : "text-slate-400"}`}>
+                <span>Unpaid</span>
+                <span className="font-semibold">{currency.format(unpaidVendorCosts)}</span>
+              </div>
+            </div>
+            {ordersWithoutVendorCost > 0 && (
+              <p className="mt-2 text-[9px] text-slate-400">{ordersWithoutVendorCost} order{ordersWithoutVendorCost !== 1 ? "s" : ""} missing cost</p>
             )}
           </div>
-          {/* Paid Expenses */}
-          <div className={`rounded-2xl px-4 py-4 ${paidExpenses > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${paidExpenses > 0 ? "text-rose-700" : "text-slate-500"}`}>
-              {currency.format(paidExpenses)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Paid Expenses</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">General business expenses marked paid</p>
+          {/* Expenses */}
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Expenses</p>
+            <p className="mt-2 text-xl font-bold text-slate-950">{currency.format(paidExpenses + unpaidExpenses)}</p>
+            <div className="mt-3 space-y-1.5">
+              <div className={`flex items-center justify-between text-[10px] ${paidExpenses > 0 ? "text-rose-600" : "text-slate-500"}`}>
+                <span>Paid</span>
+                <span className="font-semibold">{currency.format(paidExpenses)}</span>
+              </div>
+              <div className={`flex items-center justify-between text-[10px] ${unpaidExpenses > 0 ? "text-amber-600" : "text-slate-400"}`}>
+                <span>Unpaid</span>
+                <span className="font-semibold">{currency.format(unpaidExpenses)}</span>
+              </div>
+            </div>
           </div>
-          {/* Unpaid Expenses */}
-          <div className={`rounded-2xl px-4 py-4 ${unpaidExpenses > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${unpaidExpenses > 0 ? "text-amber-700" : "text-slate-500"}`}>
-              {currency.format(unpaidExpenses)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Unpaid Expenses</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">General business expenses not yet paid</p>
-          </div>
-          {/* Net Position */}
-          <div className={`rounded-2xl px-4 py-4 ${netPosition >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${netPosition >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-              {currency.format(netPosition)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Net Position</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Paid revenue − paid vendor costs − paid expenses</p>
+          {/* Sales Tax */}
+          <div className={`rounded-2xl p-4 ${taxDue > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.15em] ${taxDue > 0 ? "text-rose-400" : "text-slate-400"}`}>Sales Tax Owed</p>
+            <p className={`mt-2 text-xl font-bold ${taxDue > 0 ? "text-rose-700" : "text-slate-950"}`}>{currency.format(taxDue)}</p>
+            <div className="mt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-slate-500">
+                <span>Collected YTD</span>
+                <span className="font-semibold text-slate-700">{currency.format(taxCollectedYTD)}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-slate-500">
+                <span>Remitted YTD</span>
+                <span className="font-semibold text-slate-700">{currency.format(taxPaidYTD)}</span>
+              </div>
+            </div>
+            {hasTaxGap && (
+              <p className="mt-2 text-[9px] font-medium text-amber-600">⚠ Some invoices missing tax data</p>
+            )}
           </div>
         </div>
-        {ordersWithoutVendorCost > 0 && (
-          <p className="mt-3 text-[10px] text-slate-400">
-            {ordersWithoutVendorCost} active order{ordersWithoutVendorCost !== 1 ? "s" : ""} have no vendor cost recorded — vendor cost totals may be understated.
-          </p>
-        )}
       </section>
       </>
       )}

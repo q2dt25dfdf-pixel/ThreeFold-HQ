@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ModalShell from "@/components/ModalShell";
-import { Box, Edit2, Package, Printer, Search, Trash2 } from "lucide-react";
+import { Edit2, Search, Trash2 } from "lucide-react";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
@@ -104,6 +104,21 @@ const emptyForm: Omit<Vendor, "id"> = {
   status: "Review",
   jobs: 0,
 };
+type VendorTab = "all" | "production" | "suppliers" | "specialty";
+const VENDOR_TABS: { value: VendorTab; label: string }[] = [
+  { value: "all",        label: "All"        },
+  { value: "production", label: "Production" },
+  { value: "suppliers",  label: "Suppliers"  },
+  { value: "specialty",  label: "Specialty"  },
+];
+
+function vendorTabFor(type: string): VendorTab {
+  const t = type.toLowerCase();
+  if (t.includes("screen") || t.includes("dtf") || t.includes("dtg") || t.includes("embroidery")) return "production";
+  if (t.includes("blank") || t.includes("fulfillment") || t.includes("packaging") || t.includes("shipping") || t.includes("supplier")) return "suppliers";
+  return "specialty";
+}
+
 export default function VendorsPage() {
   const router = useRouter();
   const { data: vendors, upsertItem, deleteItem, loading, error } = useSupabaseTable<Vendor>("vendors", defaultVendors);
@@ -111,6 +126,7 @@ export default function VendorsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState("");
   const [query, setQuery] = useState("");
+  const [activeVendorTab, setActiveVendorTab] = useState<VendorTab>("all");
   const [form, setForm] = useState(emptyForm);
   const addSave = useSaveState();
   const editSave = useSaveState();
@@ -123,37 +139,9 @@ export default function VendorsPage() {
   const visible = vendors.filter((vendor) =>
     Object.values(vendor).join(" ").toLowerCase().includes(query.toLowerCase()),
   );
-  const groupedVendors = [
-    {
-      label: "Blank Suppliers",
-      headerClass: "border-l-blue-500",
-      icon: Package,
-      vendors: visible.filter((vendor) => {
-        const type = vendor.type.toLowerCase();
-        return type.includes("blank") || type.includes("supplier");
-      }),
-    },
-    {
-      label: "Print & Production",
-      headerClass: "border-l-violet-500",
-      icon: Printer,
-      vendors: visible.filter((vendor) => {
-        const type = vendor.type.toLowerCase();
-        return type.includes("print") || type.includes("dtg") || type.includes("screen") || type.includes("embroidery");
-      }),
-    },
-    {
-      label: "Other",
-      headerClass: "border-l-slate-400",
-      icon: Box,
-      vendors: visible.filter((vendor) => {
-        const type = vendor.type.toLowerCase();
-        const isBlankSupplier = type.includes("blank") || type.includes("supplier");
-        const isPrintProduction = type.includes("print") || type.includes("dtg") || type.includes("screen") || type.includes("embroidery");
-        return !isBlankSupplier && !isPrintProduction;
-      }),
-    },
-  ].filter((section) => section.vendors.length > 0);
+  const tabVendors = activeVendorTab === "all"
+    ? visible
+    : visible.filter((v) => vendorTabFor(v.type) === activeVendorTab);
 
   const handleAdd = async () => {
     if (!form.name.trim()) {
@@ -445,18 +433,29 @@ export default function VendorsPage() {
         </div>
       </div>
 
-      <div className="space-y-8">
-        {groupedVendors.map((section, sectionIndex) => {
-          const Icon = section.icon;
+      <>
+      {/* Vendor tab bar */}
+      <div className="overflow-x-auto pb-1">
+        <nav className="inline-flex w-fit min-w-max items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1" aria-label="Vendor categories">
+          {VENDOR_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setActiveVendorTab(tab.value)}
+              className={`min-h-10 rounded-full px-4 py-2 text-xs font-semibold transition md:text-sm ${
+                activeVendorTab === tab.value
+                  ? "bg-white text-slate-950 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-          return (
-            <section key={section.label} className={sectionIndex > 0 ? "border-t border-slate-300 pt-8" : ""}>
-              <div className={`mb-4 flex items-center gap-2 border-l-4 pl-3 text-base md:text-lg font-bold text-slate-950 ${section.headerClass}`}>
-                <Icon className="h-5 w-5" aria-hidden="true" />
-                <h2>{section.label}</h2>
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {section.vendors.map((vendor) => (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {tabVendors.map((vendor) => (
                   <article
                     key={vendor.id}
                     role="button"
@@ -553,17 +552,14 @@ export default function VendorsPage() {
                       </div>
                     )}
                   </article>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-        {groupedVendors.length === 0 && (
-          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-xs text-slate-500 md:text-sm">
-            No vendors match your search.
-          </div>
-        )}
+        ))}
       </div>
+      {tabVendors.length === 0 && (
+        <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-xs text-slate-500 md:text-sm">
+          {visible.length === 0 ? "No vendors match your search." : "No vendors in this category yet."}
+        </div>
+      )}
+      </>
 
       {showModal && (
         <ModalShell
