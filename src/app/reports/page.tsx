@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronUp, ArrowRight, Loader2,
 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
-import { businessTodayISO, businessTodayLabel, addDaysToISODate } from "@/lib/businessDate";
+import { businessTodayISO, businessTodayLabel, dateToBusinessISO, addDaysToISODate } from "@/lib/businessDate";
 import {
   INACTIVE_FINANCE_STATUSES,
   INACTIVE_ORDER_STATUSES,
@@ -16,7 +16,7 @@ import {
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 import { hasActiveFollowUpTask, hasFollowUpDate } from "@/lib/followUps";
 import { normalizeCRMStage } from "@/lib/dashboardMetrics";
-import { parseAmount } from "@/lib/invoiceCalc";
+import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
@@ -65,6 +65,43 @@ type AuditReport = {
   totalWarnings: number;
 };
 
+// ── End-of-Day types ──────────────────────────────────────────────────────────
+
+type DayPayment = {
+  id: string;
+  name: string;
+  amount: number;
+  type: "deposit" | "final";
+};
+
+type DayTask = {
+  id: string;
+  name: string;
+  assignedTo: string;
+};
+
+type DayContact = {
+  leadId: string;
+  leadName: string;
+  contactType: string;
+};
+
+type DayExpense = {
+  id: string;
+  name: string;
+  amount: number;
+};
+
+type EndOfDayReport = {
+  revenueToday: number;
+  payments: DayPayment[];
+  completedTasks: DayTask[];
+  contactsLogged: DayContact[];
+  expensesToday: DayExpense[];
+  expenseTotalToday: number;
+  hasActivity: boolean;
+};
+
 // ── Morning Briefing computation ──────────────────────────────────────────────
 
 function computeBriefing(
@@ -104,7 +141,6 @@ function computeBriefing(
   });
 
   const taxDue = calcTaxDue(invoices, taxPayments, currentYear);
-
   const sections: BriefingSection[] = [];
 
   if (overdueTasks.length > 0) {
@@ -209,7 +245,6 @@ function computeAudit(
   const activeOrders = orders.filter((o) => !INACTIVE_ORDER_STATUSES.has(statusText(o)));
   const liveInvoices = invoices.filter((inv) => !INACTIVE_FINANCE_STATUSES.has(statusText(inv)));
 
-  // ── Critical: active orders missing client ──────────────────────────────────
   const ordersNoClient = activeOrders.filter(
     (o) => !stringField(o, "client") && !stringField(o, "client_id"),
   );
@@ -228,7 +263,6 @@ function computeAudit(
     });
   }
 
-  // ── Critical: active orders missing due date ────────────────────────────────
   const ordersNoDueDate = activeOrders.filter((o) => {
     const date = stringField(o, "estimatedDeliveryDate") || stringField(o, "dueDate");
     return !date || date === "TBD";
@@ -248,7 +282,6 @@ function computeAudit(
     });
   }
 
-  // ── Critical: active orders missing vendor ──────────────────────────────────
   const ordersNoVendor = activeOrders.filter(
     (o) => !stringField(o, "vendor") && !stringField(o, "vendor_id"),
   );
@@ -267,7 +300,6 @@ function computeAudit(
     });
   }
 
-  // ── Critical: live invoices with $0 total ───────────────────────────────────
   const invoicesNoAmount = liveInvoices.filter(
     (inv) => parseAmount(inv.total_amount) <= 0 && parseAmount(inv.amount) <= 0,
   );
@@ -289,7 +321,6 @@ function computeAudit(
     });
   }
 
-  // ── Critical: live invoices missing client identification ───────────────────
   const invoicesNoClient = liveInvoices.filter(
     (inv) =>
       !stringField(inv, "client") &&
@@ -315,7 +346,6 @@ function computeAudit(
     });
   }
 
-  // ── Critical: invoices with orphaned order_id ───────────────────────────────
   const orphanedInvoices = liveInvoices.filter((inv) => {
     const orderId = stringField(inv, "order_id");
     return orderId !== "" && !orderIdSet.has(orderId);
@@ -338,7 +368,6 @@ function computeAudit(
     });
   }
 
-  // ── Critical: open tasks with no title ─────────────────────────────────────
   const tasksNoTitle = tasks.filter((task) => {
     if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
     return !stringField(task, "title").trim();
@@ -358,7 +387,6 @@ function computeAudit(
     });
   }
 
-  // ── Warnings: overdue tasks ─────────────────────────────────────────────────
   const overdueTasks = tasks.filter((task) => {
     if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
     const due = readField(task, "dueDate", "due_date");
@@ -379,7 +407,6 @@ function computeAudit(
     });
   }
 
-  // ── Warnings: unpaid invoices ───────────────────────────────────────────────
   const unpaidInvoices = invoices.filter((inv) => {
     if (INACTIVE_FINANCE_STATUSES.has(statusText(inv))) return false;
     return inv.final_paid !== true;
@@ -409,7 +436,6 @@ function computeAudit(
     });
   }
 
-  // ── Warnings: stale leads ───────────────────────────────────────────────────
   const staleLeads = leads.filter((lead) => {
     if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
     const followUp = readField(lead, "followUpDate", "follow_up_date");
@@ -437,15 +463,109 @@ function computeAudit(
   return { critical, warnings, taxDue, totalCritical, totalWarnings };
 }
 
+// ── End-of-Day computation ────────────────────────────────────────────────────
+
+function computeEndOfDay(
+  tasks: Row[],
+  invoices: Row[],
+  leads: Row[],
+  expenses: Row[],
+  todayISO: string,
+): EndOfDayReport {
+  // Tasks completed today — completedAt is a full ISO timestamp; convert to business date
+  const completedTasks: DayTask[] = tasks
+    .filter((task) => {
+      const raw = stringField(task, "completedAt") || stringField(task, "completed_at");
+      if (!raw) return false;
+      const d = new Date(raw);
+      return !Number.isNaN(d.getTime()) && dateToBusinessISO(d) === todayISO;
+    })
+    .map((task) => ({
+      id: task.id,
+      name: stringField(task, "title", "Untitled task"),
+      assignedTo: stringField(task, "assignedTo") || stringField(task, "owner", ""),
+    }));
+
+  // Invoice payments received today (deposit_paid_date / final_paid_date are ISO date strings)
+  const payments: DayPayment[] = invoices
+    .filter((inv) => !INACTIVE_FINANCE_STATUSES.has(statusText(inv)))
+    .flatMap((inv) => {
+      const events: DayPayment[] = [];
+      const depositDate = stringField(inv, "deposit_paid_date");
+      const finalDate   = stringField(inv, "final_paid_date");
+      const name =
+        stringField(inv, "orderName") ||
+        stringField(inv, "order_name") ||
+        stringField(inv, "client", "Invoice");
+
+      if (inv.deposit_paid === true && depositDate === todayISO) {
+        events.push({ id: `${inv.id}-dep`, name, amount: calcDeposit(inv), type: "deposit" });
+      }
+      if (inv.final_paid === true && finalDate === todayISO) {
+        const amount = inv.deposit_paid === true ? calcBalance(inv) : calcTotal(inv);
+        events.push({ id: `${inv.id}-fin`, name, amount, type: "final" });
+      }
+      return events;
+    });
+
+  const revenueToday = payments.reduce((sum, p) => sum + p.amount, 0);
+
+  // CRM contacts logged today — each entry in communicationHistory has a date field
+  const contactsLogged: DayContact[] = [];
+  for (const lead of leads) {
+    const rawHistory = lead.communicationHistory;
+    if (!Array.isArray(rawHistory)) continue;
+    for (const entry of rawHistory) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const e = entry as Record<string, unknown>;
+      if (stringField(e, "date") === todayISO) {
+        contactsLogged.push({
+          leadId: lead.id,
+          leadName: stringField(lead, "company", stringField(lead, "name", "Lead")),
+          contactType: stringField(e, "type", "Contact"),
+        });
+      }
+    }
+  }
+
+  // Expenses recorded today — expense_date is an ISO date string
+  const expensesToday: DayExpense[] = expenses
+    .filter((exp) => stringField(exp, "expense_date") === todayISO)
+    .map((exp) => {
+      const cents = exp.amount_cents;
+      return {
+        id: exp.id,
+        name: stringField(exp, "vendor_name") || stringField(exp, "category", "Expense"),
+        amount: typeof cents === "number" ? cents / 100 : parseAmount(exp.amount ?? 0),
+      };
+    });
+
+  const expenseTotalToday = expensesToday.reduce((sum, e) => sum + e.amount, 0);
+
+  return {
+    revenueToday,
+    payments,
+    completedTasks,
+    contactsLogged,
+    expensesToday,
+    expenseTotalToday,
+    hasActivity:
+      payments.length > 0 ||
+      completedTasks.length > 0 ||
+      contactsLogged.length > 0 ||
+      expensesToday.length > 0,
+  };
+}
+
 // ── Shared sales-tax helper ───────────────────────────────────────────────────
 
 function calcTaxDue(invoices: Row[], taxPayments: Row[], currentYear: string): number {
   const collected = invoices.reduce((sum, inv) => {
     const taxAmt = parseAmount(inv.sales_tax_amount);
     if (taxAmt <= 0) return sum;
-    const grandTotal = parseAmount(inv.grand_total ?? inv.total_amount);
-    const deposit = parseAmount(inv.deposit_amount);
-    const finalDate = String(inv.final_paid_date ?? "");
+    const grandTotal  = parseAmount(inv.grand_total ?? inv.total_amount);
+    const deposit     = parseAmount(inv.deposit_amount);
+    const finalDate   = String(inv.final_paid_date ?? "");
     const depositDate = String(inv.deposit_paid_date ?? "");
     if (inv.final_paid === true && finalDate.startsWith(currentYear)) return sum + taxAmt;
     if (inv.deposit_paid === true && depositDate.startsWith(currentYear) && inv.final_paid !== true) {
@@ -471,22 +591,28 @@ function calcTaxDue(invoices: Row[], taxPayments: Row[], currentYear: string): n
 
 const toneStyles = {
   red: {
-    badge: "bg-rose-100 text-rose-700",
-    heading: "text-rose-700",
-    dot: "bg-rose-400",
+    badge:      "bg-rose-100 text-rose-700",
+    heading:    "text-rose-700",
+    dot:        "bg-rose-400",
     itemBorder: "border-rose-100 bg-rose-50 hover:bg-rose-100",
   },
   amber: {
-    badge: "bg-amber-100 text-amber-700",
-    heading: "text-amber-700",
-    dot: "bg-amber-400",
+    badge:      "bg-amber-100 text-amber-700",
+    heading:    "text-amber-700",
+    dot:        "bg-amber-400",
     itemBorder: "border-amber-100 bg-amber-50 hover:bg-amber-100",
   },
   blue: {
-    badge: "bg-blue-100 text-blue-700",
-    heading: "text-blue-700",
-    dot: "bg-blue-400",
+    badge:      "bg-blue-100 text-blue-700",
+    heading:    "text-blue-700",
+    dot:        "bg-blue-400",
     itemBorder: "border-blue-100 bg-blue-50 hover:bg-blue-100",
+  },
+  slate: {
+    badge:      "bg-slate-100 text-slate-600",
+    heading:    "text-slate-700",
+    dot:        "bg-slate-400",
+    itemBorder: "border-slate-100 bg-slate-50 hover:bg-slate-100",
   },
 };
 
@@ -574,6 +700,32 @@ function TaxDueCard({ taxDue }: { taxDue: number }) {
   );
 }
 
+function StatTile({
+  label,
+  value,
+  href,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  href: string;
+  accent?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex flex-col gap-1 rounded-[2rem] border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
+        accent ? "border-emerald-200" : "border-slate-200"
+      }`}
+    >
+      <p className={`text-2xl font-bold tracking-tight md:text-3xl ${accent ? "text-emerald-700" : "text-slate-950"}`}>
+        {value}
+      </p>
+      <p className="text-xs text-slate-500 md:text-sm">{label}</p>
+    </Link>
+  );
+}
+
 // ── Morning Briefing panel ────────────────────────────────────────────────────
 
 function BriefingPanel({ briefing, loading }: { briefing: Briefing; loading: boolean }) {
@@ -643,22 +795,11 @@ function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean
       {audit.critical.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700">
-              Critical Issues
-            </span>
-            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
-              {audit.totalCritical}
-            </span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700">Critical Issues</span>
+            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">{audit.totalCritical}</span>
           </div>
           {audit.critical.map((section) => (
-            <SectionCard
-              key={section.key}
-              label={section.label}
-              count={section.count}
-              items={section.items}
-              allHref={section.allHref}
-              toneKey="red"
-            />
+            <SectionCard key={section.key} label={section.label} count={section.count} items={section.items} allHref={section.allHref} toneKey="red" />
           ))}
         </div>
       )}
@@ -666,22 +807,11 @@ function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean
       {(audit.warnings.length > 0 || audit.taxDue > 0) && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
-              Warnings
-            </span>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-              {audit.totalWarnings}
-            </span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">Warnings</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{audit.totalWarnings}</span>
           </div>
           {audit.warnings.map((section) => (
-            <SectionCard
-              key={section.key}
-              label={section.label}
-              count={section.count}
-              items={section.items}
-              allHref={section.allHref}
-              toneKey="amber"
-            />
+            <SectionCard key={section.key} label={section.label} count={section.count} items={section.items} allHref={section.allHref} toneKey="amber" />
           ))}
           {audit.taxDue > 0 && <TaxDueCard taxDue={audit.taxDue} />}
         </div>
@@ -690,24 +820,130 @@ function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean
   );
 }
 
+// ── End-of-Day panel ──────────────────────────────────────────────────────────
+
+function EndOfDayPanel({ report, loading }: { report: EndOfDayReport; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-3 rounded-[2rem] border border-slate-200 bg-white p-8 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
+        Loading report…
+      </div>
+    );
+  }
+
+  if (!report.hasActivity) {
+    return (
+      <div className="flex items-center gap-4 rounded-[2rem] border border-slate-200 bg-white p-6">
+        <Moon className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden="true" />
+        <p className="text-sm font-semibold text-slate-700">No significant activity recorded today.</p>
+      </div>
+    );
+  }
+
+  const statTiles = [
+    report.revenueToday > 0 && { label: "Revenue Collected", value: currency.format(report.revenueToday), href: "/finances?tab=invoices", accent: true  },
+    report.payments.length > 0 && { label: `Payment${report.payments.length !== 1 ? "s" : ""} Received`,  value: String(report.payments.length),        href: "/finances?tab=invoices", accent: false },
+    report.completedTasks.length > 0 && { label: `Task${report.completedTasks.length !== 1 ? "s" : ""} Completed`, value: String(report.completedTasks.length), href: "/tasks",                 accent: false },
+    report.contactsLogged.length > 0 && { label: `Contact${report.contactsLogged.length !== 1 ? "s" : ""} Logged`,  value: String(report.contactsLogged.length), href: "/crm",                  accent: false },
+  ].filter(Boolean) as { label: string; value: string; href: string; accent: boolean }[];
+
+  return (
+    <div className="space-y-4">
+      {/* Summary stats */}
+      <div className={`grid gap-3 ${statTiles.length >= 4 ? "grid-cols-2 md:grid-cols-4" : statTiles.length === 3 ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"}`}>
+        {statTiles.map((tile) => (
+          <StatTile key={tile.label} label={tile.label} value={tile.value} href={tile.href} accent={tile.accent} />
+        ))}
+      </div>
+
+      {/* Payments detail */}
+      {report.payments.length > 0 && (
+        <SectionCard
+          label="Payments Received"
+          count={report.payments.length}
+          items={report.payments.slice(0, 5).map((p) => ({
+            id: p.id,
+            name: p.name,
+            detail: `${p.type === "deposit" ? "Deposit" : "Final payment"} — ${currency.format(p.amount)}`,
+            href: "/finances?tab=invoices",
+          }))}
+          allHref="/finances?tab=invoices"
+          toneKey="slate"
+        />
+      )}
+
+      {/* Tasks completed detail */}
+      {report.completedTasks.length > 0 && (
+        <SectionCard
+          label="Tasks Completed"
+          count={report.completedTasks.length}
+          items={report.completedTasks.slice(0, 5).map((task) => ({
+            id: task.id,
+            name: task.name,
+            detail: task.assignedTo || undefined,
+            href: "/tasks",
+          }))}
+          allHref="/tasks"
+          toneKey="slate"
+        />
+      )}
+
+      {/* Contacts logged detail */}
+      {report.contactsLogged.length > 0 && (
+        <SectionCard
+          label="Contacts Logged"
+          count={report.contactsLogged.length}
+          items={report.contactsLogged.slice(0, 5).map((c, i) => ({
+            id: `${c.leadId}-${i}`,
+            name: c.leadName,
+            detail: c.contactType,
+            href: "/crm",
+          }))}
+          allHref="/crm"
+          toneKey="slate"
+        />
+      )}
+
+      {/* Expenses detail */}
+      {report.expensesToday.length > 0 && (
+        <SectionCard
+          label="Expenses Recorded"
+          count={report.expensesToday.length}
+          items={report.expensesToday.slice(0, 5).map((exp) => ({
+            id: exp.id,
+            name: exp.name,
+            detail: currency.format(exp.amount),
+            href: "/finances?tab=expenses",
+          }))}
+          allHref="/finances?tab=expenses"
+          toneKey="slate"
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
-  const todayISO = businessTodayISO();
+  const todayISO          = businessTodayISO();
   const sevenDaysAheadISO = addDaysToISODate(todayISO, 7);
-  const currentYear = todayISO.slice(0, 4);
-  const todayLabel = businessTodayLabel();
+  const currentYear       = todayISO.slice(0, 4);
+  const todayLabel        = businessTodayLabel();
 
   const { data: tasks,       loading: loadingTasks    } = useSupabaseTable<Row>("tasks",              []);
   const { data: invoices,    loading: loadingInvoices } = useSupabaseTable<Row>("finances",           []);
   const { data: orders,      loading: loadingOrders   } = useSupabaseTable<Row>("orders",             []);
   const { data: leads,       loading: loadingLeads    } = useSupabaseTable<Row>("crm_leads",          []);
   const { data: taxPayments, loading: loadingTax      } = useSupabaseTable<Row>("sales_tax_payments", []);
+  const { data: expenses,    loading: loadingExpenses } = useSupabaseTable<Row>("expenses",           []);
 
-  const loading = loadingTasks || loadingInvoices || loadingOrders || loadingLeads || loadingTax;
+  const loading = loadingTasks || loadingInvoices || loadingOrders || loadingLeads || loadingTax || loadingExpenses;
 
   const [briefingOpen, setBriefingOpen] = useState(true);
-  const [auditorOpen, setAuditorOpen] = useState(false);
+  const [auditorOpen,  setAuditorOpen]  = useState(false);
+  const [eodOpen,      setEodOpen]      = useState(false);
 
   const briefing = useMemo(
     () => computeBriefing(tasks, invoices, orders, leads, taxPayments, todayISO, sevenDaysAheadISO, currentYear),
@@ -721,8 +957,15 @@ export default function ReportsPage() {
     [tasks, invoices, orders, leads, taxPayments],
   );
 
+  const endOfDay = useMemo(
+    () => computeEndOfDay(tasks, invoices, leads, expenses, todayISO),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, invoices, leads, expenses],
+  );
+
   const briefingAllClear = !loading && briefing.sections.length === 0 && briefing.taxDue === 0;
   const auditorAllClear  = !loading && audit.critical.length === 0 && audit.warnings.length === 0 && audit.taxDue === 0;
+  const eodQuiet         = !loading && !endOfDay.hasActivity;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
@@ -753,9 +996,7 @@ export default function ReportsPage() {
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
             ) : briefingAllClear ? (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-700">
-                All clear
-              </span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-700">All clear</span>
             ) : (
               <span className="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-rose-700">
                 {briefing.totalCount} item{briefing.totalCount !== 1 ? "s" : ""}
@@ -774,21 +1015,41 @@ export default function ReportsPage() {
           </div>
         </button>
 
-        {/* End-of-Day — coming soon */}
-        <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        {/* End-of-Day Report */}
+        <button
+          type="button"
+          onClick={() => setEodOpen((prev) => !prev)}
+          className={`flex flex-col gap-4 rounded-[2rem] border bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-7 ${
+            eodOpen ? "border-2 border-slate-950" : "border-slate-200"
+          }`}
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
               <Moon className="h-6 w-6 text-indigo-500" aria-hidden="true" />
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              Coming soon
-            </span>
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
+            ) : eodQuiet ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Quiet</span>
+            ) : endOfDay.revenueToday > 0 ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-700">
+                {currency.format(endOfDay.revenueToday)}
+              </span>
+            ) : (
+              <span className="rounded-full bg-indigo-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-700">Active</span>
+            )}
           </div>
           <div className="flex-1">
             <h2 className="text-base font-semibold text-slate-950">End-of-Day Report</h2>
-            <p className="mt-1 text-xs text-slate-500 md:text-sm">What changed today</p>
+            <p className="mt-1 text-xs text-slate-500 md:text-sm">What happened today</p>
           </div>
-        </div>
+          <div className="flex items-center gap-1 text-xs font-semibold text-slate-500">
+            {eodOpen
+              ? <><span>Close</span><ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /></>
+              : <><span>Open</span><ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /></>
+            }
+          </div>
+        </button>
 
         {/* HQ Auditor */}
         <button
@@ -805,9 +1066,7 @@ export default function ReportsPage() {
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
             ) : auditorAllClear ? (
-              <span className="rounded-full bg-teal-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-teal-700">
-                Healthy
-              </span>
+              <span className="rounded-full bg-teal-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-teal-700">Healthy</span>
             ) : audit.totalCritical > 0 ? (
               <span className="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-rose-700">
                 {audit.totalCritical} critical
@@ -841,6 +1100,17 @@ export default function ReportsPage() {
             <p className="text-xs text-slate-500">{todayLabel}</p>
           </div>
           <BriefingPanel briefing={briefing} loading={loading} />
+        </div>
+      )}
+
+      {/* End-of-Day panel */}
+      {eodOpen && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950 md:text-base">End-of-Day Report</h2>
+            <p className="text-xs text-slate-500">{todayLabel}</p>
+          </div>
+          <EndOfDayPanel report={endOfDay} loading={loading} />
         </div>
       )}
 
