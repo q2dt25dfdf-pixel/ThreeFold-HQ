@@ -47,7 +47,7 @@ export default defineConfig({
     // ── Desktop (1440×900) ──────────────────────────────────────────────────
     {
       name: "desktop",
-      testIgnore: "**/api.spec.ts",
+      testIgnore: ["**/api.spec.ts", "**/internal-api.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -59,7 +59,7 @@ export default defineConfig({
     // ── Mobile (390×844 — iPhone 14 Pro) ────────────────────────────────────
     {
       name: "mobile",
-      testIgnore: "**/api.spec.ts",
+      testIgnore: ["**/api.spec.ts", "**/internal-api.spec.ts"],
       use: {
         ...devices["iPhone 14 Pro"],
         storageState: STORAGE_STATE,
@@ -72,7 +72,7 @@ export default defineConfig({
     // Runs independently of the auth setup step.
     {
       name: "api",
-      testMatch: "**/api.spec.ts",
+      testMatch: ["**/api.spec.ts", "**/internal-api.spec.ts"],
     },
   ],
 
