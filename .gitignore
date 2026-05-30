@@ -13,6 +13,11 @@
 # testing
 /coverage
 
+# playwright — auth state contains live session tokens, never commit
+/.auth/
+/playwright-report/
+/test-results/
+
 # next.js
 /.next/
 /out/
