@@ -2,7 +2,7 @@ import { pipelineStages, type PipelineStage } from "@/components/crm/types";
 import { FOUNDERS, INACTIVE_FINANCE_STATUSES, INACTIVE_ORDER_STATUSES, TASK_DONE_STATUSES } from "@/lib/constants";
 import { addDaysToISODate, dateOnlyToDate } from "@/lib/businessDate";
 import { calcBalance, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
-import { isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
+import { hasActiveFollowUpTask, hasFollowUpDate, isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 
 export type DashboardRecord = Record<string, unknown> & { id: string };
@@ -323,4 +323,51 @@ export function needsAttention(
 
   const toneOrder = { red: 0, amber: 1, blue: 2, slate: 3 };
   return items.sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]).slice(0, 8);
+}
+
+// ── Attention summary (counts only) ──────────────────────────────────────────
+
+export type AttentionSummary = {
+  overdueTasks: number;
+  unpaidInvoices: number;
+  staleLeads: number;
+  ordersDueSoon: number;
+};
+
+export function attentionSummary(
+  orders: DashboardRecord[],
+  finances: DashboardRecord[],
+  tasks: DashboardRecord[],
+  leads: DashboardRecord[],
+  todayISO: string,
+  sevenDaysAheadISO: string,
+): AttentionSummary {
+  const overdueTasks = tasks.filter((task) => {
+    if (isTaskDone(task)) return false;
+    const due = readField(task, "dueDate", "due_date");
+    return Boolean(due && due !== "TBD" && /^\d{4}-\d{2}-\d{2}$/.test(due) && due < todayISO);
+  }).length;
+
+  const unpaidInvoices = finances.filter((invoice) => {
+    if (INACTIVE_FINANCE_STATUSES.has(statusText(invoice))) return false;
+    return invoice.final_paid !== true;
+  }).length;
+
+  // Stale: open lead with a follow-up date that has passed and still has an active follow-up task
+  const staleLeads = leads.filter((lead) => {
+    if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+    const followUp = readField(lead, "followUpDate", "follow_up_date");
+    return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
+  }).length;
+
+  const ordersDueSoon = orders.filter((order) => {
+    if (INACTIVE_ORDER_STATUSES.has(statusText(order))) return false;
+    const dueDate =
+      stringField(order, "estimatedDeliveryDate") ||
+      stringField(order, "dueDate") ||
+      stringField(order, "final_due_date");
+    return Boolean(dueDate && dueDate >= todayISO && dueDate <= sevenDaysAheadISO);
+  }).length;
+
+  return { overdueTasks, unpaidInvoices, staleLeads, ordersDueSoon };
 }

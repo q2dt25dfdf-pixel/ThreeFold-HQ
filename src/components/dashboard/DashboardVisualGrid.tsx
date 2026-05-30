@@ -30,6 +30,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import type {
   AttentionItem,
+  AttentionSummary,
   ChartDatum,
   DashboardRecord,
   FollowUpLoadDatum,
@@ -37,6 +38,7 @@ import type {
   TaskLoadDatum,
 } from "@/lib/dashboardMetrics";
 import {
+  attentionSummary,
   followUpLoad,
   invoiceHealth,
   monthlyRevenueProgress,
@@ -507,6 +509,100 @@ function NeedsAttentionCard({ items }: { items: AttentionItem[] }) {
   );
 }
 
+function AttentionBanner({ summary }: { summary: AttentionSummary }) {
+  const router = useRouter();
+
+  const allClear =
+    summary.overdueTasks === 0 &&
+    summary.unpaidInvoices === 0 &&
+    summary.staleLeads === 0 &&
+    summary.ordersDueSoon === 0;
+
+  if (allClear) {
+    return (
+      <div className="flex items-center gap-3 rounded-[2rem] border border-emerald-200 bg-emerald-50 px-5 py-4">
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+        <p className="text-sm font-semibold text-emerald-800">Nothing needs attention right now.</p>
+      </div>
+    );
+  }
+
+  const tiles = [
+    {
+      key: "tasks",
+      label: "Overdue Tasks",
+      count: summary.overdueTasks,
+      href: "/tasks",
+      active: summary.overdueTasks > 0,
+      containerActive: "border-red-200 bg-red-50 hover:bg-red-100",
+      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
+      countActive: "text-red-600",
+    },
+    {
+      key: "invoices",
+      label: "Unpaid Invoices",
+      count: summary.unpaidInvoices,
+      href: "/finances?tab=invoices",
+      active: summary.unpaidInvoices > 0,
+      containerActive: "border-amber-200 bg-amber-50 hover:bg-amber-100",
+      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
+      countActive: "text-amber-600",
+    },
+    {
+      key: "leads",
+      label: "Stale Leads",
+      count: summary.staleLeads,
+      href: "/crm",
+      active: summary.staleLeads > 0,
+      containerActive: "border-amber-200 bg-amber-50 hover:bg-amber-100",
+      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
+      countActive: "text-amber-600",
+    },
+    {
+      key: "orders",
+      label: "Orders Due Soon",
+      count: summary.ordersDueSoon,
+      href: "/orders",
+      active: summary.ordersDueSoon > 0,
+      containerActive: "border-blue-200 bg-blue-50 hover:bg-blue-100",
+      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
+      countActive: "text-blue-600",
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {tiles.map((tile) => (
+        <button
+          key={tile.key}
+          type="button"
+          onClick={() => router.push(tile.href)}
+          className={`group flex min-h-[5.5rem] flex-col rounded-[2rem] border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+            tile.active ? tile.containerActive : tile.containerIdle
+          }`}
+        >
+          <span
+            className={`text-3xl font-bold tracking-tight ${
+              tile.active ? tile.countActive : "text-slate-400"
+            }`}
+          >
+            {tile.count}
+          </span>
+          <span className="mt-1 flex-1 text-[10px] font-semibold uppercase leading-tight tracking-[0.18em] text-slate-500">
+            {tile.label}
+          </span>
+          <ArrowUpRight
+            className={`mt-2 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 ${
+              tile.active ? tile.countActive : "text-slate-300"
+            }`}
+            aria-hidden="true"
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function DashboardVisualGrid({ orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO }: Props) {
   const metrics = useMemo(() => ({
     revenue: monthlyRevenueProgress(finances, todayISO),
@@ -516,17 +612,21 @@ export default function DashboardVisualGrid({ orders, finances, tasks, crmLeads,
     followUps: followUpLoad(crmLeads, tasks, todayISO),
     taskLoad: taskLoadByFounder(tasks, todayISO),
     attention: needsAttention(orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO),
+    summary: attentionSummary(orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO),
   }), [crmLeads, finances, orders, sevenDaysAheadISO, tasks, todayISO]);
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-      <RevenueProgressCard metric={metrics.revenue} />
-      <PipelineOverviewCard data={metrics.pipeline} />
-      <InvoiceHealthCard data={metrics.invoices} />
-      <OrdersPipelineCard data={metrics.orderStatuses} />
-      <FollowUpLoadCard data={metrics.followUps} />
-      <TaskLoadCard data={metrics.taskLoad} />
-      <NeedsAttentionCard items={metrics.attention} />
+    <div className="space-y-5">
+      <AttentionBanner summary={metrics.summary} />
+      <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <RevenueProgressCard metric={metrics.revenue} />
+        <PipelineOverviewCard data={metrics.pipeline} />
+        <InvoiceHealthCard data={metrics.invoices} />
+        <OrdersPipelineCard data={metrics.orderStatuses} />
+        <FollowUpLoadCard data={metrics.followUps} />
+        <TaskLoadCard data={metrics.taskLoad} />
+        <NeedsAttentionCard items={metrics.attention} />
+      </div>
     </div>
   );
 }
