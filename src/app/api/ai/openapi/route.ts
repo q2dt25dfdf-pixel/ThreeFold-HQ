@@ -994,6 +994,73 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/pipeline-stage": {
+    post: {
+      operationId: "updatePipelineStage",
+      summary: "Move a CRM lead to a new pipeline stage",
+      description:
+        "Moves a CRM lead to a new pipeline stage after founder confirmation. " +
+        "Show current and new stage and ask 'Shall I move this?' first. " +
+        "Deposit Paid is blocked — that cascade must be done manually in HQ.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                leadId: {
+                  type: "string",
+                  description: "ID of the CRM lead. Obtain from search results or getLead.",
+                },
+                newStage: {
+                  type: "string",
+                  enum: [
+                    "New Lead", "Contacted", "Design Phase", "Client Review",
+                    "Design Approved", "Quote Sent", "Quote Approved",
+                  ],
+                  description: "Target pipeline stage. Deposit Paid is intentionally excluded — use HQ UI.",
+                },
+              },
+              required: ["leadId", "newStage"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Lead stage updated successfully.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      leadId:        { type: "string" },
+                      company:       { type: "string", nullable: true },
+                      previousStage: { type: "string", nullable: true },
+                      newStage:      { type: "string" },
+                      updatedVia:    { type: "string", enum: ["jarvis"] },
+                    },
+                    required: ["leadId", "previousStage", "newStage", "updatedVia"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Validation error or Deposit Paid blocked.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",
@@ -1285,7 +1352,11 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
       version: "1.0.0",
       description:
         "Operational API for ThreeFold Supply Co. intended for use by a personal ChatGPT Custom GPT (Jarvis). " +
-        "Primarily read-only. One confirmed write action exists: POST /api/ai/activity (log client activity after founder confirmation). " +
+        "Primarily read-only. Write actions (all require explicit founder confirmation before calling): " +
+        "POST /api/ai/activity (log client activity), " +
+        "POST /api/ai/lead-activity (log CRM lead communication), " +
+        "POST /api/ai/task (create HQ task), " +
+        "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
         "raw notes, Stripe links, or payment links. " +
         "All data endpoints require a Bearer token (AI_API_SECRET). " +
