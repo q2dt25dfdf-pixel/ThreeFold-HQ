@@ -1247,6 +1247,15 @@ function FinancesContent() {
   );
   };
 
+  // ── Tab badge counts ────────────────────────────────────────────────────────
+  // Invoices: any invoice with an outstanding balance (not fully paid, not draft, not cancelled)
+  const invoiceBadgeCount = normalizedInvoices.filter(
+    (inv) => !inv.final_paid && inv.status !== "Cancelled" && inv.status !== "Draft",
+  ).length;
+  // Expenses: expenses where payment_status is "unpaid"
+  const expenseBadgeCount = expenses.filter((e) => e.payment_status !== "paid").length;
+  // Sales Tax: taxDue is already computed — badge shows only when tax is owed
+
   if (loading) return <LoadingState label="Loading finances..." />;
 
   return (
@@ -1262,20 +1271,35 @@ function FinancesContent() {
       {/* Internal tab bar */}
       <div className="overflow-x-auto pb-1">
         <nav className="inline-flex w-fit min-w-max items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1" aria-label="Finance sections">
-          {FINANCE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => updateTab(tab.value)}
-              className={`min-h-10 rounded-full px-4 py-2 text-xs font-semibold transition md:text-sm ${
-                activeTab === tab.value
-                  ? "bg-white text-slate-950 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {FINANCE_TABS.map((tab) => {
+            const badge =
+              tab.value === "invoices" ? invoiceBadgeCount
+              : tab.value === "expenses" ? expenseBadgeCount
+              : null;
+            const hasTaxDot = tab.value === "sales-tax" && taxDue > 0;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => updateTab(tab.value)}
+                className={`inline-flex min-h-10 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition md:text-sm ${
+                  activeTab === tab.value
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {tab.label}
+                {badge != null && badge > 0 && (
+                  <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+                    {badge}
+                  </span>
+                )}
+                {hasTaxDot && (
+                  <span className="inline-block h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
