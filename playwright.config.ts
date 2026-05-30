@@ -47,6 +47,7 @@ export default defineConfig({
     // ── Desktop (1440×900) ──────────────────────────────────────────────────
     {
       name: "desktop",
+      testIgnore: "**/api.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -58,11 +59,20 @@ export default defineConfig({
     // ── Mobile (390×844 — iPhone 14 Pro) ────────────────────────────────────
     {
       name: "mobile",
+      testIgnore: "**/api.spec.ts",
       use: {
         ...devices["iPhone 14 Pro"],
         storageState: STORAGE_STATE,
       },
       dependencies: ["setup"],
+    },
+
+    // ── API (browser-free HTTP tests) ────────────────────────────────────────
+    // No storageState or browser setup — uses Playwright's request fixture only.
+    // Runs independently of the auth setup step.
+    {
+      name: "api",
+      testMatch: "**/api.spec.ts",
     },
   ],
 
