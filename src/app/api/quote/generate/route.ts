@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
-import { calcGrandTotal, calcSalesTax, salesTaxRate } from "@/lib/salesTax";
+import { calcGrandTotal, calcSalesTax } from "@/lib/salesTax";
+import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
 
 type LineItem = {
   name: string;
@@ -15,7 +16,11 @@ type LineItem = {
 
 export async function POST(request: NextRequest) {
   try {
-    const { leadId, clientName, clientEmail, totalAmount, lineItems, items, notes, subtotal: bodySubtotal, salesTaxRate: bodyTaxRate } =
+    const {
+      leadId, clientName, clientEmail, totalAmount, lineItems, items, notes,
+      subtotal: bodySubtotal,
+      clientAddressText, clientZip, deliveryZip,
+    } =
       await request.json() as {
         leadId: string;
         clientName: string;
@@ -25,7 +30,9 @@ export async function POST(request: NextRequest) {
         items: string[];
         notes: string;
         subtotal?: number;
-        salesTaxRate?: number;
+        clientAddressText?: string;
+        clientZip?: string;
+        deliveryZip?: string;
       };
 
     if (!leadId) {
@@ -51,7 +58,27 @@ export async function POST(request: NextRequest) {
         ? lineItems.reduce((sum, item) => sum + item.lineTotal, 0)
         : (bodySubtotal ?? totalAmount ?? 0);
 
-    const taxRate = bodyTaxRate ?? salesTaxRate();
+    // Supplement caller-supplied clientZip from the stored client record if missing
+    let resolvedClientZip = clientZip;
+    if (clientEmail && !resolvedClientZip) {
+      const { data: clientRows } = await db
+        .from("clients")
+        .select("data")
+        .filter("data->>email", "eq", clientEmail)
+        .limit(1);
+      if (clientRows?.[0]) {
+        const c = clientRows[0].data as Record<string, unknown>;
+        resolvedClientZip = c.zip as string | undefined;
+      }
+    }
+
+    const taxLookup = getSalesTaxRateForAddress({
+      deliveryZip,
+      clientZip: resolvedClientZip,
+      clientAddressText: clientAddressText ?? "",
+    });
+
+    const taxRate = taxLookup.rate;
     const salesTaxAmount = calcSalesTax(computedSubtotal, taxRate);
     const grandTotal = calcGrandTotal(computedSubtotal, taxRate);
 
@@ -69,6 +96,12 @@ export async function POST(request: NextRequest) {
       sales_tax_amount: salesTaxAmount,
       grand_total: grandTotal,
       total_amount: grandTotal,
+      // Tax rate metadata — stored for audit/display; does not affect downstream math
+      tax_rate_percent: taxRate,
+      tax_rate_source: taxLookup.source,
+      tax_zip_used: taxLookup.zipUsed ?? null,
+      tax_jurisdiction_label: taxLookup.jurisdictionLabel,
+      tax_rate_warning: taxLookup.warning ?? null,
       expiration_date: expirationDateStr,
       public_token: token,
       public_link: publicLink,
@@ -94,6 +127,11 @@ export async function POST(request: NextRequest) {
       publicLink,
       publicToken: token,
       expirationDate: expirationDateStr,
+      grandTotal,
+      salesTaxRate: taxRate,
+      salesTaxAmount,
+      taxJurisdictionLabel: taxLookup.jurisdictionLabel,
+      taxRateWarning: taxLookup.warning ?? null,
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

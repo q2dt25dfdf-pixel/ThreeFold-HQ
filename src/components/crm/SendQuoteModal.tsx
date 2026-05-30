@@ -14,6 +14,10 @@ interface QuoteResult {
   publicLink: string;
   expirationDate: string;
   grandTotal?: number;
+  salesTaxRate?: number;
+  salesTaxAmount?: number;
+  taxJurisdictionLabel?: string;
+  taxRateWarning?: string | null;
 }
 
 interface Props {
@@ -132,8 +136,8 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         leadId: lead.id,
         clientName: lead.company,
         clientEmail: lead.email,
+        clientAddressText: lead.companyProfile?.address ?? "",
         subtotal: computedSubtotal,
-        salesTaxRate: taxRate,
         totalAmount: computedGrandTotal,
         lineItems: validItems,
         items: validItems.map((i) => i.name),
@@ -148,10 +152,11 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           return;
         }
 
-        setQuoteResult({ ...data, grandTotal: computedGrandTotal });
+        const serverGrandTotal = data.grandTotal ?? computedGrandTotal;
+        setQuoteResult({ ...data, grandTotal: serverGrandTotal });
 
         const contactName = lead.contact || lead.company;
-        const grandTotalFormatted = fmtCurrency(computedGrandTotal);
+        const grandTotalFormatted = fmtCurrency(serverGrandTotal);
         const expFormatted = fmtDate(data.expirationDate);
         const isRevised = lead.stage === "Quote Sent";
 
@@ -428,25 +433,35 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
       {step === "preview" && quoteResult && (
         <div className="flex flex-col gap-6">
           {/* Quote info strip */}
-          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Quote #</p>
-              <p className="mt-1 text-sm font-semibold text-slate-950">{quoteResult.quoteNumber}</p>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Quote #</p>
+                <p className="mt-1 text-sm font-semibold text-slate-950">{quoteResult.quoteNumber}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expires</p>
+                <p className="mt-1 text-sm font-semibold text-slate-950">{fmtDate(quoteResult.expirationDate)}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Public link</p>
+                <a
+                  href={quoteResult.publicLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 block truncate text-xs text-blue-600 underline"
+                >
+                  {quoteResult.publicLink}
+                </a>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expires</p>
-              <p className="mt-1 text-sm font-semibold text-slate-950">{fmtDate(quoteResult.expirationDate)}</p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Public link</p>
-              <a
-                href={quoteResult.publicLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 block truncate text-xs text-blue-600 underline"
-              >
-                {quoteResult.publicLink}
-              </a>
+            <div className="mt-3 border-t border-slate-200 pt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+              <span>Tax: {fmtTaxRate(quoteResult.salesTaxRate ?? taxRate)}</span>
+              <span className="text-slate-300">·</span>
+              <span>{quoteResult.taxJurisdictionLabel ?? "Bay Area, CA (default)"}</span>
+              {quoteResult.taxRateWarning && (
+                <span className="text-amber-600">· {quoteResult.taxRateWarning}</span>
+              )}
             </div>
           </div>
 
