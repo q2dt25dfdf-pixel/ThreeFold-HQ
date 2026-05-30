@@ -19,20 +19,24 @@ import { normalizeCRMStage } from "@/lib/dashboardMetrics";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
 
+// ── Shared types ──────────────────────────────────────────────────────────────
+
 type Row = Record<string, unknown> & { id: string };
 
-type BriefingItem = {
+type ReportItem = {
   id: string;
   name: string;
   detail?: string;
   href: string;
 };
 
+// ── Briefing types ────────────────────────────────────────────────────────────
+
 type BriefingSection = {
   key: string;
   label: string;
   count: number;
-  items: BriefingItem[];
+  items: ReportItem[];
   allHref: string;
   tone: "red" | "amber" | "blue";
 };
@@ -42,6 +46,26 @@ type Briefing = {
   taxDue: number;
   totalCount: number;
 };
+
+// ── Auditor types ─────────────────────────────────────────────────────────────
+
+type AuditSection = {
+  key: string;
+  label: string;
+  count: number;
+  items: ReportItem[];
+  allHref: string;
+};
+
+type AuditReport = {
+  critical: AuditSection[];
+  warnings: AuditSection[];
+  taxDue: number;
+  totalCritical: number;
+  totalWarnings: number;
+};
+
+// ── Morning Briefing computation ──────────────────────────────────────────────
 
 function computeBriefing(
   tasks: Row[],
@@ -53,20 +77,17 @@ function computeBriefing(
   sevenDaysAheadISO: string,
   currentYear: string,
 ): Briefing {
-  // Overdue tasks: not done, ISO date, before today
   const overdueTasks = tasks.filter((task) => {
     if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
     const due = readField(task, "dueDate", "due_date");
     return Boolean(due && due !== "TBD" && /^\d{4}-\d{2}-\d{2}$/.test(due) && due < todayISO);
   });
 
-  // Unpaid invoices: not draft/cancelled and not fully paid
   const unpaidInvoices = invoices.filter((inv) => {
     if (INACTIVE_FINANCE_STATUSES.has(statusText(inv))) return false;
     return inv.final_paid !== true;
   });
 
-  // Orders due within 7 days: active, delivery date in [today, +7]
   const ordersDueSoon = orders.filter((order) => {
     if (INACTIVE_ORDER_STATUSES.has(statusText(order))) return false;
     const dueDate =
@@ -76,39 +97,13 @@ function computeBriefing(
     return Boolean(dueDate && dueDate >= todayISO && dueDate <= sevenDaysAheadISO);
   });
 
-  // Stale leads: follow-up date has passed and an active follow-up task still exists
   const staleLeads = leads.filter((lead) => {
     if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
     const followUp = readField(lead, "followUpDate", "follow_up_date");
     return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
   });
 
-  // Sales tax owed YTD: tax collected via payments minus tax remitted
-  const taxCollectedYTD = invoices.reduce((sum, inv) => {
-    const taxAmt = parseAmount(inv.sales_tax_amount);
-    if (taxAmt <= 0) return sum;
-    const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
-    const depositAmt = parseAmount(inv.deposit_amount);
-    const finalDate = String(inv.final_paid_date ?? "");
-    const depositDate = String(inv.deposit_paid_date ?? "");
-    if (inv.final_paid === true && finalDate.startsWith(currentYear)) return sum + taxAmt;
-    if (inv.deposit_paid === true && depositDate.startsWith(currentYear) && inv.final_paid !== true) {
-      return sum + calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
-    }
-    if (inv.final_paid === true && !finalDate.startsWith(currentYear) && inv.deposit_paid === true && depositDate.startsWith(currentYear)) {
-      return sum + calcDepositTax(taxAmt, depositAmt, grandTotalAmt);
-    }
-    return sum;
-  }, 0);
-
-  const taxPaidYTD = taxPayments
-    .filter((p) => String(p.payment_date ?? p.date ?? "").startsWith(currentYear))
-    .reduce((sum, p) => {
-      const cents = p.amount_cents;
-      return sum + (typeof cents === "number" ? cents / 100 : parseAmount(p.amount ?? 0));
-    }, 0);
-
-  const taxDue = Math.max(taxCollectedYTD - taxPaidYTD, 0);
+  const taxDue = calcTaxDue(invoices, taxPayments, currentYear);
 
   const sections: BriefingSection[] = [];
 
@@ -135,11 +130,10 @@ function computeBriefing(
       count: unpaidInvoices.length,
       items: unpaidInvoices.slice(0, 5).map((inv) => {
         const st = statusText(inv);
-        const detail = st === "overdue"
-          ? "Overdue"
-          : st.includes("deposit")
-          ? "Deposit pending"
-          : "Balance due";
+        const detail =
+          st === "overdue" ? "Overdue" :
+          st.includes("deposit") ? "Deposit pending" :
+          "Balance due";
         return {
           id: inv.id,
           name:
@@ -197,6 +191,284 @@ function computeBriefing(
   return { sections, taxDue, totalCount };
 }
 
+// ── HQ Auditor computation ────────────────────────────────────────────────────
+
+function computeAudit(
+  tasks: Row[],
+  invoices: Row[],
+  orders: Row[],
+  leads: Row[],
+  taxPayments: Row[],
+  todayISO: string,
+  currentYear: string,
+): AuditReport {
+  const critical: AuditSection[] = [];
+  const warnings: AuditSection[] = [];
+
+  const orderIdSet = new Set(orders.map((o) => o.id));
+  const activeOrders = orders.filter((o) => !INACTIVE_ORDER_STATUSES.has(statusText(o)));
+  const liveInvoices = invoices.filter((inv) => !INACTIVE_FINANCE_STATUSES.has(statusText(inv)));
+
+  // ── Critical: active orders missing client ──────────────────────────────────
+  const ordersNoClient = activeOrders.filter(
+    (o) => !stringField(o, "client") && !stringField(o, "client_id"),
+  );
+  if (ordersNoClient.length > 0) {
+    critical.push({
+      key: "orders-no-client",
+      label: "Orders Missing Client",
+      count: ordersNoClient.length,
+      items: ordersNoClient.slice(0, 5).map((o) => ({
+        id: o.id,
+        name: stringField(o, "orderName", `Order ${o.id.slice(0, 8)}`),
+        detail: "No client assigned",
+        href: `/orders/${o.id}`,
+      })),
+      allHref: "/orders",
+    });
+  }
+
+  // ── Critical: active orders missing due date ────────────────────────────────
+  const ordersNoDueDate = activeOrders.filter((o) => {
+    const date = stringField(o, "estimatedDeliveryDate") || stringField(o, "dueDate");
+    return !date || date === "TBD";
+  });
+  if (ordersNoDueDate.length > 0) {
+    critical.push({
+      key: "orders-no-date",
+      label: "Orders Missing Due Date",
+      count: ordersNoDueDate.length,
+      items: ordersNoDueDate.slice(0, 5).map((o) => ({
+        id: o.id,
+        name: stringField(o, "orderName", `Order ${o.id.slice(0, 8)}`),
+        detail: "No delivery date set",
+        href: `/orders/${o.id}`,
+      })),
+      allHref: "/orders",
+    });
+  }
+
+  // ── Critical: active orders missing vendor ──────────────────────────────────
+  const ordersNoVendor = activeOrders.filter(
+    (o) => !stringField(o, "vendor") && !stringField(o, "vendor_id"),
+  );
+  if (ordersNoVendor.length > 0) {
+    critical.push({
+      key: "orders-no-vendor",
+      label: "Orders Missing Vendor",
+      count: ordersNoVendor.length,
+      items: ordersNoVendor.slice(0, 5).map((o) => ({
+        id: o.id,
+        name: stringField(o, "orderName", `Order ${o.id.slice(0, 8)}`),
+        detail: "No vendor assigned",
+        href: `/orders/${o.id}`,
+      })),
+      allHref: "/orders",
+    });
+  }
+
+  // ── Critical: live invoices with $0 total ───────────────────────────────────
+  const invoicesNoAmount = liveInvoices.filter(
+    (inv) => parseAmount(inv.total_amount) <= 0 && parseAmount(inv.amount) <= 0,
+  );
+  if (invoicesNoAmount.length > 0) {
+    critical.push({
+      key: "invoices-no-amount",
+      label: "Invoices With No Amount",
+      count: invoicesNoAmount.length,
+      items: invoicesNoAmount.slice(0, 5).map((inv) => ({
+        id: inv.id,
+        name:
+          stringField(inv, "orderName") ||
+          stringField(inv, "order_name") ||
+          stringField(inv, "client", "Invoice"),
+        detail: "$0.00 total",
+        href: `/finances?tab=invoices&invoice=${inv.id}`,
+      })),
+      allHref: "/finances?tab=invoices",
+    });
+  }
+
+  // ── Critical: live invoices missing client identification ───────────────────
+  const invoicesNoClient = liveInvoices.filter(
+    (inv) =>
+      !stringField(inv, "client") &&
+      !stringField(inv, "client_id") &&
+      !stringField(inv, "client_name") &&
+      !stringField(inv, "client_company"),
+  );
+  if (invoicesNoClient.length > 0) {
+    critical.push({
+      key: "invoices-no-client",
+      label: "Invoices Missing Client",
+      count: invoicesNoClient.length,
+      items: invoicesNoClient.slice(0, 5).map((inv) => ({
+        id: inv.id,
+        name:
+          stringField(inv, "orderName") ||
+          stringField(inv, "order_name") ||
+          "Unnamed invoice",
+        detail: "No client assigned",
+        href: `/finances?tab=invoices&invoice=${inv.id}`,
+      })),
+      allHref: "/finances?tab=invoices",
+    });
+  }
+
+  // ── Critical: invoices with orphaned order_id ───────────────────────────────
+  const orphanedInvoices = liveInvoices.filter((inv) => {
+    const orderId = stringField(inv, "order_id");
+    return orderId !== "" && !orderIdSet.has(orderId);
+  });
+  if (orphanedInvoices.length > 0) {
+    critical.push({
+      key: "invoices-orphan",
+      label: "Invoices With Missing Order Reference",
+      count: orphanedInvoices.length,
+      items: orphanedInvoices.slice(0, 5).map((inv) => ({
+        id: inv.id,
+        name:
+          stringField(inv, "orderName") ||
+          stringField(inv, "order_name") ||
+          stringField(inv, "client", "Invoice"),
+        detail: "Linked order not found",
+        href: `/finances?tab=invoices&invoice=${inv.id}`,
+      })),
+      allHref: "/finances?tab=invoices",
+    });
+  }
+
+  // ── Critical: open tasks with no title ─────────────────────────────────────
+  const tasksNoTitle = tasks.filter((task) => {
+    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
+    return !stringField(task, "title").trim();
+  });
+  if (tasksNoTitle.length > 0) {
+    critical.push({
+      key: "tasks-no-title",
+      label: "Tasks Missing Title",
+      count: tasksNoTitle.length,
+      items: tasksNoTitle.slice(0, 5).map((task) => ({
+        id: task.id,
+        name: "Untitled task",
+        detail: `ID: ${task.id.slice(0, 8)}`,
+        href: "/tasks",
+      })),
+      allHref: "/tasks",
+    });
+  }
+
+  // ── Warnings: overdue tasks ─────────────────────────────────────────────────
+  const overdueTasks = tasks.filter((task) => {
+    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
+    const due = readField(task, "dueDate", "due_date");
+    return Boolean(due && due !== "TBD" && /^\d{4}-\d{2}-\d{2}$/.test(due) && due < todayISO);
+  });
+  if (overdueTasks.length > 0) {
+    warnings.push({
+      key: "warn-tasks",
+      label: "Overdue Tasks",
+      count: overdueTasks.length,
+      items: overdueTasks.slice(0, 5).map((task) => ({
+        id: task.id,
+        name: stringField(task, "title", "Untitled task"),
+        detail: `Due ${readField(task, "dueDate", "due_date")}`,
+        href: "/tasks",
+      })),
+      allHref: "/tasks",
+    });
+  }
+
+  // ── Warnings: unpaid invoices ───────────────────────────────────────────────
+  const unpaidInvoices = invoices.filter((inv) => {
+    if (INACTIVE_FINANCE_STATUSES.has(statusText(inv))) return false;
+    return inv.final_paid !== true;
+  });
+  if (unpaidInvoices.length > 0) {
+    warnings.push({
+      key: "warn-invoices",
+      label: "Unpaid Invoices",
+      count: unpaidInvoices.length,
+      items: unpaidInvoices.slice(0, 5).map((inv) => {
+        const st = statusText(inv);
+        const detail =
+          st === "overdue" ? "Overdue" :
+          st.includes("deposit") ? "Deposit pending" :
+          "Balance due";
+        return {
+          id: inv.id,
+          name:
+            stringField(inv, "orderName") ||
+            stringField(inv, "order_name") ||
+            stringField(inv, "client", "Invoice"),
+          detail,
+          href: `/finances?tab=invoices&invoice=${inv.id}`,
+        };
+      }),
+      allHref: "/finances?tab=invoices",
+    });
+  }
+
+  // ── Warnings: stale leads ───────────────────────────────────────────────────
+  const staleLeads = leads.filter((lead) => {
+    if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+    const followUp = readField(lead, "followUpDate", "follow_up_date");
+    return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
+  });
+  if (staleLeads.length > 0) {
+    warnings.push({
+      key: "warn-leads",
+      label: "Stale Leads",
+      count: staleLeads.length,
+      items: staleLeads.slice(0, 5).map((lead) => ({
+        id: lead.id,
+        name: stringField(lead, "company", stringField(lead, "name", "Lead")),
+        detail: "Follow-up overdue",
+        href: "/crm?view=followups",
+      })),
+      allHref: "/crm?view=followups",
+    });
+  }
+
+  const taxDue = calcTaxDue(invoices, taxPayments, currentYear);
+  const totalCritical = critical.reduce((sum, s) => sum + s.count, 0);
+  const totalWarnings = warnings.reduce((sum, s) => sum + s.count, 0) + (taxDue > 0 ? 1 : 0);
+
+  return { critical, warnings, taxDue, totalCritical, totalWarnings };
+}
+
+// ── Shared sales-tax helper ───────────────────────────────────────────────────
+
+function calcTaxDue(invoices: Row[], taxPayments: Row[], currentYear: string): number {
+  const collected = invoices.reduce((sum, inv) => {
+    const taxAmt = parseAmount(inv.sales_tax_amount);
+    if (taxAmt <= 0) return sum;
+    const grandTotal = parseAmount(inv.grand_total ?? inv.total_amount);
+    const deposit = parseAmount(inv.deposit_amount);
+    const finalDate = String(inv.final_paid_date ?? "");
+    const depositDate = String(inv.deposit_paid_date ?? "");
+    if (inv.final_paid === true && finalDate.startsWith(currentYear)) return sum + taxAmt;
+    if (inv.deposit_paid === true && depositDate.startsWith(currentYear) && inv.final_paid !== true) {
+      return sum + calcDepositTax(taxAmt, deposit, grandTotal);
+    }
+    if (inv.final_paid === true && !finalDate.startsWith(currentYear) && inv.deposit_paid === true && depositDate.startsWith(currentYear)) {
+      return sum + calcDepositTax(taxAmt, deposit, grandTotal);
+    }
+    return sum;
+  }, 0);
+
+  const paid = taxPayments
+    .filter((p) => String(p.payment_date ?? p.date ?? "").startsWith(currentYear))
+    .reduce((sum, p) => {
+      const cents = p.amount_cents;
+      return sum + (typeof cents === "number" ? cents / 100 : parseAmount(p.amount ?? 0));
+    }, 0);
+
+  return Math.max(collected - paid, 0);
+}
+
+// ── Shared UI components ──────────────────────────────────────────────────────
+
 const toneStyles = {
   red: {
     badge: "bg-rose-100 text-rose-700",
@@ -224,6 +496,86 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+function SectionCard({
+  label,
+  count,
+  items,
+  allHref,
+  toneKey,
+}: {
+  label: string;
+  count: number;
+  items: ReportItem[];
+  allHref: string;
+  toneKey: keyof typeof toneStyles;
+}) {
+  const styles = toneStyles[toneKey];
+  return (
+    <div className="rounded-[2rem] border border-slate-200 bg-white p-5 md:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-semibold ${styles.heading}`}>{label}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${styles.badge}`}>{count}</span>
+        </div>
+        <Link href={allHref} className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900">
+          See all <ArrowRight className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      </div>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item.id}>
+            <Link
+              href={item.href}
+              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${styles.itemBorder}`}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${styles.dot}`} aria-hidden="true" />
+                <span className="truncate font-medium text-slate-900">{item.name}</span>
+              </div>
+              {item.detail && <span className="shrink-0 text-slate-500">{item.detail}</span>}
+            </Link>
+          </li>
+        ))}
+        {count > 5 && (
+          <li>
+            <Link href={allHref} className="block px-4 py-2 text-xs text-slate-500 hover:text-slate-900">
+              +{count - 5} more
+            </Link>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function TaxDueCard({ taxDue }: { taxDue: number }) {
+  return (
+    <div className="rounded-[2rem] border border-slate-200 bg-white p-5 md:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-rose-700">Sales Tax Owed</span>
+          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">YTD</span>
+        </div>
+        <Link href="/finances?tab=sales-tax" className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900">
+          See all <ArrowRight className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      </div>
+      <Link
+        href="/finances?tab=sales-tax"
+        className="flex items-center justify-between rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs transition hover:bg-rose-100"
+      >
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-rose-400" aria-hidden="true" />
+          <span className="font-medium text-slate-900">Tax collected, not yet remitted</span>
+        </div>
+        <span className="shrink-0 font-semibold text-rose-700">{currency.format(taxDue)}</span>
+      </Link>
+    </div>
+  );
+}
+
+// ── Morning Briefing panel ────────────────────────────────────────────────────
+
 function BriefingPanel({ briefing, loading }: { briefing: Briefing; loading: boolean }) {
   if (loading) {
     return (
@@ -245,90 +597,106 @@ function BriefingPanel({ briefing, loading }: { briefing: Briefing; loading: boo
 
   return (
     <div className="space-y-4">
-      {briefing.sections.map((section) => {
-        const styles = toneStyles[section.tone];
-        return (
-          <div key={section.key} className="rounded-[2rem] border border-slate-200 bg-white p-5 md:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-semibold ${styles.heading}`}>{section.label}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${styles.badge}`}>
-                  {section.count}
-                </span>
-              </div>
-              <Link
-                href={section.allHref}
-                className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900"
-              >
-                See all <ArrowRight className="h-3 w-3" aria-hidden="true" />
-              </Link>
-            </div>
-            <ul className="space-y-2">
-              {section.items.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={item.href}
-                    className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${styles.itemBorder}`}
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${styles.dot}`} aria-hidden="true" />
-                      <span className="truncate font-medium text-slate-900">{item.name}</span>
-                    </div>
-                    {item.detail && (
-                      <span className="shrink-0 text-slate-500">{item.detail}</span>
-                    )}
-                  </Link>
-                </li>
-              ))}
-              {section.count > 5 && (
-                <li>
-                  <Link
-                    href={section.allHref}
-                    className="block px-4 py-2 text-xs text-slate-500 hover:text-slate-900"
-                  >
-                    +{section.count - 5} more
-                  </Link>
-                </li>
-              )}
-            </ul>
-          </div>
-        );
-      })}
+      {briefing.sections.map((section) => (
+        <SectionCard
+          key={section.key}
+          label={section.label}
+          count={section.count}
+          items={section.items}
+          allHref={section.allHref}
+          toneKey={section.tone}
+        />
+      ))}
+      {briefing.taxDue > 0 && <TaxDueCard taxDue={briefing.taxDue} />}
+    </div>
+  );
+}
 
-      {briefing.taxDue > 0 && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-5 md:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-rose-700">Sales Tax Owed</span>
-              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">YTD</span>
-            </div>
-            <Link
-              href="/finances?tab=sales-tax"
-              className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900"
-            >
-              See all <ArrowRight className="h-3 w-3" aria-hidden="true" />
-            </Link>
+// ── HQ Auditor panel ──────────────────────────────────────────────────────────
+
+function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-3 rounded-[2rem] border border-slate-200 bg-white p-8 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
+        Running audit…
+      </div>
+    );
+  }
+
+  const allClear = audit.critical.length === 0 && audit.warnings.length === 0 && audit.taxDue === 0;
+
+  if (allClear) {
+    return (
+      <div className="flex items-center gap-4 rounded-[2rem] border border-teal-200 bg-teal-50 p-6">
+        <ShieldCheck className="h-6 w-6 shrink-0 text-teal-600" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-semibold text-teal-800">System Healthy</p>
+          <p className="mt-0.5 text-xs text-teal-700">No critical issues detected.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {audit.critical.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700">
+              Critical Issues
+            </span>
+            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+              {audit.totalCritical}
+            </span>
           </div>
-          <Link
-            href="/finances?tab=sales-tax"
-            className="flex items-center justify-between rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs transition hover:bg-rose-100"
-          >
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-rose-400" aria-hidden="true" />
-              <span className="font-medium text-slate-900">Tax collected, not yet remitted</span>
-            </div>
-            <span className="shrink-0 font-semibold text-rose-700">{currency.format(briefing.taxDue)}</span>
-          </Link>
+          {audit.critical.map((section) => (
+            <SectionCard
+              key={section.key}
+              label={section.label}
+              count={section.count}
+              items={section.items}
+              allHref={section.allHref}
+              toneKey="red"
+            />
+          ))}
+        </div>
+      )}
+
+      {(audit.warnings.length > 0 || audit.taxDue > 0) && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
+              Warnings
+            </span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+              {audit.totalWarnings}
+            </span>
+          </div>
+          {audit.warnings.map((section) => (
+            <SectionCard
+              key={section.key}
+              label={section.label}
+              count={section.count}
+              items={section.items}
+              allHref={section.allHref}
+              toneKey="amber"
+            />
+          ))}
+          {audit.taxDue > 0 && <TaxDueCard taxDue={audit.taxDue} />}
         </div>
       )}
     </div>
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function ReportsPage() {
   const todayISO = businessTodayISO();
   const sevenDaysAheadISO = addDaysToISODate(todayISO, 7);
   const currentYear = todayISO.slice(0, 4);
+  const todayLabel = businessTodayLabel();
 
   const { data: tasks,       loading: loadingTasks    } = useSupabaseTable<Row>("tasks",              []);
   const { data: invoices,    loading: loadingInvoices } = useSupabaseTable<Row>("finances",           []);
@@ -339,6 +707,7 @@ export default function ReportsPage() {
   const loading = loadingTasks || loadingInvoices || loadingOrders || loadingLeads || loadingTax;
 
   const [briefingOpen, setBriefingOpen] = useState(true);
+  const [auditorOpen, setAuditorOpen] = useState(false);
 
   const briefing = useMemo(
     () => computeBriefing(tasks, invoices, orders, leads, taxPayments, todayISO, sevenDaysAheadISO, currentYear),
@@ -346,10 +715,18 @@ export default function ReportsPage() {
     [tasks, invoices, orders, leads, taxPayments],
   );
 
-  const allClear = !loading && briefing.sections.length === 0 && briefing.taxDue === 0;
+  const audit = useMemo(
+    () => computeAudit(tasks, invoices, orders, leads, taxPayments, todayISO, currentYear),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, invoices, orders, leads, taxPayments],
+  );
+
+  const briefingAllClear = !loading && briefing.sections.length === 0 && briefing.taxDue === 0;
+  const auditorAllClear  = !loading && audit.critical.length === 0 && audit.warnings.length === 0 && audit.taxDue === 0;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
+      {/* Header */}
       <div>
         <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Reporting</p>
         <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Reports</h1>
@@ -358,8 +735,10 @@ export default function ReportsPage() {
         </p>
       </div>
 
+      {/* Report cards */}
       <div className="grid gap-5 md:grid-cols-3">
-        {/* Morning Briefing — active */}
+
+        {/* Morning Briefing */}
         <button
           type="button"
           onClick={() => setBriefingOpen((prev) => !prev)}
@@ -373,7 +752,7 @@ export default function ReportsPage() {
             </div>
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
-            ) : allClear ? (
+            ) : briefingAllClear ? (
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-700">
                 All clear
               </span>
@@ -388,15 +767,14 @@ export default function ReportsPage() {
             <p className="mt-1 text-xs text-slate-500 md:text-sm">What needs attention today</p>
           </div>
           <div className="flex items-center gap-1 text-xs font-semibold text-slate-500">
-            {briefingOpen ? (
-              <>Close <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /></>
-            ) : (
-              <>Open <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /></>
-            )}
+            {briefingOpen
+              ? <><span>Close</span><ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /></>
+              : <><span>Open</span><ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /></>
+            }
           </div>
         </button>
 
-        {/* End-of-Day Report — coming soon */}
+        {/* End-of-Day — coming soon */}
         <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-7">
           <div className="flex items-center justify-between gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
@@ -412,15 +790,33 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* HQ Auditor — coming soon */}
-        <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        {/* HQ Auditor */}
+        <button
+          type="button"
+          onClick={() => setAuditorOpen((prev) => !prev)}
+          className={`flex flex-col gap-4 rounded-[2rem] border bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-7 ${
+            auditorOpen ? "border-2 border-slate-950" : "border-slate-200"
+          }`}
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
               <ShieldCheck className="h-6 w-6 text-teal-500" aria-hidden="true" />
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              Coming soon
-            </span>
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
+            ) : auditorAllClear ? (
+              <span className="rounded-full bg-teal-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-teal-700">
+                Healthy
+              </span>
+            ) : audit.totalCritical > 0 ? (
+              <span className="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-rose-700">
+                {audit.totalCritical} critical
+              </span>
+            ) : (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-700">
+                {audit.totalWarnings} warning{audit.totalWarnings !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
           <div className="flex-1">
             <h2 className="text-base font-semibold text-slate-950">HQ Auditor</h2>
@@ -428,16 +824,34 @@ export default function ReportsPage() {
               Functional issues, missing required data, and workflow health
             </p>
           </div>
-        </div>
+          <div className="flex items-center gap-1 text-xs font-semibold text-slate-500">
+            {auditorOpen
+              ? <><span>Close</span><ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /></>
+              : <><span>Open</span><ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /></>
+            }
+          </div>
+        </button>
       </div>
 
+      {/* Morning Briefing panel */}
       {briefingOpen && (
         <div className="space-y-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-950 md:text-base">Morning Briefing</h2>
-            <p className="text-xs text-slate-500">{businessTodayLabel()}</p>
+            <p className="text-xs text-slate-500">{todayLabel}</p>
           </div>
           <BriefingPanel briefing={briefing} loading={loading} />
+        </div>
+      )}
+
+      {/* HQ Auditor panel */}
+      {auditorOpen && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950 md:text-base">HQ Auditor</h2>
+            <p className="text-xs text-slate-500">{todayLabel}</p>
+          </div>
+          <AuditorPanel audit={audit} loading={loading} />
         </div>
       )}
     </div>
