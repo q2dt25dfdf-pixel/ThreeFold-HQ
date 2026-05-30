@@ -1061,6 +1061,70 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/order-status": {
+    post: {
+      operationId: "updateOrderStatus",
+      summary: "Update an order's production status",
+      description:
+        "Updates an order's production status after founder confirmation. " +
+        "Show current and new status and ask 'Shall I update this?' first. " +
+        "No financial or notification side effects — status field only.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                orderId: {
+                  type: "string",
+                  description: "ID of the order. Obtain from search results or getOrder.",
+                },
+                newStatus: {
+                  type: "string",
+                  enum: ["Production", "Quality Check", "Ready", "Delivered", "Cancelled"],
+                  description: "Target production status.",
+                },
+              },
+              required: ["orderId", "newStatus"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Order status updated successfully.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      orderId:        { type: "string" },
+                      orderName:      { type: "string", nullable: true },
+                      previousStatus: { type: "string", nullable: true },
+                      newStatus:      { type: "string" },
+                      updatedVia:     { type: "string", enum: ["jarvis"] },
+                    },
+                    required: ["orderId", "previousStatus", "newStatus", "updatedVia"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Validation error or same-status update.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Order not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",
@@ -1356,7 +1420,8 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
         "POST /api/ai/activity (log client activity), " +
         "POST /api/ai/lead-activity (log CRM lead communication), " +
         "POST /api/ai/task (create HQ task), " +
-        "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked). " +
+        "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked), " +
+        "POST /api/ai/order-status (update order production status; status field only). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
         "raw notes, Stripe links, or payment links. " +
         "All data endpoints require a Bearer token (AI_API_SECRET). " +
