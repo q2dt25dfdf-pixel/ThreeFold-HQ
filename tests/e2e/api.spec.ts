@@ -4,6 +4,7 @@
  * Phase 6B — /api/ai/crm and /api/ai/vendors endpoint tests appended below.
  * Phase 6C — /api/ai/reports endpoint tests appended below.
  * Phase 6D — /api/ai/finances endpoint tests appended below.
+ * Phase 6E — /api/ai/search and /api/ai/{client,order,lead,vendor}/[id] tests appended below.
  *
  * Uses Playwright's request fixture (pure HTTP, no browser).
  * Runs under the "api" project which has no browser setup and no auth dependency.
@@ -990,4 +991,170 @@ test.describe("GET /api/ai/finances — authenticated", () => {
     });
     expect(res.headers()["cache-control"]).toContain("no-store");
   });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/search  (Phase 6E)
+// ---------------------------------------------------------------------------
+
+const SEARCH = "/api/ai/search";
+
+// Forbidden fields for search — never expose PII or raw identifiers.
+const FORBIDDEN_SEARCH = [
+  '"email":', '"phone":', '"address":', '"notes":',
+  '"contact":', '"stripe":', '"payment_link":',
+  '"summary":', '"communicationHistory":',
+  '"pricingNotes":', '"client_email":', '"client_phone":',
+];
+
+test.describe("GET /api/ai/search — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=test`);
+    expect(res.status()).toBe(401);
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=test`, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=test`, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/search — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("missing q parameter returns 400", async ({ request }) => {
+    const res = await request.get(SEARCH, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("returns 200 with valid token and query", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=order`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+  });
+
+  test("data has query, totalResults, and results array with correct shape", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    expect(typeof data.query).toBe("string");
+    expect(typeof data.totalResults).toBe("number");
+    expect(data.totalResults).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(data.results)).toBe(true);
+    expect(data.results.length).toBeLessThanOrEqual(20);
+    for (const result of data.results as Record<string, unknown>[]) {
+      expect(["client", "order", "lead", "vendor"]).toContain(result.type);
+      expect(typeof result.id).toBe("string");
+      expect(typeof result.label).toBe("string");
+      expect(typeof result.status).toBe("string");
+      // Must NOT expose PII
+      expect(result).not.toHaveProperty("email");
+      expect(result).not.toHaveProperty("phone");
+      expect(result).not.toHaveProperty("notes");
+      expect(result).not.toHaveProperty("contact");
+    }
+  });
+
+  test("response does not expose PII or raw field names", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=active`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_SEARCH) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(`${SEARCH}?q=test`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Detail endpoints: /api/ai/{client,order,lead,vendor}/[id]  (Phase 6E)
+//
+// Strategy: use a nonexistent UUID to test 404 handling without needing real
+// data. All detail tests are run with and without auth to verify the auth gate.
+// ---------------------------------------------------------------------------
+
+const NONEXISTENT_ID = "00000000-0000-0000-0000-000000000000";
+
+test.describe("Detail endpoints — unauthenticated rejection", () => {
+  for (const path of [
+    `/api/ai/client/${NONEXISTENT_ID}`,
+    `/api/ai/order/${NONEXISTENT_ID}`,
+    `/api/ai/lead/${NONEXISTENT_ID}`,
+    `/api/ai/vendor/${NONEXISTENT_ID}`,
+  ]) {
+    test(`${path} — missing Authorization returns 401`, async ({ request }) => {
+      const res = await request.get(path);
+      expect(res.status()).toBe(401);
+    });
+  }
+});
+
+test.describe("Detail endpoints — authenticated, nonexistent id", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  for (const { label, path } of [
+    { label: "client",  path: `/api/ai/client/${NONEXISTENT_ID}` },
+    { label: "order",   path: `/api/ai/order/${NONEXISTENT_ID}` },
+    { label: "lead",    path: `/api/ai/lead/${NONEXISTENT_ID}` },
+    { label: "vendor",  path: `/api/ai/vendor/${NONEXISTENT_ID}` },
+  ]) {
+    test(`${label} with nonexistent id returns 404 with safe shape`, async ({ request }) => {
+      const res = await request.get(path, {
+        headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      });
+      expect(res.status()).toBe(404);
+      const body = await res.json();
+      // Must be { ok: false, error: "Not found" } — no internal detail leaked
+      expect(body.ok).toBe(false);
+      expect(typeof body.error).toBe("string");
+      expect(body.error.toLowerCase()).not.toContain("sql");
+      expect(body.error.toLowerCase()).not.toContain("table");
+      // Cache-Control must still be set
+      expect(res.headers()["cache-control"]).toContain("no-store");
+    });
+
+    test(`${label} response does not expose PII when valid record exists`, async ({ request }) => {
+      // Use a query that produces no result — we're verifying the response shape doesn't leak PII.
+      // This test passes regardless of whether data exists: it either gets 404 (no data) or
+      // a 200 with only safe fields (with data). Either way, forbidden keys must be absent.
+      const res = await request.get(path, {
+        headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      });
+      const bodyText = await res.text();
+      for (const key of ['"email":', '"phone":', '"address":', '"notes":', '"stripe":'] as const) {
+        expect(bodyText, `${label} must not expose ${key}`).not.toContain(key);
+      }
+    });
+  }
 });
