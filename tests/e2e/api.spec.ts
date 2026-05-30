@@ -5,6 +5,7 @@
  * Phase 6C — /api/ai/reports endpoint tests appended below.
  * Phase 6D — /api/ai/finances endpoint tests appended below.
  * Phase 6E — /api/ai/search and /api/ai/{client,order,lead,vendor}/[id] tests appended below.
+ * Phase 6F — /api/ai/activity endpoint tests appended below.
  *
  * Uses Playwright's request fixture (pure HTTP, no browser).
  * Runs under the "api" project which has no browser setup and no auth dependency.
@@ -1157,4 +1158,144 @@ test.describe("Detail endpoints — authenticated, nonexistent id", () => {
       }
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/activity  (Phase 6F)
+// ---------------------------------------------------------------------------
+
+const ACTIVITY = "/api/ai/activity";
+
+// Forbidden content fields — activity notes/summaries must never appear.
+const FORBIDDEN_ACTIVITY = [
+  '"email":', '"phone":', '"address":',
+  '"notes":', '"note":', '"comment":',
+  '"body":', '"summary":',
+  '"stripe":', '"payment_link":',
+  '"contact":', '"pricingNotes":',
+];
+
+test.describe("GET /api/ai/activity — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(ACTIVITY);
+    expect(res.status()).toBe(401);
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/activity — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("returns 200 with valid token", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected shape with numeric counts and safe event fields", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    // Top-level structure
+    expect(typeof data.date).toBe("string");
+    expect(data.counts).toBeDefined();
+    expect(Array.isArray(data.byType)).toBe(true);
+    expect(data.byOwner).toBeDefined();
+    expect(Array.isArray(data.recentEvents)).toBe(true);
+    expect(data.followUps).toBeDefined();
+
+    // Counts
+    const { counts } = data;
+    for (const key of ["total", "clientActivity", "crmComms", "today", "thisWeek", "lastThirtyDays"] as const) {
+      expect(typeof counts[key], `counts.${key}`).toBe("number");
+      expect(counts[key]).toBeGreaterThanOrEqual(0);
+    }
+    expect(counts.clientActivity + counts.crmComms).toBe(counts.total);
+
+    // byType — array of { type, count }
+    for (const entry of data.byType as Record<string, unknown>[]) {
+      expect(typeof entry.type).toBe("string");
+      expect(typeof entry.count).toBe("number");
+      expect(entry.count).toBeGreaterThan(0);
+    }
+
+    // recentEvents — safe fields only, capped at 10
+    expect(data.recentEvents.length).toBeLessThanOrEqual(10);
+    for (const ev of data.recentEvents as Record<string, unknown>[]) {
+      expect(typeof ev.id).toBe("string");
+      expect(["client", "crm"]).toContain(ev.source);
+      expect(typeof ev.type).toBe("string");
+      expect(typeof ev.date).toBe("string");
+      // Must NOT expose content/PII fields
+      expect(ev).not.toHaveProperty("notes");
+      expect(ev).not.toHaveProperty("summary");
+      expect(ev).not.toHaveProperty("body");
+      expect(ev).not.toHaveProperty("comment");
+      expect(ev).not.toHaveProperty("email");
+      expect(ev).not.toHaveProperty("phone");
+    }
+
+    // followUps
+    const { followUps } = data;
+    for (const key of ["overdue", "dueToday", "dueThisWeek"] as const) {
+      expect(typeof followUps[key], `followUps.${key}`).toBe("number");
+      expect(followUps[key]).toBeGreaterThanOrEqual(0);
+    }
+    expect(Array.isArray(followUps.overdueItems)).toBe(true);
+    expect(followUps.overdueItems.length).toBeLessThanOrEqual(10);
+    for (const item of followUps.overdueItems as Record<string, unknown>[]) {
+      expect(typeof item.leadId).toBe("string");
+      expect(typeof item.company).toBe("string");
+      // Must NOT expose contact PII
+      expect(item).not.toHaveProperty("email");
+      expect(item).not.toHaveProperty("phone");
+      expect(item).not.toHaveProperty("contact");
+      expect(item).not.toHaveProperty("notes");
+    }
+  });
+
+  test("response does not expose note content or PII field names", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_ACTIVITY) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(ACTIVITY, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
 });
