@@ -3,7 +3,7 @@ import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { stringField, statusText } from "@/lib/recordUtils";
 import { INACTIVE_ORDER_STATUSES } from "@/lib/constants";
-import { parseAmount } from "@/lib/invoiceCalc";
+import { parseAmount, calcBalance } from "@/lib/invoiceCalc";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
 export const dynamic = "force-dynamic";
@@ -109,10 +109,7 @@ export async function GET(
           status: stringField(relatedInvoice, "status") || "Unknown",
           depositPaid: relatedInvoice.deposit_paid === true,
           finalPaid: relatedInvoice.final_paid === true,
-          balanceRemaining: (() => {
-            const n = parseAmount(relatedInvoice.balance_remaining);
-            return n > 0 ? Math.round(n * 100) / 100 : 0;
-          })(),
+          balanceRemaining: Math.round(calcBalance(relatedInvoice) * 100) / 100,
         }
       : null;
 

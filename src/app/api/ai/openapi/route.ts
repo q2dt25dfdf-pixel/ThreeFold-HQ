@@ -72,6 +72,7 @@ const components = {
         key:   { type: "string", description: "Machine-readable section identifier." },
         label: { type: "string", description: "Human-readable section label." },
         count: { type: "integer" },
+        tone:  { type: "string", enum: ["red", "amber", "blue"], description: "Urgency colour for the section. red = critical/overdue, amber = needs attention, blue = informational." },
         items: { type: "array", items: { "$ref": "#/components/schemas/ReportItem" } },
       },
       required: ["key", "label", "count", "items"],
@@ -742,6 +743,86 @@ const paths: Record<string, unknown> = {
         "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
       },
     },
+
+    post: {
+      operationId: "addActivity",
+      summary: "Log a client activity entry",
+      description:
+        "Appends a single activity entry to the client_activity log for a known client. " +
+        "MUST only be called after the founder has explicitly confirmed the action in chat. " +
+        "Show the entry details (type, date, owner, note) and ask 'Shall I log this?' before calling. " +
+        "Append-only — never updates or deletes existing entries. " +
+        "Returns 404 if the clientId does not match an existing client record.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                clientId: {
+                  type: "string",
+                  description: "ID of the client to log against. Obtain from search results or getClient.",
+                },
+                type: {
+                  type: "string",
+                  enum: ["Call", "Email", "Text", "Meeting", "In Person", "Other"],
+                  description: "Activity type.",
+                },
+                date: {
+                  type: "string",
+                  format: "date",
+                  description: "Activity date in YYYY-MM-DD format. Cannot be in the future.",
+                },
+                owner: {
+                  type: "string",
+                  description: "Founder who performed this activity (Alliyah, Hannah, or Jordan).",
+                },
+                note: {
+                  type: "string",
+                  maxLength: 500,
+                  description: "Brief factual description of what happened. No client PII (email/phone/address).",
+                },
+              },
+              required: ["clientId", "type", "date", "owner", "note"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Activity entry created successfully.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      id:        { type: "string", description: "Generated entry ID." },
+                      clientId:  { type: "string" },
+                      type:      { type: "string" },
+                      date:      { type: "string", format: "date" },
+                      owner:     { type: "string" },
+                      note:      { type: "string" },
+                      loggedVia: { type: "string", enum: ["jarvis"], description: "Identifies this as an AI-logged entry." },
+                    },
+                    required: ["id", "clientId", "type", "date", "owner", "note", "loggedVia"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Validation error — missing or invalid fields.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Client not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
   },
 
   "/api/ai/search": {
@@ -1016,8 +1097,8 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
       title: "ThreeFold HQ Jarvis API",
       version: "1.0.0",
       description:
-        "Read-only operational API for ThreeFold Supply Co. intended for use by a personal ChatGPT Custom GPT (Jarvis). " +
-        "All endpoints return internal operational summaries only. " +
+        "Operational API for ThreeFold Supply Co. intended for use by a personal ChatGPT Custom GPT (Jarvis). " +
+        "Primarily read-only. One confirmed write action exists: POST /api/ai/activity (log client activity after founder confirmation). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
         "raw notes, Stripe links, or payment links. " +
         "All data endpoints require a Bearer token (AI_API_SECRET). " +

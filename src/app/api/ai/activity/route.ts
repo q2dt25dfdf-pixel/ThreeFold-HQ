@@ -4,6 +4,13 @@ import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
 import { FOUNDERS } from "@/lib/constants";
 import { stringField, readField } from "@/lib/recordUtils";
+
+// ── Shared constants ───────────────────────────────────────────────────────────
+
+const ACTIVITY_TYPES = ["Call", "Email", "Text", "Meeting", "In Person", "Other"] as const;
+type ActivityType = (typeof ACTIVITY_TYPES)[number];
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const NOTE_MAX_LEN = 500;
 import {
   hasFollowUpDate,
   hasActiveFollowUpTask,
@@ -218,6 +225,110 @@ export async function GET(request: Request): Promise<Response> {
     });
   } catch (err) {
     console.error("[ai/activity]", err);
+    return errResponse("Internal server error", 500);
+  }
+}
+
+// ── POST /api/ai/activity ─────────────────────────────────────────────────────
+//
+// Appends a single entry to the client_activity table.
+// Called by Jarvis ONLY after the founder has confirmed the action in chat.
+// Append-only — no update or delete logic.
+
+type ActivityPostBody = {
+  clientId: unknown;
+  type: unknown;
+  date: unknown;
+  owner: unknown;
+  note: unknown;
+};
+
+export async function POST(request: Request): Promise<Response> {
+  const auth = validateAIRequest(request);
+  if (!auth.ok) return errResponse("Unauthorized", auth.status);
+
+  // ── Parse body ──────────────────────────────────────────────────────────────
+  let body: ActivityPostBody;
+  try {
+    body = (await request.json()) as ActivityPostBody;
+  } catch {
+    return errResponse("Invalid JSON body", 400);
+  }
+
+  const { clientId, type, date, owner, note } = body;
+
+  // ── Validate required fields ────────────────────────────────────────────────
+  if (!clientId || typeof clientId !== "string" || !clientId.trim()) {
+    return errResponse("clientId is required", 400);
+  }
+  if (!type || typeof type !== "string" || !(ACTIVITY_TYPES as readonly string[]).includes(type)) {
+    return errResponse(`type must be one of: ${ACTIVITY_TYPES.join(", ")}`, 400);
+  }
+  if (!date || typeof date !== "string" || !ISO_DATE_RE.test(date)) {
+    return errResponse("date must be a valid YYYY-MM-DD string", 400);
+  }
+  if (date > businessTodayISO()) {
+    return errResponse("date cannot be in the future", 400);
+  }
+  if (!owner || typeof owner !== "string" || !owner.trim()) {
+    return errResponse("owner is required", 400);
+  }
+  if (!note || typeof note !== "string" || !note.trim()) {
+    return errResponse("note is required", 400);
+  }
+  if (note.trim().length > NOTE_MAX_LEN) {
+    return errResponse(`note must be ${NOTE_MAX_LEN} characters or fewer`, 400);
+  }
+
+  try {
+    const db = getSupabaseAdmin();
+
+    // ── Verify client exists ──────────────────────────────────────────────────
+    const { data: clientRow, error: clientErr } = await db
+      .from("clients")
+      .select("id")
+      .eq("id", clientId.trim())
+      .maybeSingle();
+
+    if (clientErr && (clientErr as { code?: string }).code !== "42P01") {
+      throw new Error(`[ai/activity POST] client lookup: ${clientErr.message}`);
+    }
+    if (!clientRow) {
+      return errResponse("Client not found", 404);
+    }
+
+    // ── Build entry — shape matches what the HQ UI reads ─────────────────────
+    const id = `jarvis-activity-${Date.now()}`;
+    const entry = {
+      id,
+      clientId: clientId.trim(),
+      type: type as ActivityType,
+      date,
+      owner: owner.trim(),
+      notes: note.trim(),  // stored as "notes" to match ActivityEntry type in HQ UI
+      loggedVia: "jarvis", // distinguishes AI-logged entries from manual entries
+    };
+
+    const { error: insertErr } = await db
+      .from("client_activity")
+      .insert({ id, data: entry });
+
+    if (insertErr) {
+      throw new Error(`[ai/activity POST] insert: ${insertErr.message}`);
+    }
+
+    // Return what was written — note is echoed back so Jarvis can confirm
+    return okResponse({
+      id: entry.id,
+      clientId: entry.clientId,
+      type: entry.type,
+      date: entry.date,
+      owner: entry.owner,
+      note: entry.notes,
+      loggedVia: entry.loggedVia,
+    });
+  } catch (err) {
+    console.error("[ai/activity POST]", err);
     return errResponse("Internal server error", 500);
   }
 }
