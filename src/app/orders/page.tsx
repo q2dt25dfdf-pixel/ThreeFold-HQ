@@ -117,6 +117,12 @@ function OrdersContent() {
     setDeletingId("");
   };
 
+  const allNormalized = orders.map(normalizeOrder);
+  const statsTotal      = allNormalized.length;
+  const statsProduction = allNormalized.filter((o) => o.status === "Production").length;
+  const statsInReview   = allNormalized.filter((o) => o.status === "Quality Check" || o.status === "Ready").length;
+  const statsDelivered  = allNormalized.filter((o) => o.status === "Delivered").length;
+
   if (loading) return <LoadingState label="Loading orders..." />;
 
   return (
@@ -157,6 +163,27 @@ function OrdersContent() {
             <option>Cancelled</option>
           </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { label: "Total Orders",  count: statsTotal,      filterValue: "All"        as const },
+          { label: "In Production", count: statsProduction,  filterValue: "Production" as const },
+          { label: "In Review",     count: statsInReview,    filterValue: "Active"     as const },
+          { label: "Delivered",     count: statsDelivered,   filterValue: "Delivered"  as const },
+        ].map((stat) => (
+          <button
+            key={stat.label}
+            type="button"
+            onClick={() => setFilter(stat.filterValue)}
+            className={`rounded-[2rem] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
+              filter === stat.filterValue ? "border-2 border-slate-950" : "border border-slate-200"
+            }`}
+          >
+            <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-4xl">{stat.count}</p>
+            <p className="mt-2 text-xs text-slate-600 md:text-sm">{stat.label}</p>
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
