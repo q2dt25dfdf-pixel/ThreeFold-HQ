@@ -304,8 +304,10 @@ export async function GET(request: Request): Promise<Response> {
           company,
           hasExistingDeposit: false,
           message:
-            "No deposit request has been generated for this lead yet. " +
-            "Use Send Deposit in HQ to create one.",
+            "No deposit request has been generated for this lead yet.",
+          nextStepGuidance:
+            "To create and send a deposit request via Jarvis: confirm amounts with the founder, " +
+            "then call POST /api/ai/deposit-send with { leadId, sender, confirm: true }.",
         });
       }
 
@@ -340,8 +342,10 @@ export async function GET(request: Request): Promise<Response> {
         company,
         hasExistingDeposit: false,
         message:
-          "No deposit request has been generated for this lead yet. " +
-          "Use Send Deposit in HQ to create one.",
+          "No deposit request has been generated for this lead yet.",
+        nextStepGuidance:
+          "To create and send a deposit request via Jarvis: confirm amounts with the founder, " +
+          "then call POST /api/ai/deposit-send with { leadId, sender, confirm: true }.",
       });
     }
 

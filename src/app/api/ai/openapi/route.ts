@@ -1465,6 +1465,7 @@ const paths: Record<string, unknown> = {
                       selectionNote:  { type: "string", description: "Explains which deposit was selected and why." },
                       hasExistingDeposit: { type: "boolean", description: "False when no deposit has been generated yet." },
                       message:        { type: "string", description: "Human-readable status — present when hasExistingDeposit is false or ambiguous is true." },
+                      nextStepGuidance: { type: "string", description: "Present when hasExistingDeposit is false. Instructs Jarvis to call POST /api/ai/deposit-send to create and send a deposit." },
                       // ── Ambiguous ───────────────────────────────────────
                       ambiguous:  { type: "boolean", description: "True when q matched multiple leads." },
                       matchCount: { type: "integer" },
@@ -1572,6 +1573,84 @@ const paths: Record<string, unknown> = {
         "409": { description: "Quote already sent. Use HQ to resend.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "502": { description: "Resend delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "503": { description: "RESEND_API_KEY not configured. Use HQ SendQuoteModal.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
+  "/api/ai/deposit-send": {
+    post: {
+      operationId: "sendDeposit",
+      summary: "Send a deposit request to the client after founder confirmation",
+      description:
+        "Sends a deposit request after founder confirmation. " +
+        "Requires confirm: true — show deposit-preview and ask 'Send this deposit request?' first. " +
+        "Reuses existing deposit if lead has one (no duplicate records). " +
+        "409 if already sent. Requires RESEND_API_KEY.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                leadId: {
+                  type: "string",
+                  description: "CRM lead UUID from GET /api/ai/deposit-preview. Never guess.",
+                },
+                sender: {
+                  type: "string",
+                  enum: ["Alliyah", "Hannah", "Jordan"],
+                  description: "Founder sending the deposit request. Ask if not specified.",
+                },
+                confirm: {
+                  type: "boolean",
+                  enum: [true],
+                  description: "Must be boolean true. Only set after explicit founder confirmation.",
+                },
+              },
+              required: ["leadId", "sender", "confirm"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Deposit request sent. deposit_requests and crm_leads records updated.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      sent:          { type: "boolean", enum: [true] },
+                      sentVia:       { type: "string", enum: ["resend"] },
+                      isNew:         { type: "boolean", description: "True if a new deposit record was created; false if an existing draft was reused." },
+                      depositId:     { type: "string" },
+                      depositNumber: { type: "string", description: "Formatted request number (e.g. TF-D-2026-0001)." },
+                      publicLink:    { type: "string", description: "Live deposit URL." },
+                      leadId:        { type: "string" },
+                      company:       { type: "string", nullable: true },
+                      sentAt:        { type: "string", format: "date-time" },
+                      emailSubject:  { type: "string" },
+                    },
+                    required: ["sent", "sentVia", "isNew", "depositId", "depositNumber", "publicLink", "leadId", "sentAt", "emailSubject"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Missing confirm: true, invalid sender, no email on lead, or no project value.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead or deposit record not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "409": { description: "Deposit already sent. Use HQ SendDepositModal to resend.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "502": { description: "Resend delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "503": { description: "RESEND_API_KEY not configured. Use HQ SendDepositModal.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
       },
     },
