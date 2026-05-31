@@ -1125,6 +1125,86 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/quote-preview": {
+    get: {
+      operationId: "previewQuote",
+      summary: "Preview the most recent quote for a CRM lead",
+      description:
+        "Returns a structured preview of the most recent quote for a CRM lead. " +
+        "Read-only — no records created. " +
+        "Includes line items, totals, tax, deposit estimate, and email subject/body templates. " +
+        "Use leadId from search.",
+      parameters: [
+        {
+          name: "leadId",
+          in: "query",
+          required: true,
+          description: "CRM lead ID. Obtain from search results or getLead.",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Quote preview. hasExistingQuote is false if no quote has been generated yet.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      leadId:            { type: "string" },
+                      company:           { type: "string", nullable: true },
+                      stage:             { type: "string", nullable: true },
+                      hasExistingQuote:  { type: "boolean" },
+                      message:           { type: "string", description: "Present when hasExistingQuote is false — explains why." },
+                      quoteId:           { type: "string", description: "Present when hasExistingQuote is true." },
+                      quoteNumber:       { type: "string", nullable: true },
+                      quoteStatus:       { type: "string", nullable: true, description: "'draft', 'sent', or 'approved'." },
+                      expirationDate:    { type: "string", nullable: true, description: "ISO 8601 date (YYYY-MM-DD)." },
+                      lineItems: {
+                        nullable: true,
+                        type: "array",
+                        description: "Quote line items. null for quotes generated before line items UI existed.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            name:        { type: "string" },
+                            description: { type: "string" },
+                            quantity:    { type: "number" },
+                            unitPrice:   { type: "number" },
+                            lineTotal:   { type: "number" },
+                          },
+                        },
+                      },
+                      subtotal:          { type: "number", nullable: true },
+                      salesTaxRate:      { type: "number", nullable: true },
+                      salesTaxAmount:    { type: "number", nullable: true },
+                      grandTotal:        { type: "number", nullable: true },
+                      depositEstimate:   { type: "number", nullable: true, description: "50% of grandTotal. null if grandTotal is null." },
+                      publicLink:        { type: "string", nullable: true, description: "Live public quote URL. Share with founders only — not directly to clients." },
+                      isRevised:         { type: "boolean", description: "True if the lead is currently at 'Quote Sent' stage, indicating a revised quote flow." },
+                      emailSubject:      { type: "string", description: "Email subject matching HQ SendQuoteModal. Present when hasExistingQuote is true." },
+                      emailBodyPreview:  { type: "string", description: "Full email body preview matching HQ SendQuoteModal templates. Company name used as contact fallback." },
+                    },
+                    required: ["leadId", "company", "stage", "hasExistingQuote"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Missing leadId parameter.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",
@@ -1422,6 +1502,7 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
         "POST /api/ai/task (create HQ task), " +
         "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked), " +
         "POST /api/ai/order-status (update order production status; status field only). " +
+        "Read-only preview: GET /api/ai/quote-preview (existing quote data + email templates; no records created). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
         "raw notes, Stripe links, or payment links. " +
         "All data endpoints require a Bearer token (AI_API_SECRET). " +
