@@ -1693,6 +1693,7 @@ const EXPECTED_PATHS = [
   "/api/ai/vendor/{id}",
   "/api/ai/morning-briefing",
   "/api/ai/end-of-day-summary",
+  "/api/ai/financial-watchlist",
 ];
 
 test.describe("GET /api/ai/openapi", () => {
@@ -1712,7 +1713,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 21 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 22 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -4803,5 +4804,319 @@ test.describe("GET /api/ai/end-of-day-summary — OpenAPI schema", () => {
     expect(typeEnum).toBeDefined();
     expect(typeEnum).toContain("deposit");
     expect(typeEnum).toContain("final");
+  });
+});
+
+// ============================================================================
+// Tier 12 — GET /api/ai/financial-watchlist
+// ============================================================================
+
+const FW = "/api/ai/financial-watchlist";
+
+const FORBIDDEN_FW = [
+  '"email":',      '"phone":',         '"address":',
+  '"notes":',      '"contact":',       '"summary":',
+  '"stripe":',     '"payment_link":',  '"client_name":',
+  '"client_email":',                   '"communicationHistory":',
+  '"questionnaire_files":',            '"public_token":',
+  '"payment_instructions":',           '"stripe_invoice_url":',
+];
+
+function fwAuthHeaders(): Record<string, string> {
+  const secret = process.env.AI_API_SECRET;
+  if (!secret) return {};
+  return { Authorization: `Bearer ${secret}` };
+}
+
+test.describe("GET /api/ai/financial-watchlist — unauthenticated rejection", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(FW);
+    expect(res.status()).toBe(401);
+  });
+
+  test("returns 401 with wrong Bearer token", async ({ request }) => {
+    const res = await request.get(FW, { headers: { Authorization: "Bearer wrong-token" } });
+    expect(res.status()).toBe(401);
+  });
+
+  test("returns 401 with malformed Authorization header", async ({ request }) => {
+    const res = await request.get(FW, { headers: { Authorization: "Token abc123" } });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/financial-watchlist — authenticated", () => {
+  test("returns 200 with valid Bearer token", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response has ok:true and required top-level sections", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const d = body.data as Record<string, unknown>;
+    expect(typeof d.date).toBe("string");
+    expect(typeof d.revenueToday).toBe("number");
+    expect(typeof d.revenueThisWeek).toBe("number");
+    expect(typeof d.revenueThisMonth).toBe("number");
+    expect(typeof d.monthlyGoal).toBe("number");
+    expect(typeof d.unpaidDeposits).toBe("object");
+    expect(typeof d.outstandingInvoices).toBe("object");
+    expect(typeof d.overdueInvoices).toBe("object");
+    expect(typeof d.finalBalancesDue).toBe("object");
+    expect(typeof d.approvedQuotesAwaitingDeposit).toBe("object");
+    expect(Array.isArray(d.highPriorityFinancialActions)).toBe(true);
+  });
+
+  test("revenue fields are non-negative numbers", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    expect(d.revenueToday as number).toBeGreaterThanOrEqual(0);
+    expect(d.revenueThisWeek as number).toBeGreaterThanOrEqual(0);
+    expect(d.revenueThisMonth as number).toBeGreaterThanOrEqual(0);
+    expect(d.monthlyGoal as number).toBeGreaterThan(0);
+  });
+
+  test("revenueToday <= revenueThisWeek (today is part of the rolling 7-day window)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    expect(d.revenueToday as number).toBeLessThanOrEqual((d.revenueThisWeek as number) + 0.01);
+  });
+
+  test("unpaidDeposits has count, totalAmount, items array", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const ud = d.unpaidDeposits as Record<string, unknown>;
+    expect(typeof ud.count).toBe("number");
+    expect(typeof ud.totalAmount).toBe("number");
+    expect(Array.isArray(ud.items)).toBe(true);
+    expect((ud.items as unknown[]).length).toBeLessThanOrEqual(10);
+    expect(ud.count as number).toBeGreaterThanOrEqual(0);
+    expect(ud.totalAmount as number).toBeGreaterThanOrEqual(0);
+  });
+
+  test("unpaidDeposits items have expected shape", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const items = (d.unpaidDeposits as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.status).toBe("string");
+      expect(typeof item.amount).toBe("number");
+      expect(item.amount as number).toBeGreaterThanOrEqual(0);
+      // client_name must never appear — company is resolved from lead
+      expect(Object.keys(item)).not.toContain("client_name");
+      expect(Object.keys(item)).not.toContain("payment_instructions");
+    }
+  });
+
+  test("outstandingInvoices has count, totalBalance, items array bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const oi = d.outstandingInvoices as Record<string, unknown>;
+    expect(typeof oi.count).toBe("number");
+    expect(typeof oi.totalBalance).toBe("number");
+    expect(Array.isArray(oi.items)).toBe(true);
+    expect((oi.items as unknown[]).length).toBeLessThanOrEqual(10);
+    expect(oi.count as number).toBeGreaterThanOrEqual(0);
+  });
+
+  test("outstandingInvoices items have invoiceId, orderName, daysOverdue", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const items = (d.outstandingInvoices as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.invoiceId).toBe("string");
+      expect(typeof item.orderName).toBe("string");
+      expect(typeof item.daysOverdue).toBe("number");
+      expect(item.daysOverdue as number).toBeGreaterThanOrEqual(0);
+      expect(typeof item.balanceDue).toBe("number");
+    }
+  });
+
+  test("overdueInvoices is a subset of outstandingInvoices (count invariant)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const outstanding = d.outstandingInvoices as Record<string, unknown>;
+    const overdue = d.overdueInvoices as Record<string, unknown>;
+    expect(overdue.count as number).toBeLessThanOrEqual(outstanding.count as number);
+    expect(overdue.totalBalance as number).toBeLessThanOrEqual((outstanding.totalBalance as number) + 0.01);
+  });
+
+  test("overdueInvoices items all have daysOverdue > 0", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const items = (d.overdueInvoices as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(item.daysOverdue as number).toBeGreaterThan(0);
+    }
+  });
+
+  test("overdueInvoices items are sorted most-overdue first", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const items = (d.overdueInvoices as Record<string, unknown>).items as Record<string, unknown>[];
+    for (let i = 1; i < items.length; i++) {
+      expect(items[i - 1].daysOverdue as number).toBeGreaterThanOrEqual(items[i].daysOverdue as number);
+    }
+  });
+
+  test("finalBalancesDue has count, totalBalance, items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const fb = d.finalBalancesDue as Record<string, unknown>;
+    expect(typeof fb.count).toBe("number");
+    expect(typeof fb.totalBalance).toBe("number");
+    expect(Array.isArray(fb.items)).toBe(true);
+    expect((fb.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("finalBalancesDue count <= outstandingInvoices count (it's a subset)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const fb = d.finalBalancesDue as Record<string, unknown>;
+    const oi = d.outstandingInvoices as Record<string, unknown>;
+    expect(fb.count as number).toBeLessThanOrEqual(oi.count as number);
+  });
+
+  test("approvedQuotesAwaitingDeposit has count, totalAmount, items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const aq = d.approvedQuotesAwaitingDeposit as Record<string, unknown>;
+    expect(typeof aq.count).toBe("number");
+    expect(typeof aq.totalAmount).toBe("number");
+    expect(Array.isArray(aq.items)).toBe(true);
+    expect((aq.items as unknown[]).length).toBeLessThanOrEqual(10);
+    expect(aq.count as number).toBeGreaterThanOrEqual(0);
+    expect(aq.totalAmount as number).toBeGreaterThanOrEqual(0);
+  });
+
+  test("approvedQuotesAwaitingDeposit items have quoteId and grandTotal", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const items = (d.approvedQuotesAwaitingDeposit as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.quoteId).toBe("string");
+      expect(typeof item.grandTotal).toBe("number");
+      expect(item.grandTotal as number).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test("highPriorityFinancialActions is non-empty array of strings", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const actions = d.highPriorityFinancialActions as unknown[];
+    expect(Array.isArray(actions)).toBe(true);
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      expect(typeof action).toBe("string");
+      expect((action as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("response sets Cache-Control: no-store", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+
+  test("no PII fields in financial-watchlist response body", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FW, { headers: fwAuthHeaders() });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_FW) {
+      expect(bodyText, `financial-watchlist must not expose ${key}`).not.toContain(key);
+    }
+  });
+});
+
+test.describe("GET /api/ai/financial-watchlist — OpenAPI schema", () => {
+  test("OpenAPI schema declares /api/ai/financial-watchlist with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths[FW]).toBeDefined();
+
+    const getOp = (paths[FW] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getFinancialWatchlist");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    for (const section of [
+      "date", "revenueToday", "revenueThisWeek", "revenueThisMonth", "monthlyGoal",
+      "unpaidDeposits", "outstandingInvoices", "overdueInvoices",
+      "finalBalancesDue", "approvedQuotesAwaitingDeposit", "highPriorityFinancialActions",
+    ]) {
+      expect(dataProps[section], `Missing schema property: ${section}`).toBeDefined();
+    }
+
+    const hpfa = dataProps.highPriorityFinancialActions as Record<string, unknown>;
+    expect(hpfa.type).toBe("array");
+    expect((hpfa.items as Record<string, unknown>).type).toBe("string");
+  });
+
+  test("getFinancialWatchlist description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths[FW] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
   });
 });

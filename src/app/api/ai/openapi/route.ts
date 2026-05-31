@@ -2575,6 +2575,179 @@ const paths: Record<string, unknown> = {
       },
     },
   },
+
+  "/api/ai/financial-watchlist": {
+    get: {
+      operationId: "getFinancialWatchlist",
+      summary: "Financial watchlist — revenue and collection status",
+      description:
+        "Financial watchlist: revenue today/week/month, unpaid deposits, outstanding and overdue invoices, " +
+        "final balances due, approved quotes awaiting deposit, and high-priority financial actions. Read-only. Auth required.",
+      responses: {
+        "200": {
+          description: "Financial watchlist. highPriorityFinancialActions lists plain-language items needing attention.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      date:              { type: "string", format: "date", description: "Today's date (PT timezone, YYYY-MM-DD)." },
+                      revenueToday:      { type: "number", description: "Revenue collected today (sum of deposits and final payments with today's paid date)." },
+                      revenueThisWeek:   { type: "number", description: "Revenue collected in the rolling 7-day window ending today." },
+                      revenueThisMonth:  { type: "number", description: "Revenue collected so far this calendar month." },
+                      monthlyGoal:       { type: "number", description: "Configured monthly revenue goal." },
+                      unpaidDeposits: {
+                        type: "object",
+                        description: "Deposit requests not yet paid. Failed payments sorted first, then oldest.",
+                        properties: {
+                          count:       { type: "integer" },
+                          totalAmount: { type: "number" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                leadId:        { type: "string", nullable: true },
+                                company:       { type: "string", nullable: true },
+                                depositNumber: { type: "string", nullable: true },
+                                status:        { type: "string", description: "pending | payment_failed | draft" },
+                                sentDate:      { type: "string", nullable: true },
+                                daysOld:       { type: "integer", nullable: true },
+                                amount:        { type: "number" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "totalAmount", "items"],
+                      },
+                      outstandingInvoices: {
+                        type: "object",
+                        description: "All active invoices with final payment not yet received. Overdue items sorted first.",
+                        properties: {
+                          count:        { type: "integer" },
+                          totalBalance: { type: "number" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                invoiceId:   { type: "string" },
+                                orderName:   { type: "string" },
+                                company:     { type: "string", nullable: true },
+                                depositPaid: { type: "boolean" },
+                                dueDate:     { type: "string", nullable: true },
+                                daysOverdue: { type: "integer", description: "0 when not overdue." },
+                                balanceDue:  { type: "number" },
+                                totalAmount: { type: "number" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "totalBalance", "items"],
+                      },
+                      overdueInvoices: {
+                        type: "object",
+                        description: "Subset of outstandingInvoices where daysOverdue > 0, sorted most-overdue first.",
+                        properties: {
+                          count:        { type: "integer" },
+                          totalBalance: { type: "number" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                invoiceId:   { type: "string" },
+                                orderName:   { type: "string" },
+                                company:     { type: "string", nullable: true },
+                                depositPaid: { type: "boolean" },
+                                dueDate:     { type: "string", nullable: true },
+                                daysOverdue: { type: "integer" },
+                                balanceDue:  { type: "number" },
+                                totalAmount: { type: "number" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "totalBalance", "items"],
+                      },
+                      finalBalancesDue: {
+                        type: "object",
+                        description: "Invoices where deposit is paid but final balance is not yet collected.",
+                        properties: {
+                          count:        { type: "integer" },
+                          totalBalance: { type: "number" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                invoiceId:    { type: "string" },
+                                orderName:    { type: "string" },
+                                company:      { type: "string", nullable: true },
+                                dueDate:      { type: "string", nullable: true },
+                                daysOverdue:  { type: "integer" },
+                                daysUntilDue: { type: "integer", nullable: true },
+                                balanceDue:   { type: "number" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "totalBalance", "items"],
+                      },
+                      approvedQuotesAwaitingDeposit: {
+                        type: "object",
+                        description: "Quotes digitally approved by the client but with no paid deposit request. Sorted oldest approval first.",
+                        properties: {
+                          count:       { type: "integer" },
+                          totalAmount: { type: "number" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                quoteId:     { type: "string" },
+                                quoteNumber: { type: "string", nullable: true },
+                                company:     { type: "string", nullable: true },
+                                approvedAt:  { type: "string", nullable: true },
+                                grandTotal:  { type: "number" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "totalAmount", "items"],
+                      },
+                      highPriorityFinancialActions: {
+                        type: "array",
+                        description: "Plain-language action items Jarvis can present. 'No urgent items' when nothing needs attention.",
+                        items: { type: "string" },
+                      },
+                    },
+                    required: [
+                      "date", "revenueToday", "revenueThisWeek", "revenueThisMonth", "monthlyGoal",
+                      "unpaidDeposits", "outstandingInvoices", "overdueInvoices",
+                      "finalBalancesDue", "approvedQuotesAwaitingDeposit", "highPriorityFinancialActions",
+                    ],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
