@@ -2942,6 +2942,82 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/invoice-action/prepare-final-send": {
+    post: {
+      operationId: "prepareFinalInvoiceSend",
+      summary: "Prepare final invoice send data after deposit is paid",
+      description:
+        "Validates deposit_paid and prevents double-payment. Calls invoice/generate (idempotent). " +
+        "Returns publicLink, emailSubject, emailBodyPreview, balanceRemaining, verificationSummary. " +
+        "Requires confirm: true. No email sent. No Stripe. No final_paid update.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                invoiceId: {
+                  type: "string",
+                  description: "Finance record ID. Obtain from GET /api/ai/invoice-preview. Never guess.",
+                },
+                confirm: {
+                  type: "boolean",
+                  enum: [true],
+                  description: "Must be boolean true. Only set after reviewing the invoice preview with the founder.",
+                },
+              },
+              required: ["invoiceId", "confirm"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Invoice link generated (idempotent) and compose-ready data returned. No email sent.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      invoiceId:          { type: "string" },
+                      invoicePhase:       { type: "string", enum: ["final_payment_due"], description: "Always final_payment_due on success." },
+                      company:            { type: "string", nullable: true, description: "Business name — no contact PII." },
+                      orderName:          { type: "string", nullable: true },
+                      leadId:             { type: "string", nullable: true },
+                      status:             { type: "string" },
+                      depositPaidDate:    { type: "string", format: "date", nullable: true },
+                      finalDueDate:       { type: "string", format: "date", nullable: true },
+                      balanceRemaining:   { type: "number", description: "Final balance owed by the client." },
+                      publicLink:         { type: "string", nullable: true, description: "Live invoice URL. Share with founders only — not directly to clients." },
+                      emailSubject:       { type: "string", description: "Email subject matching HQ SendFinalInvoiceModal." },
+                      emailBodyPreview:   { type: "string", description: "Full email body preview. Review with founder before sending." },
+                      verificationSummary: { type: "string", description: "Plain-language confirmation. Quote to founder before they send." },
+                      nextStep:           { type: "string", description: "Reminder that the founder must send the email manually." },
+                      preparedVia:        { type: "string", enum: ["jarvis"] },
+                    },
+                    required: ["invoiceId", "invoicePhase", "balanceRemaining", "emailSubject", "emailBodyPreview", "verificationSummary", "nextStep", "preparedVia"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Missing invoiceId, missing confirm: true, or invalid JSON.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Invoice not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "409": { description: "Invoice already paid, cancelled, draft, or deposit not yet collected.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "502": { description: "Invoice link generation failed (upstream error from invoice/generate).", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/command-center": {
     get: {
       operationId: "getCommandCenter",
@@ -3170,7 +3246,8 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
         "POST /api/ai/lead-activity (log CRM lead communication), " +
         "POST /api/ai/task (create HQ task), " +
         "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked), " +
-        "POST /api/ai/order-status (update order production status; status field only). " +
+        "POST /api/ai/order-status (update order production status; status field only), " +
+        "POST /api/ai/invoice-action/prepare-final-send (prepare final invoice for email send; idempotent token generation; requires confirm: true). " +
         "Read-only preview: GET /api/ai/quote-preview (existing quote data + email templates; no records created). " +
         "Schedule: GET /api/ai/calendar (today's events and next 7 days; read-only). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
