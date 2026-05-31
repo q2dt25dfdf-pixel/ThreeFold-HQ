@@ -1694,6 +1694,7 @@ const EXPECTED_PATHS = [
   "/api/ai/morning-briefing",
   "/api/ai/end-of-day-summary",
   "/api/ai/financial-watchlist",
+  "/api/ai/follow-up-watchlist",
 ];
 
 test.describe("GET /api/ai/openapi", () => {
@@ -1713,7 +1714,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 22 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 23 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -5116,6 +5117,383 @@ test.describe("GET /api/ai/financial-watchlist — OpenAPI schema", () => {
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
     const op = (paths[FW] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});
+
+// ============================================================================
+// Tier 13 — GET /api/ai/follow-up-watchlist
+// ============================================================================
+
+const FUWL = "/api/ai/follow-up-watchlist";
+
+const FORBIDDEN_FUWL = [
+  '"email":',      '"phone":',         '"address":',
+  '"notes":',      '"contact":',       '"summary":',
+  '"stripe":',     '"payment_link":',  '"client_name":',
+  '"client_email":',                   '"communicationHistory":',
+  '"questionnaire_files":',            '"public_token":',
+  '"payment_instructions":',           '"stripe_invoice_url":',
+];
+
+function fuwlAuthHeaders(): Record<string, string> {
+  const secret = process.env.AI_API_SECRET;
+  if (!secret) return {};
+  return { Authorization: `Bearer ${secret}` };
+}
+
+test.describe("GET /api/ai/follow-up-watchlist — unauthenticated rejection", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(FUWL);
+    expect(res.status()).toBe(401);
+  });
+
+  test("returns 401 with wrong Bearer token", async ({ request }) => {
+    const res = await request.get(FUWL, { headers: { Authorization: "Bearer wrong-token" } });
+    expect(res.status()).toBe(401);
+  });
+
+  test("returns 401 with malformed Authorization header", async ({ request }) => {
+    const res = await request.get(FUWL, { headers: { Authorization: "Token abc123" } });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/follow-up-watchlist — authenticated", () => {
+  test("returns 200 with valid Bearer token", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response has ok:true and all required top-level sections", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const d = body.data as Record<string, unknown>;
+    expect(typeof d.date).toBe("string");
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(d.date as string)).toBe(true);
+    expect(typeof d.staleLeads).toBe("object");
+    expect(typeof d.quotesAwaitingResponse).toBe("object");
+    expect(typeof d.depositsAwaitingPayment).toBe("object");
+    expect(typeof d.overdueTasks).toBe("object");
+    expect(typeof d.stalledOrders).toBe("object");
+    expect(typeof d.clientFollowUps).toBe("object");
+    expect(Array.isArray(d.recommendedFollowUpActions)).toBe(true);
+  });
+
+  test("staleLeads has count and items array bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const sl = d.staleLeads as Record<string, unknown>;
+    expect(typeof sl.count).toBe("number");
+    expect(sl.count as number).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(sl.items)).toBe(true);
+    expect((sl.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("staleLeads items have required fields and reason string", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const items = (d.staleLeads as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.leadId).toBe("string");
+      expect(typeof item.company).toBe("string");
+      expect(typeof item.followUpDate).toBe("string");
+      expect(typeof item.daysPastFollowUp).toBe("number");
+      expect(item.daysPastFollowUp as number).toBeGreaterThan(0);
+      expect(typeof item.reason).toBe("string");
+      expect((item.reason as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("staleLeads items are sorted most-overdue first (daysPastFollowUp desc)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).staleLeads as Record<string, unknown>).items as Record<string, unknown>[];
+    for (let i = 1; i < items.length; i++) {
+      expect(items[i - 1].daysPastFollowUp as number).toBeGreaterThanOrEqual(items[i].daysPastFollowUp as number);
+    }
+  });
+
+  test("staleLeads items never expose communicationHistory or contact summary", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).staleLeads as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(Object.keys(item)).not.toContain("communicationHistory");
+      expect(Object.keys(item)).not.toContain("summary");
+      expect(Object.keys(item)).not.toContain("notes");
+    }
+  });
+
+  test("quotesAwaitingResponse has count and items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const qar = d.quotesAwaitingResponse as Record<string, unknown>;
+    expect(typeof qar.count).toBe("number");
+    expect(Array.isArray(qar.items)).toBe(true);
+    expect((qar.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("quotesAwaitingResponse items have leadId, company, and reason", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).quotesAwaitingResponse as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.leadId).toBe("string");
+      expect(typeof item.company).toBe("string");
+      expect(typeof item.reason).toBe("string");
+      expect((item.reason as string).length).toBeGreaterThan(0);
+      if (item.daysUntilExpiry !== null && item.daysUntilExpiry !== undefined) {
+        expect(typeof item.daysUntilExpiry).toBe("number");
+      }
+    }
+  });
+
+  test("quotesAwaitingResponse sorted by expiry urgency (expired/expiring soonest first)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).quotesAwaitingResponse as Record<string, unknown>).items as Record<string, unknown>[];
+    // Items with daysUntilExpiry set must appear before those with null
+    let seenNull = false;
+    for (const item of items) {
+      if (item.daysUntilExpiry === null || item.daysUntilExpiry === undefined) {
+        seenNull = true;
+      } else {
+        expect(seenNull, "Item with daysUntilExpiry appeared after null-expiry item").toBe(false);
+      }
+    }
+  });
+
+  test("depositsAwaitingPayment has count, totalAmount, and items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const dap = d.depositsAwaitingPayment as Record<string, unknown>;
+    expect(typeof dap.count).toBe("number");
+    expect(typeof dap.totalAmount).toBe("number");
+    expect(dap.totalAmount as number).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(dap.items)).toBe(true);
+    expect((dap.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("depositsAwaitingPayment items sorted — payment_failed first", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).depositsAwaitingPayment as Record<string, unknown>).items as Record<string, unknown>[];
+    let seenNonFailed = false;
+    for (const item of items) {
+      if (item.status !== "payment_failed") {
+        seenNonFailed = true;
+      } else {
+        expect(seenNonFailed, "payment_failed item appeared after non-failed item").toBe(false);
+      }
+    }
+  });
+
+  test("depositsAwaitingPayment items never expose client_name or payment_instructions", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).depositsAwaitingPayment as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(Object.keys(item)).not.toContain("client_name");
+      expect(Object.keys(item)).not.toContain("payment_instructions");
+    }
+  });
+
+  test("overdueTasks has count and items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const ot = d.overdueTasks as Record<string, unknown>;
+    expect(typeof ot.count).toBe("number");
+    expect(Array.isArray(ot.items)).toBe(true);
+    expect((ot.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("overdueTasks items have daysPastDue > 0 and a reason", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).overdueTasks as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.id).toBe("string");
+      expect(typeof item.title).toBe("string");
+      expect(typeof item.daysPastDue).toBe("number");
+      expect(item.daysPastDue as number).toBeGreaterThan(0);
+      expect(typeof item.reason).toBe("string");
+    }
+  });
+
+  test("overdueTasks items sorted most-overdue first (daysPastDue desc)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).overdueTasks as Record<string, unknown>).items as Record<string, unknown>[];
+    for (let i = 1; i < items.length; i++) {
+      expect(items[i - 1].daysPastDue as number).toBeGreaterThanOrEqual(items[i].daysPastDue as number);
+    }
+  });
+
+  test("stalledOrders has count and items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const so = d.stalledOrders as Record<string, unknown>;
+    expect(typeof so.count).toBe("number");
+    expect(Array.isArray(so.items)).toBe(true);
+    expect((so.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("stalledOrders items have daysPastDue > 0 and sorted desc", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).stalledOrders as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      expect(item.daysPastDue as number).toBeGreaterThan(0);
+    }
+    for (let i = 1; i < items.length; i++) {
+      expect(items[i - 1].daysPastDue as number).toBeGreaterThanOrEqual(items[i].daysPastDue as number);
+    }
+  });
+
+  test("clientFollowUps has count and items bounded to 10", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const d = body.data as Record<string, unknown>;
+    const cf = d.clientFollowUps as Record<string, unknown>;
+    expect(typeof cf.count).toBe("number");
+    expect(Array.isArray(cf.items)).toBe(true);
+    expect((cf.items as unknown[]).length).toBeLessThanOrEqual(10);
+  });
+
+  test("clientFollowUps items have daysUntilFollowUp in [0, 3] and sorted soonest first", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).clientFollowUps as Record<string, unknown>).items as Record<string, unknown>[];
+    for (const item of items) {
+      const d = item.daysUntilFollowUp as number;
+      expect(d).toBeGreaterThanOrEqual(0);
+      expect(d).toBeLessThanOrEqual(3);
+      expect(typeof item.reason).toBe("string");
+    }
+    for (let i = 1; i < items.length; i++) {
+      expect(
+        (items[i - 1].daysUntilFollowUp as number) <=
+        (items[i].daysUntilFollowUp as number),
+      ).toBe(true);
+    }
+  });
+
+  test("recommendedFollowUpActions is non-empty array of non-empty strings", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const actions = (body.data as Record<string, unknown>).recommendedFollowUpActions as unknown[];
+    expect(Array.isArray(actions)).toBe(true);
+    expect(actions.length).toBeGreaterThan(0);
+    for (const a of actions) {
+      expect(typeof a).toBe("string");
+      expect((a as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("response sets Cache-Control: no-store", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+
+  test("no PII fields in follow-up-watchlist response body", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(FUWL, { headers: fuwlAuthHeaders() });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_FUWL) {
+      expect(bodyText, `follow-up-watchlist must not expose ${key}`).not.toContain(key);
+    }
+  });
+});
+
+test.describe("GET /api/ai/follow-up-watchlist — OpenAPI schema", () => {
+  test("OpenAPI schema declares /api/ai/follow-up-watchlist with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths[FUWL]).toBeDefined();
+
+    const getOp = (paths[FUWL] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getFollowUpWatchlist");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    for (const section of [
+      "date", "staleLeads", "quotesAwaitingResponse", "depositsAwaitingPayment",
+      "overdueTasks", "stalledOrders", "clientFollowUps", "recommendedFollowUpActions",
+    ]) {
+      expect(dataProps[section], `Missing schema property: ${section}`).toBeDefined();
+    }
+
+    const rfa = dataProps.recommendedFollowUpActions as Record<string, unknown>;
+    expect(rfa.type).toBe("array");
+    expect((rfa.items as Record<string, unknown>).type).toBe("string");
+  });
+
+  test("getFollowUpWatchlist description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths[FUWL] as Record<string, unknown>).get as Record<string, unknown>;
     expect(typeof op.description).toBe("string");
     expect((op.description as string).length).toBeLessThanOrEqual(300);
   });

@@ -2748,6 +2748,199 @@ const paths: Record<string, unknown> = {
       },
     },
   },
+
+  "/api/ai/follow-up-watchlist": {
+    get: {
+      operationId: "getFollowUpWatchlist",
+      summary: "Follow-up watchlist — leads, quotes, deposits, tasks, and orders needing attention",
+      description:
+        "Follow-up watchlist: stale leads, quotes awaiting client response, deposits awaiting payment, " +
+        "overdue tasks, stalled orders, and upcoming client follow-ups. " +
+        "Each item includes reason and urgency indicators. Read-only. Auth required.",
+      responses: {
+        "200": {
+          description: "Follow-up watchlist. recommendedFollowUpActions lists plain-language items to act on.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      date: { type: "string", format: "date", description: "Today's date (PT timezone, YYYY-MM-DD)." },
+                      staleLeads: {
+                        type: "object",
+                        description: "Open leads with a past-due follow-up date and an active follow-up task. Sorted most-overdue first.",
+                        properties: {
+                          count: { type: "integer" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                leadId:             { type: "string" },
+                                company:            { type: "string" },
+                                stage:              { type: "string" },
+                                owner:              { type: "string", nullable: true },
+                                followUpDate:       { type: "string", format: "date" },
+                                daysPastFollowUp:   { type: "integer", description: "Days since follow-up was due." },
+                                lastContacted:      { type: "string", nullable: true, description: "Date of most recent communication log entry." },
+                                daysSinceLastContact: { type: "integer", nullable: true },
+                                reason:             { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "items"],
+                      },
+                      quotesAwaitingResponse: {
+                        type: "object",
+                        description: "Leads in Quote Sent stage with their most recent sent quote. Sorted by expiry urgency.",
+                        properties: {
+                          count: { type: "integer" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                leadId:        { type: "string" },
+                                company:       { type: "string" },
+                                quoteId:       { type: "string", nullable: true },
+                                quoteNumber:   { type: "string", nullable: true },
+                                sentDate:      { type: "string", nullable: true },
+                                daysSinceSent: { type: "integer", nullable: true },
+                                expirationDate:  { type: "string", nullable: true },
+                                daysUntilExpiry: { type: "integer", nullable: true, description: "Negative when expired." },
+                                grandTotal:    { type: "number", nullable: true },
+                                reason:        { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "items"],
+                      },
+                      depositsAwaitingPayment: {
+                        type: "object",
+                        description: "Deposit requests not yet paid. Failed payments sorted first, then oldest.",
+                        properties: {
+                          count:       { type: "integer" },
+                          totalAmount: { type: "number" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                leadId:        { type: "string", nullable: true },
+                                company:       { type: "string", nullable: true },
+                                depositNumber: { type: "string", nullable: true },
+                                status:        { type: "string", description: "pending | payment_failed | draft" },
+                                sentDate:      { type: "string", nullable: true },
+                                daysOld:       { type: "integer", nullable: true },
+                                amount:        { type: "number" },
+                                reason:        { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "totalAmount", "items"],
+                      },
+                      overdueTasks: {
+                        type: "object",
+                        description: "Incomplete tasks past their due date. Sorted most-overdue first.",
+                        properties: {
+                          count: { type: "integer" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:          { type: "string" },
+                                title:       { type: "string" },
+                                owner:       { type: "string", nullable: true },
+                                dueDate:     { type: "string" },
+                                daysPastDue: { type: "integer" },
+                                reason:      { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "items"],
+                      },
+                      stalledOrders: {
+                        type: "object",
+                        description: "Active orders past their estimated delivery date. Sorted most-overdue first.",
+                        properties: {
+                          count: { type: "integer" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:          { type: "string" },
+                                orderName:   { type: "string" },
+                                status:      { type: "string" },
+                                dueDate:     { type: "string" },
+                                daysPastDue: { type: "integer" },
+                                reason:      { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "items"],
+                      },
+                      clientFollowUps: {
+                        type: "object",
+                        description: "Leads with a follow-up task due today through the next 3 days. Sorted soonest first.",
+                        properties: {
+                          count: { type: "integer" },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              properties: {
+                                leadId:            { type: "string" },
+                                company:           { type: "string" },
+                                stage:             { type: "string" },
+                                owner:             { type: "string", nullable: true },
+                                followUpDate:      { type: "string", format: "date" },
+                                daysUntilFollowUp: { type: "integer", description: "0 = today, 1 = tomorrow, etc." },
+                                reason:            { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["count", "items"],
+                      },
+                      recommendedFollowUpActions: {
+                        type: "array",
+                        description: "Plain-language follow-up actions Jarvis can present. 'All caught up' when nothing needs attention.",
+                        items: { type: "string" },
+                      },
+                    },
+                    required: [
+                      "date", "staleLeads", "quotesAwaitingResponse", "depositsAwaitingPayment",
+                      "overdueTasks", "stalledOrders", "clientFollowUps", "recommendedFollowUpActions",
+                    ],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
