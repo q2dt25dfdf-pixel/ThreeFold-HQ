@@ -2,6 +2,10 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
+import {
+  type QuoteRow,
+  selectBestQuote,
+} from "@/lib/quoteSelection";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +37,6 @@ export const dynamic = "force-dynamic";
 //   ambiguous:true with a choices array — never guesses.
 
 type LeadRow = { id: string; data: Record<string, unknown> | null };
-type QuoteRow = { id: string; data: Record<string, unknown> | null };
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
@@ -50,33 +53,6 @@ function fmtDate(iso: string): string {
     month: "long",
     day: "numeric",
     year: "numeric",
-  });
-}
-
-// ── Quote recency sort ─────────────────────────────────────────────────────────
-//
-// Effective timestamp = latest of: acknowledgementAcceptedAt, sent_date, created_at.
-// The quotes table has no updated_at column at the row level — only id and data.
-// ISO 8601 strings compare correctly as strings, so no Date parsing needed.
-
-function effectiveTimestamp(q: QuoteRow): string {
-  const d = q.data ?? {};
-  return (
-    (d.acknowledgementAcceptedAt as string) ||
-    (d.sent_date as string) ||
-    (d.created_at as string) ||
-    ""
-  );
-}
-
-function sortQuotesByRecency(quotes: QuoteRow[]): QuoteRow[] {
-  return [...quotes].sort((a, b) => {
-    const ta = effectiveTimestamp(a);
-    const tb = effectiveTimestamp(b);
-    if (tb > ta) return 1;
-    if (tb < ta) return -1;
-    // Tie-break: compare IDs (format: quote-{leadId}-{ms})
-    return b.id > a.id ? 1 : -1;
   });
 }
 
@@ -137,6 +113,7 @@ function buildPreviewResponse(
   resolvedBy: string,
   totalQuotesForLead: number,
   selectionNote: string,
+  selectionWarning?: string,
 ) {
   const qd = (quoteRow.data ?? {}) as Record<string, unknown>;
 
@@ -187,6 +164,7 @@ function buildPreviewResponse(
     isRevised,
     totalQuotesForLead,
     selectionNote,
+    selectionWarning: selectionWarning ?? null,
     emailSubject,
     emailBodyPreview,
   });
@@ -233,7 +211,12 @@ async function fetchAllQuotes(
   return (rows ?? []) as QuoteRow[];
 }
 
-// ── Shared: resolve leadId → find best quote via recency sort ──────────────────
+// ── Shared: resolve leadId → select best quote via status-aware sort ───────────
+//
+// Selection priority: sent quotes beat drafts; within a bucket, most recent wins.
+// Multiple equally-valid candidates returns an ambiguous response — never guesses.
+// A single draft-only quote is returned with selectionWarning so the founder can
+// confirm before Jarvis proceeds to deposit-send.
 
 async function resolveLeadQuote(
   db: ReturnType<typeof getSupabaseAdmin>,
@@ -242,9 +225,7 @@ async function resolveLeadQuote(
   resolvedBy: string,
 ): Promise<Response> {
   const allQuotes = await fetchAllQuotes(db);
-  const leadQuotes = sortQuotesByRecency(
-    allQuotes.filter((q) => (q.data?.lead_id as string) === leadId),
-  );
+  const leadQuotes = allQuotes.filter((q) => (q.data?.lead_id as string) === leadId);
 
   if (leadQuotes.length === 0) {
     return okResponse({
@@ -257,22 +238,30 @@ async function resolveLeadQuote(
     });
   }
 
-  const selected = leadQuotes[0];
-  const total    = leadQuotes.length;
-  const selectedQN = (selected.data?.quote_number as string) ?? selected.id;
-  const ts = effectiveTimestamp(selected);
-  const tsReason =
-    selected.data?.acknowledgementAcceptedAt ? "approved"
-    : selected.data?.sent_date              ? "sent"
-    : selected.data?.created_at             ? "created"
-    : "generated";
+  const result = selectBestQuote(leadQuotes);
+  const total  = leadQuotes.length;
 
-  const selectionNote =
-    total === 1
-      ? `Only quote on file for this lead.`
-      : `${selectedQN} selected — most recently ${tsReason} of ${total} quotes for this lead. Use quoteNumber=<number> to pull a specific one.`;
+  if (result.kind === "ambiguous") {
+    return okResponse({
+      leadId,
+      company:            (leadData.company as string) ?? null,
+      stage:              (leadData.stage as string) ?? null,
+      ambiguous:          true,
+      matchCount:         result.candidates.length,
+      totalQuotesForLead: total,
+      message:            result.reason,
+      candidates:         result.candidates,
+    });
+  }
 
-  return buildPreviewResponse(leadId, leadData, selected, resolvedBy, total, selectionNote);
+  if (result.kind === "single") {
+    return buildPreviewResponse(
+      leadId, leadData, result.quote, resolvedBy, total, result.selectionNote, result.warning,
+    );
+  }
+
+  // Unreachable: leadQuotes.length > 0 guarantees a single or ambiguous result
+  return errResponse("Internal server error", 500);
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────

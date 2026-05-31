@@ -1344,14 +1344,15 @@ const paths: Record<string, unknown> = {
                       resolvedBy:           { type: "string", description: "'leadId', 'quoteNumber', 'company', or 'contactName' — how the lead was found." },
                       totalQuotesForLead:   { type: "integer", description: "Total number of quotes in the system for this lead. >1 means other quotes exist." },
                       selectionNote:        { type: "string", description: "Explains which quote was selected and why. Always show this to the founder when totalQuotesForLead > 1." },
+                      selectionWarning:     { type: "string", nullable: true, description: "Present when the selected quote is a draft (not yet sent). Show to founder and ask them to confirm before proceeding to deposit-send." },
                       isRevised:            { type: "boolean", description: "True if the lead is currently at 'Quote Sent' stage, indicating a revised quote flow." },
                       emailSubject:      { type: "string", description: "Email subject matching HQ SendQuoteModal. Present when hasExistingQuote is true." },
                       emailBodyPreview:  { type: "string", description: "Full email body preview matching HQ SendQuoteModal templates. Company name used as contact fallback." },
-                      ambiguous:         { type: "boolean", description: "True when multiple leads matched. leadId/hasExistingQuote are absent — present choices from matches array instead." },
-                      matchCount:        { type: "integer", description: "Number of leads matched. Present when ambiguous is true." },
+                      ambiguous:         { type: "boolean", description: "True when multiple leads matched (matches array) or multiple equally-valid quotes found (candidates array). Never guesses — show choices and ask founder." },
+                      matchCount:        { type: "integer", description: "Number of leads or quotes matched. Present when ambiguous is true." },
                       matches: {
                         type: "array",
-                        description: "Choice list when ambiguous is true. Show these to the founder and ask which one they mean.",
+                        description: "Lead choice list when multiple leads matched the company/contact search. Show to founder.",
                         items: {
                           type: "object",
                           properties: {
@@ -1361,6 +1362,22 @@ const paths: Record<string, unknown> = {
                             quoteNumber: { type: "string", nullable: true },
                           },
                           required: ["leadId"],
+                        },
+                      },
+                      candidates: {
+                        type: "array",
+                        description: "Quote choice list when multiple equally-valid quotes exist for the same lead. Show to founder — use quoteNumber=<number> to select.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            quoteId:     { type: "string" },
+                            quoteNumber: { type: "string", nullable: true },
+                            status:      { type: "string", nullable: true, description: "'sent' or 'draft'." },
+                            grandTotal:  { type: "number", nullable: true },
+                            sentDate:    { type: "string", nullable: true },
+                            createdAt:   { type: "string", nullable: true },
+                          },
+                          required: ["quoteId"],
                         },
                       },
                     },
@@ -1585,7 +1602,8 @@ const paths: Record<string, unknown> = {
       description:
         "Sends a deposit request after founder confirmation. " +
         "Requires confirm: true — show deposit-preview and ask 'Send this deposit request?' first. " +
-        "Reuses existing deposit if lead has one (no duplicate records). " +
+        "Reuses existing deposit if lead has one. " +
+        "Blocks if quote is draft or ambiguous — never guesses. " +
         "409 if already sent. Requires RESEND_API_KEY.",
       requestBody: {
         required: true,
@@ -1645,7 +1663,7 @@ const paths: Record<string, unknown> = {
             },
           },
         },
-        "400": { description: "Missing confirm: true, invalid sender, no email on lead, or no project value.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "400": { description: "Missing confirm: true, invalid sender, quote is draft/ambiguous, no email on lead, or no project value.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "404": { description: "Lead or deposit record not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "409": { description: "Deposit already sent. Use HQ SendDepositModal to resend.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },

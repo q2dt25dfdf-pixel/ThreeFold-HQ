@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
+import { type QuoteRow, selectBestQuote } from "@/lib/quoteSelection";
 
 export const dynamic = "force-dynamic";
 
@@ -233,38 +234,79 @@ export async function POST(request: Request): Promise<Response> {
       }
     } else {
       // ── No existing deposit — generate a new record ────────────────────────
-      // Amounts: read from linked quote first, then lead value. Never recomputed.
+      // Amounts come from the best sent quote for this lead, then fall back to
+      // lead.value. Never recomputed — reads what is already stored.
+      // Draft quotes are rejected; ambiguous sent quotes require the founder to
+      // specify quoteNumber via GET /api/ai/quote-preview first.
       let totalAmount = 0;
       let lineItems: unknown[] | null = null;
       let subtotal: number | null = null;
       let salesTaxRate: number | null = null;
       let salesTaxAmount: number | null = null;
       let grandTotal: number | null = null;
-      let quoteId: string | null = (ld.quote_id as string) || null;
+      let quoteId: string | null = null;
 
-      if (quoteId) {
-        const { data: quoteRows } = await db
-          .from("quotes")
-          .select("id,data")
-          .eq("id", quoteId)
-          .limit(1);
-        if (quoteRows && quoteRows.length > 0) {
-          const qd = (quoteRows[0].data ?? {}) as Record<string, unknown>;
-          const qGrandTotal = qd.grand_total != null ? Number(qd.grand_total) : null;
-          const qTotal = qd.total_amount != null ? Number(qd.total_amount) : 0;
-          const effectiveTotal = qGrandTotal ?? qTotal;
-          if (effectiveTotal > 0) {
-            totalAmount = effectiveTotal;
-            if (qd.subtotal != null) subtotal = Number(qd.subtotal);
-            if (qd.sales_tax_rate != null) salesTaxRate = Number(qd.sales_tax_rate);
-            if (qd.sales_tax_amount != null) salesTaxAmount = Number(qd.sales_tax_amount);
-            if (qd.grand_total != null) grandTotal = Number(qd.grand_total);
-            if (Array.isArray(qd.line_items)) lineItems = qd.line_items as unknown[];
-          }
-        }
+      // Fetch all quotes for this lead and select the best one
+      const { data: allQuoteRows, error: quotesErr } = await db
+        .from("quotes")
+        .select("id,data");
+
+      if (quotesErr && (quotesErr as { code?: string }).code !== "42P01") {
+        throw new Error(`[ai/deposit-send] fetch quotes: ${quotesErr.message}`);
       }
 
-      // Fall back to lead value
+      const leadQuotes = ((allQuoteRows ?? []) as QuoteRow[]).filter(
+        (q) => (q.data?.lead_id as string) === leadId,
+      );
+
+      const quoteResult = selectBestQuote(leadQuotes);
+
+      if (quoteResult.kind === "ambiguous") {
+        const candidateList = quoteResult.candidates
+          .map((c) => {
+            const total = c.grandTotal != null ? fmtCurrency(c.grandTotal) : "no total";
+            return `${c.quoteNumber ?? c.quoteId} (${c.status ?? "unknown"}, ${total})`;
+          })
+          .join("; ");
+        return errResponse(
+          `Multiple quotes exist for this lead — cannot determine which to use for the deposit. ` +
+          `Preview the correct quote with GET /api/ai/quote-preview?quoteNumber=<number>, ` +
+          `confirm with the founder, then retry. Candidates: ${candidateList}`,
+          400,
+        );
+      }
+
+      if (quoteResult.kind === "single") {
+        const selectedQuote = quoteResult.quote;
+        const qd = (selectedQuote.data ?? {}) as Record<string, unknown>;
+        const quoteStatus = (qd.status as string) ?? null;
+
+        if (quoteStatus !== "sent") {
+          const qn = (qd.quote_number as string) ?? selectedQuote.id;
+          return errResponse(
+            `Quote ${qn} is a draft and has not been sent to the client. ` +
+            `Send the quote first via HQ or GET /api/ai/quote-preview, then retry deposit-send.`,
+            400,
+          );
+        }
+
+        // Use the sent quote's amounts
+        const qGrandTotal = qd.grand_total != null ? Number(qd.grand_total) : null;
+        const qTotal = qd.total_amount != null ? Number(qd.total_amount) : 0;
+        const effectiveTotal = qGrandTotal ?? qTotal;
+        if (effectiveTotal > 0) {
+          totalAmount = effectiveTotal;
+          quoteId = selectedQuote.id;
+          if (qd.subtotal != null) subtotal = Number(qd.subtotal);
+          if (qd.sales_tax_rate != null) salesTaxRate = Number(qd.sales_tax_rate);
+          if (qd.sales_tax_amount != null) salesTaxAmount = Number(qd.sales_tax_amount);
+          if (qd.grand_total != null) grandTotal = Number(qd.grand_total);
+          if (Array.isArray(qd.line_items)) lineItems = qd.line_items as unknown[];
+        }
+      }
+      // quoteResult.kind === "empty" → falls through to lead.value
+
+      // Fall back to lead value when no quote exists
       if (totalAmount <= 0) {
         const rawValue = ld.value;
         if (typeof rawValue === "number") {
