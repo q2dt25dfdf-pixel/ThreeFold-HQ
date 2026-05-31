@@ -1446,6 +1446,7 @@ const EXPECTED_PATHS = [
   "/api/ai/finances",
   "/api/ai/activity",
   "/api/ai/search",
+  "/api/ai/calendar",
   "/api/ai/client/{id}",
   "/api/ai/order/{id}",
   "/api/ai/lead/{id}",
@@ -1469,7 +1470,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 14 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 15 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -1543,5 +1544,202 @@ test.describe("GET /api/ai/openapi", () => {
       violations,
       `GPT Actions incompatible — null inside enum at: ${violations.join(", ")}`,
     ).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 9G — GET /api/ai/calendar
+// ---------------------------------------------------------------------------
+
+const CALENDAR = "/api/ai/calendar";
+
+const FORBIDDEN_CALENDAR = [
+  '"email":', '"phone":', '"address":',
+  '"notes":', '"source":',
+  '"stripe":', '"payment_link":',
+  '"contact":', '"pricingNotes":',
+];
+
+test.describe("GET /api/ai/calendar — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(CALENDAR);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("GET /api/ai/calendar — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("returns 200 with valid token", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has expected shape with correct types", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    // Required top-level fields
+    expect(typeof data.date).toBe("string");
+    // date must be a valid YYYY-MM-DD
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(data.date)).toBe(true);
+    expect(Number.isNaN(Date.parse(data.date))).toBe(false);
+
+    expect(typeof data.todayCount).toBe("number");
+    expect(data.todayCount).toBeGreaterThanOrEqual(0);
+
+    expect(typeof data.hasDeliveriesToday).toBe("boolean");
+    expect(typeof data.hasMeetingsToday).toBe("boolean");
+
+    expect(Array.isArray(data.today)).toBe(true);
+    expect(Array.isArray(data.thisWeek)).toBe(true);
+
+    // todayCount must match today array length
+    expect(data.todayCount).toBe(data.today.length);
+
+    // Validate safe event shape — no notes, no source
+    const VALID_TYPES = new Set([
+      "Client Meeting", "Demo", "Video Call", "Delivery",
+      "Deadline", "Internal Meeting", "Other",
+    ]);
+    const VALID_PRIORITIES = new Set(["High", "Medium", "Low"]);
+
+    for (const ev of [...data.today, ...data.thisWeek] as Record<string, unknown>[]) {
+      expect(typeof ev.id).toBe("string");
+      expect(typeof ev.title).toBe("string");
+      expect(typeof ev.date).toBe("string");
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(ev.date as string)).toBe(true);
+      expect(Array.isArray(ev.assignedTo)).toBe(true);
+
+      // type must be a known value when present
+      if (ev.type !== null && ev.type !== undefined) {
+        expect(VALID_TYPES.has(ev.type as string), `Unknown type: ${ev.type}`).toBe(true);
+      }
+      // priority must be a known value when present
+      if (ev.priority !== null && ev.priority !== undefined) {
+        expect(VALID_PRIORITIES.has(ev.priority as string), `Unknown priority: ${ev.priority}`).toBe(true);
+      }
+
+      // Must NOT expose private fields
+      expect(ev).not.toHaveProperty("notes");
+      expect(ev).not.toHaveProperty("source");
+      expect(ev).not.toHaveProperty("cancelled");
+    }
+  });
+
+  test("today[] events all have date matching data.date", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    for (const ev of data.today as Record<string, unknown>[]) {
+      expect(ev.date).toBe(data.date);
+    }
+  });
+
+  test("thisWeek[] events all have date after today and within 7 days", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    const today   = data.date as string;
+    const weekEnd = new Date(today + "T12:00:00");
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+
+    for (const ev of data.thisWeek as Record<string, unknown>[]) {
+      expect(ev.date as string > today).toBe(true);
+      expect(ev.date as string <= weekEndStr).toBe(true);
+    }
+  });
+
+  test("hasDeliveriesToday is true iff any today[] event has type Delivery", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    const hasDelivery = (data.today as Record<string, unknown>[]).some((e) => e.type === "Delivery");
+    expect(data.hasDeliveriesToday).toBe(hasDelivery);
+  });
+
+  test("hasMeetingsToday is true iff any today[] event is a meeting type", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    const MEETING_TYPES = new Set(["Client Meeting", "Demo", "Video Call", "Internal Meeting"]);
+    const hasMeeting = (data.today as Record<string, unknown>[]).some(
+      (e) => MEETING_TYPES.has(e.type as string),
+    );
+    expect(data.hasMeetingsToday).toBe(hasMeeting);
+  });
+
+  test("response does not expose private or PII field names", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_CALENDAR) {
+      expect(bodyText, `Response must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(CALENDAR, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+
+  test("OpenAPI schema declares CalendarEvent component with required fields", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const schemas = ((schema.components as Record<string, unknown>).schemas as Record<string, unknown>);
+    const ce = schemas.CalendarEvent as Record<string, unknown>;
+    expect(ce).toBeDefined();
+    const props = ce.properties as Record<string, unknown>;
+    expect(props.id).toBeDefined();
+    expect(props.title).toBeDefined();
+    expect(props.date).toBeDefined();
+    expect(props.type).toBeDefined();
+    expect(props.assignedTo).toBeDefined();
+    // Sensitive fields must not be in the schema
+    expect(props).not.toHaveProperty("notes");
+    expect(props).not.toHaveProperty("source");
   });
 });

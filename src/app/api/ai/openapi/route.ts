@@ -105,6 +105,22 @@ const components = {
       },
       required: ["id", "source", "type", "date"],
     },
+
+    CalendarEvent: {
+      type: "object",
+      description: "A single HQ calendar event. Notes and source are never included.",
+      properties: {
+        id:         { type: "string" },
+        title:      { type: "string" },
+        date:       { type: "string", format: "date", description: "Event date (YYYY-MM-DD)." },
+        time:       { type: "string", description: "Start time in 24-hour HH:MM format, or null if all-day." },
+        endTime:    { type: "string", description: "End time in 24-hour HH:MM format, or null." },
+        type:       { type: "string", enum: ["Client Meeting", "Demo", "Video Call", "Delivery", "Deadline", "Internal Meeting", "Other"] },
+        priority:   { type: "string", enum: ["High", "Medium", "Low"] },
+        assignedTo: { type: "array", items: { type: "string" }, description: "Founder names assigned to this event." },
+      },
+      required: ["id", "title", "date", "type", "assignedTo"],
+    },
   },
 };
 
@@ -1244,6 +1260,47 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/calendar": {
+    get: {
+      operationId: "getCalendar",
+      summary: "Today's schedule and next-7-day calendar view",
+      description:
+        "Today's HQ calendar events and next 7 days. " +
+        "Returns today[], thisWeek[], todayCount, hasDeliveriesToday, hasMeetingsToday. " +
+        "Cancelled events excluded. Notes never returned. Read-only.",
+      responses: {
+        "200": {
+          description: "Calendar events for today and the next 7 days.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      date:                { type: "string", format: "date", description: "Today's date (YYYY-MM-DD)." },
+                      todayCount:          { type: "integer", description: "Number of non-cancelled events scheduled today." },
+                      hasDeliveriesToday:  { type: "boolean" },
+                      hasMeetingsToday:    { type: "boolean", description: "True if any Client Meeting, Demo, Video Call, or Internal Meeting is today." },
+                      today:    { type: "array", description: "Events today, sorted by start time.", items: { "$ref": "#/components/schemas/CalendarEvent" } },
+                      thisWeek: { type: "array", description: "Events in the next 7 days (excluding today), sorted by date then time.", items: { "$ref": "#/components/schemas/CalendarEvent" } },
+                    },
+                    required: ["date", "todayCount", "hasDeliveriesToday", "hasMeetingsToday", "today", "thisWeek"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",
@@ -1542,6 +1599,7 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
         "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked), " +
         "POST /api/ai/order-status (update order production status; status field only). " +
         "Read-only preview: GET /api/ai/quote-preview (existing quote data + email templates; no records created). " +
+        "Schedule: GET /api/ai/calendar (today's events and next 7 days; read-only). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
         "raw notes, Stripe links, or payment links. " +
         "All data endpoints require a Bearer token (AI_API_SECRET). " +
