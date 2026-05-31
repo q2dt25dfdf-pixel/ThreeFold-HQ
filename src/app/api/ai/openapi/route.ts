@@ -1421,6 +1421,161 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/client-intelligence": {
+    get: {
+      operationId: "getClientIntelligence",
+      summary: "Full activity and pipeline view for a CRM lead",
+      description:
+        "Client intelligence for one CRM lead. Find by leadId or q (partial company name). " +
+        "Returns recentQuotes, recentInvoices, recentDeposits, recentOrders, " +
+        "recentActivityLogs (type/date/owner — no note content), " +
+        "lastContacted, nextRecommendedFollowUp, and summary. Read-only.",
+      parameters: [
+        {
+          name: "leadId",
+          in: "query",
+          required: false,
+          description: "CRM lead UUID. Highest priority — use when known.",
+          schema: { type: "string" },
+        },
+        {
+          name: "q",
+          in: "query",
+          required: false,
+          description: "Partial, case-insensitive company name search. Returns choice list if multiple leads match.",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Client intelligence or ambiguous choice list.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    description:
+                      "Single ClientIntelligence result, or ambiguous list. " +
+                      "When ambiguous is true, show matches and ask which lead they mean.",
+                    properties: {
+                      // ── Single result ───────────────────────────────────
+                      leadId:    { type: "string" },
+                      company:   { type: "string", description: "Business name — no contact PII." },
+                      stage:     { type: "string", description: "Normalized CRM pipeline stage." },
+                      status:    { type: "string" },
+                      owner:     { type: "string", nullable: true },
+                      followUpDate: { type: "string", format: "date", nullable: true },
+                      lastContacted: { type: "string", format: "date", nullable: true, description: "Date of most recent logged communication." },
+                      nextRecommendedFollowUp: { type: "string", description: "Plain-language next action recommendation. Quote directly to the founder." },
+                      recentQuotes: {
+                        type: "array", maxItems: 5,
+                        items: {
+                          type: "object",
+                          properties: {
+                            quoteId:         { type: "string" },
+                            quoteNumber:     { type: "string", nullable: true },
+                            status:          { type: "string" },
+                            grandTotal:      { type: "number", nullable: true },
+                            expirationDate:  { type: "string", format: "date", nullable: true },
+                            sentDate:        { type: "string", format: "date", nullable: true },
+                            daysUntilExpiry: { type: "integer", nullable: true, description: "Negative = already expired." },
+                          },
+                          required: ["quoteId", "status"],
+                        },
+                      },
+                      recentInvoices: {
+                        type: "array", maxItems: 5,
+                        items: {
+                          type: "object",
+                          properties: {
+                            invoiceId:   { type: "string" },
+                            orderName:   { type: "string" },
+                            status:      { type: "string" },
+                            depositPaid: { type: "boolean" },
+                            finalPaid:   { type: "boolean" },
+                            balance:     { type: "number", description: "Remaining balance. 0 when fully paid." },
+                            dueDate:     { type: "string", format: "date", nullable: true },
+                          },
+                          required: ["invoiceId", "orderName", "status", "depositPaid", "finalPaid", "balance"],
+                        },
+                      },
+                      recentDeposits: {
+                        type: "array", maxItems: 5,
+                        items: {
+                          type: "object",
+                          properties: {
+                            depositId:            { type: "string" },
+                            depositRequestNumber: { type: "string", nullable: true },
+                            status:               { type: "string" },
+                            depositAmount:        { type: "number", nullable: true },
+                            sentDate:             { type: "string", format: "date", nullable: true },
+                          },
+                          required: ["depositId", "status"],
+                        },
+                      },
+                      recentOrders: {
+                        type: "array", maxItems: 5,
+                        items: {
+                          type: "object",
+                          properties: {
+                            orderId:               { type: "string" },
+                            orderName:             { type: "string" },
+                            status:                { type: "string" },
+                            estimatedDeliveryDate: { type: "string", format: "date", nullable: true },
+                          },
+                          required: ["orderId", "orderName", "status"],
+                        },
+                      },
+                      recentActivityLogs: {
+                        type: "array", maxItems: 10,
+                        description: "Recent communication log entries. Type, date, and owner only — note content is never returned.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            date:  { type: "string", format: "date" },
+                            type:  { type: "string", description: "Call, Email, Text, Meeting, In Person, or Other." },
+                            owner: { type: "string" },
+                          },
+                          required: ["date", "type", "owner"],
+                        },
+                      },
+                      summary: { type: "string", description: "One-sentence Jarvis-readable summary of the client's pipeline state." },
+                      // ── Ambiguous ───────────────────────────────────────
+                      ambiguous:  { type: "boolean", description: "True when q matched multiple leads." },
+                      matchCount: { type: "integer" },
+                      matches: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            leadId:  { type: "string" },
+                            company: { type: "string" },
+                            stage:   { type: "string" },
+                            status:  { type: "string" },
+                          },
+                          required: ["leadId", "company", "stage", "status"],
+                        },
+                      },
+                    },
+                    required: [],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "No lookup parameter provided.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/order-intelligence": {
     get: {
       operationId: "getOrderIntelligence",

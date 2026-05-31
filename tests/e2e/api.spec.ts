@@ -1684,6 +1684,7 @@ const EXPECTED_PATHS = [
   "/api/ai/search",
   "/api/ai/calendar",
   "/api/ai/order-intelligence",
+  "/api/ai/client-intelligence",
   "/api/ai/client/{id}",
   "/api/ai/order/{id}",
   "/api/ai/lead/{id}",
@@ -1707,7 +1708,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 16 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 17 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -2440,6 +2441,311 @@ test.describe("GET /api/ai/order-intelligence — OpenAPI schema", () => {
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
     const op = (paths["/api/ai/order-intelligence"] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 6 — GET /api/ai/client-intelligence
+// ---------------------------------------------------------------------------
+
+const CLIENT_INTEL = "/api/ai/client-intelligence";
+
+const FORBIDDEN_CLIENT_INTEL = [
+  '"email":', '"phone":', '"address":',
+  '"notes":', '"summary":', '"body":',
+  '"contact":', '"stripe":', '"payment_link":',
+  '"client_name":', '"client_email":',
+  '"communicationHistory":',
+];
+
+test.describe("GET /api/ai/client-intelligence — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=test`);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=test`, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=test`, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/client-intelligence — param validation", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("missing both params returns 400", async ({ request }) => {
+    const res = await request.get(CLIENT_INTEL, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("nonexistent leadId returns 404", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?leadId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+    expect(body.error.toLowerCase()).not.toContain("sql");
+  });
+
+  test("q with no matching leads returns 404", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=zzz-no-such-company-xyz-999`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("GET /api/ai/client-intelligence — authenticated, shape validation", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response with any q returns correct shape (single, ambiguous, or 404)", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() === 404) return; // no data in test env — OK
+
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+
+    const { data } = body;
+
+    if (data.ambiguous === true) {
+      // Ambiguous path
+      expect(typeof data.matchCount).toBe("number");
+      expect(data.matchCount).toBeGreaterThan(1);
+      expect(Array.isArray(data.matches)).toBe(true);
+      expect(data.matches.length).toBeGreaterThan(0);
+      expect(data.matches.length).toBeLessThanOrEqual(5);
+      for (const m of data.matches as Record<string, unknown>[]) {
+        expect(typeof m.leadId).toBe("string");
+        expect(typeof m.company).toBe("string");
+        expect(typeof m.stage).toBe("string");
+        expect(typeof m.status).toBe("string");
+        // Must NOT expose PII
+        expect(m).not.toHaveProperty("email");
+        expect(m).not.toHaveProperty("phone");
+        expect(m).not.toHaveProperty("contact");
+      }
+    } else {
+      // Single result path
+      expect(typeof data.leadId).toBe("string");
+      expect(typeof data.company).toBe("string");
+      expect(typeof data.stage).toBe("string");
+      expect(typeof data.status).toBe("string");
+      expect(typeof data.nextRecommendedFollowUp).toBe("string");
+      expect((data.nextRecommendedFollowUp as string).length).toBeGreaterThan(0);
+      expect(typeof data.summary).toBe("string");
+      expect((data.summary as string).length).toBeGreaterThan(0);
+
+      // Arrays present and bounded
+      expect(Array.isArray(data.recentQuotes)).toBe(true);
+      expect(data.recentQuotes.length).toBeLessThanOrEqual(5);
+      expect(Array.isArray(data.recentInvoices)).toBe(true);
+      expect(data.recentInvoices.length).toBeLessThanOrEqual(5);
+      expect(Array.isArray(data.recentDeposits)).toBe(true);
+      expect(data.recentDeposits.length).toBeLessThanOrEqual(5);
+      expect(Array.isArray(data.recentOrders)).toBe(true);
+      expect(data.recentOrders.length).toBeLessThanOrEqual(5);
+      expect(Array.isArray(data.recentActivityLogs)).toBe(true);
+      expect(data.recentActivityLogs.length).toBeLessThanOrEqual(10);
+
+      // Nullable fields: must be string or null
+      if (data.owner !== null && data.owner !== undefined) expect(typeof data.owner).toBe("string");
+      if (data.followUpDate !== null && data.followUpDate !== undefined) {
+        expect(typeof data.followUpDate).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}$/.test(data.followUpDate as string)).toBe(true);
+      }
+      if (data.lastContacted !== null && data.lastContacted !== undefined) {
+        expect(typeof data.lastContacted).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}/.test(data.lastContacted as string)).toBe(true);
+      }
+    }
+  });
+
+  test("recentQuotes items have safe shape — no contact PII", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (data.ambiguous) return;
+
+    for (const q of data.recentQuotes as Record<string, unknown>[]) {
+      expect(typeof q.quoteId).toBe("string");
+      expect(typeof q.status).toBe("string");
+      if (q.grandTotal !== null && q.grandTotal !== undefined) {
+        expect(typeof q.grandTotal).toBe("number");
+        expect(q.grandTotal).toBeGreaterThan(0);
+      }
+      if (q.daysUntilExpiry !== null && q.daysUntilExpiry !== undefined) {
+        expect(typeof q.daysUntilExpiry).toBe("number");
+        expect(Number.isInteger(q.daysUntilExpiry)).toBe(true);
+      }
+      // Must NOT expose PII
+      expect(q).not.toHaveProperty("email");
+      expect(q).not.toHaveProperty("contact");
+      expect(q).not.toHaveProperty("notes");
+      expect(q).not.toHaveProperty("public_link");
+    }
+  });
+
+  test("recentInvoices items have safe shape", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (data.ambiguous) return;
+
+    for (const inv of data.recentInvoices as Record<string, unknown>[]) {
+      expect(typeof inv.invoiceId).toBe("string");
+      expect(typeof inv.orderName).toBe("string");
+      expect(typeof inv.status).toBe("string");
+      expect(typeof inv.depositPaid).toBe("boolean");
+      expect(typeof inv.finalPaid).toBe("boolean");
+      expect(typeof inv.balance).toBe("number");
+      expect(inv.balance).toBeGreaterThanOrEqual(0);
+      // balance must be 0 when finalPaid
+      if (inv.finalPaid === true) expect(inv.balance).toBe(0);
+      // Must NOT expose PII
+      expect(inv).not.toHaveProperty("email");
+      expect(inv).not.toHaveProperty("client_name");
+      expect(inv).not.toHaveProperty("stripe");
+    }
+  });
+
+  test("recentActivityLogs never expose summary or note content", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (data.ambiguous) return;
+
+    for (const entry of data.recentActivityLogs as Record<string, unknown>[]) {
+      expect(typeof entry.date).toBe("string");
+      expect(typeof entry.type).toBe("string");
+      expect(typeof entry.owner).toBe("string");
+      // Summary content must NEVER appear
+      expect(entry).not.toHaveProperty("summary");
+      expect(entry).not.toHaveProperty("notes");
+      expect(entry).not.toHaveProperty("body");
+      expect(entry).not.toHaveProperty("content");
+    }
+  });
+
+  test("recentActivityLogs sorted most-recent first", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (data.ambiguous) return;
+
+    const logs = data.recentActivityLogs as Record<string, unknown>[];
+    for (let i = 1; i < logs.length; i++) {
+      expect((logs[i].date as string) <= (logs[i - 1].date as string)).toBe(true);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(`${CLIENT_INTEL}?leadId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+test.describe("GET /api/ai/client-intelligence — PII exclusion", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response body never exposes PII or raw field names", async ({ request }) => {
+    for (const url of [
+      `${CLIENT_INTEL}?q=a`,
+      `${CLIENT_INTEL}?leadId=${NONEXISTENT_ID}`,
+    ]) {
+      const res = await request.get(url, {
+        headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      });
+      const bodyText = await res.text();
+      for (const key of FORBIDDEN_CLIENT_INTEL) {
+        expect(bodyText, `client-intelligence must not expose ${key} (${url})`).not.toContain(key);
+      }
+    }
+  });
+});
+
+test.describe("GET /api/ai/client-intelligence — OpenAPI schema", () => {
+  test("schema declares /api/ai/client-intelligence with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths["/api/ai/client-intelligence"]).toBeDefined();
+
+    const getOp = (paths["/api/ai/client-intelligence"] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getClientIntelligence");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    // Query params: leadId, q
+    const params = getOp.parameters as Record<string, unknown>[];
+    const paramNames = params.map((p) => p.name);
+    expect(paramNames).toContain("leadId");
+    expect(paramNames).toContain("q");
+
+    // Response schema declares key fields
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+
+    expect(dataProps.leadId).toBeDefined();
+    expect(dataProps.company).toBeDefined();
+    expect(dataProps.stage).toBeDefined();
+    expect(dataProps.nextRecommendedFollowUp).toBeDefined();
+    expect(dataProps.recentQuotes).toBeDefined();
+    expect((dataProps.recentQuotes as Record<string, unknown>).type).toBe("array");
+    expect(dataProps.recentInvoices).toBeDefined();
+    expect(dataProps.recentDeposits).toBeDefined();
+    expect(dataProps.recentOrders).toBeDefined();
+    expect(dataProps.recentActivityLogs).toBeDefined();
+    expect(dataProps.lastContacted).toBeDefined();
+    expect(dataProps.summary).toBeDefined();
+    // Ambiguous fields
+    expect(dataProps.ambiguous).toBeDefined();
+    expect(dataProps.matches).toBeDefined();
+  });
+
+  test("getClientIntelligence description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths["/api/ai/client-intelligence"] as Record<string, unknown>).get as Record<string, unknown>;
     expect(typeof op.description).toBe("string");
     expect((op.description as string).length).toBeLessThanOrEqual(300);
   });
