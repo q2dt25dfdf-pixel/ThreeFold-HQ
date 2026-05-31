@@ -1979,3 +1979,228 @@ test.describe("GET /api/ai/calendar — authenticated", () => {
     expect(props).not.toHaveProperty("source");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 9G Tier 4 — attentionRequired in GET /api/ai/reports
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/reports — attentionRequired (Phase 9G Tier 4)", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response includes attentionRequired object", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    expect(data.attentionRequired).toBeDefined();
+    expect(typeof data.attentionRequired).toBe("object");
+  });
+
+  test("attentionRequired has all required top-level fields", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired } = (await res.json()).data;
+
+    expect(typeof attentionRequired.criticalCount).toBe("number");
+    expect(attentionRequired.criticalCount).toBeGreaterThanOrEqual(0);
+
+    expect(typeof attentionRequired.warningCount).toBe("number");
+    expect(attentionRequired.warningCount).toBeGreaterThanOrEqual(0);
+
+    expect(Array.isArray(attentionRequired.overdueInvoices)).toBe(true);
+    expect(Array.isArray(attentionRequired.overdueDeposits)).toBe(true);
+    expect(Array.isArray(attentionRequired.stalledOrders)).toBe(true);
+    expect(Array.isArray(attentionRequired.followUpsDueToday)).toBe(true);
+  });
+
+  test("count invariants hold: criticalCount = overdueInvoices + stalledOrders, warningCount = overdueDeposits + followUpsDueToday", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+
+    expect(ar.criticalCount).toBe(ar.overdueInvoices.length + ar.stalledOrders.length);
+    expect(ar.warningCount).toBe(ar.overdueDeposits.length + ar.followUpsDueToday.length);
+  });
+
+  test("all arrays are bounded at 10 items", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+
+    expect(ar.overdueInvoices.length).toBeLessThanOrEqual(10);
+    expect(ar.overdueDeposits.length).toBeLessThanOrEqual(10);
+    expect(ar.stalledOrders.length).toBeLessThanOrEqual(10);
+    expect(ar.followUpsDueToday.length).toBeLessThanOrEqual(10);
+  });
+
+  test("overdueInvoices items have required safe fields and plain-language description", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+
+    for (const inv of ar.overdueInvoices as Record<string, unknown>[]) {
+      expect(typeof inv.id).toBe("string");
+      expect(typeof inv.orderName).toBe("string");
+      expect(typeof inv.status).toBe("string");
+      expect(typeof inv.balance).toBe("number");
+      expect(inv.balance).toBeGreaterThanOrEqual(0);
+      expect(typeof inv.daysPastDue).toBe("number");
+      expect(inv.daysPastDue).toBeGreaterThan(0);
+      expect(typeof inv.description).toBe("string");
+      expect((inv.description as string).length).toBeGreaterThan(0);
+      // Must NOT expose client PII
+      expect(inv).not.toHaveProperty("email");
+      expect(inv).not.toHaveProperty("phone");
+      expect(inv).not.toHaveProperty("client_name");
+      expect(inv).not.toHaveProperty("notes");
+      expect(inv).not.toHaveProperty("stripe");
+    }
+  });
+
+  test("overdueInvoices sorted most-overdue first", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+    const invs = ar.overdueInvoices as Record<string, unknown>[];
+    for (let i = 1; i < invs.length; i++) {
+      expect(invs[i].daysPastDue as number).toBeLessThanOrEqual(invs[i - 1].daysPastDue as number);
+    }
+  });
+
+  test("overdueDeposits items have required safe fields, no client_name", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+
+    for (const dep of ar.overdueDeposits as Record<string, unknown>[]) {
+      expect(typeof dep.id).toBe("string");
+      expect(typeof dep.company).toBe("string");
+      expect(typeof dep.sentDate).toBe("string");
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(dep.sentDate as string)).toBe(true);
+      expect(typeof dep.daysSinceSent).toBe("number");
+      expect(dep.daysSinceSent).toBeGreaterThanOrEqual(0);
+      expect(typeof dep.status).toBe("string");
+      expect(dep.status).not.toBe("paid");
+      expect(typeof dep.description).toBe("string");
+      expect((dep.description as string).length).toBeGreaterThan(0);
+      // Must NOT expose raw client_name field — company is resolved via lead_id
+      expect(dep).not.toHaveProperty("client_name");
+      expect(dep).not.toHaveProperty("email");
+      expect(dep).not.toHaveProperty("phone");
+    }
+  });
+
+  test("overdueDeposits sorted longest-waiting first", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+    const deps = ar.overdueDeposits as Record<string, unknown>[];
+    for (let i = 1; i < deps.length; i++) {
+      expect(deps[i].daysSinceSent as number).toBeLessThanOrEqual(deps[i - 1].daysSinceSent as number);
+    }
+  });
+
+  test("stalledOrders items have required safe fields and plain-language description", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+
+    for (const order of ar.stalledOrders as Record<string, unknown>[]) {
+      expect(typeof order.id).toBe("string");
+      expect(typeof order.orderName).toBe("string");
+      expect(typeof order.status).toBe("string");
+      expect(typeof order.dueDate).toBe("string");
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(order.dueDate as string)).toBe(true);
+      expect(typeof order.daysPastDue).toBe("number");
+      expect(order.daysPastDue).toBeGreaterThan(0);
+      expect(typeof order.description).toBe("string");
+      expect((order.description as string).length).toBeGreaterThan(0);
+      // Must NOT expose PII
+      expect(order).not.toHaveProperty("email");
+      expect(order).not.toHaveProperty("notes");
+      expect(order).not.toHaveProperty("client");
+    }
+  });
+
+  test("stalledOrders sorted most-overdue first", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+    const orders = ar.stalledOrders as Record<string, unknown>[];
+    for (let i = 1; i < orders.length; i++) {
+      expect(orders[i].daysPastDue as number).toBeLessThanOrEqual(orders[i - 1].daysPastDue as number);
+    }
+  });
+
+  test("followUpsDueToday items have required safe fields and plain-language description", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { attentionRequired: ar } = (await res.json()).data;
+
+    for (const fu of ar.followUpsDueToday as Record<string, unknown>[]) {
+      expect(typeof fu.leadId).toBe("string");
+      expect(typeof fu.company).toBe("string");
+      expect(typeof fu.owner).toBe("string");
+      expect(typeof fu.followUpDate).toBe("string");
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(fu.followUpDate as string)).toBe(true);
+      expect(typeof fu.description).toBe("string");
+      expect((fu.description as string).length).toBeGreaterThan(0);
+      // Must NOT expose contact PII
+      expect(fu).not.toHaveProperty("email");
+      expect(fu).not.toHaveProperty("phone");
+      expect(fu).not.toHaveProperty("contact");
+      expect(fu).not.toHaveProperty("notes");
+    }
+  });
+
+  test("attentionRequired does not expose client_name or raw deposit fields", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    // client_name must never appear — company is resolved via lead_id → crm_leads.company
+    for (const key of ['"client_name":', '"client_email":', '"stripe":', '"payment_link":'] as const) {
+      expect(bodyText, `attentionRequired must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("OpenAPI schema declares attentionRequired with all required sub-arrays", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const reportsOp = (paths["/api/ai/reports"] as Record<string, unknown>).get as Record<string, unknown>;
+    const resp200 = (reportsOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+
+    const ar = dataProps.attentionRequired as Record<string, unknown>;
+    expect(ar).toBeDefined();
+    expect(ar.type).toBe("object");
+
+    const arProps = ar.properties as Record<string, Record<string, unknown>>;
+    expect(arProps.criticalCount).toBeDefined();
+    expect(arProps.warningCount).toBeDefined();
+    expect(arProps.overdueInvoices).toBeDefined();
+    expect((arProps.overdueInvoices as Record<string, unknown>).type).toBe("array");
+    expect(arProps.overdueDeposits).toBeDefined();
+    expect((arProps.overdueDeposits as Record<string, unknown>).type).toBe("array");
+    expect(arProps.stalledOrders).toBeDefined();
+    expect((arProps.stalledOrders as Record<string, unknown>).type).toBe("array");
+    expect(arProps.followUpsDueToday).toBeDefined();
+    expect((arProps.followUpsDueToday as Record<string, unknown>).type).toBe("array");
+
+    // attentionRequired must be in the required array for the reports response data
+    const dataRequired = ((((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).required as string[]);
+    expect(dataRequired).toContain("attentionRequired");
+  });
+});

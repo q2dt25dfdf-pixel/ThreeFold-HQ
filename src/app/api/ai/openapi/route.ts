@@ -477,7 +477,7 @@ const paths: Record<string, unknown> = {
         "Three reports plus briefing data: morningBriefing (allClear flag), " +
         "hqAuditor (systemHealthy flag), endOfDayReport (today's activity), " +
         "pendingQuotes (Quote Sent leads), outstandingDeposits (unpaid deposits), " +
-        "revenuePace (MTD vs monthly goal). PII excluded.",
+        "revenuePace (MTD vs monthly goal), attentionRequired (critical + warnings). PII excluded.",
       responses: {
         "200": {
           description: "All three reports.",
@@ -600,8 +600,83 @@ const paths: Record<string, unknown> = {
                         },
                         required: ["monthlyGoal", "monthToDateRevenue", "revenuePaceStatus", "projectedMonthEndRevenue", "amountAheadOrBehindGoal", "daysLeftInMonth"],
                       },
+                      attentionRequired: {
+                        type: "object",
+                        description: "Items needing immediate founder attention, with plain-language descriptions Jarvis can quote. criticalCount = overdueInvoices + stalledOrders. warningCount = overdueDeposits + followUpsDueToday.",
+                        properties: {
+                          criticalCount: { type: "integer", description: "Count of critical items (overdue invoices + stalled orders)." },
+                          warningCount:  { type: "integer", description: "Count of warning items (overdue deposits + follow-ups due today)." },
+                          overdueInvoices: {
+                            type: "array", maxItems: 10,
+                            description: "Active invoices past due date, not fully paid. Sorted most overdue first.",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:          { type: "string" },
+                                orderName:   { type: "string" },
+                                status:      { type: "string" },
+                                dueDate:     { type: "string", format: "date", nullable: true },
+                                balance:     { type: "number", description: "Remaining balance due." },
+                                daysPastDue: { type: "integer" },
+                                description: { type: "string", description: "Plain-language summary Jarvis can quote directly." },
+                              },
+                              required: ["id", "orderName", "status", "balance", "daysPastDue", "description"],
+                            },
+                          },
+                          overdueDeposits: {
+                            type: "array", maxItems: 10,
+                            description: "Deposit requests sent to clients but not yet paid. Sorted longest-waiting first.",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:                   { type: "string" },
+                                depositRequestNumber: { type: "string", nullable: true },
+                                company:              { type: "string", description: "Business name from CRM — no contact PII." },
+                                depositAmount:        { type: "number", nullable: true },
+                                sentDate:             { type: "string", format: "date" },
+                                daysSinceSent:        { type: "integer" },
+                                status:               { type: "string" },
+                                description:          { type: "string", description: "Plain-language summary Jarvis can quote directly." },
+                              },
+                              required: ["id", "company", "sentDate", "daysSinceSent", "status", "description"],
+                            },
+                          },
+                          stalledOrders: {
+                            type: "array", maxItems: 10,
+                            description: "Active orders past their estimated delivery date. Sorted most overdue first.",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:          { type: "string" },
+                                orderName:   { type: "string" },
+                                status:      { type: "string" },
+                                dueDate:     { type: "string", format: "date" },
+                                daysPastDue: { type: "integer" },
+                                description: { type: "string", description: "Plain-language summary Jarvis can quote directly." },
+                              },
+                              required: ["id", "orderName", "status", "dueDate", "daysPastDue", "description"],
+                            },
+                          },
+                          followUpsDueToday: {
+                            type: "array", maxItems: 10,
+                            description: "CRM leads with an active follow-up task due today (excluding Deposit Paid stage).",
+                            items: {
+                              type: "object",
+                              properties: {
+                                leadId:       { type: "string" },
+                                company:      { type: "string", description: "Business name — no contact PII." },
+                                owner:        { type: "string" },
+                                followUpDate: { type: "string", format: "date" },
+                                description:  { type: "string", description: "Plain-language summary Jarvis can quote directly." },
+                              },
+                              required: ["leadId", "company", "owner", "followUpDate", "description"],
+                            },
+                          },
+                        },
+                        required: ["criticalCount", "warningCount", "overdueInvoices", "overdueDeposits", "stalledOrders", "followUpsDueToday"],
+                      },
                     },
-                    required: ["date", "morningBriefing", "hqAuditor", "endOfDayReport", "pendingQuotes", "outstandingDeposits", "revenuePace"],
+                    required: ["date", "morningBriefing", "hqAuditor", "endOfDayReport", "pendingQuotes", "outstandingDeposits", "revenuePace", "attentionRequired"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },

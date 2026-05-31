@@ -715,6 +715,215 @@ function computeRevenuePace(invoices: Row[], todayISO: string): RevenuePace {
   };
 }
 
+// ── Attention Required computation ───────────────────────────────────────────
+//
+// Structured list of items that need the founder's immediate action, with
+// plain-language descriptions Jarvis can quote directly.
+//
+// criticalCount = overdueInvoices + stalledOrders  (missed deadlines, money past due)
+// warningCount  = overdueDeposits + followUpsDueToday  (sent but waiting, today's outreach)
+//
+// "Stalled" = active order whose estimated delivery date is in the past.
+// "Overdue deposit" = deposit request sent to client, not yet paid (any status ≠ paid).
+
+type OverdueInvoiceItem = {
+  id: string;
+  orderName: string;
+  status: string;
+  dueDate: string | null;
+  balance: number;
+  daysPastDue: number;
+  description: string;
+};
+
+type OverdueDepositItem = {
+  id: string;
+  depositRequestNumber: string | null;
+  company: string;
+  depositAmount: number | null;
+  sentDate: string;
+  daysSinceSent: number;
+  status: string;
+  description: string;
+};
+
+type StalledOrderItem = {
+  id: string;
+  orderName: string;
+  status: string;
+  dueDate: string;
+  daysPastDue: number;
+  description: string;
+};
+
+type FollowUpTodayItem = {
+  leadId: string;
+  company: string;
+  owner: string;
+  followUpDate: string;
+  description: string;
+};
+
+type AttentionRequired = {
+  criticalCount: number;
+  warningCount: number;
+  overdueInvoices: OverdueInvoiceItem[];
+  overdueDeposits: OverdueDepositItem[];
+  stalledOrders: StalledOrderItem[];
+  followUpsDueToday: FollowUpTodayItem[];
+};
+
+function daysBetween(fromISO: string, toISO: string): number {
+  const a = new Date(fromISO + "T12:00:00");
+  const b = new Date(toISO + "T12:00:00");
+  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function fmtAmount(n: number): string {
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function plural(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
+function computeAttentionRequired(
+  tasks: Row[],
+  invoices: Row[],
+  orders: Row[],
+  leads: Row[],
+  depositRows: Row[],
+  todayISO: string,
+): AttentionRequired {
+
+  // ── Overdue invoices: active, not fully paid, past due date ──────────────
+  const overdueInvoices: OverdueInvoiceItem[] = invoices
+    .filter((inv) => {
+      if (INACTIVE_FINANCE_STATUSES.has(statusText(inv))) return false;
+      if (inv.final_paid === true) return false;
+      const due = stringField(inv, "final_due_date") || stringField(inv, "dueDate");
+      return Boolean(due && due < todayISO);
+    })
+    .map((inv) => {
+      const orderName = stringField(inv, "orderName") || stringField(inv, "order_name") || "Invoice";
+      const dueDate   = stringField(inv, "final_due_date") || stringField(inv, "dueDate") || null;
+      const balance   = Math.round(
+        (inv.deposit_paid === true ? calcBalance(inv) : calcTotal(inv)) * 100,
+      ) / 100;
+      const daysPastDue  = dueDate ? daysBetween(dueDate, todayISO) : 0;
+      const statusLabel  =
+        statusText(inv) === "overdue"          ? "Overdue final invoice" :
+        statusText(inv).includes("deposit")    ? "Deposit overdue" :
+                                                 "Invoice past due";
+      return {
+        id:         inv.id,
+        orderName,
+        status:     stringField(inv, "status") || "unknown",
+        dueDate,
+        balance,
+        daysPastDue,
+        description: `${statusLabel} — ${fmtAmount(balance)} outstanding for ${orderName}, ${plural(daysPastDue, "day")} past due`,
+      };
+    })
+    .sort((a, b) => b.daysPastDue - a.daysPastDue)
+    .slice(0, 10);
+
+  // ── Overdue deposits: sent to client, not yet paid ────────────────────────
+  const leadCompanyMap = new Map<string, string>();
+  for (const l of leads) {
+    const co = stringField(l, "company") || stringField(l, "name");
+    if (l.id && co) leadCompanyMap.set(l.id, co);
+  }
+
+  const overdueDeposits: OverdueDepositItem[] = depositRows
+    .filter((d) => {
+      const sent = stringField(d, "sent_date");
+      return Boolean(sent) && stringField(d, "status") !== "paid";
+    })
+    .map((d) => {
+      const leadId        = stringField(d, "lead_id");
+      const company       = leadId ? (leadCompanyMap.get(leadId) ?? "Unknown") : "Unknown";
+      const sentDate      = stringField(d, "sent_date");
+      const daysSinceSent = daysBetween(sentDate, todayISO);
+      const depositAmount = parseAmount(d.deposit_amount ?? 0) || null;
+      const status        = stringField(d, "status") || "unknown";
+      const statusNote    = status === "payment_failed" ? "payment failed" : "unpaid";
+      const amountStr     = depositAmount ? fmtAmount(depositAmount) : "amount unknown";
+      return {
+        id:                   d.id,
+        depositRequestNumber: stringField(d, "deposit_request_number") || null,
+        company,
+        depositAmount,
+        sentDate,
+        daysSinceSent,
+        status,
+        description: `Deposit request ${statusNote} — ${amountStr} from ${company}, sent ${plural(daysSinceSent, "day")} ago`,
+      };
+    })
+    .sort((a, b) => b.daysSinceSent - a.daysSinceSent)
+    .slice(0, 10);
+
+  // ── Stalled orders: active, past estimated delivery date ─────────────────
+  const stalledOrders: StalledOrderItem[] = orders
+    .filter((order) => {
+      if (INACTIVE_ORDER_STATUSES.has(statusText(order))) return false;
+      const due =
+        stringField(order, "estimatedDeliveryDate") ||
+        stringField(order, "dueDate") ||
+        stringField(order, "final_due_date");
+      return Boolean(due && due < todayISO);
+    })
+    .map((order) => {
+      const dueDate   =
+        stringField(order, "estimatedDeliveryDate") ||
+        stringField(order, "dueDate") ||
+        stringField(order, "final_due_date");
+      const orderName  = stringField(order, "orderName") || stringField(order, "order_name") || "Order";
+      const status     = stringField(order, "status") || "unknown";
+      const daysPastDue = daysBetween(dueDate, todayISO);
+      return {
+        id: order.id,
+        orderName,
+        status,
+        dueDate,
+        daysPastDue,
+        description: `${orderName} is in ${status} — ${plural(daysPastDue, "day")} past delivery date`,
+      };
+    })
+    .sort((a, b) => b.daysPastDue - a.daysPastDue)
+    .slice(0, 10);
+
+  // ── Follow-ups due today: open CRM leads with today's follow-up date ─────
+  const followUpsDueToday: FollowUpTodayItem[] = leads
+    .filter((lead) => {
+      if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+      const followUp = readField(lead, "followUpDate", "follow_up_date");
+      return followUp === todayISO && hasActiveFollowUpTask(lead, tasks);
+    })
+    .map((lead) => {
+      const company     = stringField(lead, "company") || stringField(lead, "name") || "Lead";
+      const owner       = stringField(lead, "owner") || "Team";
+      const followUpDate = readField(lead, "followUpDate", "follow_up_date") || todayISO;
+      return {
+        leadId: lead.id,
+        company,
+        owner,
+        followUpDate,
+        description: `Follow-up with ${company} due today — assigned to ${owner}`,
+      };
+    })
+    .slice(0, 10);
+
+  return {
+    criticalCount: overdueInvoices.length + stalledOrders.length,
+    warningCount:  overdueDeposits.length + followUpsDueToday.length,
+    overdueInvoices,
+    overdueDeposits,
+    stalledOrders,
+    followUpsDueToday,
+  };
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 /**
@@ -761,6 +970,7 @@ export async function GET(request: Request): Promise<Response> {
     const pendingQuotes       = computePendingQuotes(leads, quotes, todayISO);
     const outstandingDeposits = computeOutstandingDeposits(depositRequests, leads);
     const revenuePace         = computeRevenuePace(invoices, todayISO);
+    const attentionRequired   = computeAttentionRequired(tasks, invoices, orders, leads, depositRequests, todayISO);
 
     return okResponse({
       date: todayISO,
@@ -770,6 +980,7 @@ export async function GET(request: Request): Promise<Response> {
       pendingQuotes,
       outstandingDeposits,
       revenuePace,
+      attentionRequired,
     });
   } catch (err) {
     console.error("[ai/reports]", err);
