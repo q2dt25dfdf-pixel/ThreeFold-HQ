@@ -3093,3 +3093,213 @@ test.describe("GET /api/ai/deposit-preview — OpenAPI schema", () => {
     expect((op.description as string).length).toBeLessThanOrEqual(300);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tier 7B — POST /api/ai/quote-send
+// ---------------------------------------------------------------------------
+
+const QUOTE_SEND = "/api/ai/quote-send";
+
+test.describe("POST /api/ai/quote-send — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      data: { quoteId: "test", sender: "Alliyah", confirm: true },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+      data: { quoteId: "test", sender: "Alliyah", confirm: true },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+      data: { quoteId: "test", sender: "Alliyah", confirm: true },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("POST /api/ai/quote-send — confirm gate (authenticated)", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("missing confirm returns 400", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { quoteId: "test", sender: "Alliyah" },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+    expect(body.error.toLowerCase()).toContain("confirm");
+  });
+
+  test("confirm: false returns 400", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { quoteId: "test", sender: "Alliyah", confirm: false },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.toLowerCase()).toContain("confirm");
+  });
+
+  test("confirm: 'true' (string, not boolean) returns 400", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { quoteId: "test", sender: "Alliyah", confirm: "true" },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("POST /api/ai/quote-send — input validation (authenticated)", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("missing quoteId returns 400", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { sender: "Alliyah", confirm: true },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.toLowerCase()).toContain("quoteid");
+  });
+
+  test("invalid sender returns 400", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { quoteId: "test-id", sender: "NotAFounder", confirm: true },
+    });
+    // 400 (invalid sender) or 503 (no Resend key in test env) — either is valid
+    expect([400, 503]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    if (res.status() === 400) {
+      expect(body.error.toLowerCase()).toContain("sender");
+    }
+  });
+
+  test("nonexistent quoteId returns 404 (or 503 if Resend not configured)", async ({ request }) => {
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { quoteId: NONEXISTENT_ID, sender: "Alliyah", confirm: true },
+    });
+    // 404 (not found) or 503 (no Resend key in test env)
+    expect([404, 503]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.toLowerCase()).not.toContain("sql");
+    expect(body.error.toLowerCase()).not.toContain("table");
+  });
+
+  test("503 returned when RESEND_API_KEY is not set in test environment", async ({ request }) => {
+    // This test documents expected behavior: Jarvis quote-send requires Resend.
+    // If the test environment has RESEND_API_KEY, this test is skipped — that's OK.
+    if (process.env.RESEND_API_KEY) return; // Resend configured — skip
+
+    const res = await request.post(QUOTE_SEND, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      data: { quoteId: "any-quote-id", sender: "Alliyah", confirm: true },
+    });
+    expect(res.status()).toBe(503);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.toLowerCase()).toContain("resend");
+  });
+});
+
+test.describe("POST /api/ai/quote-send — PII exclusion", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("error responses never expose client_email or raw PII fields", async ({ request }) => {
+    // Test the 400/404/503 paths — none should leak PII
+    for (const payload of [
+      { sender: "Alliyah" },                                                  // missing confirm → 400
+      { quoteId: NONEXISTENT_ID, sender: "Alliyah", confirm: true },         // 404 or 503
+    ]) {
+      const res = await request.post(QUOTE_SEND, {
+        headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+        data: payload,
+      });
+      const bodyText = await res.text();
+      for (const key of ['"client_email":', '"email":', '"phone":', '"notes":', '"public_token":']) {
+        expect(bodyText, `quote-send error must not expose ${key}`).not.toContain(key);
+      }
+    }
+  });
+});
+
+test.describe("POST /api/ai/quote-send — OpenAPI schema", () => {
+  test("schema declares /api/ai/quote-send with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths["/api/ai/quote-send"]).toBeDefined();
+
+    const postOp = (paths["/api/ai/quote-send"] as Record<string, unknown>).post as Record<string, unknown>;
+    expect(postOp.operationId).toBe("sendQuote");
+    expect(typeof postOp.description).toBe("string");
+    expect((postOp.description as string).length).toBeLessThanOrEqual(300);
+
+    // Request body must declare quoteId, sender, confirm
+    const rb = postOp.requestBody as Record<string, unknown>;
+    expect(rb.required).toBe(true);
+    const rbSchema = ((rb.content as Record<string, unknown>)["application/json"] as Record<string, unknown>).schema as Record<string, unknown>;
+    const props = rbSchema.properties as Record<string, unknown>;
+    expect(props.quoteId).toBeDefined();
+    expect(props.sender).toBeDefined();
+    expect((props.sender as Record<string, unknown>).enum).toContain("Alliyah");
+    expect((props.sender as Record<string, unknown>).enum).toContain("Hannah");
+    expect((props.sender as Record<string, unknown>).enum).toContain("Jordan");
+    expect(props.confirm).toBeDefined();
+    expect((props.confirm as Record<string, unknown>).enum).toContain(true);
+    const required = rbSchema.required as string[];
+    expect(required).toContain("quoteId");
+    expect(required).toContain("sender");
+    expect(required).toContain("confirm");
+
+    // Must have 409 and 503 responses documented
+    const responses = postOp.responses as Record<string, unknown>;
+    expect(responses["409"]).toBeDefined();
+    expect(responses["503"]).toBeDefined();
+    expect(responses["400"]).toBeDefined();
+    expect(responses["401"]).toBeDefined();
+    expect(responses["404"]).toBeDefined();
+
+    // Success response must declare newStage as "Quote Sent"
+    const ok200 = responses["200"] as Record<string, unknown>;
+    const content = (ok200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+    expect(dataProps.sent).toBeDefined();
+    expect(dataProps.quoteId).toBeDefined();
+    expect(dataProps.newStage).toBeDefined();
+    expect((dataProps.newStage as Record<string, unknown>).enum).toContain("Quote Sent");
+    // Must NOT expose client_email in success schema
+    expect(dataProps).not.toHaveProperty("client_email");
+    expect(dataProps).not.toHaveProperty("email");
+  });
+
+  test("sendQuote description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths["/api/ai/quote-send"] as Record<string, unknown>).post as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});

@@ -1497,6 +1497,86 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/quote-send": {
+    post: {
+      operationId: "sendQuote",
+      summary: "Send an existing HQ quote to the client after founder confirmation",
+      description:
+        "Sends an existing HQ quote after founder confirmation. " +
+        "Requires confirm: true — show quote-preview and ask 'Send this quote?' first. " +
+        "Updates lead to 'Quote Sent', logs activity, marks quote sent. " +
+        "Requires RESEND_API_KEY. Never generates a new quote.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                quoteId: {
+                  type: "string",
+                  description: "Quote ID from GET /api/ai/quote-preview. Never guess — always use preview result.",
+                },
+                sender: {
+                  type: "string",
+                  enum: ["Alliyah", "Hannah", "Jordan"],
+                  description: "Founder sending the quote. Ask if not already specified.",
+                },
+                confirm: {
+                  type: "boolean",
+                  enum: [true],
+                  description: "Must be boolean true. Only set after founder explicitly confirms the preview.",
+                },
+              },
+              required: ["quoteId", "sender", "confirm"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Quote sent successfully. Lead stage updated to 'Quote Sent'.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      sent:          { type: "boolean", enum: [true] },
+                      sentVia:       { type: "string", enum: ["resend"] },
+                      quoteId:       { type: "string" },
+                      quoteNumber:   { type: "string", nullable: true },
+                      publicLink:    { type: "string", description: "Live quote URL." },
+                      leadId:        { type: "string" },
+                      company:       { type: "string", nullable: true },
+                      previousStage: { type: "string", nullable: true },
+                      newStage:      { type: "string", enum: ["Quote Sent"] },
+                      isRevised:     { type: "boolean", description: "True if the lead was already at Quote Sent (revised quote flow)." },
+                      sentAt:        { type: "string", format: "date-time" },
+                      emailSubject:  { type: "string" },
+                    },
+                    required: ["sent", "sentVia", "quoteId", "publicLink", "leadId", "newStage", "sentAt", "emailSubject"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Missing confirm: true, invalid sender, or missing quoteId.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Quote or lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "409": { description: "Quote already sent. Use HQ to resend.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "502": { description: "Resend delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "503": { description: "RESEND_API_KEY not configured. Use HQ SendQuoteModal.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/calendar": {
     get: {
       operationId: "getCalendar",

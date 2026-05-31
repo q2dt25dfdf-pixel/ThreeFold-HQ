@@ -27,7 +27,7 @@ export function okResponse<T>(data: T, meta?: Omit<AIMeta, "as_of">): NextRespon
 /** Error response envelope. Status is explicit to avoid accidental 200 errors. */
 export function errResponse(
   error: string,
-  status: 400 | 401 | 403 | 404 | 429 | 500,
+  status: 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 | 503,
 ): NextResponse {
   return NextResponse.json(
     { ok: false, error },
