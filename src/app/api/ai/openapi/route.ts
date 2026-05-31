@@ -1130,16 +1130,36 @@ const paths: Record<string, unknown> = {
       operationId: "previewQuote",
       summary: "Preview the most recent quote for a CRM lead",
       description:
-        "Returns a structured preview of the most recent quote for a CRM lead. " +
-        "Read-only — no records created. " +
-        "Includes line items, totals, tax, deposit estimate, and email subject/body templates. " +
-        "Use leadId from search.",
+        "Read-only preview of a CRM lead's quote. Accepts leadId, quoteNumber, company, or contactName. " +
+        "Multiple company/contact matches returns a choice list — never guesses. " +
+        "No records created.",
       parameters: [
         {
           name: "leadId",
           in: "query",
-          required: true,
-          description: "CRM lead ID. Obtain from search results or getLead.",
+          required: false,
+          description: "CRM lead UUID. Highest priority — use this when known.",
+          schema: { type: "string" },
+        },
+        {
+          name: "quoteNumber",
+          in: "query",
+          required: false,
+          description: "Quote number (e.g. TF-Q-2026-0022). Returns that exact quote.",
+          schema: { type: "string" },
+        },
+        {
+          name: "company",
+          in: "query",
+          required: false,
+          description: "Lead company name (partial, case-insensitive). Returns ambiguity list if multiple match.",
+          schema: { type: "string" },
+        },
+        {
+          name: "contactName",
+          in: "query",
+          required: false,
+          description: "Lead contact person name (partial, case-insensitive). Used as lookup key only — never returned.",
           schema: { type: "string" },
         },
       ],
@@ -1159,7 +1179,7 @@ const paths: Record<string, unknown> = {
                       company:           { type: "string", nullable: true },
                       stage:             { type: "string", nullable: true },
                       hasExistingQuote:  { type: "boolean" },
-                      message:           { type: "string", description: "Present when hasExistingQuote is false — explains why." },
+                      message:           { type: "string", description: "Human-readable status — present when hasExistingQuote is false or ambiguous is true." },
                       quoteId:           { type: "string", description: "Present when hasExistingQuote is true." },
                       quoteNumber:       { type: "string", nullable: true },
                       quoteStatus:       { type: "string", nullable: true, description: "'draft', 'sent', or 'approved'." },
@@ -1185,11 +1205,28 @@ const paths: Record<string, unknown> = {
                       grandTotal:        { type: "number", nullable: true },
                       depositEstimate:   { type: "number", nullable: true, description: "50% of grandTotal. null if grandTotal is null." },
                       publicLink:        { type: "string", nullable: true, description: "Live public quote URL. Share with founders only — not directly to clients." },
+                      resolvedBy:        { type: "string", description: "'leadId', 'quoteNumber', 'company', or 'contactName' — how the lead was found." },
                       isRevised:         { type: "boolean", description: "True if the lead is currently at 'Quote Sent' stage, indicating a revised quote flow." },
                       emailSubject:      { type: "string", description: "Email subject matching HQ SendQuoteModal. Present when hasExistingQuote is true." },
                       emailBodyPreview:  { type: "string", description: "Full email body preview matching HQ SendQuoteModal templates. Company name used as contact fallback." },
+                      ambiguous:         { type: "boolean", description: "True when multiple leads matched. leadId/hasExistingQuote are absent — present choices from matches array instead." },
+                      matchCount:        { type: "integer", description: "Number of leads matched. Present when ambiguous is true." },
+                      matches: {
+                        type: "array",
+                        description: "Choice list when ambiguous is true. Show these to the founder and ask which one they mean.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            leadId:      { type: "string" },
+                            company:     { type: "string", nullable: true },
+                            stage:       { type: "string", nullable: true },
+                            quoteNumber: { type: "string", nullable: true },
+                          },
+                          required: ["leadId"],
+                        },
+                      },
                     },
-                    required: ["leadId", "company", "stage", "hasExistingQuote"],
+                    required: [],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },
@@ -1197,9 +1234,9 @@ const paths: Record<string, unknown> = {
             },
           },
         },
-        "400": { description: "Missing leadId parameter.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "400": { description: "No lookup parameter provided.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "404": { description: "Lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead or quote not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
       },
     },
