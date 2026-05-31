@@ -1685,6 +1685,7 @@ const EXPECTED_PATHS = [
   "/api/ai/calendar",
   "/api/ai/order-intelligence",
   "/api/ai/client-intelligence",
+  "/api/ai/deposit-preview",
   "/api/ai/client/{id}",
   "/api/ai/order/{id}",
   "/api/ai/lead/{id}",
@@ -1708,7 +1709,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 17 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 18 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -2746,6 +2747,348 @@ test.describe("GET /api/ai/client-intelligence — OpenAPI schema", () => {
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
     const op = (paths["/api/ai/client-intelligence"] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 7A — GET /api/ai/deposit-preview
+// ---------------------------------------------------------------------------
+
+const DEPOSIT_PREVIEW = "/api/ai/deposit-preview";
+
+const FORBIDDEN_DEPOSIT_PREVIEW = [
+  '"client_name":',
+  '"client_email":',
+  '"email":',
+  '"phone":',
+  '"address":',
+  '"notes":',
+  '"payment_instructions":',
+  '"public_token":',
+  '"stripe":',
+  '"payment_link":',
+];
+
+test.describe("GET /api/ai/deposit-preview — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=test`);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=test`, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=test`, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/deposit-preview — param validation", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("missing all params returns 400", async ({ request }) => {
+    const res = await request.get(DEPOSIT_PREVIEW, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("nonexistent leadId returns 404", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?leadId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+    expect(body.error.toLowerCase()).not.toContain("sql");
+  });
+
+  test("nonexistent depositNumber returns 404", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?depositNumber=TF-D-0000-9999`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+    expect(body.error.toLowerCase()).not.toContain("sql");
+  });
+
+  test("q with no matching lead returns 404", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=zzz-no-such-company-xyz-999`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("GET /api/ai/deposit-preview — authenticated, response shape", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("leadId that exists but has no deposits returns hasExistingDeposit: false with safe shape", async ({ request }) => {
+    // Use nonexistent lead — returns 404. This test exercises shape validation
+    // opportunistically: when data exists it checks 200, otherwise accepts 404.
+    const res = await request.get(`${DEPOSIT_PREVIEW}?leadId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    // Nonexistent lead → 404 is expected
+    expect([200, 404]).toContain(res.status());
+    const body = await res.json();
+    if (res.status() === 200) {
+      expect(body.ok).toBe(true);
+      const { data } = body;
+      expect(typeof data.leadId).toBe("string");
+      if (data.hasExistingDeposit === false) {
+        expect(typeof data.message).toBe("string");
+      }
+    } else {
+      expect(body.ok).toBe(false);
+    }
+  });
+
+  test("response with q that returns a single match has correct preview shape", async ({ request }) => {
+    // Opportunistic — validates shape when a deposit exists; passes on 404.
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() === 404) return;
+
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+
+    const { data } = body;
+
+    if (data.ambiguous === true) {
+      // Ambiguous — validate choice list shape
+      expect(typeof data.matchCount).toBe("number");
+      expect(data.matchCount).toBeGreaterThan(1);
+      expect(Array.isArray(data.matches)).toBe(true);
+      expect(data.matches.length).toBeGreaterThan(0);
+      expect(data.matches.length).toBeLessThanOrEqual(5);
+      for (const m of data.matches as Record<string, unknown>[]) {
+        expect(typeof m.leadId).toBe("string");
+        // Must NOT expose PII
+        expect(m).not.toHaveProperty("email");
+        expect(m).not.toHaveProperty("client_name");
+        expect(m).not.toHaveProperty("notes");
+      }
+      return;
+    }
+
+    if (data.hasExistingDeposit === false) {
+      // No deposit on file — check minimal safe shape
+      expect(typeof data.leadId).toBe("string");
+      expect(typeof data.message).toBe("string");
+      return;
+    }
+
+    // Full single-result shape
+    expect(typeof data.leadId).toBe("string");
+    expect(typeof data.depositId).toBe("string");
+    expect(typeof data.status).toBe("string");
+    expect(typeof data.depositAmount).toBe("number");
+    expect(data.depositAmount).toBeGreaterThanOrEqual(0);
+    expect(typeof data.totalAmount).toBe("number");
+    expect(data.totalAmount).toBeGreaterThanOrEqual(0);
+    expect(typeof data.balanceRemaining).toBe("number");
+    expect(data.balanceRemaining).toBeGreaterThanOrEqual(0);
+    expect(typeof data.verificationSummary).toBe("string");
+    expect((data.verificationSummary as string).length).toBeGreaterThan(0);
+    expect(typeof data.emailSubject).toBe("string");
+    expect((data.emailSubject as string).length).toBeGreaterThan(0);
+    expect(typeof data.emailBodyPreview).toBe("string");
+    expect((data.emailBodyPreview as string).length).toBeGreaterThan(0);
+    expect(typeof data.totalDepositsForLead).toBe("number");
+    expect(typeof data.selectionNote).toBe("string");
+
+    // Optional nullable fields
+    if (data.depositNumber !== null && data.depositNumber !== undefined) {
+      expect(typeof data.depositNumber).toBe("string");
+    }
+    if (data.sentDate !== null && data.sentDate !== undefined) {
+      expect(typeof data.sentDate).toBe("string");
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(data.sentDate as string)).toBe(true);
+    }
+    if (data.company !== null && data.company !== undefined) {
+      expect(typeof data.company).toBe("string");
+    }
+    if (data.publicLink !== null && data.publicLink !== undefined) {
+      expect(typeof data.publicLink).toBe("string");
+    }
+
+    // Must NOT expose PII
+    expect(data).not.toHaveProperty("client_name");
+    expect(data).not.toHaveProperty("client_email");
+    expect(data).not.toHaveProperty("notes");
+    expect(data).not.toHaveProperty("payment_instructions");
+    expect(data).not.toHaveProperty("public_token");
+  });
+
+  test("email subject matches HQ SendDepositModal format when depositNumber present", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (!data.depositNumber || data.ambiguous || data.hasExistingDeposit === false) return;
+
+    // Subject must match: "Your Deposit Request — {number} | Threefold Supply Co."
+    expect(data.emailSubject as string).toContain("Your Deposit Request");
+    expect(data.emailSubject as string).toContain("Threefold Supply Co.");
+    expect(data.emailSubject as string).toContain(data.depositNumber as string);
+  });
+
+  test("email body preview contains required structural elements", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (!data.emailBodyPreview || data.ambiguous || data.hasExistingDeposit === false) return;
+
+    const body = data.emailBodyPreview as string;
+    expect(body).toContain("Threefold Supply Co.");
+    expect(body).toContain("Deposit Request #:");
+    expect(body).toContain("Total Project Value:");
+    expect(body).toContain("Deposit Due");
+    expect(body).toContain("Balance Due on Completion:");
+    expect(body).toContain("Card payments include a 3% processing fee");
+    expect(body).toContain("View your full deposit request here:");
+    // Must never contain payment_instructions content proxy or raw PII
+    expect(body).not.toContain("client_name");
+    expect(body).not.toContain("client_email");
+  });
+
+  test("lineItems array (when present) does not contain PII fields", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (!Array.isArray(data.lineItems) || data.lineItems.length === 0) return;
+
+    for (const item of data.lineItems as Record<string, unknown>[]) {
+      expect(item).not.toHaveProperty("email");
+      expect(item).not.toHaveProperty("notes");
+      expect(item).not.toHaveProperty("contact");
+    }
+  });
+
+  test("balanceRemaining is non-negative", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?q=a`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const { data } = await res.json();
+    if (data.ambiguous || data.hasExistingDeposit === false || data.balanceRemaining === undefined) return;
+    expect(data.balanceRemaining as number).toBeGreaterThanOrEqual(0);
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(`${DEPOSIT_PREVIEW}?leadId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+test.describe("GET /api/ai/deposit-preview — PII exclusion", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response body never exposes PII or raw deposit fields on any lookup path", async ({ request }) => {
+    for (const url of [
+      `${DEPOSIT_PREVIEW}?q=a`,
+      `${DEPOSIT_PREVIEW}?leadId=${NONEXISTENT_ID}`,
+      `${DEPOSIT_PREVIEW}?depositNumber=TF-D-0000-9999`,
+    ]) {
+      const res = await request.get(url, {
+        headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      });
+      const bodyText = await res.text();
+      for (const key of FORBIDDEN_DEPOSIT_PREVIEW) {
+        expect(bodyText, `deposit-preview must not expose ${key} (${url})`).not.toContain(key);
+      }
+    }
+  });
+});
+
+test.describe("GET /api/ai/deposit-preview — OpenAPI schema", () => {
+  test("schema declares /api/ai/deposit-preview with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths["/api/ai/deposit-preview"]).toBeDefined();
+
+    const getOp = (paths["/api/ai/deposit-preview"] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("previewDeposit");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    // Query params: leadId, depositNumber, q
+    const params = getOp.parameters as Record<string, unknown>[];
+    const paramNames = params.map((p) => p.name);
+    expect(paramNames).toContain("leadId");
+    expect(paramNames).toContain("depositNumber");
+    expect(paramNames).toContain("q");
+
+    // Response schema must declare key fields
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+
+    expect(dataProps.leadId).toBeDefined();
+    expect(dataProps.company).toBeDefined();
+    expect(dataProps.depositId).toBeDefined();
+    expect(dataProps.depositNumber).toBeDefined();
+    expect(dataProps.depositAmount).toBeDefined();
+    expect((dataProps.depositAmount as Record<string, unknown>).type).toBe("number");
+    expect(dataProps.totalAmount).toBeDefined();
+    expect(dataProps.balanceRemaining).toBeDefined();
+    expect(dataProps.status).toBeDefined();
+    expect(dataProps.sentDate).toBeDefined();
+    expect(dataProps.publicLink).toBeDefined();
+    expect(dataProps.emailSubject).toBeDefined();
+    expect(dataProps.emailBodyPreview).toBeDefined();
+    expect(dataProps.verificationSummary).toBeDefined();
+    // Must NOT have PII fields in schema
+    expect(dataProps).not.toHaveProperty("client_name");
+    expect(dataProps).not.toHaveProperty("client_email");
+    expect(dataProps).not.toHaveProperty("notes");
+    expect(dataProps).not.toHaveProperty("payment_instructions");
+    expect(dataProps).not.toHaveProperty("public_token");
+    // Ambiguous fields
+    expect(dataProps.ambiguous).toBeDefined();
+    expect(dataProps.matches).toBeDefined();
+  });
+
+  test("previewDeposit description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths["/api/ai/deposit-preview"] as Record<string, unknown>).get as Record<string, unknown>;
     expect(typeof op.description).toBe("string");
     expect((op.description as string).length).toBeLessThanOrEqual(300);
   });

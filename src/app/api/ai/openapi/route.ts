@@ -1380,6 +1380,123 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/deposit-preview": {
+    get: {
+      operationId: "previewDeposit",
+      summary: "Preview the most recent deposit request for a CRM lead",
+      description:
+        "Preview of the most recent deposit request for a CRM lead. " +
+        "Find by leadId, depositNumber (e.g. TF-D-2026-0001), or q (partial company name). " +
+        "Ambiguous q returns a choice list. " +
+        "Returns emailSubject and emailBodyPreview matching HQ SendDepositModal. " +
+        "No records created. Read-only.",
+      parameters: [
+        {
+          name: "leadId",
+          in: "query",
+          required: false,
+          description: "CRM lead UUID. Highest priority — use when known.",
+          schema: { type: "string" },
+        },
+        {
+          name: "depositNumber",
+          in: "query",
+          required: false,
+          description: "Deposit request number (e.g. TF-D-2026-0001). Returns that exact deposit.",
+          schema: { type: "string" },
+        },
+        {
+          name: "q",
+          in: "query",
+          required: false,
+          description: "Partial, case-insensitive company name search. Returns choice list if multiple match.",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Deposit preview. hasExistingDeposit is false if no deposit has been generated yet.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    description:
+                      "Deposit preview, ambiguous choice list, or no-deposit message. " +
+                      "When ambiguous is true, show matches to the founder and ask which lead they mean.",
+                    properties: {
+                      // ── Single result ───────────────────────────────────
+                      leadId:         { type: "string" },
+                      company:        { type: "string", nullable: true, description: "Business name — no contact PII." },
+                      depositId:      { type: "string" },
+                      depositNumber:  { type: "string", nullable: true, description: "Formatted request number (e.g. TF-D-2026-0001)." },
+                      depositAmount:  { type: "number", description: "Amount due from the client for this deposit." },
+                      totalAmount:    { type: "number", description: "Full project value." },
+                      grandTotal:     { type: "number", nullable: true, description: "Grand total including tax. Equal to totalAmount when tax is included." },
+                      balanceRemaining: { type: "number", description: "Remaining balance after deposit. 0 when deposit is paid." },
+                      status:         { type: "string", description: "'draft', 'pending', 'payment_failed', or 'paid'." },
+                      sentDate:       { type: "string", format: "date", nullable: true, description: "Date the deposit request was sent. null if not yet sent." },
+                      lineItems: {
+                        type: "array",
+                        nullable: true,
+                        description: "Line items carried over from the quote. null if no quote was linked.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            name:        { type: "string" },
+                            description: { type: "string" },
+                            quantity:    { type: "number" },
+                            unitPrice:   { type: "number" },
+                            lineTotal:   { type: "number" },
+                          },
+                        },
+                      },
+                      subtotal:       { type: "number", nullable: true },
+                      salesTaxRate:   { type: "number", nullable: true },
+                      salesTaxAmount: { type: "number", nullable: true },
+                      publicLink:     { type: "string", nullable: true, description: "Live deposit URL. Share with founders only — not directly to clients." },
+                      emailSubject:   { type: "string", description: "Email subject matching HQ SendDepositModal." },
+                      emailBodyPreview: { type: "string", description: "Full email body preview matching HQ SendDepositModal template." },
+                      verificationSummary: { type: "string", description: "Plain-language summary of the deposit state. Quote directly to the founder for confirmation." },
+                      totalDepositsForLead: { type: "integer", description: "Total deposits on file for this lead. >1 means other deposit requests exist." },
+                      selectionNote:  { type: "string", description: "Explains which deposit was selected and why." },
+                      hasExistingDeposit: { type: "boolean", description: "False when no deposit has been generated yet." },
+                      message:        { type: "string", description: "Human-readable status — present when hasExistingDeposit is false or ambiguous is true." },
+                      // ── Ambiguous ───────────────────────────────────────
+                      ambiguous:  { type: "boolean", description: "True when q matched multiple leads." },
+                      matchCount: { type: "integer" },
+                      matches: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            leadId:  { type: "string" },
+                            company: { type: "string", nullable: true },
+                            stage:   { type: "string", nullable: true },
+                          },
+                          required: ["leadId"],
+                        },
+                      },
+                    },
+                    required: [],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "No lookup parameter provided.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead or deposit not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/calendar": {
     get: {
       operationId: "getCalendar",
