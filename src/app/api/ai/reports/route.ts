@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 import { hasActiveFollowUpTask, hasFollowUpDate } from "@/lib/followUps";
-import { normalizeCRMStage } from "@/lib/dashboardMetrics";
+import { normalizeCRMStage, monthlyRevenueProgress, parseDashboardDate } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
@@ -663,6 +663,58 @@ function computeOutstandingDeposits(
   return results.slice(0, 10);
 }
 
+// ── Revenue Pace computation ──────────────────────────────────────────────────
+//
+// Linear projection: (MTD collected / daysElapsed) × totalDaysInMonth.
+// Uses the same payment logic as the HQ dashboard RevenueProgressCard
+// (monthlyRevenueProgress from dashboardMetrics). No new DB fetch needed —
+// finances table is already loaded.
+//
+// revenuePaceStatus:
+//   "ahead"    — projection meets or exceeds goal (paceRatio >= 1.0)
+//   "on-track" — projection is within 10% of goal (paceRatio >= 0.90)
+//   "behind"   — projection is more than 10% short
+
+type RevenuePace = {
+  monthlyGoal: number;
+  monthToDateRevenue: number;
+  revenuePaceStatus: "ahead" | "on-track" | "behind";
+  projectedMonthEndRevenue: number;
+  amountAheadOrBehindGoal: number;
+  daysLeftInMonth: number;
+};
+
+function computeRevenuePace(invoices: Row[], todayISO: string): RevenuePace {
+  const today = parseDashboardDate(todayISO) ?? new Date();
+  const totalDaysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const dayOfMonth       = today.getDate();
+  const daysLeftInMonth  = totalDaysInMonth - dayOfMonth;
+
+  const { collected, goal } = monthlyRevenueProgress(invoices, todayISO);
+  const monthToDateRevenue  = Math.round(collected * 100) / 100;
+
+  const dailyRate = dayOfMonth > 0 ? collected / dayOfMonth : 0;
+  const projectedMonthEndRevenue =
+    Math.round(dailyRate * totalDaysInMonth * 100) / 100;
+  const amountAheadOrBehindGoal =
+    Math.round((projectedMonthEndRevenue - goal) * 100) / 100;
+
+  const paceRatio = goal > 0 ? projectedMonthEndRevenue / goal : 1;
+  const revenuePaceStatus: "ahead" | "on-track" | "behind" =
+    paceRatio >= 1.0  ? "ahead" :
+    paceRatio >= 0.90 ? "on-track" :
+    "behind";
+
+  return {
+    monthlyGoal: goal,
+    monthToDateRevenue,
+    revenuePaceStatus,
+    projectedMonthEndRevenue,
+    amountAheadOrBehindGoal,
+    daysLeftInMonth,
+  };
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 /**
@@ -706,8 +758,9 @@ export async function GET(request: Request): Promise<Response> {
     );
 
     const endOfDayReport     = computeEndOfDay(tasks, invoices, leads, expenses, todayISO);
-    const pendingQuotes      = computePendingQuotes(leads, quotes, todayISO);
+    const pendingQuotes       = computePendingQuotes(leads, quotes, todayISO);
     const outstandingDeposits = computeOutstandingDeposits(depositRequests, leads);
+    const revenuePace         = computeRevenuePace(invoices, todayISO);
 
     return okResponse({
       date: todayISO,
@@ -716,6 +769,7 @@ export async function GET(request: Request): Promise<Response> {
       endOfDayReport,
       pendingQuotes,
       outstandingDeposits,
+      revenuePace,
     });
   } catch (err) {
     console.error("[ai/reports]", err);

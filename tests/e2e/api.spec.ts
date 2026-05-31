@@ -973,6 +973,105 @@ test.describe("GET /api/ai/reports — pendingQuotes and outstandingDeposits (Ph
 });
 
 // ---------------------------------------------------------------------------
+// Phase 9G Tier 3 — revenuePace in GET /api/ai/reports
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/reports — revenuePace (Phase 9G Tier 3)", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response includes revenuePace object", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    expect(data.revenuePace).toBeDefined();
+    expect(typeof data.revenuePace).toBe("object");
+  });
+
+  test("revenuePace has all required fields with correct types", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { revenuePace } = (await res.json()).data;
+
+    expect(typeof revenuePace.monthlyGoal).toBe("number");
+    expect(revenuePace.monthlyGoal).toBeGreaterThan(0);
+
+    expect(typeof revenuePace.monthToDateRevenue).toBe("number");
+    expect(revenuePace.monthToDateRevenue).toBeGreaterThanOrEqual(0);
+
+    expect(["ahead", "on-track", "behind"]).toContain(revenuePace.revenuePaceStatus);
+
+    expect(typeof revenuePace.projectedMonthEndRevenue).toBe("number");
+    expect(revenuePace.projectedMonthEndRevenue).toBeGreaterThanOrEqual(0);
+
+    expect(typeof revenuePace.amountAheadOrBehindGoal).toBe("number");
+
+    expect(typeof revenuePace.daysLeftInMonth).toBe("number");
+    expect(Number.isInteger(revenuePace.daysLeftInMonth)).toBe(true);
+    expect(revenuePace.daysLeftInMonth).toBeGreaterThanOrEqual(0);
+    expect(revenuePace.daysLeftInMonth).toBeLessThanOrEqual(30);
+  });
+
+  test("revenuePace invariants hold", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { revenuePace } = (await res.json()).data;
+    const { monthlyGoal, monthToDateRevenue, projectedMonthEndRevenue, amountAheadOrBehindGoal, revenuePaceStatus } = revenuePace;
+
+    // amountAheadOrBehindGoal = projected - goal (within rounding)
+    expect(Math.abs(amountAheadOrBehindGoal - (projectedMonthEndRevenue - monthlyGoal))).toBeLessThan(0.02);
+
+    // Status consistency: "ahead" only when projection >= goal
+    if (revenuePaceStatus === "ahead") {
+      expect(projectedMonthEndRevenue).toBeGreaterThanOrEqual(monthlyGoal * 0.999);
+    }
+    // Status consistency: "behind" only when projection < 90% of goal
+    if (revenuePaceStatus === "behind") {
+      expect(projectedMonthEndRevenue).toBeLessThan(monthlyGoal * 0.901);
+    }
+
+    // monthToDateRevenue <= projectedMonthEndRevenue (projection is always >= MTD)
+    expect(projectedMonthEndRevenue).toBeGreaterThanOrEqual(monthToDateRevenue - 0.01);
+  });
+
+  test("revenuePace does not expose raw finance fields or PII", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of ['"client_name":', '"deposit_paid_date":', '"final_paid_date":', '"stripe":'] as const) {
+      expect(bodyText, `revenuePace must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("OpenAPI schema declares revenuePace with correct fields", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const reportsOp = (paths["/api/ai/reports"] as Record<string, unknown>).get as Record<string, unknown>;
+    const resp200 = (reportsOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+
+    const rp = dataProps.revenuePace as Record<string, unknown>;
+    expect(rp).toBeDefined();
+    expect(rp.type).toBe("object");
+    const rpProps = rp.properties as Record<string, Record<string, unknown>>;
+    expect(rpProps.monthlyGoal).toBeDefined();
+    expect(rpProps.monthToDateRevenue).toBeDefined();
+    expect(rpProps.revenuePaceStatus).toBeDefined();
+    expect((rpProps.revenuePaceStatus as Record<string, unknown>).enum).toContain("ahead");
+    expect((rpProps.revenuePaceStatus as Record<string, unknown>).enum).toContain("on-track");
+    expect((rpProps.revenuePaceStatus as Record<string, unknown>).enum).toContain("behind");
+    expect(rpProps.projectedMonthEndRevenue).toBeDefined();
+    expect(rpProps.amountAheadOrBehindGoal).toBeDefined();
+    expect(rpProps.daysLeftInMonth).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/ai/finances  (Phase 6D)
 // ---------------------------------------------------------------------------
 

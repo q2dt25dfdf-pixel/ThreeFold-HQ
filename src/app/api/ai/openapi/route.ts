@@ -474,10 +474,10 @@ const paths: Record<string, unknown> = {
       operationId: "getReports",
       summary: "Morning Briefing, HQ Auditor, and End-of-Day Report",
       description:
-        "Three reports plus two briefing lists: morningBriefing (allClear flag), " +
+        "Three reports plus briefing data: morningBriefing (allClear flag), " +
         "hqAuditor (systemHealthy flag), endOfDayReport (today's activity), " +
-        "pendingQuotes (Quote Sent leads with expiry), outstandingDeposits (unpaid deposit requests). " +
-        "PII excluded.",
+        "pendingQuotes (Quote Sent leads), outstandingDeposits (unpaid deposits), " +
+        "revenuePace (MTD vs monthly goal). PII excluded.",
       responses: {
         "200": {
           description: "All three reports.",
@@ -587,8 +587,21 @@ const paths: Record<string, unknown> = {
                           required: ["id", "company", "status"],
                         },
                       },
+                      revenuePace: {
+                        type: "object",
+                        description: "MTD revenue vs monthly goal. Linear projection: (collected ÷ daysElapsed) × totalDaysInMonth.",
+                        properties: {
+                          monthlyGoal:              { type: "number", description: "Configured monthly revenue target in dollars." },
+                          monthToDateRevenue:       { type: "number", description: "Total dollars collected so far this calendar month." },
+                          revenuePaceStatus:        { type: "string", enum: ["ahead", "on-track", "behind"], description: "ahead = projection meets goal; on-track = within 10%; behind = more than 10% short." },
+                          projectedMonthEndRevenue: { type: "number", description: "Projected total revenue if current daily rate holds for the rest of the month." },
+                          amountAheadOrBehindGoal:  { type: "number", description: "projectedMonthEndRevenue minus monthlyGoal. Positive = ahead, negative = behind." },
+                          daysLeftInMonth:          { type: "integer", description: "Calendar days remaining after today." },
+                        },
+                        required: ["monthlyGoal", "monthToDateRevenue", "revenuePaceStatus", "projectedMonthEndRevenue", "amountAheadOrBehindGoal", "daysLeftInMonth"],
+                      },
                     },
-                    required: ["date", "morningBriefing", "hqAuditor", "endOfDayReport", "pendingQuotes", "outstandingDeposits"],
+                    required: ["date", "morningBriefing", "hqAuditor", "endOfDayReport", "pendingQuotes", "outstandingDeposits", "revenuePace"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },
