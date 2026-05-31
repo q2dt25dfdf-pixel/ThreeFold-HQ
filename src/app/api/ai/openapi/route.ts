@@ -1421,6 +1421,113 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/order-intelligence": {
+    get: {
+      operationId: "getOrderIntelligence",
+      summary: "Unified order status and next-step intelligence",
+      description:
+        "Full pipeline view for one order: currentStage, quoteStatus, depositStatus, " +
+        "productionStatus, invoiceStatus, nextStep, blockerReason, and a plain-language summary. " +
+        "Find by q (partial order name), orderId, or leadId. " +
+        "Ambiguous matches return a choice list. Read-only.",
+      parameters: [
+        {
+          name: "q",
+          in: "query",
+          required: false,
+          description: "Partial, case-insensitive order name search (e.g. 'DSF7'). Returns choice list if multiple match.",
+          schema: { type: "string" },
+        },
+        {
+          name: "orderId",
+          in: "query",
+          required: false,
+          description: "Direct order UUID. Highest priority — use when known.",
+          schema: { type: "string" },
+        },
+        {
+          name: "leadId",
+          in: "query",
+          required: false,
+          description: "CRM lead UUID. Finds the order linked to this lead via its invoice.",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Order intelligence or ambiguous match list.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    description:
+                      "Either a single OrderIntelligence result, or an ambiguous list. " +
+                      "When ambiguous is true, show matches to the founder and ask which order they mean.",
+                    properties: {
+                      // ── Single-result fields ────────────────────────────
+                      orderId:           { type: "string" },
+                      orderName:         { type: "string" },
+                      company:           { type: "string", nullable: true, description: "Business name from CRM lead — no contact PII." },
+                      leadId:            { type: "string", nullable: true, description: "CRM lead UUID. null if no lead is linked." },
+                      currentStage:      { type: "string", description: "CRM pipeline stage (if linked) or inferred production stage." },
+                      quoteStatus: {
+                        type: "string",
+                        enum: ["none", "draft", "sent", "expired", "approved"],
+                        description: "State of the most recent quote for this lead.",
+                      },
+                      depositStatus: {
+                        type: "string",
+                        enum: ["none", "draft", "pending", "payment_failed", "paid"],
+                        description: "State of the most recent deposit request.",
+                      },
+                      productionStatus:  { type: "string", description: "Current order production status (e.g. Production, Quality Check, Ready, Delivered)." },
+                      invoiceStatus: {
+                        type: "string",
+                        enum: ["none", "outstanding", "deposit_paid", "overdue", "paid"],
+                        description: "Derived invoice payment state.",
+                      },
+                      nextStep:     { type: "string", description: "Plain-language description of the immediate next action required. Quote directly to the founder." },
+                      blockerReason:{ type: "string", nullable: true, description: "Plain-language blocker description when something is actively stuck. null if no blocker." },
+                      lastUpdated:  { type: "string", format: "date", nullable: true, description: "Most recent activity date across quote, deposit, and invoice records." },
+                      summary:      { type: "string", description: "One-sentence Jarvis-readable summary of the full order state." },
+                      // ── Ambiguous-result fields ──────────────────────────
+                      ambiguous:   { type: "boolean", description: "True when q matched multiple orders. Show matches and ask which one." },
+                      matchCount:  { type: "integer", description: "Total number of matching orders. Present when ambiguous is true." },
+                      matches: {
+                        type: "array",
+                        description: "Choice list when ambiguous is true. Show to the founder to disambiguate.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            orderId:   { type: "string" },
+                            orderName: { type: "string" },
+                            status:    { type: "string" },
+                            company:   { type: "string", nullable: true },
+                          },
+                          required: ["orderId", "orderName", "status"],
+                        },
+                      },
+                    },
+                    required: [],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "No lookup parameter provided.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Order not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/search": {
     get: {
       operationId: "search",

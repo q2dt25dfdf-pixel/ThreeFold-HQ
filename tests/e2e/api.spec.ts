@@ -1683,6 +1683,7 @@ const EXPECTED_PATHS = [
   "/api/ai/activity",
   "/api/ai/search",
   "/api/ai/calendar",
+  "/api/ai/order-intelligence",
   "/api/ai/client/{id}",
   "/api/ai/order/{id}",
   "/api/ai/lead/{id}",
@@ -1706,7 +1707,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 15 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 16 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -2202,5 +2203,244 @@ test.describe("GET /api/ai/reports — attentionRequired (Phase 9G Tier 4)", () 
     // attentionRequired must be in the required array for the reports response data
     const dataRequired = ((((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).required as string[]);
     expect(dataRequired).toContain("attentionRequired");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 5 — GET /api/ai/order-intelligence
+// ---------------------------------------------------------------------------
+
+const ORDER_INTEL = "/api/ai/order-intelligence";
+
+const FORBIDDEN_ORDER_INTEL = [
+  '"email":', '"phone":', '"address":',
+  '"notes":', '"contact":', '"summary":',
+  '"stripe":', '"payment_link":',
+  '"client_name":', '"client_email":',
+];
+
+test.describe("GET /api/ai/order-intelligence — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?q=test`);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?q=test`, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?q=test`, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/order-intelligence — param validation", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("missing all params returns 400", async ({ request }) => {
+    const res = await request.get(ORDER_INTEL, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("nonexistent orderId returns 404", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?orderId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+    expect(body.error.toLowerCase()).not.toContain("sql");
+  });
+
+  test("nonexistent leadId returns 404", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?leadId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("q with no matching orders returns 404", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?q=zzz-no-such-order-xyz-999`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("GET /api/ai/order-intelligence — authenticated, single result shape", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response with any q that returns one match has correct intelligence shape", async ({ request }) => {
+    // This test is opportunistic — it only exercises shape validation when data exists.
+    // It passes (as skipped assertion) when no orders match the broad query.
+    const res = await request.get(`${ORDER_INTEL}?q=order`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    // Could be 200 (single), 200 (ambiguous), or 404 (no data)
+    if (res.status() === 404) return; // no data in test env — OK
+
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+
+    const { data } = body;
+
+    if (data.ambiguous === true) {
+      // Ambiguous path — validate match list shape
+      expect(typeof data.matchCount).toBe("number");
+      expect(data.matchCount).toBeGreaterThan(1);
+      expect(Array.isArray(data.matches)).toBe(true);
+      expect(data.matches.length).toBeGreaterThan(0);
+      expect(data.matches.length).toBeLessThanOrEqual(5);
+      for (const m of data.matches as Record<string, unknown>[]) {
+        expect(typeof m.orderId).toBe("string");
+        expect(typeof m.orderName).toBe("string");
+        expect(typeof m.status).toBe("string");
+        expect(m).not.toHaveProperty("email");
+        expect(m).not.toHaveProperty("notes");
+      }
+    } else {
+      // Single result path — validate full intelligence shape
+      expect(typeof data.orderId).toBe("string");
+      expect(typeof data.orderName).toBe("string");
+      expect(typeof data.currentStage).toBe("string");
+      expect(typeof data.productionStatus).toBe("string");
+      expect(typeof data.nextStep).toBe("string");
+      expect((data.nextStep as string).length).toBeGreaterThan(0);
+      expect(typeof data.summary).toBe("string");
+      expect((data.summary as string).length).toBeGreaterThan(0);
+
+      // Enum fields
+      const VALID_QUOTE_STATUSES = new Set(["none", "draft", "sent", "expired", "approved"]);
+      const VALID_DEPOSIT_STATUSES = new Set(["none", "draft", "pending", "payment_failed", "paid"]);
+      const VALID_INVOICE_STATUSES = new Set(["none", "outstanding", "deposit_paid", "overdue", "paid"]);
+      expect(VALID_QUOTE_STATUSES.has(data.quoteStatus)).toBe(true);
+      expect(VALID_DEPOSIT_STATUSES.has(data.depositStatus)).toBe(true);
+      expect(VALID_INVOICE_STATUSES.has(data.invoiceStatus)).toBe(true);
+
+      // Nullable fields — must be string or null
+      if (data.company !== null && data.company !== undefined) {
+        expect(typeof data.company).toBe("string");
+      }
+      if (data.leadId !== null && data.leadId !== undefined) {
+        expect(typeof data.leadId).toBe("string");
+      }
+      if (data.blockerReason !== null && data.blockerReason !== undefined) {
+        expect(typeof data.blockerReason).toBe("string");
+        expect((data.blockerReason as string).length).toBeGreaterThan(0);
+      }
+      if (data.lastUpdated !== null && data.lastUpdated !== undefined) {
+        expect(typeof data.lastUpdated).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}/.test(data.lastUpdated as string)).toBe(true);
+      }
+
+      // Must NOT expose PII fields
+      expect(data).not.toHaveProperty("email");
+      expect(data).not.toHaveProperty("phone");
+      expect(data).not.toHaveProperty("contact");
+      expect(data).not.toHaveProperty("notes");
+      expect(data).not.toHaveProperty("client_name");
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(`${ORDER_INTEL}?orderId=${NONEXISTENT_ID}`, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    // Even 404 responses must not be publicly cached
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+test.describe("GET /api/ai/order-intelligence — PII exclusion", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response body does not expose PII or raw field names on any path", async ({ request }) => {
+    // Test with a broad query that may return real data or a 404
+    for (const url of [
+      `${ORDER_INTEL}?q=order`,
+      `${ORDER_INTEL}?orderId=${NONEXISTENT_ID}`,
+    ]) {
+      const res = await request.get(url, {
+        headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+      });
+      const bodyText = await res.text();
+      for (const key of FORBIDDEN_ORDER_INTEL) {
+        expect(bodyText, `order-intelligence must not expose ${key} (${url})`).not.toContain(key);
+      }
+    }
+  });
+});
+
+test.describe("GET /api/ai/order-intelligence — OpenAPI schema", () => {
+  test("OpenAPI schema declares /api/ai/order-intelligence with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths["/api/ai/order-intelligence"]).toBeDefined();
+
+    const getOp = (paths["/api/ai/order-intelligence"] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getOrderIntelligence");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    // Must have query parameters: q, orderId, leadId
+    const params = getOp.parameters as Record<string, unknown>[];
+    const paramNames = params.map((p) => p.name);
+    expect(paramNames).toContain("q");
+    expect(paramNames).toContain("orderId");
+    expect(paramNames).toContain("leadId");
+
+    // Response schema should declare the key intelligence fields
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+
+    expect(dataProps.orderId).toBeDefined();
+    expect(dataProps.orderName).toBeDefined();
+    expect(dataProps.currentStage).toBeDefined();
+    expect(dataProps.quoteStatus).toBeDefined();
+    expect((dataProps.quoteStatus as Record<string, unknown>).enum).toContain("approved");
+    expect((dataProps.quoteStatus as Record<string, unknown>).enum).toContain("expired");
+    expect(dataProps.depositStatus).toBeDefined();
+    expect(dataProps.productionStatus).toBeDefined();
+    expect(dataProps.invoiceStatus).toBeDefined();
+    expect(dataProps.nextStep).toBeDefined();
+    expect(dataProps.blockerReason).toBeDefined();
+    expect(dataProps.summary).toBeDefined();
+    // Ambiguous fields
+    expect(dataProps.ambiguous).toBeDefined();
+    expect(dataProps.matches).toBeDefined();
+  });
+
+  test("getOrderIntelligence operation description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths["/api/ai/order-intelligence"] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
   });
 });
