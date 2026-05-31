@@ -1695,6 +1695,7 @@ const EXPECTED_PATHS = [
   "/api/ai/end-of-day-summary",
   "/api/ai/financial-watchlist",
   "/api/ai/follow-up-watchlist",
+  "/api/ai/command-center",
 ];
 
 test.describe("GET /api/ai/openapi", () => {
@@ -1714,7 +1715,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 23 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 24 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -5494,6 +5495,322 @@ test.describe("GET /api/ai/follow-up-watchlist — OpenAPI schema", () => {
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
     const op = (paths[FUWL] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});
+
+// ============================================================================
+// Tier 14 — GET /api/ai/command-center
+// ============================================================================
+
+const CC = "/api/ai/command-center";
+
+const FORBIDDEN_CC = [
+  '"email":',      '"phone":',         '"address":',
+  '"notes":',      '"contact":',       '"summary":',
+  '"stripe":',     '"payment_link":',  '"client_name":',
+  '"client_email":',                   '"communicationHistory":',
+  '"questionnaire_files":',            '"public_token":',
+  '"payment_instructions":',           '"stripe_invoice_url":',
+];
+
+function ccAuthHeaders(): Record<string, string> {
+  const secret = process.env.AI_API_SECRET;
+  if (!secret) return {};
+  return { Authorization: `Bearer ${secret}` };
+}
+
+test.describe("GET /api/ai/command-center — unauthenticated rejection", () => {
+  test("returns 401 with no Authorization header", async ({ request }) => {
+    const res = await request.get(CC);
+    expect(res.status()).toBe(401);
+  });
+
+  test("returns 401 with wrong Bearer token", async ({ request }) => {
+    const res = await request.get(CC, { headers: { Authorization: "Bearer wrong-token" } });
+    expect(res.status()).toBe(401);
+  });
+
+  test("returns 401 with malformed Authorization header", async ({ request }) => {
+    const res = await request.get(CC, { headers: { Authorization: "Token abc123" } });
+    expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("GET /api/ai/command-center — authenticated", () => {
+  test("returns 200 with valid Bearer token", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response has ok:true and all required top-level sections", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const d = body.data as Record<string, unknown>;
+    expect(typeof d.date).toBe("string");
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(d.date as string)).toBe(true);
+    expect(Array.isArray(d.urgentItems)).toBe(true);
+    expect(typeof d.todayFocus).toBe("object");
+    expect(typeof d.financialPriorities).toBe("object");
+    expect(typeof d.followUpPriorities).toBe("object");
+    expect(typeof d.taskPriorities).toBe("object");
+    expect(typeof d.orderPriorities).toBe("object");
+    expect(Array.isArray(d.recommendedActions)).toBe(true);
+    expect(typeof d.executiveSummary).toBe("string");
+  });
+
+  test("urgentItems is array bounded to 15 with required fields", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = (body.data as Record<string, unknown>).urgentItems as Record<string, unknown>[];
+    expect(items.length).toBeLessThanOrEqual(15);
+    for (const item of items) {
+      expect(["red", "amber", "blue"]).toContain(item.priority);
+      expect(["finance", "followup", "task", "order"]).toContain(item.category);
+      expect(typeof item.label).toBe("string");
+      expect(typeof item.detail).toBe("string");
+      expect(typeof item.reason).toBe("string");
+    }
+  });
+
+  test("urgentItems sorted red→amber→blue (no red after amber, no amber after blue)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = (body.data as Record<string, unknown>).urgentItems as Record<string, unknown>[];
+    const priorityOrder: Record<string, number> = { red: 0, amber: 1, blue: 2 };
+    for (let i = 1; i < items.length; i++) {
+      const prev = priorityOrder[items[i - 1].priority as string] ?? 99;
+      const curr = priorityOrder[items[i].priority as string] ?? 99;
+      expect(prev).toBeLessThanOrEqual(curr);
+    }
+  });
+
+  test("todayFocus has tasksDueToday, followUpsDueToday, allClear, and items array", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const tf = (body.data as Record<string, unknown>).todayFocus as Record<string, unknown>;
+    expect(typeof tf.tasksDueToday).toBe("number");
+    expect(typeof tf.followUpsDueToday).toBe("number");
+    expect(typeof tf.allClear).toBe("boolean");
+    expect(Array.isArray(tf.items)).toBe(true);
+  });
+
+  test("todayFocus allClear invariant matches counts", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const tf = (body.data as Record<string, unknown>).todayFocus as Record<string, unknown>;
+    const expectedAllClear = (tf.tasksDueToday as number) === 0 && (tf.followUpsDueToday as number) === 0;
+    expect(tf.allClear).toBe(expectedAllClear);
+  });
+
+  test("financialPriorities has revenue fields, counts, paceStatus, and topItems", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const fp = (body.data as Record<string, unknown>).financialPriorities as Record<string, unknown>;
+    expect(typeof fp.revenueToday).toBe("number");
+    expect(typeof fp.revenueThisMonth).toBe("number");
+    expect(typeof fp.monthlyGoal).toBe("number");
+    expect(fp.monthlyGoal as number).toBeGreaterThan(0);
+    expect(typeof fp.monthlyPercent).toBe("number");
+    expect(["ahead", "on-track", "behind"]).toContain(fp.paceStatus);
+    expect(typeof fp.failedDepositCount).toBe("number");
+    expect(typeof fp.overdueInvoiceCount).toBe("number");
+    expect(typeof fp.overdueInvoiceTotal).toBe("number");
+    expect(typeof fp.approvedQuotesAwaitingDeposit).toBe("number");
+    expect(Array.isArray(fp.topItems)).toBe(true);
+    expect((fp.topItems as unknown[]).length).toBeLessThanOrEqual(5);
+  });
+
+  test("financialPriorities revenue fields are non-negative", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const fp = (body.data as Record<string, unknown>).financialPriorities as Record<string, unknown>;
+    expect(fp.revenueToday as number).toBeGreaterThanOrEqual(0);
+    expect(fp.revenueThisMonth as number).toBeGreaterThanOrEqual(0);
+    expect(fp.overdueInvoiceTotal as number).toBeGreaterThanOrEqual(0);
+    expect(fp.monthlyPercent as number).toBeGreaterThanOrEqual(0);
+  });
+
+  test("financialPriorities topItems have type, label, amount, and reason", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).financialPriorities as Record<string, unknown>).topItems as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.type).toBe("string");
+      expect(typeof item.label).toBe("string");
+      expect(typeof item.amount).toBe("number");
+      expect(typeof item.reason).toBe("string");
+    }
+  });
+
+  test("followUpPriorities has staleLeadCount, expiredQuoteCount, followUpsDueToday, and topItems", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const fu = (body.data as Record<string, unknown>).followUpPriorities as Record<string, unknown>;
+    expect(typeof fu.staleLeadCount).toBe("number");
+    expect(typeof fu.expiredQuoteCount).toBe("number");
+    expect(typeof fu.followUpsDueToday).toBe("number");
+    expect(Array.isArray(fu.topItems)).toBe(true);
+    expect((fu.topItems as unknown[]).length).toBeLessThanOrEqual(5);
+  });
+
+  test("taskPriorities has overdueCount, dueTodayCount, and topItems", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const tp = (body.data as Record<string, unknown>).taskPriorities as Record<string, unknown>;
+    expect(typeof tp.overdueCount).toBe("number");
+    expect(typeof tp.dueTodayCount).toBe("number");
+    expect(Array.isArray(tp.topItems)).toBe(true);
+    expect((tp.topItems as unknown[]).length).toBeLessThanOrEqual(5);
+  });
+
+  test("taskPriorities topItems are sorted most-overdue first (daysPastDue desc)", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).taskPriorities as Record<string, unknown>).topItems as Record<string, unknown>[];
+    for (let i = 1; i < items.length; i++) {
+      expect(items[i - 1].daysPastDue as number).toBeGreaterThanOrEqual(items[i].daysPastDue as number);
+    }
+  });
+
+  test("orderPriorities has stalledCount, dueSoonCount, and topItems", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const op = (body.data as Record<string, unknown>).orderPriorities as Record<string, unknown>;
+    expect(typeof op.stalledCount).toBe("number");
+    expect(typeof op.dueSoonCount).toBe("number");
+    expect(Array.isArray(op.topItems)).toBe(true);
+    expect((op.topItems as unknown[]).length).toBeLessThanOrEqual(5);
+  });
+
+  test("orderPriorities topItems have isStalled and reason", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const items = ((body.data as Record<string, unknown>).orderPriorities as Record<string, unknown>).topItems as Record<string, unknown>[];
+    for (const item of items) {
+      expect(typeof item.isStalled).toBe("boolean");
+      expect(typeof item.reason).toBe("string");
+      expect(typeof item.orderName).toBe("string");
+    }
+  });
+
+  test("recommendedActions is non-empty array of strings", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const actions = (body.data as Record<string, unknown>).recommendedActions as unknown[];
+    expect(Array.isArray(actions)).toBe(true);
+    expect(actions.length).toBeGreaterThan(0);
+    for (const a of actions) {
+      expect(typeof a).toBe("string");
+      expect((a as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("executiveSummary is a non-empty string", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const body = await res.json() as Record<string, unknown>;
+    const summary = (body.data as Record<string, unknown>).executiveSummary;
+    expect(typeof summary).toBe("string");
+    expect((summary as string).length).toBeGreaterThan(0);
+  });
+
+  test("response sets Cache-Control: no-store", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+
+  test("no PII fields in command-center response body", async ({ request }) => {
+    const secret = process.env.AI_API_SECRET;
+    if (!secret) test.skip(true, "AI_API_SECRET not set");
+    const res = await request.get(CC, { headers: ccAuthHeaders() });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_CC) {
+      expect(bodyText, `command-center must not expose ${key}`).not.toContain(key);
+    }
+  });
+});
+
+test.describe("GET /api/ai/command-center — OpenAPI schema", () => {
+  test("OpenAPI schema declares /api/ai/command-center with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths[CC]).toBeDefined();
+
+    const getOp = (paths[CC] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getCommandCenter");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    for (const section of [
+      "date", "urgentItems", "todayFocus", "financialPriorities",
+      "followUpPriorities", "taskPriorities", "orderPriorities",
+      "recommendedActions", "executiveSummary",
+    ]) {
+      expect(dataProps[section], `Missing schema property: ${section}`).toBeDefined();
+    }
+
+    // urgentItems must document priority enum
+    const urgentSchema = dataProps.urgentItems as Record<string, unknown>;
+    expect(urgentSchema.type).toBe("array");
+    const itemProps = ((urgentSchema.items as Record<string, unknown>).properties as Record<string, Record<string, unknown>>);
+    expect(itemProps.priority?.enum).toEqual(expect.arrayContaining(["red", "amber", "blue"]));
+    expect(itemProps.category?.enum).toEqual(expect.arrayContaining(["finance", "followup", "task", "order"]));
+
+    // paceStatus must document enum
+    const fpProps = (dataProps.financialPriorities as Record<string, unknown>).properties as Record<string, Record<string, unknown>>;
+    expect(fpProps.paceStatus?.enum).toEqual(expect.arrayContaining(["ahead", "on-track", "behind"]));
+  });
+
+  test("getCommandCenter description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths[CC] as Record<string, unknown>).get as Record<string, unknown>;
     expect(typeof op.description).toBe("string");
     expect((op.description as string).length).toBeLessThanOrEqual(300);
   });

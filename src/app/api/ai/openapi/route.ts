@@ -2941,6 +2941,198 @@ const paths: Record<string, unknown> = {
       },
     },
   },
+
+  "/api/ai/command-center": {
+    get: {
+      operationId: "getCommandCenter",
+      summary: "Command center — what needs attention right now",
+      description:
+        "Command center: cross-category urgent items, today's focus, financial and follow-up priorities, " +
+        "task and order priorities, recommended actions, and an executive summary. Read-only. Auth required.",
+      responses: {
+        "200": {
+          description: "Command center snapshot. executiveSummary gives a one-paragraph business-state narrative.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      date: { type: "string", format: "date", description: "Today's date (PT timezone, YYYY-MM-DD)." },
+                      urgentItems: {
+                        type: "array",
+                        maxItems: 15,
+                        description: "Cross-category urgent items sorted red→amber→blue then finance→followup→task→order.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            priority: { type: "string", enum: ["red", "amber", "blue"] },
+                            category: { type: "string", enum: ["finance", "followup", "task", "order"] },
+                            label:    { type: "string", description: "Company or order name (no PII)." },
+                            detail:   { type: "string" },
+                            reason:   { type: "string" },
+                          },
+                          required: ["priority", "category", "label", "detail", "reason"],
+                        },
+                      },
+                      todayFocus: {
+                        type: "object",
+                        description: "Tasks and client follow-ups due specifically today.",
+                        properties: {
+                          tasksDueToday:     { type: "integer" },
+                          followUpsDueToday: { type: "integer" },
+                          allClear:          { type: "boolean", description: "True when nothing is due today." },
+                          items: {
+                            type: "array",
+                            maxItems: 10,
+                            items: {
+                              type: "object",
+                              description: "type=task includes id/title/owner; type=followup includes leadId/company/stage.",
+                              properties: {
+                                type:    { type: "string", enum: ["task", "followup"] },
+                                reason:  { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["tasksDueToday", "followUpsDueToday", "allClear", "items"],
+                      },
+                      financialPriorities: {
+                        type: "object",
+                        description: "Revenue pace, overdue invoices, failed deposits, and approved quotes awaiting deposit.",
+                        properties: {
+                          revenueToday:                  { type: "number" },
+                          revenueThisWeek:               { type: "number" },
+                          revenueThisMonth:              { type: "number" },
+                          monthlyGoal:                   { type: "number" },
+                          monthlyPercent:                { type: "integer" },
+                          paceStatus:                    { type: "string", enum: ["ahead", "on-track", "behind"] },
+                          failedDepositCount:            { type: "integer" },
+                          overdueInvoiceCount:           { type: "integer" },
+                          overdueInvoiceTotal:           { type: "number" },
+                          approvedQuotesAwaitingDeposit: { type: "integer" },
+                          unpaidDepositCount:            { type: "integer" },
+                          topItems: {
+                            type: "array",
+                            maxItems: 5,
+                            items: {
+                              type: "object",
+                              properties: {
+                                type:   { type: "string", description: "failed-deposit | overdue-invoice | approved-quote-no-deposit | old-unpaid-deposit" },
+                                label:  { type: "string" },
+                                amount: { type: "number" },
+                                reason: { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["revenueToday", "revenueThisMonth", "monthlyGoal", "paceStatus", "failedDepositCount", "overdueInvoiceCount", "topItems"],
+                      },
+                      followUpPriorities: {
+                        type: "object",
+                        description: "Stale leads, expired/expiring quotes, old unpaid deposits, and upcoming follow-ups.",
+                        properties: {
+                          staleLeadCount:     { type: "integer" },
+                          expiredQuoteCount:  { type: "integer" },
+                          expiringQuoteCount: { type: "integer" },
+                          oldDepositCount:    { type: "integer" },
+                          followUpsDueToday:  { type: "integer" },
+                          followUpsDueSoon:   { type: "integer" },
+                          topItems: {
+                            type: "array",
+                            maxItems: 5,
+                            items: {
+                              type: "object",
+                              properties: {
+                                type:             { type: "string", description: "stale-lead | expired-quote | expiring-quote | old-deposit" },
+                                leadId:           { type: "string", nullable: true },
+                                company:          { type: "string" },
+                                daysPastFollowUp: { type: "integer", nullable: true },
+                                daysUntilExpiry:  { type: "integer", nullable: true },
+                                reason:           { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["staleLeadCount", "expiredQuoteCount", "followUpsDueToday", "topItems"],
+                      },
+                      taskPriorities: {
+                        type: "object",
+                        properties: {
+                          overdueCount:  { type: "integer" },
+                          dueTodayCount: { type: "integer" },
+                          topItems: {
+                            type: "array",
+                            maxItems: 5,
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:          { type: "string" },
+                                title:       { type: "string" },
+                                owner:       { type: "string", nullable: true },
+                                dueDate:     { type: "string" },
+                                daysPastDue: { type: "integer" },
+                                reason:      { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["overdueCount", "dueTodayCount", "topItems"],
+                      },
+                      orderPriorities: {
+                        type: "object",
+                        properties: {
+                          stalledCount: { type: "integer" },
+                          dueSoonCount: { type: "integer" },
+                          topItems: {
+                            type: "array",
+                            maxItems: 5,
+                            items: {
+                              type: "object",
+                              properties: {
+                                id:          { type: "string" },
+                                orderName:   { type: "string" },
+                                status:      { type: "string" },
+                                dueDate:     { type: "string" },
+                                daysPastDue: { type: "integer" },
+                                isStalled:   { type: "boolean" },
+                                reason:      { type: "string" },
+                              },
+                            },
+                          },
+                        },
+                        required: ["stalledCount", "dueSoonCount", "topItems"],
+                      },
+                      recommendedActions: {
+                        type: "array",
+                        description: "Plain-language action items sorted by urgency. Non-empty — 'all clear' message when nothing needs attention.",
+                        items: { type: "string" },
+                      },
+                      executiveSummary: {
+                        type: "string",
+                        description: "One-paragraph business-state narrative Jarvis can read as a briefing.",
+                      },
+                    },
+                    required: [
+                      "date", "urgentItems", "todayFocus", "financialPriorities",
+                      "followUpPriorities", "taskPriorities", "orderPriorities",
+                      "recommendedActions", "executiveSummary",
+                    ],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
