@@ -474,10 +474,10 @@ const paths: Record<string, unknown> = {
       operationId: "getReports",
       summary: "Morning Briefing, HQ Auditor, and End-of-Day Report",
       description:
-        "Three reports in one call: morningBriefing (items needing attention today, allClear flag), " +
-        "hqAuditor (data integrity issues, systemHealthy flag), " +
-        "endOfDayReport (today's activity summary, hasActivity flag). " +
-        "Item names included; all PII and note content excluded.",
+        "Three reports plus two briefing lists: morningBriefing (allClear flag), " +
+        "hqAuditor (systemHealthy flag), endOfDayReport (today's activity), " +
+        "pendingQuotes (Quote Sent leads with expiry), outstandingDeposits (unpaid deposit requests). " +
+        "PII excluded.",
       responses: {
         "200": {
           description: "All three reports.",
@@ -555,8 +555,40 @@ const paths: Record<string, unknown> = {
                         },
                         required: ["hasActivity", "revenueToday", "expenseTotalToday", "payments", "completedTasks", "contactsLogged", "expensesToday"],
                       },
+                      pendingQuotes: {
+                        type: "array",
+                        description: "CRM leads in Quote Sent stage with their most recent quote. Sorted by soonest expiring (negative daysUntilExpiry = already expired). Up to 10.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            leadId:          { type: "string" },
+                            company:         { type: "string", description: "Business name — no contact PII." },
+                            quoteNumber:     { type: "string" },
+                            grandTotal:      { type: "number" },
+                            expirationDate:  { type: "string", format: "date" },
+                            daysUntilExpiry: { type: "integer", description: "Days until expiry. Negative = already expired. Null if no expiration date." },
+                          },
+                          required: ["leadId", "company"],
+                        },
+                      },
+                      outstandingDeposits: {
+                        type: "array",
+                        description: "Deposit requests not yet paid (status: draft, pending, or payment_failed). Sorted oldest first. Up to 10.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            id:                   { type: "string" },
+                            depositRequestNumber: { type: "string" },
+                            company:              { type: "string", description: "Business name resolved from CRM lead." },
+                            depositAmount:        { type: "number" },
+                            status:               { type: "string", enum: ["draft", "pending", "payment_failed"] },
+                            sentDate:             { type: "string", format: "date" },
+                          },
+                          required: ["id", "company", "status"],
+                        },
+                      },
                     },
-                    required: ["date", "morningBriefing", "hqAuditor", "endOfDayReport"],
+                    required: ["date", "morningBriefing", "hqAuditor", "endOfDayReport", "pendingQuotes", "outstandingDeposits"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },

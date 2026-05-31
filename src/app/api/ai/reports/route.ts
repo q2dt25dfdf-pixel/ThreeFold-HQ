@@ -531,6 +531,138 @@ function computeEndOfDay(
   };
 }
 
+// ── Pending Quotes computation ────────────────────────────────────────────────
+//
+// Leads currently in "Quote Sent" stage joined to their most-recent quote.
+// Uses the same recency sort as /api/ai/quote-preview: acknowledgementAcceptedAt
+// → sent_date → created_at → id desc.
+// Returns up to 10, sorted by soonest expiring (expired negatives first, nulls last).
+
+function quoteEffectiveTs(q: Row): string {
+  return (
+    (q.acknowledgementAcceptedAt as string) ||
+    (q.sent_date as string) ||
+    (q.created_at as string) ||
+    ""
+  );
+}
+
+type PendingQuoteItem = {
+  leadId: string;
+  company: string;
+  quoteNumber: string | null;
+  grandTotal: number | null;
+  expirationDate: string | null;
+  daysUntilExpiry: number | null;
+};
+
+function computePendingQuotes(
+  leads: Row[],
+  quotes: Row[],
+  todayISO: string,
+): PendingQuoteItem[] {
+  const quoteSentLeads = leads.filter(
+    (l) => normalizeCRMStage(stringField(l, "stage")) === "Quote Sent",
+  );
+  if (quoteSentLeads.length === 0) return [];
+
+  const quotesByLead = new Map<string, Row[]>();
+  for (const q of quotes) {
+    const lid = stringField(q, "lead_id");
+    if (!lid) continue;
+    const arr = quotesByLead.get(lid) ?? [];
+    arr.push(q);
+    quotesByLead.set(lid, arr);
+  }
+
+  const results: PendingQuoteItem[] = quoteSentLeads.map((lead) => {
+    const leadId  = lead.id;
+    const company = stringField(lead, "company") || stringField(lead, "name") || "Unknown";
+    const raw     = quotesByLead.get(leadId) ?? [];
+    const sorted  = [...raw].sort((a, b) => {
+      const ta = quoteEffectiveTs(a);
+      const tb = quoteEffectiveTs(b);
+      if (tb > ta) return 1;
+      if (tb < ta) return -1;
+      return (b.id as string) > (a.id as string) ? 1 : -1;
+    });
+    const q = sorted[0];
+
+    const quoteNumber    = q ? (stringField(q, "quote_number") || null) : null;
+    const grandTotal     = q ? (parseAmount(q.grand_total ?? q.total_amount ?? 0) || null) : null;
+    const expirationDate = q ? (stringField(q, "expiration_date") || null) : null;
+    const daysUntilExpiry = expirationDate
+      ? Math.round(
+          (new Date(expirationDate + "T12:00:00").getTime() -
+           new Date(todayISO + "T12:00:00").getTime()) /
+           (1000 * 60 * 60 * 24),
+        )
+      : null;
+
+    return { leadId, company, quoteNumber, grandTotal, expirationDate, daysUntilExpiry };
+  });
+
+  results.sort((a, b) => {
+    if (a.daysUntilExpiry === null && b.daysUntilExpiry === null) return 0;
+    if (a.daysUntilExpiry === null) return 1;
+    if (b.daysUntilExpiry === null) return -1;
+    return a.daysUntilExpiry - b.daysUntilExpiry;
+  });
+
+  return results.slice(0, 10);
+}
+
+// ── Outstanding Deposits computation ──────────────────────────────────────────
+//
+// Deposit requests that have not been paid: status "draft", "pending", or
+// "payment_failed". Company name resolved via lead_id → crm_leads.company.
+// client_name is never exposed directly. Returns up to 10, oldest sentDate first.
+
+type OutstandingDepositItem = {
+  id: string;
+  depositRequestNumber: string | null;
+  company: string;
+  depositAmount: number | null;
+  status: string;
+  sentDate: string | null;
+};
+
+function computeOutstandingDeposits(
+  depositRows: Row[],
+  leads: Row[],
+): OutstandingDepositItem[] {
+  const leadCompanyMap = new Map<string, string>();
+  for (const l of leads) {
+    const company = stringField(l, "company") || stringField(l, "name");
+    if (l.id && company) leadCompanyMap.set(l.id, company);
+  }
+
+  const outstanding = depositRows.filter((d) => stringField(d, "status") !== "paid");
+
+  const results: OutstandingDepositItem[] = outstanding.map((d) => {
+    const leadId  = stringField(d, "lead_id");
+    const company = leadId ? (leadCompanyMap.get(leadId) ?? "Unknown") : "Unknown";
+    return {
+      id: d.id,
+      depositRequestNumber: stringField(d, "deposit_request_number") || null,
+      company,
+      depositAmount: parseAmount(d.deposit_amount ?? 0) || null,
+      status: stringField(d, "status") || "unknown",
+      sentDate: stringField(d, "sent_date") || null,
+    };
+  });
+
+  // Oldest sent date first (most overdue), unsent (null sentDate) last
+  results.sort((a, b) => {
+    if (!a.sentDate && !b.sentDate) return 0;
+    if (!a.sentDate) return 1;
+    if (!b.sentDate) return -1;
+    return a.sentDate.localeCompare(b.sentDate);
+  });
+
+  return results.slice(0, 10);
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 /**
@@ -548,13 +680,15 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const db = getSupabaseAdmin();
-    const [tasks, invoices, orders, leads, taxPayments, expenses] = await Promise.all([
+    const [tasks, invoices, orders, leads, taxPayments, expenses, quotes, depositRequests] = await Promise.all([
       fetchTable(db, "tasks"),
       fetchTable(db, "finances"),
       fetchTable(db, "orders"),
       fetchTable(db, "crm_leads"),
       fetchTable(db, "sales_tax_payments"),
       fetchTable(db, "expenses"),
+      fetchTable(db, "quotes"),
+      fetchTable(db, "deposit_requests"),
     ]);
 
     const todayISO          = businessTodayISO();
@@ -571,13 +705,17 @@ export async function GET(request: Request): Promise<Response> {
       todayISO, currentYear,
     );
 
-    const endOfDayReport = computeEndOfDay(tasks, invoices, leads, expenses, todayISO);
+    const endOfDayReport     = computeEndOfDay(tasks, invoices, leads, expenses, todayISO);
+    const pendingQuotes      = computePendingQuotes(leads, quotes, todayISO);
+    const outstandingDeposits = computeOutstandingDeposits(depositRequests, leads);
 
     return okResponse({
       date: todayISO,
       morningBriefing,
       hqAuditor,
       endOfDayReport,
+      pendingQuotes,
+      outstandingDeposits,
     });
   } catch (err) {
     console.error("[ai/reports]", err);

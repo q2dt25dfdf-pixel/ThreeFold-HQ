@@ -836,6 +836,143 @@ test.describe("GET /api/ai/reports — authenticated", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 9G — pendingQuotes + outstandingDeposits in GET /api/ai/reports
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/ai/reports — pendingQuotes and outstandingDeposits (Phase 9G)", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("response includes pendingQuotes and outstandingDeposits arrays", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    expect(Array.isArray(data.pendingQuotes)).toBe(true);
+    expect(Array.isArray(data.outstandingDeposits)).toBe(true);
+  });
+
+  test("pendingQuotes items have correct safe shape", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    expect(data.pendingQuotes.length).toBeLessThanOrEqual(10);
+
+    for (const q of data.pendingQuotes as Record<string, unknown>[]) {
+      expect(typeof q.leadId).toBe("string");
+      expect(typeof q.company).toBe("string");
+      // Optional fields — present or null, never wrong type
+      if (q.quoteNumber !== null && q.quoteNumber !== undefined) {
+        expect(typeof q.quoteNumber).toBe("string");
+      }
+      if (q.grandTotal !== null && q.grandTotal !== undefined) {
+        expect(typeof q.grandTotal).toBe("number");
+        expect(q.grandTotal).toBeGreaterThan(0);
+      }
+      if (q.expirationDate !== null && q.expirationDate !== undefined) {
+        expect(typeof q.expirationDate).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}$/.test(q.expirationDate as string)).toBe(true);
+      }
+      if (q.daysUntilExpiry !== null && q.daysUntilExpiry !== undefined) {
+        expect(typeof q.daysUntilExpiry).toBe("number");
+      }
+      // Must NOT expose contact PII
+      expect(q).not.toHaveProperty("contact");
+      expect(q).not.toHaveProperty("email");
+      expect(q).not.toHaveProperty("phone");
+      expect(q).not.toHaveProperty("notes");
+    }
+  });
+
+  test("pendingQuotes sorted soonest-expiring first when expirationDate present", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    const withExpiry = (data.pendingQuotes as Record<string, unknown>[]).filter(
+      (q) => q.daysUntilExpiry !== null && q.daysUntilExpiry !== undefined,
+    );
+    for (let i = 1; i < withExpiry.length; i++) {
+      expect(withExpiry[i].daysUntilExpiry as number).toBeGreaterThanOrEqual(
+        withExpiry[i - 1].daysUntilExpiry as number,
+      );
+    }
+  });
+
+  test("outstandingDeposits items have correct safe shape", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    expect(data.outstandingDeposits.length).toBeLessThanOrEqual(10);
+
+    const VALID_STATUSES = new Set(["draft", "pending", "payment_failed"]);
+
+    for (const d of data.outstandingDeposits as Record<string, unknown>[]) {
+      expect(typeof d.id).toBe("string");
+      expect(typeof d.company).toBe("string");
+      expect(typeof d.status).toBe("string");
+      // Status must never be "paid" — that would mean it slipped the filter
+      expect(d.status).not.toBe("paid");
+      expect(VALID_STATUSES.has(d.status as string)).toBe(true);
+      if (d.depositRequestNumber !== null && d.depositRequestNumber !== undefined) {
+        expect(typeof d.depositRequestNumber).toBe("string");
+      }
+      if (d.depositAmount !== null && d.depositAmount !== undefined) {
+        expect(typeof d.depositAmount).toBe("number");
+        expect(d.depositAmount).toBeGreaterThan(0);
+      }
+      if (d.sentDate !== null && d.sentDate !== undefined) {
+        expect(typeof d.sentDate).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}$/.test(d.sentDate as string)).toBe(true);
+      }
+      // Must NOT expose client_name or email directly
+      expect(d).not.toHaveProperty("client_name");
+      expect(d).not.toHaveProperty("client_email");
+      expect(d).not.toHaveProperty("email");
+      expect(d).not.toHaveProperty("contact");
+    }
+  });
+
+  test("outstandingDeposits does not include paid deposits", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+    for (const d of data.outstandingDeposits as Record<string, unknown>[]) {
+      expect(d.status).not.toBe("paid");
+    }
+  });
+
+  test("response does not expose client_name or deposit PII fields", async ({ request }) => {
+    const res = await request.get(REPORTS, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of ['"client_name":', '"client_email":', '"public_link":', '"public_token":'] as const) {
+      expect(bodyText, `Reports must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("OpenAPI schema declares pendingQuotes and outstandingDeposits in reports response", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const reportsPath = paths["/api/ai/reports"] as Record<string, unknown>;
+    const getOp = reportsPath.get as Record<string, unknown>;
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const schemaDef = content.schema as Record<string, unknown>;
+    const dataProps = ((schemaDef.properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+
+    expect(dataProps.pendingQuotes).toBeDefined();
+    expect((dataProps.pendingQuotes as Record<string, unknown>).type).toBe("array");
+    expect(dataProps.outstandingDeposits).toBeDefined();
+    expect((dataProps.outstandingDeposits as Record<string, unknown>).type).toBe("array");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/ai/finances  (Phase 6D)
 // ---------------------------------------------------------------------------
 
