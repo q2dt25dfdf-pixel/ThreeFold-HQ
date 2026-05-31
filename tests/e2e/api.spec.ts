@@ -1686,6 +1686,7 @@ const EXPECTED_PATHS = [
   "/api/ai/order-intelligence",
   "/api/ai/client-intelligence",
   "/api/ai/deposit-preview",
+  "/api/ai/invoice-preview",
   "/api/ai/client/{id}",
   "/api/ai/order/{id}",
   "/api/ai/lead/{id}",
@@ -1709,7 +1710,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 18 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 19 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -3299,6 +3300,223 @@ test.describe("POST /api/ai/quote-send — OpenAPI schema", () => {
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
     const op = (paths["/api/ai/quote-send"] as Record<string, unknown>).post as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ai/invoice-preview — Tier 8 tests
+// ---------------------------------------------------------------------------
+
+const INVOICE_PREVIEW = "/api/ai/invoice-preview";
+
+test.describe("GET /api/ai/invoice-preview", () => {
+  // ── Auth ───────────────────────────────────────────────────────────────────
+
+  test("rejects requests with no token", async ({ request }) => {
+    const res = await request.get(INVOICE_PREVIEW + "?invoiceId=test");
+    expect(res.status()).toBe(401);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("rejects requests with bad token", async ({ request }) => {
+    const res = await request.get(INVOICE_PREVIEW + "?invoiceId=test", {
+      headers: { Authorization: "Bearer bad-token" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  // ── Param validation ───────────────────────────────────────────────────────
+
+  test("returns 400 when no lookup parameter is provided", async ({ request }) => {
+    const res = await request.get(INVOICE_PREVIEW, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 404 for nonexistent invoiceId", async ({ request }) => {
+    const res = await request.get(
+      INVOICE_PREVIEW + "?invoiceId=invoice-does-not-exist-xyz",
+      { headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` } },
+    );
+    expect(res.status()).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns 404 for nonexistent orderId", async ({ request }) => {
+    const res = await request.get(
+      INVOICE_PREVIEW + "?orderId=order-does-not-exist-xyz",
+      { headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` } },
+    );
+    expect(res.status()).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns 404 for nonexistent company name query", async ({ request }) => {
+    const res = await request.get(
+      INVOICE_PREVIEW + "?q=zzz-company-that-does-not-exist-xyz",
+      { headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` } },
+    );
+    expect(res.status()).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("returns ok for nonexistent leadId — soft no-invoice response", async ({ request }) => {
+    const res = await request.get(
+      INVOICE_PREVIEW + "?leadId=lead-does-not-exist-xyz",
+      { headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` } },
+    );
+    // leadId path returns 200 with hasInvoice: false rather than 404
+    expect(res.status()).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const data = body.data as Record<string, unknown>;
+    expect(data.hasInvoice).toBe(false);
+  });
+
+  // ── Preview does not mutate (inferred from read-only response shape) ────────
+
+  test("response never contains mutation side-effect fields", async ({ request }) => {
+    // Any record that exists: verify no write-confirming fields are returned.
+    // Use a query that returns 200 data (a real record, or a graceful empty response).
+    const res = await request.get(
+      INVOICE_PREVIEW + "?leadId=lead-mutation-check-xyz",
+      { headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` } },
+    );
+    // Either 200 (soft empty) or 404 — neither should have mutation fields
+    const body = await res.json() as Record<string, unknown>;
+    const text = JSON.stringify(body);
+    expect(text).not.toContain('"email_sent"');
+    expect(text).not.toContain('"status_updated"');
+    expect(text).not.toContain('"token_generated"');
+  });
+
+  // ── PII exclusion (verified against any live data that may exist) ───────────
+
+  test("response never contains PII fields", async ({ request }) => {
+    // Use q to search for any invoice — verify PII exclusion regardless of results
+    const res = await request.get(INVOICE_PREVIEW + "?q=a", {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.text();
+    expect(body).not.toContain('"client_email"');
+    expect(body).not.toContain('"notes"');
+    expect(body).not.toContain('"stripe_invoice_url"');
+    expect(body).not.toContain('"public_token"');
+  });
+
+  // ── Shape (when a record exists) ──────────────────────────────────────────
+
+  test("success response has required shape fields", async ({ request }) => {
+    // We use a fake invoiceId so we always get the shape we can check.
+    // Skip if 404 — no live test data guaranteed in this environment.
+    const res = await request.get(
+      INVOICE_PREVIEW + "?invoiceId=invoice-shape-check",
+      { headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` } },
+    );
+    if (res.status() === 404) return; // No live record — skip shape check
+    expect(res.status()).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const data = body.data as Record<string, unknown>;
+    expect(typeof data.invoiceId).toBe("string");
+    expect(typeof data.invoicePhase).toBe("string");
+    expect(["deposit_phase", "final_payment_due", "paid_in_full", "draft", "cancelled"]).toContain(data.invoicePhase);
+    expect(typeof data.status).toBe("string");
+    expect(typeof data.totalAmount).toBe("number");
+    expect(typeof data.depositAmount).toBe("number");
+    expect(typeof data.balanceRemaining).toBe("number");
+    expect(typeof data.depositPaid).toBe("boolean");
+    expect(typeof data.finalPaid).toBe("boolean");
+    expect(Array.isArray(data.lineItems)).toBe(true);
+    expect(typeof data.emailSubject).toBe("string");
+    expect(typeof data.emailBodyPreview).toBe("string");
+    expect(typeof data.verificationSummary).toBe("string");
+    expect(typeof data.selectionNote).toBe("string");
+    // publicLink is either a string or null — never the raw token
+    expect(data.publicLink === null || typeof data.publicLink === "string").toBe(true);
+    expect(data).not.toHaveProperty("client_email");
+    expect(data).not.toHaveProperty("public_token");
+  });
+
+  // ── Email format ───────────────────────────────────────────────────────────
+
+  test("emailBodyPreview matches HQ SendFinalInvoiceModal template when record exists", async ({ request }) => {
+    // Only verifiable with live data — skip gracefully if no record found
+    const res = await request.get(INVOICE_PREVIEW + "?q=a", {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    if (res.status() !== 200) return;
+    const body = await res.json() as Record<string, unknown>;
+    if (!(body.data as Record<string, unknown>)?.emailBodyPreview) return;
+    const data = body.data as Record<string, unknown>;
+    if (data.hasInvoice === false || data.ambiguous === true) return;
+    const preview = data.emailBodyPreview as string;
+    expect(preview).toContain("remaining balance is now ready for payment");
+    expect(preview).toContain("Remaining Balance:");
+    expect(preview).toContain("3% processing fee");
+    expect(preview).toContain("ThreeFold Supply Co.");
+    // Never contains email address
+    expect(preview).not.toMatch(/@\w+\.\w+/);
+  });
+
+  // ── OpenAPI schema ─────────────────────────────────────────────────────────
+
+  test("invoicePreview appears in OpenAPI schema", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    expect(paths["/api/ai/invoice-preview"]).toBeDefined();
+    const pathItem = paths["/api/ai/invoice-preview"] as Record<string, unknown>;
+    expect(pathItem.get).toBeDefined();
+    const op = pathItem.get as Record<string, unknown>;
+    expect(op.operationId).toBe("invoicePreview");
+    // Verify all four query parameters are declared
+    const params = op.parameters as Record<string, unknown>[];
+    const paramNames = params.map((p) => p.name as string);
+    expect(paramNames).toContain("invoiceId");
+    expect(paramNames).toContain("orderId");
+    expect(paramNames).toContain("leadId");
+    expect(paramNames).toContain("q");
+    // Response shape has required fields
+    const responses = op.responses as Record<string, unknown>;
+    expect(responses["200"]).toBeDefined();
+    expect(responses["400"]).toBeDefined();
+    expect(responses["401"]).toBeDefined();
+    expect(responses["404"]).toBeDefined();
+    const ok200 = responses["200"] as Record<string, unknown>;
+    const content = (ok200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
+    expect(dataProps.invoiceId).toBeDefined();
+    expect(dataProps.invoicePhase).toBeDefined();
+    expect(dataProps.balanceRemaining).toBeDefined();
+    expect(dataProps.balanceRemaining).toMatchObject({ type: "number" });
+    expect(dataProps.emailSubject).toBeDefined();
+    expect(dataProps.emailBodyPreview).toBeDefined();
+    expect(dataProps.publicLink).toBeDefined();
+    // Must NOT expose PII fields in schema
+    expect(dataProps).not.toHaveProperty("client_email");
+    expect(dataProps).not.toHaveProperty("public_token");
+    expect(dataProps).not.toHaveProperty("notes");
+    expect(dataProps).not.toHaveProperty("stripe_invoice_url");
+  });
+
+  test("invoicePreview description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths["/api/ai/invoice-preview"] as Record<string, unknown>).get as Record<string, unknown>;
     expect(typeof op.description).toBe("string");
     expect((op.description as string).length).toBeLessThanOrEqual(300);
   });

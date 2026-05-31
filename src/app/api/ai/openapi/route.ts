@@ -1577,6 +1577,101 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/invoice-preview": {
+    get: {
+      operationId: "invoicePreview",
+      summary: "Preview a final invoice before sending from HQ",
+      description:
+        "Read-only preview of a finances record. " +
+        "Lookup by invoiceId, orderId, leadId, or q (partial company name). " +
+        "Returns company, order, amounts, line items, tax, balance, email preview. " +
+        "Never sends email or writes records.",
+      parameters: [
+        {
+          name: "invoiceId",
+          in: "query",
+          description: "Finance record id (e.g. invoice-{orderId}).",
+          schema: { type: "string" },
+        },
+        {
+          name: "orderId",
+          in: "query",
+          description: "Order id — the invoice id is derived as invoice-{orderId}.",
+          schema: { type: "string" },
+        },
+        {
+          name: "leadId",
+          in: "query",
+          description: "CRM lead id — finds the invoice linked to this lead.",
+          schema: { type: "string" },
+        },
+        {
+          name: "q",
+          in: "query",
+          description: "Partial case-insensitive company name. Returns a choice list if ambiguous.",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description:
+            "Invoice preview. Fields: invoiceId, invoicePhase, company, orderName, orderId, " +
+            "leadId, status, depositPaid, finalPaid, totalAmount, depositAmount, " +
+            "balanceRemaining, lineItems, publicLink, emailSubject, emailBodyPreview, verificationSummary.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      invoiceId:            { type: "string" },
+                      invoicePhase:         { type: "string", enum: ["deposit_phase", "final_payment_due", "paid_in_full", "draft", "cancelled"] },
+                      company:              { type: "string", nullable: true },
+                      orderName:            { type: "string", nullable: true },
+                      orderId:              { type: "string", nullable: true },
+                      leadId:               { type: "string", nullable: true },
+                      depositRequestId:     { type: "string", nullable: true },
+                      status:               { type: "string" },
+                      depositPaid:          { type: "boolean" },
+                      depositPaidDate:      { type: "string", nullable: true, format: "date" },
+                      finalPaid:            { type: "boolean" },
+                      finalPaidDate:        { type: "string", nullable: true, format: "date" },
+                      finalDueDate:         { type: "string", nullable: true, format: "date" },
+                      subtotal:             { type: "number", nullable: true },
+                      salesTaxRate:         { type: "number", nullable: true },
+                      salesTaxRateFormatted:{ type: "string", nullable: true },
+                      salesTaxAmount:       { type: "number", nullable: true },
+                      grandTotal:           { type: "number", nullable: true },
+                      totalAmount:          { type: "number" },
+                      depositAmount:        { type: "number" },
+                      depositPercent:       { type: "integer" },
+                      balanceRemaining:     { type: "number" },
+                      lineItems:            { type: "array", items: { type: "object" } },
+                      publicLink:           { type: "string", nullable: true, description: "Null if invoice link not yet generated in HQ." },
+                      emailSubject:         { type: "string" },
+                      emailBodyPreview:     { type: "string" },
+                      verificationSummary:  { type: "string" },
+                      selectionNote:        { type: "string" },
+                    },
+                    required: ["invoiceId", "invoicePhase", "status", "totalAmount", "depositAmount", "balanceRemaining", "emailSubject", "emailBodyPreview", "verificationSummary"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "No lookup parameter provided.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Invoice not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/calendar": {
     get: {
       operationId: "getCalendar",
