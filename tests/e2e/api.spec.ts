@@ -954,21 +954,11 @@ test.describe("GET /api/ai/reports — pendingQuotes and outstandingDeposits (Ph
     }
   });
 
-  test("OpenAPI schema declares pendingQuotes and outstandingDeposits in reports response", async ({ request }) => {
+  test("OpenAPI schema does not expose /api/ai/reports (hidden to stay within 30-operation limit)", async ({ request }) => {
     const schemaRes = await request.get("/api/ai/openapi");
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
-    const reportsPath = paths["/api/ai/reports"] as Record<string, unknown>;
-    const getOp = reportsPath.get as Record<string, unknown>;
-    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
-    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
-    const schemaDef = content.schema as Record<string, unknown>;
-    const dataProps = ((schemaDef.properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
-
-    expect(dataProps.pendingQuotes).toBeDefined();
-    expect((dataProps.pendingQuotes as Record<string, unknown>).type).toBe("array");
-    expect(dataProps.outstandingDeposits).toBeDefined();
-    expect((dataProps.outstandingDeposits as Record<string, unknown>).type).toBe("array");
+    expect(paths["/api/ai/reports"]).toBeUndefined();
   });
 });
 
@@ -1046,28 +1036,11 @@ test.describe("GET /api/ai/reports — revenuePace (Phase 9G Tier 3)", () => {
     }
   });
 
-  test("OpenAPI schema declares revenuePace with correct fields", async ({ request }) => {
+  test("OpenAPI schema does not expose /api/ai/reports (hidden to stay within 30-operation limit)", async ({ request }) => {
     const schemaRes = await request.get("/api/ai/openapi");
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
-    const reportsOp = (paths["/api/ai/reports"] as Record<string, unknown>).get as Record<string, unknown>;
-    const resp200 = (reportsOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
-    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
-    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
-
-    const rp = dataProps.revenuePace as Record<string, unknown>;
-    expect(rp).toBeDefined();
-    expect(rp.type).toBe("object");
-    const rpProps = rp.properties as Record<string, Record<string, unknown>>;
-    expect(rpProps.monthlyGoal).toBeDefined();
-    expect(rpProps.monthToDateRevenue).toBeDefined();
-    expect(rpProps.revenuePaceStatus).toBeDefined();
-    expect((rpProps.revenuePaceStatus as Record<string, unknown>).enum).toContain("ahead");
-    expect((rpProps.revenuePaceStatus as Record<string, unknown>).enum).toContain("on-track");
-    expect((rpProps.revenuePaceStatus as Record<string, unknown>).enum).toContain("behind");
-    expect(rpProps.projectedMonthEndRevenue).toBeDefined();
-    expect(rpProps.amountAheadOrBehindGoal).toBeDefined();
-    expect(rpProps.daysLeftInMonth).toBeDefined();
+    expect(paths["/api/ai/reports"]).toBeUndefined();
   });
 });
 
@@ -1673,12 +1646,9 @@ const OPENAPI = "/api/ai/openapi";
 
 const EXPECTED_PATHS = [
   "/api/ai/health",
-  "/api/ai/summary",
   "/api/ai/tasks",
   "/api/ai/orders",
   "/api/ai/crm",
-  "/api/ai/vendors",
-  "/api/ai/reports",
   "/api/ai/finances",
   "/api/ai/activity",
   "/api/ai/search",
@@ -1716,7 +1686,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 25 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 22 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -2184,34 +2154,11 @@ test.describe("GET /api/ai/reports — attentionRequired (Phase 9G Tier 4)", () 
     }
   });
 
-  test("OpenAPI schema declares attentionRequired with all required sub-arrays", async ({ request }) => {
+  test("OpenAPI schema does not expose /api/ai/reports (hidden to stay within 30-operation limit)", async ({ request }) => {
     const schemaRes = await request.get("/api/ai/openapi");
     const schema = await schemaRes.json() as Record<string, unknown>;
     const paths = schema.paths as Record<string, unknown>;
-    const reportsOp = (paths["/api/ai/reports"] as Record<string, unknown>).get as Record<string, unknown>;
-    const resp200 = (reportsOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
-    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
-    const dataProps = (((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).properties as Record<string, unknown>;
-
-    const ar = dataProps.attentionRequired as Record<string, unknown>;
-    expect(ar).toBeDefined();
-    expect(ar.type).toBe("object");
-
-    const arProps = ar.properties as Record<string, Record<string, unknown>>;
-    expect(arProps.criticalCount).toBeDefined();
-    expect(arProps.warningCount).toBeDefined();
-    expect(arProps.overdueInvoices).toBeDefined();
-    expect((arProps.overdueInvoices as Record<string, unknown>).type).toBe("array");
-    expect(arProps.overdueDeposits).toBeDefined();
-    expect((arProps.overdueDeposits as Record<string, unknown>).type).toBe("array");
-    expect(arProps.stalledOrders).toBeDefined();
-    expect((arProps.stalledOrders as Record<string, unknown>).type).toBe("array");
-    expect(arProps.followUpsDueToday).toBeDefined();
-    expect((arProps.followUpsDueToday as Record<string, unknown>).type).toBe("array");
-
-    // attentionRequired must be in the required array for the reports response data
-    const dataRequired = ((((content.schema as Record<string, unknown>).properties as Record<string, unknown>).data as Record<string, unknown>).required as string[]);
-    expect(dataRequired).toContain("attentionRequired");
+    expect(paths["/api/ai/reports"]).toBeUndefined();
   });
 });
 
