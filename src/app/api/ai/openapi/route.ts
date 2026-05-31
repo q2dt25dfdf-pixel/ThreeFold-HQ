@@ -866,70 +866,6 @@ const paths: Record<string, unknown> = {
     },
   },
 
-  "/api/ai/order-status": {
-    post: {
-      operationId: "updateOrderStatus",
-      summary: "Update an order's production status",
-      description:
-        "Updates an order's production status after founder confirmation. " +
-        "Show current and new status and ask 'Shall I update this?' first. " +
-        "No financial or notification side effects — status field only.",
-      requestBody: {
-        required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                orderId: {
-                  type: "string",
-                  description: "ID of the order. Obtain from search results or getOrder.",
-                },
-                newStatus: {
-                  type: "string",
-                  enum: ["Production", "Quality Check", "Ready", "Delivered", "Cancelled"],
-                  description: "Target production status.",
-                },
-              },
-              required: ["orderId", "newStatus"],
-            },
-          },
-        },
-      },
-      responses: {
-        "200": {
-          description: "Order status updated successfully.",
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  ok:   { type: "boolean" },
-                  data: {
-                    type: "object",
-                    properties: {
-                      orderId:        { type: "string" },
-                      orderName:      { type: "string", nullable: true },
-                      previousStatus: { type: "string", nullable: true },
-                      newStatus:      { type: "string" },
-                      updatedVia:     { type: "string", enum: ["jarvis"] },
-                    },
-                    required: ["orderId", "previousStatus", "newStatus", "updatedVia"],
-                  },
-                  meta: { "$ref": "#/components/schemas/Meta" },
-                },
-              },
-            },
-          },
-        },
-        "400": { description: "Validation error or same-status update.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "404": { description: "Order not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-      },
-    },
-  },
-
   "/api/ai/quote-preview": {
     get: {
       operationId: "previewQuote",
@@ -2878,6 +2814,138 @@ const paths: Record<string, unknown> = {
       },
     },
   },
+
+  "/api/ai/quote-create": {
+    post: {
+      operationId: "quoteCreate",
+      summary: "Create a draft quote for an existing CRM lead",
+      description:
+        "Creates a draft quote for an existing CRM lead after founder confirmation. " +
+        "Requires confirm: true and at least one line item with quantity > 0 and unitPrice >= 0. " +
+        "Does not send email or update lead stage. Set revisedQuote: true if a quote already exists.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                leadId: {
+                  type: "string",
+                  description: "CRM lead UUID. Preferred — use when known.",
+                },
+                company: {
+                  type: "string",
+                  description: "Partial company name for fuzzy match. Returns choice list if ambiguous. Use leadId when possible.",
+                },
+                lineItems: {
+                  type: "array",
+                  description: "At least one line item. Each item requires name, quantity (> 0), and unitPrice (>= 0).",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name:        { type: "string", description: "Item name." },
+                      description: { type: "string", description: "Optional item description." },
+                      quantity:    { type: "number", description: "Quantity — must be greater than 0." },
+                      unitPrice:   { type: "number", description: "Unit price in USD — must be >= 0." },
+                    },
+                    required: ["name", "quantity", "unitPrice"],
+                  },
+                },
+                notes: {
+                  type: "string",
+                  description: "Optional internal notes for the quote.",
+                },
+                deliveryZip: {
+                  type: "string",
+                  description: "Optional delivery ZIP code for sales tax lookup.",
+                },
+                clientZip: {
+                  type: "string",
+                  description: "Optional client ZIP code for sales tax lookup fallback.",
+                },
+                revisedQuote: {
+                  type: "boolean",
+                  description: "Set to true to allow creating a new quote when one already exists for this lead.",
+                },
+                confirm: {
+                  type: "boolean",
+                  enum: [true],
+                  description: "Must be exactly true. Show proposed quote to founder and get confirmation before calling.",
+                },
+              },
+              required: ["lineItems", "confirm"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Draft quote created. Review quoteId, grandTotal, expirationDate, and publicLink before proceeding to send.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      quoteId:            { type: "string" },
+                      quoteNumber:        { type: "string", description: "Sequential quote number e.g. TF-Q-2026-0043." },
+                      leadId:             { type: "string" },
+                      company:            { type: "string", nullable: true },
+                      stage:              { type: "string", nullable: true },
+                      isRevised:          { type: "boolean", description: "True when lead stage is 'Quote Sent' — email template changes accordingly." },
+                      resolvedBy:         { type: "string", enum: ["leadId", "company"] },
+                      existingQuoteCount: { type: "integer", description: "Number of pre-existing quotes for this lead before this one was created." },
+                      lineItems: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            name:        { type: "string" },
+                            description: { type: "string" },
+                            quantity:    { type: "number" },
+                            unitPrice:   { type: "number" },
+                            lineTotal:   { type: "number" },
+                          },
+                        },
+                      },
+                      subtotal:        { type: "number" },
+                      salesTaxRate:    { type: "number", description: "Decimal rate e.g. 0.09375." },
+                      salesTaxAmount:  { type: "number" },
+                      grandTotal:      { type: "number" },
+                      depositEstimate: { type: "number", description: "50% of grandTotal — the expected deposit amount." },
+                      expirationDate:  { type: "string", format: "date", description: "Quote valid through this date (30 days from creation)." },
+                      publicLink:      { type: "string", nullable: true, description: "Client-facing quote portal URL." },
+                      taxRateSource:   { type: "string" },
+                      taxRateWarning:  { type: "string", nullable: true },
+                      status:          { type: "string", enum: ["draft"] },
+                      notes:           { type: "string" },
+                      nextStep:        { type: "string" },
+                      createdVia:      { type: "string", enum: ["jarvis"] },
+                    },
+                    required: [
+                      "quoteId", "quoteNumber", "leadId", "isRevised", "lineItems",
+                      "subtotal", "salesTaxRate", "salesTaxAmount", "grandTotal",
+                      "depositEstimate", "expirationDate", "status", "nextStep", "createdVia",
+                    ],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Validation error — missing confirm, invalid line items, or missing lead identifier.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "404": { description: "Lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "409": { description: "Quote already exists — set revisedQuote: true to proceed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -2915,7 +2983,7 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
         "POST /api/ai/lead-activity (log CRM lead communication), " +
         "POST /api/ai/task (create HQ task), " +
         "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked), " +
-        "POST /api/ai/order-status (update order production status; status field only), " +
+        "POST /api/ai/quote-create (create draft quote for existing CRM lead; requires confirm: true), " +
         "POST /api/ai/invoice-action/prepare-final-send (prepare final invoice for email send; idempotent token generation; requires confirm: true). " +
         "Read-only preview: GET /api/ai/quote-preview (existing quote data + email templates; no records created). " +
         "Schedule: GET /api/ai/calendar (today's events and next 7 days; read-only). " +

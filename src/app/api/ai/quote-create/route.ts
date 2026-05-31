@@ -1,0 +1,299 @@
+import { randomBytes } from "crypto";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { validateAIRequest } from "@/lib/aiAuth";
+import { okResponse, errResponse } from "@/lib/aiResponse";
+import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
+import { calcSalesTax, calcGrandTotal } from "@/lib/salesTax";
+import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
+
+export const dynamic = "force-dynamic";
+
+// ── POST /api/ai/quote-create ──────────────────────────────────────────────
+//
+// Jarvis action: creates a draft quote for an existing CRM lead.
+// Requires founder confirmation (confirm: true) before Jarvis calls this.
+//
+// Requires:
+//   - confirm: true (boolean, strict equality)
+//   - leadId or company to identify the lead (company triggers fuzzy match)
+//   - lineItems: at least one item with name, quantity > 0, unitPrice >= 0
+//   - revisedQuote: true if any quote already exists for the lead
+//
+// Does NOT:
+//   - Send any email
+//   - Update lead stage, value, or communicationHistory
+//   - Mark the quote as sent
+//   - Return publicToken or clientEmail
+
+type InputLineItem = {
+  name: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+type ComputedLineItem = {
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+type LeadRow = { id: string; data: Record<string, unknown> | null };
+type QuoteRow = { id: string; data: Record<string, unknown> | null };
+
+function validateLineItems(items: unknown): items is InputLineItem[] {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) return false;
+    const i = item as Record<string, unknown>;
+    if (typeof i.name !== "string" || !i.name.trim()) return false;
+    if (
+      typeof i.quantity !== "number" ||
+      !Number.isFinite(i.quantity) ||
+      i.quantity <= 0
+    ) return false;
+    if (
+      typeof i.unitPrice !== "number" ||
+      !Number.isFinite(i.unitPrice) ||
+      i.unitPrice < 0
+    ) return false;
+  }
+  return true;
+}
+
+export async function POST(request: Request): Promise<Response> {
+  const auth = validateAIRequest(request);
+  if (!auth.ok) return errResponse("Unauthorized", auth.status);
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errResponse("Invalid JSON body", 400);
+  }
+
+  const {
+    leadId,
+    company,
+    lineItems: rawLineItems,
+    notes,
+    revisedQuote,
+    confirm,
+    deliveryZip,
+    clientZip,
+  } = body as Record<string, unknown>;
+
+  // ── Require confirm: true ─────────────────────────────────────────────────
+  if (confirm !== true) {
+    return errResponse(
+      "confirm: true is required. Show the proposed quote to the founder and ask for confirmation before calling this endpoint.",
+      400,
+    );
+  }
+
+  // ── Validate lineItems ────────────────────────────────────────────────────
+  if (!validateLineItems(rawLineItems)) {
+    return errResponse(
+      "lineItems is required: array of at least one item with name (string), quantity (number > 0), unitPrice (number >= 0).",
+      400,
+    );
+  }
+  const inputLineItems = rawLineItems as InputLineItem[];
+
+  // ── Require leadId or company ─────────────────────────────────────────────
+  const hasLeadId  = leadId  && typeof leadId  === "string" && leadId.trim();
+  const hasCompany = company && typeof company === "string" && company.trim();
+  if (!hasLeadId && !hasCompany) {
+    return errResponse("leadId or company is required.", 400);
+  }
+
+  try {
+    const db = getSupabaseAdmin();
+    let lead: LeadRow | null = null;
+    let resolvedBy = "leadId";
+
+    // ── Lead resolution ───────────────────────────────────────────────────
+    if (hasLeadId) {
+      const { data: row, error } = await db
+        .from("crm_leads")
+        .select("id,data")
+        .eq("id", (leadId as string).trim())
+        .maybeSingle();
+      if (error && (error as { code?: string }).code !== "42P01") {
+        throw new Error(`[ai/quote-create] fetch lead: ${error.message}`);
+      }
+      lead = row as LeadRow | null;
+      if (!lead) {
+        return errResponse(`No CRM lead found with id "${leadId}".`, 404);
+      }
+    } else {
+      const { data: rows, error } = await db
+        .from("crm_leads")
+        .select("id,data");
+      if (error && (error as { code?: string }).code !== "42P01") {
+        throw new Error(`[ai/quote-create] fetch leads: ${error.message}`);
+      }
+      const allLeads = (rows ?? []) as LeadRow[];
+      const query = (company as string).trim().toLowerCase();
+      const matches = allLeads.filter((r) => {
+        const comp = ((r.data?.company as string) ?? "").toLowerCase();
+        return comp.includes(query);
+      });
+
+      if (matches.length === 0) {
+        return errResponse(`No CRM lead found matching company "${company}".`, 404);
+      }
+      if (matches.length > 1) {
+        return okResponse({
+          ambiguous: true,
+          matchCount: matches.length,
+          message: `${matches.length} leads match "${company}". Provide leadId to proceed.`,
+          choices: matches.map((r) => ({
+            leadId:  r.id,
+            company: (r.data?.company as string) ?? null,
+            stage:   (r.data?.stage as string) ?? null,
+          })),
+        });
+      }
+      lead = matches[0];
+      resolvedBy = "company";
+    }
+
+    const leadData = (lead.data ?? {}) as Record<string, unknown>;
+    const resolvedLeadId = lead.id;
+    const companyName = (leadData.company as string) ?? null;
+    const stage = (leadData.stage as string) ?? null;
+
+    // ── Duplicate protection ──────────────────────────────────────────────
+    const { data: existingRows, error: quotesErr } = await db
+      .from("quotes")
+      .select("id,data")
+      .filter("data->>lead_id", "eq", resolvedLeadId);
+
+    if (quotesErr && (quotesErr as { code?: string }).code !== "42P01") {
+      throw new Error(`[ai/quote-create] fetch quotes: ${quotesErr.message}`);
+    }
+
+    const existingQuotes = (existingRows ?? []) as QuoteRow[];
+
+    if (existingQuotes.length > 0 && revisedQuote !== true) {
+      const sentOrApproved = existingQuotes.filter((q) => {
+        const s = (q.data?.status as string) ?? "";
+        return s === "sent" || s === "approved";
+      });
+      const kind = sentOrApproved.length > 0 ? "sent/approved" : "draft";
+      return errResponse(
+        `Lead "${companyName ?? resolvedLeadId}" already has ${existingQuotes.length} quote(s) (${kind}). ` +
+        `Set revisedQuote: true to create an additional quote for this lead.`,
+        409,
+      );
+    }
+
+    // ── Compute line items and subtotal ───────────────────────────────────
+    const computedLineItems: ComputedLineItem[] = inputLineItems.map((item) => ({
+      name:        item.name.trim(),
+      description: (item.description ?? "").trim(),
+      quantity:    item.quantity,
+      unitPrice:   item.unitPrice,
+      lineTotal:   Math.round(item.quantity * item.unitPrice * 100) / 100,
+    }));
+    const subtotal = computedLineItems.reduce((sum, i) => sum + i.lineTotal, 0);
+
+    // ── Tax calculation ───────────────────────────────────────────────────
+    const taxLookup = getSalesTaxRateForAddress({
+      deliveryZip: typeof deliveryZip === "string" ? deliveryZip : undefined,
+      clientZip:   typeof clientZip === "string" ? clientZip : undefined,
+      clientAddressText: "",
+    });
+    const taxRate = taxLookup.rate;
+    const salesTaxAmount = calcSalesTax(subtotal, taxRate);
+    const grandTotal = calcGrandTotal(subtotal, taxRate);
+
+    // ── Quote number ──────────────────────────────────────────────────────
+    // Sequential: count all existing quotes + 1 (matches /api/quote/generate logic)
+    const year = new Date().getFullYear();
+    const { count } = await db.from("quotes").select("*", { count: "exact", head: true });
+    const quoteNumber = `TF-Q-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+
+    // ── Build and persist quote record ────────────────────────────────────
+    const token   = "tfq-" + randomBytes(12).toString("hex");
+    const origin  = new URL(request.url).origin;
+    const publicLink = `${origin}/quote/${token}`;
+    const quoteId = `quote-${resolvedLeadId}-${Date.now()}`;
+    const expirationDate = addDaysToISODate(businessTodayISO(), 30);
+    const isRevised = stage === "Quote Sent";
+
+    const quoteData = {
+      id:                     quoteId,
+      quote_number:           quoteNumber,
+      lead_id:                resolvedLeadId,
+      client_name:            companyName ?? "",
+      client_email:           "",  // never stored from Jarvis
+      items:                  computedLineItems.map((i) => i.name),
+      line_items:             computedLineItems,
+      subtotal:               Math.round(subtotal * 100) / 100,
+      sales_tax_rate:         taxRate,
+      sales_tax_amount:       salesTaxAmount,
+      grand_total:            Math.round(grandTotal * 100) / 100,
+      total_amount:           Math.round(grandTotal * 100) / 100,
+      tax_rate_percent:       taxRate,
+      tax_rate_source:        taxLookup.source,
+      tax_zip_used:           taxLookup.zipUsed ?? null,
+      tax_jurisdiction_label: taxLookup.jurisdictionLabel,
+      tax_rate_warning:       taxLookup.warning ?? null,
+      expiration_date:        expirationDate,
+      public_token:           token,  // stored but never returned to Jarvis
+      public_link:            publicLink,
+      status:                 "draft",
+      notes:                  typeof notes === "string" ? notes.trim() : "",
+      sent_date:              null,
+      email_status:           null,
+      email_message_id:       null,
+      created_at:             new Date().toISOString(),
+      created_via:            "jarvis",
+    };
+
+    const { error: upsertErr } = await db
+      .from("quotes")
+      .upsert({ id: quoteId, data: quoteData });
+
+    if (upsertErr) {
+      console.error("[ai/quote-create POST] upsert error:", upsertErr);
+      return errResponse(`Failed to create quote: ${upsertErr.message}`, 500);
+    }
+
+    const depositEstimate = Math.round(grandTotal * 0.5 * 100) / 100;
+
+    return okResponse({
+      quoteId,
+      quoteNumber,
+      leadId:             resolvedLeadId,
+      company:            companyName,
+      stage,
+      isRevised,
+      resolvedBy,
+      existingQuoteCount: existingQuotes.length,
+      lineItems:          computedLineItems,
+      subtotal:           Math.round(subtotal * 100) / 100,
+      salesTaxRate:       taxRate,
+      salesTaxAmount,
+      grandTotal:         Math.round(grandTotal * 100) / 100,
+      depositEstimate,
+      expirationDate,
+      publicLink,
+      taxRateSource:      taxLookup.source,
+      taxRateWarning:     taxLookup.warning ?? null,
+      status:             "draft",
+      notes:              quoteData.notes,
+      nextStep:
+        "Review the created draft quote above. Call GET /api/ai/quote-preview with this quoteId " +
+        "to verify, then ask if the founder wants to send it via POST /api/ai/quote-send.",
+      createdVia: "jarvis",
+    });
+  } catch (err) {
+    console.error("[ai/quote-create POST]", err);
+    return errResponse("Internal server error", 500);
+  }
+}

@@ -1667,6 +1667,7 @@ const EXPECTED_PATHS = [
   "/api/ai/follow-up-watchlist",
   "/api/ai/command-center",
   "/api/ai/invoice-action/prepare-final-send",
+  "/api/ai/quote-create",
 ];
 
 test.describe("GET /api/ai/openapi", () => {
@@ -1686,7 +1687,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 22 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 23 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -6063,5 +6064,338 @@ test.describe("POST /api/ai/invoice-action/prepare-final-send — OpenAPI schema
     const op = (paths[PREPARE_SEND] as Record<string, unknown>).post as Record<string, unknown>;
     expect(typeof op.description).toBe("string");
     expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 16 — POST /api/ai/quote-create
+// ---------------------------------------------------------------------------
+
+const QUOTE_CREATE = "/api/ai/quote-create";
+
+function qcAuthHeaders() {
+  return { Authorization: `Bearer ${process.env.AI_API_SECRET}` };
+}
+
+const VALID_LINE_ITEMS = [
+  { name: "Custom Performance Tee", quantity: 100, unitPrice: 40 },
+];
+
+// ── Unauthenticated rejection ──────────────────────────────────────────────
+
+test.describe("POST /api/ai/quote-create — unauthenticated rejection", () => {
+  test("missing Authorization header returns 401", async ({ request }) => {
+    const res = await request.post(QUOTE_CREATE, {
+      data: { lineItems: VALID_LINE_ITEMS, confirm: true },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong Bearer token returns 401", async ({ request }) => {
+    const res = await request.post(QUOTE_CREATE, {
+      headers: { Authorization: "Bearer totally-invalid-token-xyz" },
+      data: { lineItems: VALID_LINE_ITEMS, confirm: true },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("wrong auth scheme returns 401", async ({ request }) => {
+    const res = await request.post(QUOTE_CREATE, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+      data: { lineItems: VALID_LINE_ITEMS, confirm: true },
+    });
+    expect(res.status()).toBe(401);
+  });
+});
+
+// ── Input validation (requires auth) ──────────────────────────────────────
+
+test.describe("POST /api/ai/quote-create — input validation", () => {
+  test("missing confirm returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: { leadId: "lead-test", lineItems: VALID_LINE_ITEMS },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("confirm as false returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: { leadId: "lead-test", lineItems: VALID_LINE_ITEMS, confirm: false },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("confirm as string 'true' returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: { leadId: "lead-test", lineItems: VALID_LINE_ITEMS, confirm: "true" },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("missing lineItems returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: { leadId: "lead-test", confirm: true },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("empty lineItems array returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: { leadId: "lead-test", lineItems: [], confirm: true },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("lineItem with quantity = 0 returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        leadId: "lead-test",
+        lineItems: [{ name: "Item", quantity: 0, unitPrice: 40 }],
+        confirm: true,
+      },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("lineItem with negative quantity returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        leadId: "lead-test",
+        lineItems: [{ name: "Item", quantity: -5, unitPrice: 40 }],
+        confirm: true,
+      },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("lineItem with negative unitPrice returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        leadId: "lead-test",
+        lineItems: [{ name: "Item", quantity: 10, unitPrice: -5 }],
+        confirm: true,
+      },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+
+  test("missing leadId and company returns 400", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: { lineItems: VALID_LINE_ITEMS, confirm: true },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+});
+
+// ── Lead resolution ────────────────────────────────────────────────────────
+
+test.describe("POST /api/ai/quote-create — lead resolution", () => {
+  test("nonexistent leadId returns 404", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        leadId: "lead-does-not-exist-00000000",
+        lineItems: VALID_LINE_ITEMS,
+        confirm: true,
+      },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("company with no matches returns 404", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        company: "zzz-no-such-company-xyzzy-9999",
+        lineItems: VALID_LINE_ITEMS,
+        confirm: true,
+      },
+    });
+    expect(res.status()).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+  });
+});
+
+// ── Response safety (no PII, no sensitive fields) ─────────────────────────
+
+test.describe("POST /api/ai/quote-create — response safety", () => {
+  test("response never includes publicToken or client_email", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    // Use a nonexistent lead — even error responses must not leak PII
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        leadId: "lead-pii-check-00000000",
+        lineItems: VALID_LINE_ITEMS,
+        confirm: true,
+      },
+    });
+    const text = await res.text();
+    expect(text).not.toContain('"publicToken"');
+    expect(text).not.toContain('"public_token"');
+    expect(text).not.toContain('"client_email"');
+  });
+
+  test("Cache-Control: no-store is set on every response", async ({ request }) => {
+    if (!process.env.AI_API_SECRET) test.skip(true, SKIP_REASON);
+    const res = await request.post(QUOTE_CREATE, {
+      headers: qcAuthHeaders(),
+      data: {
+        leadId: "lead-cache-check-00000000",
+        lineItems: VALID_LINE_ITEMS,
+        confirm: true,
+      },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+
+  test("GET method returns 405", async ({ request }) => {
+    const res = await request.get(QUOTE_CREATE);
+    expect(res.status()).toBe(405);
+  });
+});
+
+// ── OpenAPI schema ─────────────────────────────────────────────────────────
+
+test.describe("POST /api/ai/quote-create — OpenAPI schema", () => {
+  test("quoteCreate appears in schema with correct operationId and structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths[QUOTE_CREATE]).toBeDefined();
+    const pathItem = paths[QUOTE_CREATE] as Record<string, unknown>;
+    expect(pathItem.post).toBeDefined();
+
+    const op = pathItem.post as Record<string, unknown>;
+    expect(op.operationId).toBe("quoteCreate");
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+
+    // requestBody must require lineItems and confirm
+    const rb = op.requestBody as Record<string, unknown>;
+    expect(rb.required).toBe(true);
+    const schemaProps = (
+      ((rb.content as Record<string, unknown>)["application/json"] as Record<string, unknown>)
+        .schema as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+    expect(schemaProps.leadId).toBeDefined();
+    expect(schemaProps.company).toBeDefined();
+    expect(schemaProps.lineItems).toBeDefined();
+    expect(schemaProps.revisedQuote).toBeDefined();
+    expect(schemaProps.confirm).toBeDefined();
+    expect((schemaProps.confirm as Record<string, unknown>).enum).toContain(true);
+
+    const required = (
+      ((rb.content as Record<string, unknown>)["application/json"] as Record<string, unknown>)
+        .schema as Record<string, unknown>
+    ).required as string[];
+    expect(required).toContain("lineItems");
+    expect(required).toContain("confirm");
+
+    // Must declare 200, 400, 401, 404, 409, 500 responses
+    const responses = op.responses as Record<string, unknown>;
+    expect(responses["200"]).toBeDefined();
+    expect(responses["400"]).toBeDefined();
+    expect(responses["401"]).toBeDefined();
+    expect(responses["404"]).toBeDefined();
+    expect(responses["409"]).toBeDefined();
+    expect(responses["500"]).toBeDefined();
+  });
+
+  test("200 response schema declares all required fields", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths[QUOTE_CREATE] as Record<string, unknown>).post as Record<string, unknown>;
+    const resp200 = (op.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    for (const field of [
+      "quoteId", "quoteNumber", "leadId", "isRevised",
+      "lineItems", "subtotal", "salesTaxRate", "salesTaxAmount",
+      "grandTotal", "depositEstimate", "expirationDate",
+      "status", "nextStep", "createdVia",
+    ]) {
+      expect(dataProps[field], `Missing schema property: ${field}`).toBeDefined();
+    }
+
+    // publicLink must be in schema (nullable — not always generated)
+    expect(dataProps["publicLink"]).toBeDefined();
+
+    // publicToken must NOT be in the schema — never returned
+    expect(dataProps["publicToken"]).toBeUndefined();
+  });
+
+  test("updateOrderStatus is not exposed in OpenAPI schema", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    expect(paths["/api/ai/order-status"]).toBeUndefined();
+  });
+
+  test("total OpenAPI operation count is exactly 30", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    let opCount = 0;
+    for (const pathItem of Object.values(paths)) {
+      for (const method of ["get", "post", "put", "patch", "delete"]) {
+        if ((pathItem as Record<string, unknown>)[method]) opCount++;
+      }
+    }
+    expect(opCount).toBe(30);
   });
 });
