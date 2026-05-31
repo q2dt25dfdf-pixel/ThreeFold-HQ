@@ -736,11 +736,14 @@ Lookup: Accepts one of — leadId, quoteNumber, company, or contactName. Use the
 When to use: When a founder asks to see a quote by company name, contact name, or quote number — or when drafting a quote email and a quote already exists.
 Read-only: NEVER creates a record. Does not call /api/quote/generate. Only reads what already exists.
 Ambiguity: If company or contactName matches multiple leads, returns ambiguous:true with a matches array. Surface the choices to the founder and ask which one they mean. Never guess.
-Returns: hasExistingQuote (bool), resolvedBy (how the lead was found), quoteNumber, quoteStatus, expirationDate, lineItems, subtotal, salesTaxRate, salesTaxAmount, grandTotal, depositEstimate (50% of grandTotal), publicLink, isRevised, emailSubject, emailBodyPreview.
+Returns: hasExistingQuote (bool), resolvedBy (how the lead was found), quoteNumber, quoteStatus, expirationDate, lineItems, subtotal, salesTaxRate, salesTaxAmount, grandTotal, depositEstimate (50% of grandTotal), publicLink, isRevised, totalQuotesForLead, selectionNote, emailSubject, emailBodyPreview.
 hasExistingQuote = false: No quote has been generated yet — direct founder to use Send Quote in HQ.
+Most-recent selection: The endpoint scans all quotes in the system for the lead and returns the one with the most recent activity (approved > sent > created). It does NOT use lead.quote_id — that field only updates when the HQ email modal runs and misses newer drafts.
+totalQuotesForLead: Always surface this to the founder when > 1. "This lead has X quotes — showing the most recently created one (TF-Q-YYYY-NNNN). Use quoteNumber= to pull a specific one."
+selectionNote: Always show this to the founder — it explains which quote was selected and why.
 lineItems null: Quote was generated before line items UI existed — totals may still be present.
 publicLink: Share with founders only so they can verify. Never share directly with clients via Jarvis — they must receive it through the HQ email modal.
-quoteNumber path: Returns the exact quote requested (not necessarily the lead's latest quote_id). Use this when the founder says "show me TF-Q-2026-0022".
+quoteNumber path: Returns the exact quote requested (not necessarily the lead's latest). Use this when the founder says "show me TF-Q-2026-0022".
 
 ───────────────────────────────────────────────────────────
 ANSWERING COMMON QUESTIONS

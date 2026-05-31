@@ -13,14 +13,24 @@ export const dynamic = "force-dynamic";
 // HQ "Preview Email" step. This endpoint only reads what already exists.
 //
 // Resolution priority (use the first param provided):
-//   1. leadId     — direct UUID lookup (existing behavior, unchanged)
-//   2. quoteNumber — find quote by number → use that quote + its lead for context
+//   1. leadId     — direct UUID lookup (resolves via quotes table, NOT lead.quote_id)
+//   2. quoteNumber — find and return that exact quote (bypasses recency sort)
 //   3. company    — partial case-insensitive match on lead company name
 //   4. contactName — partial case-insensitive match on lead contact field (PII
 //                    used as lookup key only; never returned in response)
 //
-// Ambiguity: if company or contactName matches multiple leads, returns a 200
-// with ambiguous:true and a choices array — never guesses.
+// "Most recent" quote selection (all paths except quoteNumber):
+//   lead.quote_id is NOT used — it only updates when a quote email is actually
+//   sent via HQ, so it misses newer drafts. Instead, all quotes for the lead
+//   are fetched and sorted by recency:
+//     1. acknowledgementAcceptedAt desc  (client approval — most significant event)
+//     2. sent_date desc                  (quote was sent)
+//     3. created_at desc                 (quote was generated)
+//   The first (most recent) is returned along with totalQuotesForLead and
+//   a selectionNote so the caller knows which quote was chosen and why.
+//
+// Ambiguity (company/contactName only): if multiple leads match, returns
+//   ambiguous:true with a choices array — never guesses.
 
 type LeadRow = { id: string; data: Record<string, unknown> | null };
 type QuoteRow = { id: string; data: Record<string, unknown> | null };
@@ -40,6 +50,33 @@ function fmtDate(iso: string): string {
     month: "long",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+// ── Quote recency sort ─────────────────────────────────────────────────────────
+//
+// Effective timestamp = latest of: acknowledgementAcceptedAt, sent_date, created_at.
+// The quotes table has no updated_at column at the row level — only id and data.
+// ISO 8601 strings compare correctly as strings, so no Date parsing needed.
+
+function effectiveTimestamp(q: QuoteRow): string {
+  const d = q.data ?? {};
+  return (
+    (d.acknowledgementAcceptedAt as string) ||
+    (d.sent_date as string) ||
+    (d.created_at as string) ||
+    ""
+  );
+}
+
+function sortQuotesByRecency(quotes: QuoteRow[]): QuoteRow[] {
+  return [...quotes].sort((a, b) => {
+    const ta = effectiveTimestamp(a);
+    const tb = effectiveTimestamp(b);
+    if (tb > ta) return 1;
+    if (tb < ta) return -1;
+    // Tie-break: compare IDs (format: quote-{leadId}-{ms})
+    return b.id > a.id ? 1 : -1;
   });
 }
 
@@ -91,36 +128,35 @@ function buildRevisedQuoteBody(
   );
 }
 
-// ── Quote preview builder — shared by all resolution paths ─────────────────────
+// ── Quote preview builder ──────────────────────────────────────────────────────
 
 function buildPreviewResponse(
   leadId: string,
   leadData: Record<string, unknown>,
-  quoteData: Record<string, unknown>,
+  quoteRow: QuoteRow,
   resolvedBy: string,
+  totalQuotesForLead: number,
+  selectionNote: string,
 ) {
-  const company = (leadData.company as string) ?? null;
-  const stage = (leadData.stage as string) ?? null;
+  const qd = (quoteRow.data ?? {}) as Record<string, unknown>;
 
-  const quoteId = (quoteData.id as string) ?? null;
-  const quoteNumber =
-    (quoteData.quote_number as string) ??
-    (leadData.quote_number as string) ??
-    null;
-  const quoteStatus = (quoteData.status as string) ?? null;
-  const expirationDate = (quoteData.expiration_date as string) ?? null;
-  const lineItems = (quoteData.line_items as unknown[] | null) ?? null;
-  const subtotal = (quoteData.subtotal as number | null) ?? null;
-  const salesTaxRate = (quoteData.sales_tax_rate as number | null) ?? null;
-  const salesTaxAmount = (quoteData.sales_tax_amount as number | null) ?? null;
-  const grandTotal = (quoteData.grand_total as number | null) ?? null;
-  const publicLink = (quoteData.public_link as string | null) ?? null;
-  const depositEstimate =
-    grandTotal != null ? Math.round(grandTotal * 0.5 * 100) / 100 : null;
+  const company         = (leadData.company as string) ?? null;
+  const stage           = (leadData.stage as string) ?? null;
+  const quoteId         = quoteRow.id;
+  const quoteNumber     = (qd.quote_number as string) ?? (leadData.quote_number as string) ?? null;
+  const quoteStatus     = (qd.status as string) ?? null;
+  const expirationDate  = (qd.expiration_date as string) ?? null;
+  const lineItems       = (qd.line_items as unknown[] | null) ?? null;
+  const subtotal        = (qd.subtotal as number | null) ?? null;
+  const salesTaxRate    = (qd.sales_tax_rate as number | null) ?? null;
+  const salesTaxAmount  = (qd.sales_tax_amount as number | null) ?? null;
+  const grandTotal      = (qd.grand_total as number | null) ?? null;
+  const publicLink      = (qd.public_link as string | null) ?? null;
+  const depositEstimate = grandTotal != null ? Math.round(grandTotal * 0.5 * 100) / 100 : null;
 
   // isRevised mirrors HQ SendQuoteModal: lead.stage === "Quote Sent"
   const isRevised = stage === "Quote Sent";
-  // Contact name: Jarvis never has the contact person (PII); fall back to company
+  // Jarvis never has the contact person (PII); fall back to company name
   const contactName = company ?? "there";
 
   const emailSubject = isRevised
@@ -135,7 +171,7 @@ function buildPreviewResponse(
     leadId,
     company,
     stage,
-    hasExistingQuote: true,
+    hasExistingQuote:   true,
     resolvedBy,
     quoteId,
     quoteNumber,
@@ -149,12 +185,29 @@ function buildPreviewResponse(
     depositEstimate,
     publicLink,
     isRevised,
+    totalQuotesForLead,
+    selectionNote,
     emailSubject,
     emailBodyPreview,
   });
 }
 
 // ── DB helpers ─────────────────────────────────────────────────────────────────
+
+async function fetchLead(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  leadId: string,
+): Promise<LeadRow | null> {
+  const { data: row, error } = await db
+    .from("crm_leads")
+    .select("id,data")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (error && (error as { code?: string }).code !== "42P01") {
+    throw new Error(`[ai/quote-preview] fetch lead: ${error.message}`);
+  }
+  return row as LeadRow | null;
+}
 
 async function fetchAllLeads(
   db: ReturnType<typeof getSupabaseAdmin>,
@@ -180,6 +233,48 @@ async function fetchAllQuotes(
   return (rows ?? []) as QuoteRow[];
 }
 
+// ── Shared: resolve leadId → find best quote via recency sort ──────────────────
+
+async function resolveLeadQuote(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  leadId: string,
+  leadData: Record<string, unknown>,
+  resolvedBy: string,
+): Promise<Response> {
+  const allQuotes = await fetchAllQuotes(db);
+  const leadQuotes = sortQuotesByRecency(
+    allQuotes.filter((q) => (q.data?.lead_id as string) === leadId),
+  );
+
+  if (leadQuotes.length === 0) {
+    return okResponse({
+      leadId,
+      company: (leadData.company as string) ?? null,
+      stage:   (leadData.stage as string) ?? null,
+      hasExistingQuote: false,
+      message:
+        "No quote has been generated for this lead yet. Use Send Quote in HQ to generate one.",
+    });
+  }
+
+  const selected = leadQuotes[0];
+  const total    = leadQuotes.length;
+  const selectedQN = (selected.data?.quote_number as string) ?? selected.id;
+  const ts = effectiveTimestamp(selected);
+  const tsReason =
+    selected.data?.acknowledgementAcceptedAt ? "approved"
+    : selected.data?.sent_date              ? "sent"
+    : selected.data?.created_at             ? "created"
+    : "generated";
+
+  const selectionNote =
+    total === 1
+      ? `Only quote on file for this lead.`
+      : `${selectedQN} selected — most recently ${tsReason} of ${total} quotes for this lead. Use quoteNumber=<number> to pull a specific one.`;
+
+  return buildPreviewResponse(leadId, leadData, selected, resolvedBy, total, selectionNote);
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────────
 
 export async function GET(request: Request): Promise<Response> {
@@ -203,9 +298,7 @@ export async function GET(request: Request): Promise<Response> {
     const db = getSupabaseAdmin();
 
     // ── Path A: quoteNumber (and no leadId) ─────────────────────────────────
-    // Look up the exact quote, then get its lead for context.
-    // The founder asked for a specific quote by number — return that exact quote
-    // rather than whatever lead.quote_id currently points to.
+    // Returns the exact requested quote — no recency sort, no lead.quote_id.
     if (quoteNumberParam && !leadIdParam) {
       const allQuotes = await fetchAllQuotes(db);
       const matched = allQuotes.filter(
@@ -221,13 +314,9 @@ export async function GET(request: Request): Promise<Response> {
         );
       }
 
-      // Quote numbers are unique — treat multiple as a data integrity issue
-      const quoteRow = matched[0];
-      const quoteData = (quoteRow.data ?? {}) as Record<string, unknown>;
-      // Attach id so buildPreviewResponse can read quoteData.id
-      quoteData.id = quoteRow.id;
+      const quoteRow   = matched[0];
+      const quoteLeadId = (quoteRow.data?.lead_id as string) ?? null;
 
-      const quoteLeadId = (quoteData.lead_id as string) ?? null;
       if (!quoteLeadId) {
         return errResponse(
           `Quote ${quoteNumberParam} exists but has no linked lead. Check HQ for data integrity.`,
@@ -235,20 +324,20 @@ export async function GET(request: Request): Promise<Response> {
         );
       }
 
-      // Fetch lead for context (company, stage)
-      const { data: leadRow, error: leadErr } = await db
-        .from("crm_leads")
-        .select("id,data")
-        .eq("id", quoteLeadId)
-        .maybeSingle();
+      const leadRow = await fetchLead(db, quoteLeadId);
+      const leadData = (leadRow?.data ?? { id: quoteLeadId }) as Record<string, unknown>;
 
-      if (leadErr && (leadErr as { code?: string }).code !== "42P01") {
-        throw new Error(`[ai/quote-preview] lead lookup: ${leadErr.message}`);
-      }
+      // Count total quotes for this lead so the caller can discover siblings
+      const allQuotesForLead = allQuotes.filter(
+        (q) => (q.data?.lead_id as string) === quoteLeadId,
+      );
+      const total = allQuotesForLead.length;
+      const selectionNote =
+        total === 1
+          ? "Only quote on file for this lead."
+          : `${quoteNumberParam} requested directly. This lead has ${total} quote(s) total.`;
 
-      const leadData = (((leadRow as LeadRow | null)?.data) ?? { id: quoteLeadId }) as Record<string, unknown>;
-
-      return buildPreviewResponse(quoteLeadId, leadData, quoteData, "quoteNumber");
+      return buildPreviewResponse(quoteLeadId, leadData, quoteRow, "quoteNumber", total, selectionNote);
     }
 
     // ── Path B: company or contactName — resolve to one leadId ──────────────
@@ -257,27 +346,22 @@ export async function GET(request: Request): Promise<Response> {
 
     if (!leadIdParam) {
       const allLeads = await fetchAllLeads(db);
-
       let matches: LeadRow[];
       let resolvedBy: string;
       let searchTerm: string;
 
       if (companyParam) {
         const q = companyParam.toLowerCase();
-        matches = allLeads.filter(
-          (l) =>
-            typeof l.data?.company === "string" &&
-            l.data.company.toLowerCase().includes(q),
+        matches   = allLeads.filter(
+          (l) => typeof l.data?.company === "string" && l.data.company.toLowerCase().includes(q),
         );
         resolvedBy = "company";
         searchTerm = companyParam;
       } else {
-        // contactName — used as lookup key only; never returned in response
+        // contactName — lookup key only; never returned in response
         const q = (contactNameParam as string).toLowerCase();
-        matches = allLeads.filter(
-          (l) =>
-            typeof l.data?.contact === "string" &&
-            l.data.contact.toLowerCase().includes(q),
+        matches   = allLeads.filter(
+          (l) => typeof l.data?.contact === "string" && l.data.contact.toLowerCase().includes(q),
         );
         resolvedBy = "contactName";
         searchTerm = contactNameParam as string;
@@ -293,84 +377,37 @@ export async function GET(request: Request): Promise<Response> {
 
       if (matches.length > 1) {
         return okResponse({
-          ambiguous: true,
+          ambiguous:  true,
           resolvedBy,
           searchTerm,
           matchCount: matches.length,
-          message:
-            `${matches.length} leads match "${searchTerm}". Which one did you mean?`,
+          message:    `${matches.length} leads match "${searchTerm}". Which one did you mean?`,
           matches: matches.map((l) => {
             const d = (l.data ?? {}) as Record<string, unknown>;
             return {
-              leadId: l.id,
-              company: (d.company as string) ?? null,
-              stage: (d.stage as string) ?? null,
+              leadId:      l.id,
+              company:     (d.company as string) ?? null,
+              stage:       (d.stage as string) ?? null,
               quoteNumber: (d.quote_number as string) ?? null,
             };
           }),
         });
       }
 
-      resolvedLeadId = matches[0].id;
+      resolvedLeadId   = matches[0].id;
       resolvedLeadData = (matches[0].data ?? { id: resolvedLeadId }) as Record<string, unknown>;
-    } else {
-      // ── Path C: leadId — direct lookup (existing behavior) ─────────────────
-      const { data: leadRow, error: leadErr } = await db
-        .from("crm_leads")
-        .select("id,data")
-        .eq("id", leadIdParam)
-        .maybeSingle();
 
-      if (leadErr && (leadErr as { code?: string }).code !== "42P01") {
-        throw new Error(`[ai/quote-preview] lead lookup: ${leadErr.message}`);
-      }
-      if (!leadRow) {
-        return errResponse("Lead not found", 404);
-      }
-
-      resolvedLeadId = leadIdParam;
-      resolvedLeadData = (((leadRow as LeadRow).data) ?? { id: leadIdParam }) as Record<string, unknown>;
+      return resolveLeadQuote(db, resolvedLeadId, resolvedLeadData, resolvedBy);
     }
 
-    // ── Common tail: lead resolved → look up quote via lead.quote_id ─────────
-    const quoteId = (resolvedLeadData.quote_id as string) ?? null;
+    // ── Path C: leadId — direct lookup ──────────────────────────────────────
+    const leadRow = await fetchLead(db, leadIdParam);
+    if (!leadRow) return errResponse("Lead not found", 404);
 
-    if (!quoteId) {
-      return okResponse({
-        leadId: resolvedLeadId,
-        company: (resolvedLeadData.company as string) ?? null,
-        stage: (resolvedLeadData.stage as string) ?? null,
-        hasExistingQuote: false,
-        message:
-          "No quote has been generated for this lead yet. Use Send Quote in HQ to generate one.",
-      });
-    }
+    resolvedLeadId   = leadIdParam;
+    resolvedLeadData = (leadRow.data ?? { id: leadIdParam }) as Record<string, unknown>;
 
-    const { data: quoteRow, error: quoteErr } = await db
-      .from("quotes")
-      .select("id,data")
-      .eq("id", quoteId)
-      .maybeSingle();
-
-    if (quoteErr && (quoteErr as { code?: string }).code !== "42P01") {
-      throw new Error(`[ai/quote-preview] quote lookup: ${quoteErr.message}`);
-    }
-
-    if (!quoteRow) {
-      return okResponse({
-        leadId: resolvedLeadId,
-        company: (resolvedLeadData.company as string) ?? null,
-        stage: (resolvedLeadData.stage as string) ?? null,
-        hasExistingQuote: false,
-        message: `Quote ID on file (${quoteId}) but the quote record was not found. Check HQ for data integrity.`,
-      });
-    }
-
-    const quoteData = ((quoteRow as QuoteRow).data ?? {}) as Record<string, unknown>;
-    quoteData.id = (quoteRow as QuoteRow).id;
-
-    const resolvedBy = leadIdParam ? "leadId" : companyParam ? "company" : "contactName";
-    return buildPreviewResponse(resolvedLeadId, resolvedLeadData, quoteData, resolvedBy);
+    return resolveLeadQuote(db, resolvedLeadId, resolvedLeadData, "leadId");
 
   } catch (err) {
     console.error("[ai/quote-preview GET]", err);
