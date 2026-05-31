@@ -2331,6 +2331,111 @@ const paths: Record<string, unknown> = {
       },
     },
   },
+
+  "/api/ai/morning-briefing": {
+    get: {
+      operationId: "getMorningBriefing",
+      summary: "Morning briefing — what needs attention today",
+      description:
+        "One-call morning briefing: overdue tasks, stale leads, pending quotes, " +
+        "outstanding deposits, unpaid invoices, orders due soon, revenue pace, " +
+        "and recommended plain-language actions. Read-only. Auth required.",
+      responses: {
+        "200": {
+          description: "Morning briefing. allClear is true when no items need attention.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      date:     { type: "string", format: "date", description: "Today's date (PT timezone, YYYY-MM-DD)." },
+                      allClear: { type: "boolean", description: "True when all counts are zero — nothing needs attention." },
+                      pipeline: {
+                        type: "object",
+                        description: "CRM pipeline summary.",
+                        properties: {
+                          openLeadCount:      { type: "integer", description: "Total open (non-won) leads." },
+                          staleLeadCount:     { type: "integer", description: "Leads with overdue follow-up dates." },
+                          staleLeads:         { type: "array", maxItems: 5, items: { type: "object", properties: { leadId: { type: "string" }, company: { type: "string" }, stage: { type: "string", nullable: true }, followUpDate: { type: "string", nullable: true } } } },
+                          quoteFollowUpCount: { type: "integer", description: "Leads in Quote Sent stage." },
+                          quoteFollowUps:     { type: "array", maxItems: 10, items: { type: "object", properties: { leadId: { type: "string" }, company: { type: "string" }, quoteNumber: { type: "string", nullable: true }, grandTotal: { type: "number", nullable: true }, expirationDate: { type: "string", nullable: true }, daysUntilExpiry: { type: "integer", nullable: true } } } },
+                        },
+                        required: ["openLeadCount", "staleLeadCount", "staleLeads", "quoteFollowUpCount", "quoteFollowUps"],
+                      },
+                      tasks: {
+                        type: "object",
+                        description: "Task summary.",
+                        properties: {
+                          overdueCount:  { type: "integer" },
+                          dueTodayCount: { type: "integer" },
+                          overdue:  { type: "array", maxItems: 5, items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, dueDate: { type: "string" }, owner: { type: "string", nullable: true } } } },
+                          dueToday: { type: "array", maxItems: 5, items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, owner: { type: "string", nullable: true } } } },
+                        },
+                        required: ["overdueCount", "dueTodayCount", "overdue", "dueToday"],
+                      },
+                      orders: {
+                        type: "object",
+                        description: "Order summary.",
+                        properties: {
+                          activeCount:  { type: "integer" },
+                          dueSoonCount: { type: "integer", description: "Active orders with deadline within 7 days." },
+                          dueSoon: { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, dueDate: { type: "string", nullable: true }, status: { type: "string" } } } },
+                        },
+                        required: ["activeCount", "dueSoonCount", "dueSoon"],
+                      },
+                      deposits: {
+                        type: "object",
+                        description: "Deposit requests not yet paid.",
+                        properties: {
+                          outstandingCount: { type: "integer" },
+                          outstanding: { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, depositRequestNumber: { type: "string", nullable: true }, company: { type: "string" }, depositAmount: { type: "number", nullable: true }, status: { type: "string" }, sentDate: { type: "string", nullable: true } } } },
+                        },
+                        required: ["outstandingCount", "outstanding"],
+                      },
+                      invoices: {
+                        type: "object",
+                        description: "Unpaid final invoices.",
+                        properties: {
+                          unpaidCount: { type: "integer" },
+                          unpaid: { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, status: { type: "string" }, balance: { type: "number" } } } },
+                        },
+                        required: ["unpaidCount", "unpaid"],
+                      },
+                      revenue: {
+                        type: "object",
+                        description: "Month-to-date revenue pace.",
+                        properties: {
+                          monthlyGoal:   { type: "number" },
+                          monthToDate:   { type: "number" },
+                          paceStatus:    { type: "string", enum: ["ahead", "on-track", "behind"] },
+                          projected:     { type: "number", description: "Projected month-end revenue at current daily rate." },
+                          daysLeftInMonth: { type: "integer" },
+                        },
+                        required: ["monthlyGoal", "monthToDate", "paceStatus", "projected", "daysLeftInMonth"],
+                      },
+                      recommendedActions: {
+                        type: "array",
+                        description: "Plain-language action items Jarvis can present directly. Empty when allClear is true.",
+                        items: { type: "string" },
+                      },
+                    },
+                    required: ["date", "allClear", "pipeline", "tasks", "orders", "deposits", "invoices", "revenue", "recommendedActions"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

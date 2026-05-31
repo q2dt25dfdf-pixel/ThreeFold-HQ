@@ -1691,6 +1691,7 @@ const EXPECTED_PATHS = [
   "/api/ai/order/{id}",
   "/api/ai/lead/{id}",
   "/api/ai/vendor/{id}",
+  "/api/ai/morning-briefing",
 ];
 
 test.describe("GET /api/ai/openapi", () => {
@@ -1710,7 +1711,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 19 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 20 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -3902,5 +3903,395 @@ test.describe("POST /api/ai/deposit-send — draft-quote and ambiguity protectio
     expect(text).not.toContain('"client_email"');
     expect(text).not.toContain('"total_amount"');
     expect(text).not.toContain('"public_token"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 10 — GET /api/ai/morning-briefing
+// ---------------------------------------------------------------------------
+
+const MORNING_BRIEFING = "/api/ai/morning-briefing";
+
+const FORBIDDEN_BRIEFING = [
+  '"email":', '"phone":', '"address":',
+  '"notes":', '"contact":', '"summary":',
+  '"stripe":', '"payment_link":',
+  '"client_name":', '"client_email":',
+  '"communicationHistory":', '"questionnaire_files":',
+  '"public_token":', '"payment_instructions":',
+];
+
+test.describe("GET /api/ai/morning-briefing — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("GET /api/ai/morning-briefing — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("returns 200 with valid token", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has all required top-level sections", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    // Top-level required fields
+    expect(typeof data.date).toBe("string");
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(data.date)).toBe(true);
+    expect(Number.isNaN(Date.parse(data.date))).toBe(false);
+    expect(typeof data.allClear).toBe("boolean");
+
+    // Sections present
+    expect(data.pipeline).toBeDefined();
+    expect(data.tasks).toBeDefined();
+    expect(data.orders).toBeDefined();
+    expect(data.deposits).toBeDefined();
+    expect(data.invoices).toBeDefined();
+    expect(data.revenue).toBeDefined();
+    expect(Array.isArray(data.recommendedActions)).toBe(true);
+  });
+
+  test("pipeline section has correct shape and types", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { pipeline } = (await res.json()).data;
+
+    expect(typeof pipeline.openLeadCount).toBe("number");
+    expect(pipeline.openLeadCount).toBeGreaterThanOrEqual(0);
+    expect(typeof pipeline.staleLeadCount).toBe("number");
+    expect(pipeline.staleLeadCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(pipeline.staleLeads)).toBe(true);
+    expect(pipeline.staleLeads.length).toBeLessThanOrEqual(5);
+    expect(typeof pipeline.quoteFollowUpCount).toBe("number");
+    expect(pipeline.quoteFollowUpCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(pipeline.quoteFollowUps)).toBe(true);
+    expect(pipeline.quoteFollowUps.length).toBeLessThanOrEqual(10);
+
+    // staleLeads items have safe shape — no PII
+    for (const lead of pipeline.staleLeads as Record<string, unknown>[]) {
+      expect(typeof lead.leadId).toBe("string");
+      expect(typeof lead.company).toBe("string");
+      expect(lead).not.toHaveProperty("email");
+      expect(lead).not.toHaveProperty("phone");
+      expect(lead).not.toHaveProperty("contact");
+      expect(lead).not.toHaveProperty("notes");
+    }
+
+    // quoteFollowUps items have safe shape
+    for (const qf of pipeline.quoteFollowUps as Record<string, unknown>[]) {
+      expect(typeof qf.leadId).toBe("string");
+      expect(typeof qf.company).toBe("string");
+      expect(qf).not.toHaveProperty("email");
+      expect(qf).not.toHaveProperty("contact");
+      if (qf.grandTotal !== null && qf.grandTotal !== undefined) {
+        expect(typeof qf.grandTotal).toBe("number");
+        expect(qf.grandTotal).toBeGreaterThan(0);
+      }
+      if (qf.expirationDate !== null && qf.expirationDate !== undefined) {
+        expect(typeof qf.expirationDate).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}$/.test(qf.expirationDate as string)).toBe(true);
+      }
+      if (qf.daysUntilExpiry !== null && qf.daysUntilExpiry !== undefined) {
+        expect(typeof qf.daysUntilExpiry).toBe("number");
+        expect(Number.isInteger(qf.daysUntilExpiry)).toBe(true);
+      }
+    }
+  });
+
+  test("tasks section has correct shape and types", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { tasks } = (await res.json()).data;
+
+    expect(typeof tasks.overdueCount).toBe("number");
+    expect(tasks.overdueCount).toBeGreaterThanOrEqual(0);
+    expect(typeof tasks.dueTodayCount).toBe("number");
+    expect(tasks.dueTodayCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(tasks.overdue)).toBe(true);
+    expect(tasks.overdue.length).toBeLessThanOrEqual(5);
+    expect(Array.isArray(tasks.dueToday)).toBe(true);
+    expect(tasks.dueToday.length).toBeLessThanOrEqual(5);
+
+    for (const t of tasks.overdue as Record<string, unknown>[]) {
+      expect(typeof t.id).toBe("string");
+      expect(typeof t.title).toBe("string");
+      expect(typeof t.dueDate).toBe("string");
+      expect(t).not.toHaveProperty("notes");
+      expect(t).not.toHaveProperty("email");
+    }
+
+    for (const t of tasks.dueToday as Record<string, unknown>[]) {
+      expect(typeof t.id).toBe("string");
+      expect(typeof t.title).toBe("string");
+      expect(t).not.toHaveProperty("notes");
+    }
+  });
+
+  test("orders section has correct shape and types", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { orders } = (await res.json()).data;
+
+    expect(typeof orders.activeCount).toBe("number");
+    expect(orders.activeCount).toBeGreaterThanOrEqual(0);
+    expect(typeof orders.dueSoonCount).toBe("number");
+    expect(orders.dueSoonCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(orders.dueSoon)).toBe(true);
+    expect(orders.dueSoon.length).toBeLessThanOrEqual(10);
+    expect(orders.dueSoonCount).toBe(orders.dueSoon.length);
+
+    for (const o of orders.dueSoon as Record<string, unknown>[]) {
+      expect(typeof o.id).toBe("string");
+      expect(typeof o.orderName).toBe("string");
+      expect(typeof o.status).toBe("string");
+      if (o.dueDate !== null && o.dueDate !== undefined) {
+        expect(typeof o.dueDate).toBe("string");
+        expect(/^\d{4}-\d{2}-\d{2}$/.test(o.dueDate as string)).toBe(true);
+      }
+      expect(o).not.toHaveProperty("email");
+      expect(o).not.toHaveProperty("notes");
+    }
+  });
+
+  test("deposits section has correct shape — no client_name PII", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { deposits } = (await res.json()).data;
+
+    expect(typeof deposits.outstandingCount).toBe("number");
+    expect(deposits.outstandingCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(deposits.outstanding)).toBe(true);
+    expect(deposits.outstanding.length).toBeLessThanOrEqual(10);
+
+    const VALID_STATUSES = new Set(["draft", "pending", "payment_failed", "unknown"]);
+    for (const d of deposits.outstanding as Record<string, unknown>[]) {
+      expect(typeof d.id).toBe("string");
+      expect(typeof d.company).toBe("string");
+      expect(typeof d.status).toBe("string");
+      // Status must never be "paid" — that slipped the filter
+      expect(d.status).not.toBe("paid");
+      expect(VALID_STATUSES.has(d.status as string)).toBe(true);
+      // Must NOT expose client_name — company is resolved via lead_id
+      expect(d).not.toHaveProperty("client_name");
+      expect(d).not.toHaveProperty("email");
+      expect(d).not.toHaveProperty("payment_instructions");
+    }
+  });
+
+  test("invoices section has correct shape", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { invoices } = (await res.json()).data;
+
+    expect(typeof invoices.unpaidCount).toBe("number");
+    expect(invoices.unpaidCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(invoices.unpaid)).toBe(true);
+    expect(invoices.unpaid.length).toBeLessThanOrEqual(10);
+
+    for (const inv of invoices.unpaid as Record<string, unknown>[]) {
+      expect(typeof inv.id).toBe("string");
+      expect(typeof inv.orderName).toBe("string");
+      expect(typeof inv.status).toBe("string");
+      expect(typeof inv.balance).toBe("number");
+      expect(inv.balance).toBeGreaterThanOrEqual(0);
+      expect(inv).not.toHaveProperty("email");
+      expect(inv).not.toHaveProperty("stripe_invoice_url");
+      expect(inv).not.toHaveProperty("public_token");
+    }
+  });
+
+  test("revenue section has correct shape and invariants", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { revenue } = (await res.json()).data;
+
+    expect(typeof revenue.monthlyGoal).toBe("number");
+    expect(revenue.monthlyGoal).toBeGreaterThan(0);
+    expect(typeof revenue.monthToDate).toBe("number");
+    expect(revenue.monthToDate).toBeGreaterThanOrEqual(0);
+    expect(["ahead", "on-track", "behind"]).toContain(revenue.paceStatus);
+    expect(typeof revenue.projected).toBe("number");
+    expect(revenue.projected).toBeGreaterThanOrEqual(0);
+    expect(typeof revenue.daysLeftInMonth).toBe("number");
+    expect(Number.isInteger(revenue.daysLeftInMonth)).toBe(true);
+    expect(revenue.daysLeftInMonth).toBeGreaterThanOrEqual(0);
+    expect(revenue.daysLeftInMonth).toBeLessThanOrEqual(31);
+
+    // "behind" only when projected < 90% of goal
+    if (revenue.paceStatus === "behind") {
+      expect(revenue.projected).toBeLessThan(revenue.monthlyGoal * 0.901);
+    }
+    // "ahead" only when projected >= goal
+    if (revenue.paceStatus === "ahead") {
+      expect(revenue.projected).toBeGreaterThanOrEqual(revenue.monthlyGoal * 0.999);
+    }
+  });
+
+  test("recommendedActions is a non-empty array of strings", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Array.isArray(data.recommendedActions)).toBe(true);
+    // Always has at least one action (even if it's "all clear")
+    expect(data.recommendedActions.length).toBeGreaterThan(0);
+    for (const action of data.recommendedActions as unknown[]) {
+      expect(typeof action).toBe("string");
+      expect((action as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("allClear invariant: true only when all counts are zero", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    const { allClear, pipeline, tasks, orders, deposits, invoices } = data;
+    const anyAttention =
+      tasks.overdueCount > 0 ||
+      pipeline.staleLeadCount > 0 ||
+      deposits.outstandingCount > 0 ||
+      invoices.unpaidCount > 0 ||
+      orders.dueSoonCount > 0 ||
+      pipeline.quoteFollowUpCount > 0;
+
+    // If allClear=true, no attention items should be present
+    if (allClear) {
+      expect(anyAttention).toBe(false);
+    }
+  });
+
+  test("response does not expose PII or sensitive raw field names", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_BRIEFING) {
+      expect(bodyText, `morning-briefing must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(MORNING_BRIEFING, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+test.describe("GET /api/ai/morning-briefing — OpenAPI schema", () => {
+  test("OpenAPI schema declares /api/ai/morning-briefing with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths[MORNING_BRIEFING]).toBeDefined();
+
+    const getOp = (paths[MORNING_BRIEFING] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getMorningBriefing");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    // Response 200 schema has required top-level data fields
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    expect(dataProps.date).toBeDefined();
+    expect(dataProps.allClear).toBeDefined();
+    expect(dataProps.pipeline).toBeDefined();
+    expect(dataProps.tasks).toBeDefined();
+    expect(dataProps.orders).toBeDefined();
+    expect(dataProps.deposits).toBeDefined();
+    expect(dataProps.invoices).toBeDefined();
+    expect(dataProps.revenue).toBeDefined();
+    expect(dataProps.recommendedActions).toBeDefined();
+    expect((dataProps.recommendedActions as Record<string, unknown>).type).toBe("array");
+  });
+
+  test("getMorningBriefing description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths[MORNING_BRIEFING] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+
+  test("revenue schema in morning-briefing includes paceStatus enum", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const getOp = (paths[MORNING_BRIEFING] as Record<string, unknown>).get as Record<string, unknown>;
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    const revenue = dataProps.revenue as Record<string, unknown>;
+    expect(revenue.type).toBe("object");
+    const revenueProps = revenue.properties as Record<string, Record<string, unknown>>;
+    expect(revenueProps.monthlyGoal).toBeDefined();
+    expect(revenueProps.monthToDate).toBeDefined();
+    expect(revenueProps.paceStatus).toBeDefined();
+    const paceEnum = revenueProps.paceStatus.enum as unknown[];
+    expect(paceEnum).toContain("ahead");
+    expect(paceEnum).toContain("on-track");
+    expect(paceEnum).toContain("behind");
+    expect(revenueProps.projected).toBeDefined();
+    expect(revenueProps.daysLeftInMonth).toBeDefined();
   });
 });
