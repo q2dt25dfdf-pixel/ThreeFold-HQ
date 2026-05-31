@@ -2332,6 +2332,145 @@ const paths: Record<string, unknown> = {
     },
   },
 
+  "/api/ai/end-of-day-summary": {
+    get: {
+      operationId: "getEndOfDaySummary",
+      summary: "End-of-day summary — what happened today and what's due tomorrow",
+      description:
+        "End-of-day summary: tasks completed, activity logged, quotes/deposits sent, " +
+        "revenue today, overdue items, and a tomorrow focus list with recommended " +
+        "wrap-up actions. Read-only. Auth required.",
+      responses: {
+        "200": {
+          description: "End-of-day summary. Covers today's completions and tomorrow's priorities.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok:   { type: "boolean" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      date: { type: "string", format: "date", description: "Today's date (PT timezone, YYYY-MM-DD)." },
+                      completedToday: {
+                        type: "object",
+                        description: "Work finished today.",
+                        properties: {
+                          taskCount:           { type: "integer", description: "Tasks marked complete today." },
+                          tasks:               { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, owner: { type: "string", nullable: true } } } },
+                          crmContactCount:     { type: "integer", description: "CRM communications logged today." },
+                          crmContacts:         { type: "array", maxItems: 10, items: { type: "object", properties: { leadId: { type: "string" }, company: { type: "string" }, contactType: { type: "string" } } } },
+                          clientActivityCount: { type: "integer", description: "Client activity log entries today." },
+                        },
+                        required: ["taskCount", "tasks", "crmContactCount", "crmContacts", "clientActivityCount"],
+                      },
+                      activityToday: {
+                        type: "object",
+                        description: "Activity counts for today across all sources.",
+                        properties: {
+                          clientActivityCount: { type: "integer" },
+                          crmContactCount:     { type: "integer" },
+                          totalCount:          { type: "integer" },
+                        },
+                        required: ["clientActivityCount", "crmContactCount", "totalCount"],
+                      },
+                      pipelineChanges: {
+                        type: "object",
+                        description: "CRM leads that had activity logged today (best available pipeline signal).",
+                        properties: {
+                          leadsContactedTodayCount: { type: "integer" },
+                          leadsContactedToday: { type: "array", maxItems: 10, items: { type: "object", properties: { leadId: { type: "string" }, company: { type: "string" }, stage: { type: "string", nullable: true }, contactType: { type: "string" } } } },
+                        },
+                        required: ["leadsContactedTodayCount", "leadsContactedToday"],
+                      },
+                      quoteActivity: {
+                        type: "object",
+                        description: "Quotes sent today.",
+                        properties: {
+                          sentTodayCount: { type: "integer" },
+                          sentToday: { type: "array", maxItems: 10, items: { type: "object", properties: { leadId: { type: "string", nullable: true }, company: { type: "string" }, quoteNumber: { type: "string", nullable: true }, grandTotal: { type: "number", nullable: true } } } },
+                        },
+                        required: ["sentTodayCount", "sentToday"],
+                      },
+                      depositActivity: {
+                        type: "object",
+                        description: "Deposit requests sent today and deposits/finals paid today.",
+                        properties: {
+                          sentTodayCount:  { type: "integer" },
+                          sentToday:       { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, depositRequestNumber: { type: "string", nullable: true }, company: { type: "string" }, depositAmount: { type: "number", nullable: true } } } },
+                          paidTodayCount:  { type: "integer" },
+                          paidToday:       { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, amount: { type: "number" }, type: { type: "string", enum: ["deposit", "final"] } } } },
+                          finalsPaidCount: { type: "integer" },
+                        },
+                        required: ["sentTodayCount", "sentToday", "paidTodayCount", "paidToday", "finalsPaidCount"],
+                      },
+                      orderActivity: {
+                        type: "object",
+                        description: "Active orders and those with delivery due today.",
+                        properties: {
+                          activeCount:   { type: "integer" },
+                          dueTodayCount: { type: "integer" },
+                          dueToday:      { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, status: { type: "string" } } } },
+                        },
+                        required: ["activeCount", "dueTodayCount", "dueToday"],
+                      },
+                      financeActivity: {
+                        type: "object",
+                        description: "Revenue collected today and expenses logged today.",
+                        properties: {
+                          revenueToday:      { type: "number" },
+                          expenseTotalToday: { type: "number" },
+                          payments: { type: "array", items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, amount: { type: "number" }, type: { type: "string", enum: ["deposit", "final"] } } } },
+                          expenses: { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, amount: { type: "number" } } } },
+                        },
+                        required: ["revenueToday", "expenseTotalToday", "payments", "expenses"],
+                      },
+                      overdueItems: {
+                        type: "object",
+                        description: "All items still past due at end of day.",
+                        properties: {
+                          overdueTaskCount:        { type: "integer" },
+                          overdueTasks:            { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, dueDate: { type: "string" }, owner: { type: "string", nullable: true } } } },
+                          overdueInvoiceCount:     { type: "integer" },
+                          overdueInvoices:         { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, status: { type: "string" }, balance: { type: "number" }, daysPastDue: { type: "integer" } } } },
+                          stalledOrderCount:       { type: "integer" },
+                          stalledOrders:           { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, status: { type: "string" }, dueDate: { type: "string", nullable: true }, daysPastDue: { type: "integer" } } } },
+                          outstandingDepositCount: { type: "integer" },
+                          outstandingDeposits:     { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, depositRequestNumber: { type: "string", nullable: true }, company: { type: "string" }, depositAmount: { type: "number", nullable: true }, status: { type: "string" }, sentDate: { type: "string", nullable: true }, daysSinceSent: { type: "integer", nullable: true } } } },
+                        },
+                        required: ["overdueTaskCount", "overdueTasks", "overdueInvoiceCount", "overdueInvoices", "stalledOrderCount", "stalledOrders", "outstandingDepositCount", "outstandingDeposits"],
+                      },
+                      tomorrowFocus: {
+                        type: "object",
+                        description: "Items due tomorrow to prepare for now.",
+                        properties: {
+                          tasksDueTomorrow:      { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, owner: { type: "string", nullable: true } } } },
+                          ordersDueTomorrow:     { type: "array", maxItems: 10, items: { type: "object", properties: { id: { type: "string" }, orderName: { type: "string" }, status: { type: "string" } } } },
+                          followUpsDueTomorrow:  { type: "array", maxItems: 10, items: { type: "object", properties: { leadId: { type: "string" }, company: { type: "string" }, owner: { type: "string", nullable: true } } } },
+                        },
+                        required: ["tasksDueTomorrow", "ordersDueTomorrow", "followUpsDueTomorrow"],
+                      },
+                      recommendedWrapUpActions: {
+                        type: "array",
+                        description: "Plain-language wrap-up actions Jarvis can present directly.",
+                        items: { type: "string" },
+                      },
+                    },
+                    required: ["date", "completedToday", "activityToday", "pipelineChanges", "quoteActivity", "depositActivity", "orderActivity", "financeActivity", "overdueItems", "tomorrowFocus", "recommendedWrapUpActions"],
+                  },
+                  meta: { "$ref": "#/components/schemas/Meta" },
+                },
+              },
+            },
+          },
+        },
+        "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      },
+    },
+  },
+
   "/api/ai/morning-briefing": {
     get: {
       operationId: "getMorningBriefing",

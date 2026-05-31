@@ -1692,6 +1692,7 @@ const EXPECTED_PATHS = [
   "/api/ai/lead/{id}",
   "/api/ai/vendor/{id}",
   "/api/ai/morning-briefing",
+  "/api/ai/end-of-day-summary",
 ];
 
 test.describe("GET /api/ai/openapi", () => {
@@ -1711,7 +1712,7 @@ test.describe("GET /api/ai/openapi", () => {
     expect(typeof body.components).toBe("object");
   });
 
-  test("schema includes all 20 AI endpoint paths", async ({ request }) => {
+  test("schema includes all 21 AI endpoint paths", async ({ request }) => {
     const res = await request.get(OPENAPI);
     const body = await res.json() as Record<string, unknown>;
     const paths = body.paths as Record<string, unknown>;
@@ -4293,5 +4294,514 @@ test.describe("GET /api/ai/morning-briefing — OpenAPI schema", () => {
     expect(paceEnum).toContain("behind");
     expect(revenueProps.projected).toBeDefined();
     expect(revenueProps.daysLeftInMonth).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 11 — GET /api/ai/end-of-day-summary
+// ---------------------------------------------------------------------------
+
+const EOD = "/api/ai/end-of-day-summary";
+
+const FORBIDDEN_EOD = [
+  '"email":', '"phone":', '"address":',
+  '"notes":', '"contact":', '"summary":',
+  '"stripe":', '"payment_link":',
+  '"client_name":', '"client_email":',
+  '"communicationHistory":', '"questionnaire_files":',
+  '"public_token":', '"payment_instructions":',
+  '"stripe_invoice_url":',
+];
+
+test.describe("GET /api/ai/end-of-day-summary — unauthenticated rejection", () => {
+  test("missing Authorization returns 401", async ({ request }) => {
+    const res = await request.get(EOD);
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("wrong scheme returns 401", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: "Basic dXNlcjpwYXNz" },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("invalid Bearer token returns 401", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: "Bearer totally-wrong-token-abc123" },
+    });
+    expect(res.status()).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+test.describe("GET /api/ai/end-of-day-summary — authenticated", () => {
+  test.beforeEach(() => { skipIfNoSecret(); });
+
+  test("returns 200 with valid token", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test("response envelope has ok / data / meta shape", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toBeDefined();
+    expect(body.meta).toBeDefined();
+    expect(typeof body.meta.as_of).toBe("string");
+    expect(Number.isNaN(Date.parse(body.meta.as_of))).toBe(false);
+  });
+
+  test("data has all required top-level sections", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(typeof data.date).toBe("string");
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(data.date)).toBe(true);
+    expect(Number.isNaN(Date.parse(data.date))).toBe(false);
+
+    expect(data.completedToday).toBeDefined();
+    expect(data.activityToday).toBeDefined();
+    expect(data.pipelineChanges).toBeDefined();
+    expect(data.quoteActivity).toBeDefined();
+    expect(data.depositActivity).toBeDefined();
+    expect(data.orderActivity).toBeDefined();
+    expect(data.financeActivity).toBeDefined();
+    expect(data.overdueItems).toBeDefined();
+    expect(data.tomorrowFocus).toBeDefined();
+    expect(Array.isArray(data.recommendedWrapUpActions)).toBe(true);
+  });
+
+  test("completedToday has correct types and bounds", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { completedToday } = (await res.json()).data;
+
+    expect(typeof completedToday.taskCount).toBe("number");
+    expect(completedToday.taskCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(completedToday.tasks)).toBe(true);
+    expect(completedToday.tasks.length).toBeLessThanOrEqual(10);
+    expect(completedToday.tasks.length).toBe(completedToday.taskCount <= 10 ? completedToday.taskCount : 10);
+
+    for (const t of completedToday.tasks as Record<string, unknown>[]) {
+      expect(typeof t.id).toBe("string");
+      expect(typeof t.title).toBe("string");
+      expect(t).not.toHaveProperty("notes");
+      expect(t).not.toHaveProperty("email");
+    }
+
+    expect(typeof completedToday.crmContactCount).toBe("number");
+    expect(completedToday.crmContactCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(completedToday.crmContacts)).toBe(true);
+    expect(completedToday.crmContacts.length).toBeLessThanOrEqual(10);
+
+    for (const c of completedToday.crmContacts as Record<string, unknown>[]) {
+      expect(typeof c.leadId).toBe("string");
+      expect(typeof c.company).toBe("string");
+      expect(typeof c.contactType).toBe("string");
+      // Must NOT expose summary content or PII
+      expect(c).not.toHaveProperty("summary");
+      expect(c).not.toHaveProperty("email");
+      expect(c).not.toHaveProperty("contact");
+    }
+
+    expect(typeof completedToday.clientActivityCount).toBe("number");
+    expect(completedToday.clientActivityCount).toBeGreaterThanOrEqual(0);
+  });
+
+  test("activityToday has correct types and count invariant", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { activityToday } = (await res.json()).data;
+
+    expect(typeof activityToday.clientActivityCount).toBe("number");
+    expect(activityToday.clientActivityCount).toBeGreaterThanOrEqual(0);
+    expect(typeof activityToday.crmContactCount).toBe("number");
+    expect(activityToday.crmContactCount).toBeGreaterThanOrEqual(0);
+    expect(typeof activityToday.totalCount).toBe("number");
+    // totalCount = clientActivityCount + crmContactCount
+    expect(activityToday.totalCount).toBe(
+      activityToday.clientActivityCount + activityToday.crmContactCount,
+    );
+  });
+
+  test("pipelineChanges has correct shape — no PII", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { pipelineChanges } = (await res.json()).data;
+
+    expect(typeof pipelineChanges.leadsContactedTodayCount).toBe("number");
+    expect(pipelineChanges.leadsContactedTodayCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(pipelineChanges.leadsContactedToday)).toBe(true);
+    expect(pipelineChanges.leadsContactedToday.length).toBeLessThanOrEqual(10);
+
+    for (const lead of pipelineChanges.leadsContactedToday as Record<string, unknown>[]) {
+      expect(typeof lead.leadId).toBe("string");
+      expect(typeof lead.company).toBe("string");
+      expect(typeof lead.contactType).toBe("string");
+      expect(lead).not.toHaveProperty("email");
+      expect(lead).not.toHaveProperty("contact");
+      expect(lead).not.toHaveProperty("notes");
+    }
+  });
+
+  test("quoteActivity has correct shape", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { quoteActivity } = (await res.json()).data;
+
+    expect(typeof quoteActivity.sentTodayCount).toBe("number");
+    expect(quoteActivity.sentTodayCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(quoteActivity.sentToday)).toBe(true);
+    expect(quoteActivity.sentToday.length).toBeLessThanOrEqual(10);
+    expect(quoteActivity.sentTodayCount).toBe(quoteActivity.sentToday.length);
+
+    for (const q of quoteActivity.sentToday as Record<string, unknown>[]) {
+      expect(typeof q.company).toBe("string");
+      if (q.grandTotal !== null && q.grandTotal !== undefined) {
+        expect(typeof q.grandTotal).toBe("number");
+        expect(q.grandTotal).toBeGreaterThan(0);
+      }
+      // Must NOT expose contact PII
+      expect(q).not.toHaveProperty("email");
+      expect(q).not.toHaveProperty("contact");
+      expect(q).not.toHaveProperty("public_link");
+    }
+  });
+
+  test("depositActivity has correct shape and no client_name PII", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { depositActivity } = (await res.json()).data;
+
+    expect(typeof depositActivity.sentTodayCount).toBe("number");
+    expect(depositActivity.sentTodayCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(depositActivity.sentToday)).toBe(true);
+    expect(depositActivity.sentTodayCount).toBe(depositActivity.sentToday.length);
+
+    for (const d of depositActivity.sentToday as Record<string, unknown>[]) {
+      expect(typeof d.id).toBe("string");
+      expect(typeof d.company).toBe("string");
+      // Must NOT expose raw client_name — company resolved via lead_id
+      expect(d).not.toHaveProperty("client_name");
+      expect(d).not.toHaveProperty("email");
+      expect(d).not.toHaveProperty("payment_instructions");
+    }
+
+    expect(typeof depositActivity.paidTodayCount).toBe("number");
+    expect(depositActivity.paidTodayCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(depositActivity.paidToday)).toBe(true);
+
+    const VALID_PAYMENT_TYPES = new Set(["deposit", "final"]);
+    for (const p of depositActivity.paidToday as Record<string, unknown>[]) {
+      expect(typeof p.id).toBe("string");
+      expect(typeof p.orderName).toBe("string");
+      expect(typeof p.amount).toBe("number");
+      expect(p.amount).toBeGreaterThan(0);
+      expect(VALID_PAYMENT_TYPES.has(p.type as string)).toBe(true);
+    }
+
+    expect(typeof depositActivity.finalsPaidCount).toBe("number");
+    expect(depositActivity.finalsPaidCount).toBeGreaterThanOrEqual(0);
+  });
+
+  test("orderActivity has correct shape and counts", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { orderActivity } = (await res.json()).data;
+
+    expect(typeof orderActivity.activeCount).toBe("number");
+    expect(orderActivity.activeCount).toBeGreaterThanOrEqual(0);
+    expect(typeof orderActivity.dueTodayCount).toBe("number");
+    expect(orderActivity.dueTodayCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(orderActivity.dueToday)).toBe(true);
+    expect(orderActivity.dueTodayCount).toBe(orderActivity.dueToday.length);
+    expect(orderActivity.dueTodayCount).toBeLessThanOrEqual(orderActivity.activeCount);
+
+    for (const o of orderActivity.dueToday as Record<string, unknown>[]) {
+      expect(typeof o.id).toBe("string");
+      expect(typeof o.orderName).toBe("string");
+      expect(typeof o.status).toBe("string");
+      expect(o).not.toHaveProperty("email");
+      expect(o).not.toHaveProperty("notes");
+    }
+  });
+
+  test("financeActivity has correct shape and non-negative values", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { financeActivity } = (await res.json()).data;
+
+    expect(typeof financeActivity.revenueToday).toBe("number");
+    expect(financeActivity.revenueToday).toBeGreaterThanOrEqual(0);
+    expect(typeof financeActivity.expenseTotalToday).toBe("number");
+    expect(financeActivity.expenseTotalToday).toBeGreaterThanOrEqual(0);
+
+    expect(Array.isArray(financeActivity.payments)).toBe(true);
+    for (const p of financeActivity.payments as Record<string, unknown>[]) {
+      expect(typeof p.id).toBe("string");
+      expect(typeof p.orderName).toBe("string");
+      expect(typeof p.amount).toBe("number");
+      expect(["deposit", "final"]).toContain(p.type);
+      // No Stripe or payment link fields
+      expect(p).not.toHaveProperty("stripe_invoice_url");
+      expect(p).not.toHaveProperty("public_link");
+      expect(p).not.toHaveProperty("public_token");
+    }
+
+    // Revenue today = sum of all payment amounts
+    const computedRevenue = (financeActivity.payments as Record<string, unknown>[])
+      .reduce((sum, p) => sum + (p.amount as number), 0);
+    expect(Math.abs(financeActivity.revenueToday - computedRevenue)).toBeLessThan(0.02);
+
+    expect(Array.isArray(financeActivity.expenses)).toBe(true);
+    expect(financeActivity.expenses.length).toBeLessThanOrEqual(10);
+    for (const e of financeActivity.expenses as Record<string, unknown>[]) {
+      expect(typeof e.id).toBe("string");
+      expect(typeof e.name).toBe("string");
+      expect(typeof e.amount).toBe("number");
+    }
+  });
+
+  test("overdueItems has correct shape — all arrays bounded", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { overdueItems } = (await res.json()).data;
+
+    expect(typeof overdueItems.overdueTaskCount).toBe("number");
+    expect(overdueItems.overdueTaskCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(overdueItems.overdueTasks)).toBe(true);
+    expect(overdueItems.overdueTasks.length).toBeLessThanOrEqual(10);
+
+    for (const t of overdueItems.overdueTasks as Record<string, unknown>[]) {
+      expect(typeof t.id).toBe("string");
+      expect(typeof t.title).toBe("string");
+      expect(typeof t.dueDate).toBe("string");
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(t.dueDate as string)).toBe(true);
+      expect(t).not.toHaveProperty("notes");
+    }
+
+    expect(typeof overdueItems.overdueInvoiceCount).toBe("number");
+    expect(overdueItems.overdueInvoiceCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(overdueItems.overdueInvoices)).toBe(true);
+    expect(overdueItems.overdueInvoices.length).toBeLessThanOrEqual(10);
+
+    for (const inv of overdueItems.overdueInvoices as Record<string, unknown>[]) {
+      expect(typeof inv.id).toBe("string");
+      expect(typeof inv.orderName).toBe("string");
+      expect(typeof inv.balance).toBe("number");
+      expect(inv.balance).toBeGreaterThanOrEqual(0);
+      expect(typeof inv.daysPastDue).toBe("number");
+      expect(inv.daysPastDue).toBeGreaterThanOrEqual(0);
+      expect(inv).not.toHaveProperty("client_name");
+      expect(inv).not.toHaveProperty("stripe_invoice_url");
+    }
+
+    expect(typeof overdueItems.stalledOrderCount).toBe("number");
+    expect(overdueItems.stalledOrderCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(overdueItems.stalledOrders)).toBe(true);
+    expect(overdueItems.stalledOrders.length).toBeLessThanOrEqual(10);
+
+    for (const o of overdueItems.stalledOrders as Record<string, unknown>[]) {
+      expect(typeof o.id).toBe("string");
+      expect(typeof o.orderName).toBe("string");
+      expect(typeof o.daysPastDue).toBe("number");
+      expect(o.daysPastDue).toBeGreaterThanOrEqual(0);
+    }
+
+    expect(typeof overdueItems.outstandingDepositCount).toBe("number");
+    expect(overdueItems.outstandingDepositCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(overdueItems.outstandingDeposits)).toBe(true);
+    expect(overdueItems.outstandingDeposits.length).toBeLessThanOrEqual(10);
+
+    for (const d of overdueItems.outstandingDeposits as Record<string, unknown>[]) {
+      expect(typeof d.id).toBe("string");
+      expect(typeof d.company).toBe("string");
+      expect(d.status).not.toBe("paid");
+      // Must NOT expose client_name
+      expect(d).not.toHaveProperty("client_name");
+      expect(d).not.toHaveProperty("email");
+      expect(d).not.toHaveProperty("payment_instructions");
+    }
+  });
+
+  test("overdueInvoices sorted most-overdue first", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { overdueItems } = (await res.json()).data;
+    const invs = overdueItems.overdueInvoices as Record<string, unknown>[];
+    for (let i = 1; i < invs.length; i++) {
+      expect(invs[i].daysPastDue as number).toBeLessThanOrEqual(invs[i - 1].daysPastDue as number);
+    }
+  });
+
+  test("stalledOrders sorted most-overdue first", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { overdueItems } = (await res.json()).data;
+    const orders = overdueItems.stalledOrders as Record<string, unknown>[];
+    for (let i = 1; i < orders.length; i++) {
+      expect(orders[i].daysPastDue as number).toBeLessThanOrEqual(orders[i - 1].daysPastDue as number);
+    }
+  });
+
+  test("tomorrowFocus has correct shape and types", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { tomorrowFocus } = (await res.json()).data;
+
+    expect(Array.isArray(tomorrowFocus.tasksDueTomorrow)).toBe(true);
+    expect(tomorrowFocus.tasksDueTomorrow.length).toBeLessThanOrEqual(10);
+    for (const t of tomorrowFocus.tasksDueTomorrow as Record<string, unknown>[]) {
+      expect(typeof t.id).toBe("string");
+      expect(typeof t.title).toBe("string");
+      expect(t).not.toHaveProperty("notes");
+    }
+
+    expect(Array.isArray(tomorrowFocus.ordersDueTomorrow)).toBe(true);
+    expect(tomorrowFocus.ordersDueTomorrow.length).toBeLessThanOrEqual(10);
+    for (const o of tomorrowFocus.ordersDueTomorrow as Record<string, unknown>[]) {
+      expect(typeof o.id).toBe("string");
+      expect(typeof o.orderName).toBe("string");
+      expect(typeof o.status).toBe("string");
+    }
+
+    expect(Array.isArray(tomorrowFocus.followUpsDueTomorrow)).toBe(true);
+    expect(tomorrowFocus.followUpsDueTomorrow.length).toBeLessThanOrEqual(10);
+    for (const fu of tomorrowFocus.followUpsDueTomorrow as Record<string, unknown>[]) {
+      expect(typeof fu.leadId).toBe("string");
+      expect(typeof fu.company).toBe("string");
+      expect(fu).not.toHaveProperty("email");
+      expect(fu).not.toHaveProperty("contact");
+      expect(fu).not.toHaveProperty("notes");
+    }
+  });
+
+  test("recommendedWrapUpActions is a non-empty array of strings", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const { data } = await res.json();
+
+    expect(Array.isArray(data.recommendedWrapUpActions)).toBe(true);
+    expect(data.recommendedWrapUpActions.length).toBeGreaterThan(0);
+    for (const action of data.recommendedWrapUpActions as unknown[]) {
+      expect(typeof action).toBe("string");
+      expect((action as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("response does not expose PII or sensitive raw field names", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    const bodyText = await res.text();
+    for (const key of FORBIDDEN_EOD) {
+      expect(bodyText, `end-of-day-summary must not expose ${key}`).not.toContain(key);
+    }
+  });
+
+  test("Cache-Control header includes no-store", async ({ request }) => {
+    const res = await request.get(EOD, {
+      headers: { Authorization: `Bearer ${process.env.AI_API_SECRET}` },
+    });
+    expect(res.headers()["cache-control"]).toContain("no-store");
+  });
+});
+
+test.describe("GET /api/ai/end-of-day-summary — OpenAPI schema", () => {
+  test("OpenAPI schema declares /api/ai/end-of-day-summary with correct structure", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+
+    expect(paths[EOD]).toBeDefined();
+
+    const getOp = (paths[EOD] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(getOp.operationId).toBe("getEndOfDaySummary");
+    expect(typeof getOp.description).toBe("string");
+    expect((getOp.description as string).length).toBeLessThanOrEqual(300);
+
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    // All required top-level sections must be declared
+    for (const section of [
+      "date", "completedToday", "activityToday", "pipelineChanges",
+      "quoteActivity", "depositActivity", "orderActivity", "financeActivity",
+      "overdueItems", "tomorrowFocus", "recommendedWrapUpActions",
+    ]) {
+      expect(dataProps[section], `Missing schema property: ${section}`).toBeDefined();
+    }
+
+    // recommendedWrapUpActions must be an array of strings
+    const rwa = dataProps.recommendedWrapUpActions as Record<string, unknown>;
+    expect(rwa.type).toBe("array");
+    expect((rwa.items as Record<string, unknown>).type).toBe("string");
+  });
+
+  test("getEndOfDaySummary description is <= 300 chars", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const op = (paths[EOD] as Record<string, unknown>).get as Record<string, unknown>;
+    expect(typeof op.description).toBe("string");
+    expect((op.description as string).length).toBeLessThanOrEqual(300);
+  });
+
+  test("depositActivity schema documents paidToday items with type enum", async ({ request }) => {
+    const schemaRes = await request.get("/api/ai/openapi");
+    const schema = await schemaRes.json() as Record<string, unknown>;
+    const paths = schema.paths as Record<string, unknown>;
+    const getOp = (paths[EOD] as Record<string, unknown>).get as Record<string, unknown>;
+    const resp200 = (getOp.responses as Record<string, unknown>)["200"] as Record<string, unknown>;
+    const content = (resp200.content as Record<string, unknown>)["application/json"] as Record<string, unknown>;
+    const dataProps = (
+      ((content.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .data as Record<string, unknown>
+    ).properties as Record<string, unknown>;
+
+    const da = dataProps.depositActivity as Record<string, unknown>;
+    expect(da.type).toBe("object");
+    const daProps = da.properties as Record<string, Record<string, unknown>>;
+    expect(daProps.sentTodayCount).toBeDefined();
+    expect(daProps.sentToday).toBeDefined();
+    expect(daProps.paidTodayCount).toBeDefined();
+    expect(daProps.paidToday).toBeDefined();
+    expect(daProps.finalsPaidCount).toBeDefined();
+
+    // paidToday items must document the type enum
+    const paidTodayItems = (daProps.paidToday.items as Record<string, unknown>);
+    const paidProps = paidTodayItems.properties as Record<string, Record<string, unknown>>;
+    const typeEnum = paidProps.type?.enum as unknown[] | undefined;
+    expect(typeEnum).toBeDefined();
+    expect(typeEnum).toContain("deposit");
+    expect(typeEnum).toContain("final");
   });
 });
