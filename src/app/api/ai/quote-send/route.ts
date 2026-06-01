@@ -278,7 +278,7 @@ export async function POST(request: Request): Promise<Response> {
     const sentAt = new Date().toISOString();
 
     // ── Update quote record ─────────────────────────────────────────────────────
-    await db
+    const { error: quoteUpdateErr } = await db
       .from("quotes")
       .update({
         data: {
@@ -291,6 +291,13 @@ export async function POST(request: Request): Promise<Response> {
       })
       .eq("id", quoteId);
 
+    if (quoteUpdateErr) {
+      console.error(
+        "[ai/quote-send] EMAIL SENT but quote record DB update failed — manual recovery required.",
+        { quoteId, leadId, clientEmail, messageId, sentAt, error: quoteUpdateErr.message },
+      );
+    }
+
     // ── Update lead record (mirrors handleQuoteSent) ────────────────────────────
     const commEntry = {
       id: `comm-quote-${Date.now()}`,
@@ -300,7 +307,7 @@ export async function POST(request: Request): Promise<Response> {
       summary: `${isRevised ? "Revised quote" : "Quote"} sent by ${sender} via Jarvis. Quote #${quoteNumber ?? quoteId}. Portal: ${publicLink}`,
     };
 
-    await db
+    const { error: leadUpdateErr } = await db
       .from("crm_leads")
       .update({
         data: {
@@ -314,7 +321,15 @@ export async function POST(request: Request): Promise<Response> {
       })
       .eq("id", leadId);
 
+    if (leadUpdateErr) {
+      console.error(
+        "[ai/quote-send] EMAIL SENT but lead record DB update failed — manual recovery required.",
+        { quoteId, leadId, clientEmail, messageId, sentAt, error: leadUpdateErr.message },
+      );
+    }
+
     // ── Return ──────────────────────────────────────────────────────────────────
+    const dbSyncFailed = !!(quoteUpdateErr || leadUpdateErr);
     return okResponse({
       sent: true,
       sentVia: "resend",
@@ -328,6 +343,13 @@ export async function POST(request: Request): Promise<Response> {
       isRevised,
       sentAt,
       emailSubject,
+      ...(dbSyncFailed && {
+        dbSyncFailed: true,
+        warning:
+          `Email delivered to ${clientEmail} (Resend ID: ${messageId}) but the HQ database ` +
+          `was not updated. Please open HQ and manually mark quote ${quoteNumber ?? quoteId} ` +
+          `as Sent and set the lead stage to "Quote Sent".`,
+      }),
     });
 
   } catch (err) {

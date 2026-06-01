@@ -445,7 +445,7 @@ export async function POST(request: Request): Promise<Response> {
     const sentAt = new Date().toISOString();
 
     // ── Update deposit record ───────────────────────────────────────────────────
-    await db
+    const { error: depositUpdateErr } = await db
       .from("deposit_requests")
       .update({
         data: {
@@ -458,6 +458,13 @@ export async function POST(request: Request): Promise<Response> {
       })
       .eq("id", depositId);
 
+    if (depositUpdateErr) {
+      console.error(
+        "[ai/deposit-send] EMAIL SENT but deposit record DB update failed — manual recovery required.",
+        { depositId, leadId, clientEmail, messageId, sentAt, error: depositUpdateErr.message },
+      );
+    }
+
     // ── Update lead record (mirrors handleDepositSent) ──────────────────────────
     const depositRequestNumber = depositNumber ?? depositId;
     const commEntry = {
@@ -468,7 +475,7 @@ export async function POST(request: Request): Promise<Response> {
       summary: `Deposit request sent by ${sender} via Jarvis. Request #${depositRequestNumber}. Portal: ${publicLink}`,
     };
 
-    await db
+    const { error: leadUpdateErr } = await db
       .from("crm_leads")
       .update({
         data: {
@@ -480,7 +487,15 @@ export async function POST(request: Request): Promise<Response> {
       })
       .eq("id", leadId);
 
+    if (leadUpdateErr) {
+      console.error(
+        "[ai/deposit-send] EMAIL SENT but lead record DB update failed — manual recovery required.",
+        { depositId, leadId, clientEmail, messageId, sentAt, error: leadUpdateErr.message },
+      );
+    }
+
     // ── Return ──────────────────────────────────────────────────────────────────
+    const dbSyncFailed = !!(depositUpdateErr || leadUpdateErr);
     return okResponse({
       sent: true,
       sentVia: "resend",
@@ -492,6 +507,13 @@ export async function POST(request: Request): Promise<Response> {
       company,
       sentAt,
       emailSubject,
+      ...(dbSyncFailed && {
+        dbSyncFailed: true,
+        warning:
+          `Email delivered to ${clientEmail} (Resend ID: ${messageId}) but the HQ database ` +
+          `was not updated. Please open HQ and manually mark deposit ${depositRequestNumber} ` +
+          `as Sent and confirm the lead is linked to the deposit.`,
+      }),
     });
   } catch (err) {
     console.error("[ai/deposit-send POST]", err);
