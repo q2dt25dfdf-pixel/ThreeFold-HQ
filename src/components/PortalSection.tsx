@@ -5,6 +5,7 @@ import { Check, CheckCircle, Copy, ExternalLink, Loader2, RefreshCw, Send } from
 import { supabase } from '@/lib/supabase'
 import ModalShell from '@/components/ModalShell'
 import { openEmailCompose } from '@/lib/emailCompose'
+import { getClientPublicBaseUrl } from '@/lib/publicUrl'
 
 type CopyTarget = 'subject' | 'body' | 'link'
 type EmailStep = 'preview' | 'sending' | 'sent' | 'error'
@@ -32,7 +33,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
   const [emailCopied, setEmailCopied] = useState<CopyTarget | ''>('')
 
   useEffect(() => {
-    if (token) setPortalUrl(window.location.origin + '/portal/' + token)
+    if (token) setPortalUrl(getClientPublicBaseUrl() + '/portal/' + token)
   }, [token])
 
   useEffect(() => {
@@ -71,9 +72,13 @@ export default function PortalSection({ orderId }: { orderId: string }) {
 
   async function generateLink() {
     setGenerating(true)
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/portal/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
       body: JSON.stringify({ orderId }),
     })
     const result = await res.json() as { token?: string }

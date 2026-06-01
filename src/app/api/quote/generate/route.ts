@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 import { calcGrandTotal, calcSalesTax } from "@/lib/salesTax";
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
+import { getPublicBaseUrl } from "@/lib/publicUrl";
 
 type LineItem = {
   name: string;
@@ -47,8 +48,7 @@ export async function POST(request: NextRequest) {
 
     const quoteNumber = `TF-Q-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
     const token = "tfq-" + randomBytes(12).toString("hex");
-    const origin = request.nextUrl.origin;
-    const publicLink = `${origin}/quote/${token}`;
+    const publicLink = `${getPublicBaseUrl(request.nextUrl.origin)}/quote/${token}`;
 
     const expirationDateStr = addDaysToISODate(businessTodayISO(), 30);
 

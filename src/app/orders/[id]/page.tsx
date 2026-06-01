@@ -22,6 +22,7 @@ import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
 import type { QuestionnaireFile } from "@/components/crm/types";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { businessTodayISO } from "@/lib/businessDate";
+import { getClientPublicBaseUrl } from "@/lib/publicUrl";
 
 type IntakeSnapshot = {
   contact_title?: string;
@@ -738,7 +739,7 @@ export default function OrderDetailPage() {
 
   const copyPortalLink = async () => {
     if (!order?.portal_token) return;
-    const url = `${window.location.origin}/portal/${order.portal_token}`;
+    const url = `${getClientPublicBaseUrl()}/portal/${order.portal_token}`;
     await navigator.clipboard.writeText(url);
     setPortalCopied(true);
     window.setTimeout(() => setPortalCopied(false), 2000);
@@ -815,7 +816,7 @@ export default function OrderDetailPage() {
   );
   const portalToken = order.portal_token;
   const portalUrl = portalToken
-    ? (typeof window !== "undefined" ? window.location.origin : "") + `/portal/${portalToken}`
+    ? getClientPublicBaseUrl() + `/portal/${portalToken}`
     : null;
 
   const openInvoicePreview = async () => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
+import { getPublicBaseUrl } from "@/lib/publicUrl";
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     const chargeAmount = depositAmount + surcharge;
     const paymentMethodTypes = (method === "card" ? ["card"] : ["us_bank_account"]) as ("card" | "us_bank_account")[];
 
-    const origin = request.nextUrl.origin;
+    const origin = getPublicBaseUrl(request.nextUrl.origin);
     const stripe = getStripe();
 
     const session = await stripe.checkout.sessions.create({

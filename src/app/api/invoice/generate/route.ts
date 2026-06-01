@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parseAmount } from "@/lib/invoiceCalc";
+import { getPublicBaseUrl } from "@/lib/publicUrl";
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     let clientEmail = (raw.client_email ?? "") as string;
     if (!clientEmail && raw.lead_id) {
       const { data: leadRows } = await db
-        .from("leads")
+        .from("crm_leads")
         .select("data")
         .eq("id", raw.lead_id as string)
         .limit(1);
@@ -76,8 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = "tfi-" + randomBytes(12).toString("hex");
-    const origin = request.nextUrl.origin;
-    const publicLink = `${origin}/invoice/${token}`;
+    const publicLink = `${getPublicBaseUrl(request.nextUrl.origin)}/invoice/${token}`;
 
     const updatedData = { ...raw, public_token: token, public_link: publicLink, ...taxFields };
     const { error: updateError } = await db

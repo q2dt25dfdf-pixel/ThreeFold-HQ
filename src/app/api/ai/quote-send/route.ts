@@ -200,16 +200,12 @@ export async function POST(request: Request): Promise<Response> {
     const grandTotal     = (qd.grand_total as number | null) ?? (qd.total_amount as number | null) ?? null;
     const expirationDate = (qd.expiration_date as string) ?? null;
     const leadId         = (qd.lead_id as string) ?? null;
-    const clientEmail    = (qd.client_email as string) ?? null;
 
     if (!publicLink || !publicToken) {
       return errResponse("Quote has no public link. Regenerate from HQ.", 400);
     }
     if (!leadId) {
       return errResponse("Quote has no linked lead. Cannot send via Jarvis.", 400);
-    }
-    if (!clientEmail) {
-      return errResponse("Quote has no client email on file. Cannot send via Jarvis.", 400);
     }
 
     // ── Fetch lead ──────────────────────────────────────────────────────────────
@@ -232,6 +228,18 @@ export async function POST(request: Request): Promise<Response> {
     const isRevised        = previousStage === "Quote Sent";
     const contactName      = company ?? "there";
     const existingHistory  = (ld.communicationHistory as unknown[]) ?? [];
+
+    // Resolve client email: quote record first (set by HQ), then lead record (fallback for
+    // Jarvis-created quotes which store client_email as empty string by design).
+    const clientEmail =
+      (qd.client_email as string) || (ld.email as string) || null;
+
+    if (!clientEmail) {
+      return errResponse(
+        "No client email found on the quote or lead. Add an email in HQ before sending via Jarvis.",
+        400,
+      );
+    }
 
     // ── Build email ─────────────────────────────────────────────────────────────
     const emailSubject = isRevised

@@ -610,9 +610,13 @@ function CRMContent() {
     }
 
     // Generate client portal token for the order
+    const { data: { session: portalSession } } = await supabase.auth.getSession();
     void fetch("/api/portal/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(portalSession?.access_token ? { Authorization: `Bearer ${portalSession.access_token}` } : {}),
+      },
       body: JSON.stringify({ orderId }),
     });
 

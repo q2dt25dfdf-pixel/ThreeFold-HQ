@@ -4,6 +4,7 @@ import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
 import { type QuoteRow, selectBestQuote } from "@/lib/quoteSelection";
+import { getPublicBaseUrl } from "@/lib/publicUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -336,8 +337,7 @@ export async function POST(request: Request): Promise<Response> {
       const depositRequestNumber = `TF-D-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
       const token = "tfd-" + randomBytes(12).toString("hex");
-      const origin = new URL(request.url).origin;
-      const publicLink = `${origin}/deposit/${token}`;
+      const publicLink = `${getPublicBaseUrl(new URL(request.url).origin)}/deposit/${token}`;
 
       depositId = `deposit-${leadId}-${Date.now()}`;
 

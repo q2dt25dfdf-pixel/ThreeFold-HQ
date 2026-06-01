@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { supabase } from '@/lib/supabase'
+import { validateSessionRequest } from '@/lib/sessionAuth'
 
 export async function POST(request: NextRequest) {
+  const auth = await validateSessionRequest(request)
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: auth.status })
+  }
+
   try {
     const { orderId } = await request.json()
     if (!orderId) return NextResponse.json({ error: 'Order ID required' }, { status: 400 })
