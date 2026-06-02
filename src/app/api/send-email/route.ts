@@ -108,10 +108,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Fallback: return mailto URL the client can open ──────────────────────────
-    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    await updateRecordSent(recordType, recordId, sentAt, "sent_via_client", null);
-    return NextResponse.json({ sent: false, fallback: true, mailto_url: mailtoUrl });
+    // No service configured — return a clear error instead of opening a compose window.
+    return NextResponse.json(
+      { error: "Email service not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in Vercel (Gmail API), or set RESEND_API_KEY as a fallback." },
+      { status: 503 },
+    );
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

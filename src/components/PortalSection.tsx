@@ -162,9 +162,8 @@ export default function PortalSection({ orderId }: { orderId: string }) {
           recordType: 'quote',
         }),
       })
-      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string }
+      const data = await res.json() as { sent?: boolean; error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Send failed')
-      if (data.fallback && data.mailto_url) window.open(data.mailto_url, '_blank')
       setEmailStep('sent')
       void supabase.auth.getSession().then(({ data: { session } }) =>
         fetch('/api/internal/notify', {

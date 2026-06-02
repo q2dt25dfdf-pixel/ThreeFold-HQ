@@ -107,9 +107,8 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
           recordType: "quote",
         }),
       });
-      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string };
+      const data = await res.json() as { sent?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Send failed");
-      if (data.fallback && data.mailto_url) window.open(data.mailto_url, "_blank");
       setStep("sent");
       if (invoice) {
         const clientName = invoice.client_name || invoice.client || "";

@@ -197,9 +197,8 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           recordType: "quote",
         }),
       });
-      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string };
+      const data = await res.json() as { sent?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Send failed");
-      if (data.fallback && data.mailto_url) window.open(data.mailto_url, "_blank");
       setStep("sent");
       setTimeout(() => {
         onSent(quoteResult, sender);

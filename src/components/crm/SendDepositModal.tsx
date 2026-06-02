@@ -191,9 +191,8 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           recordType: "deposit",
         }),
       });
-      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string };
+      const data = await res.json() as { sent?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Send failed");
-      if (data.fallback && data.mailto_url) window.open(data.mailto_url, "_blank");
       setStep("sent");
       setTimeout(() => {
         onSent(depositResult, sender);
