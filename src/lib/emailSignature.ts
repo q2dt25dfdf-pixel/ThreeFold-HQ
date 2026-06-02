@@ -12,7 +12,7 @@
 export const TF_FROM_ADDRESS = "info@threefoldsupply.com";
 export const TF_FROM_HEADER  = "ThreeFold Supply Co. <info@threefoldsupply.com>";
 
-export const TF_PLAIN_CLOSING = "Best,\n\nThreeFold Supply Company";
+export const TF_PLAIN_CLOSING = "Best,";
 
 // ── Shared HTML email template ────────────────────────────────────────────────
 //
