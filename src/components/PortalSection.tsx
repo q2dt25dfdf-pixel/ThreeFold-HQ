@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Check, CheckCircle, Copy, ExternalLink, Loader2, RefreshCw, Send } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ModalShell from '@/components/ModalShell'
-import { openEmailCompose } from '@/lib/emailCompose'
+import { openGmailDraftOrFallback } from '@/lib/emailCompose'
 import { TF_PLAIN_CLOSING } from '@/lib/emailSignature'
 import { getClientPortalBaseUrl } from '@/lib/publicUrl'
 
@@ -147,7 +147,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
   async function handleEmailSend() {
     setEmailStep('sending')
     try {
-      openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody })
+      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody })
       setEmailStep('sent')
       void supabase.auth.getSession().then(({ data: { session } }) =>
         fetch('/api/internal/notify', {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
-import { openEmailCompose } from "@/lib/emailCompose";
+import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import type { Lead } from "./types";
 
@@ -51,7 +51,7 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
   const handleSend = async () => {
     setStep("sending");
     try {
-      openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
+      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
       setStep("sent");
       setTimeout(() => {
         onSent({ sentAt: new Date().toISOString() });

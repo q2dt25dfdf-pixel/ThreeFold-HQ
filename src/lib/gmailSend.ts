@@ -97,6 +97,51 @@ function base64url(input: string): string {
     .replace(/=+$/, "");
 }
 
+export interface GmailDraftResult {
+  draftId:   string;
+  messageId: string;
+  /** URL to open Gmail Drafts folder — the new draft will be at the top. */
+  openUrl:   string;
+}
+
+/**
+ * Creates a Gmail draft with the full HTML body via the Gmail REST API.
+ * The draft is saved in the info@threefoldsupply.com Drafts folder.
+ * Returns a URL to open the Drafts folder so the founder can review + send.
+ */
+export async function createGmailDraft(params: GmailSendParams): Promise<GmailDraftResult> {
+  const accessToken = await getAccessToken();
+  const raw = base64url(buildRfc2822(params));
+
+  const res = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message: { raw } }),
+    },
+  );
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Gmail API draft creation failed (${res.status}): ${body}`);
+  }
+
+  const data = (await res.json()) as {
+    id: string;
+    message: { id: string; threadId: string };
+  };
+
+  return {
+    draftId:   data.id,
+    messageId: data.message.id,
+    openUrl:   "https://mail.google.com/mail/#drafts",
+  };
+}
+
 export async function sendViaGmail(params: GmailSendParams): Promise<GmailSendResult> {
   const accessToken = await getAccessToken();
   const raw = base64url(buildRfc2822(params));

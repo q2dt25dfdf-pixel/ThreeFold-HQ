@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Plus, Send, X } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
-import { openEmailCompose } from "@/lib/emailCompose";
+import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { calcGrandTotal, calcSalesTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
@@ -186,7 +186,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     if (!quoteResult || !sender) return;
     setStep("sending");
     try {
-      openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
+      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
       setStep("sent");
       setTimeout(() => {
         onSent(quoteResult, sender);

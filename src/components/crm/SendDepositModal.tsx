@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
-import { openEmailCompose } from "@/lib/emailCompose";
+import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { fmtTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
@@ -180,7 +180,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
     if (!depositResult || !sender) return;
     setStep("sending");
     try {
-      openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
+      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
       setStep("sent");
       setTimeout(() => {
         onSent(depositResult, sender);

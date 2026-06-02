@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
-import { openEmailCompose } from "@/lib/emailCompose";
+import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { supabase } from "@/lib/supabase";
@@ -88,11 +88,11 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
       });
   }, [open, invoice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!sender) return;
     setStep("sending");
     try {
-      openEmailCompose({ to: emailTo, subject: emailSubject, body: emailBody });
+      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
       setStep("sent");
       if (invoice) {
         const clientName = invoice.client_name || invoice.client || "";
@@ -147,7 +147,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
           </button>
           <button
             type="button"
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             disabled={!sender}
             className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
           >
