@@ -1123,12 +1123,12 @@ const paths: Record<string, unknown> = {
   "/api/ai/quote-send": {
     post: {
       operationId: "sendQuote",
-      summary: "Send an existing HQ quote to the client after founder confirmation",
+      summary: "Send or draft a quote email after founder confirmation",
       description:
-        "Sends an existing HQ quote after founder confirmation. " +
-        "Requires confirm: true — show quote-preview and ask 'Send this quote?' first. " +
-        "Updates lead to 'Quote Sent', logs activity, marks quote sent. " +
-        "Requires RESEND_API_KEY. Never generates a new quote.",
+        "Sends a quote via Gmail API (or Resend fallback) after founder confirmation. " +
+        "action: 'send' (default) delivers immediately and advances lead to 'Quote Sent'. " +
+        "action: 'draft' saves to Gmail Drafts — lead stage NOT advanced. " +
+        "Requires confirm: true — show quote-preview first. Never generates a quote.",
       requestBody: {
         required: true,
         content: {
@@ -1150,6 +1150,11 @@ const paths: Record<string, unknown> = {
                   enum: [true],
                   description: "Must be boolean true. Only set after founder explicitly confirms the preview.",
                 },
+                action: {
+                  type: "string",
+                  enum: ["send", "draft"],
+                  description: "send (default): delivers via Gmail API and advances lead to Quote Sent. draft: saves to Gmail Drafts only — no stage change. Omit (or use 'send') unless founder explicitly asks for a draft.",
+                },
               },
               required: ["quoteId", "sender", "confirm"],
             },
@@ -1158,7 +1163,7 @@ const paths: Record<string, unknown> = {
       },
       responses: {
         "200": {
-          description: "Quote sent successfully. Lead stage updated to 'Quote Sent'.",
+          description: "Quote sent or drafted. When sent: lead advanced to 'Quote Sent'. When drafted: lead stage unchanged, draft saved to Gmail Drafts.",
           content: {
             "application/json": {
               schema: {
@@ -1168,20 +1173,25 @@ const paths: Record<string, unknown> = {
                   data: {
                     type: "object",
                     properties: {
-                      sent:          { type: "boolean", enum: [true] },
-                      sentVia:       { type: "string", enum: ["resend"] },
+                      sent:          { type: "boolean", description: "True when action is 'send'." },
+                      drafted:       { type: "boolean", description: "True when action is 'draft'." },
+                      sentVia:       { type: "string", enum: ["gmail", "gmail_draft", "resend"], description: "gmail = sent via Gmail API; gmail_draft = saved to Drafts; resend = sent via Resend fallback." },
+                      draftId:       { type: "string", description: "Gmail draft ID. Present when drafted is true." },
+                      openUrl:       { type: "string", description: "URL to open Gmail Drafts. Present when drafted is true." },
                       quoteId:       { type: "string" },
                       quoteNumber:   { type: "string", nullable: true },
                       publicLink:    { type: "string", description: "Live quote URL." },
                       leadId:        { type: "string" },
                       company:       { type: "string", nullable: true },
-                      previousStage: { type: "string", nullable: true },
-                      newStage:      { type: "string", enum: ["Quote Sent"] },
+                      previousStage: { type: "string", nullable: true, description: "Present when sent." },
+                      newStage:      { type: "string", enum: ["Quote Sent"], description: "Present when sent. Not set when drafted." },
                       isRevised:     { type: "boolean", description: "True if the lead was already at Quote Sent (revised quote flow)." },
-                      sentAt:        { type: "string", format: "date-time" },
+                      sentAt:        { type: "string", format: "date-time", description: "Present when sent." },
+                      draftedAt:     { type: "string", format: "date-time", description: "Present when drafted." },
                       emailSubject:  { type: "string" },
+                      note:          { type: "string", description: "Human-readable status. Present when drafted." },
                     },
-                    required: ["sent", "sentVia", "quoteId", "publicLink", "leadId", "newStage", "sentAt", "emailSubject"],
+                    required: ["quoteId", "publicLink", "leadId", "emailSubject"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },
@@ -1193,8 +1203,8 @@ const paths: Record<string, unknown> = {
         "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "404": { description: "Quote or lead not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "409": { description: "Quote already sent. Use HQ to resend.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "502": { description: "Resend delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "503": { description: "RESEND_API_KEY not configured. Use HQ SendQuoteModal.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "502": { description: "Email delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "503": { description: "No email service configured — set GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN or RESEND_API_KEY.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
       },
     },
@@ -1203,13 +1213,13 @@ const paths: Record<string, unknown> = {
   "/api/ai/deposit-send": {
     post: {
       operationId: "sendDeposit",
-      summary: "Send a deposit request to the client after founder confirmation",
+      summary: "Send or draft a deposit request email after founder confirmation",
       description:
-        "Sends a deposit request after founder confirmation. " +
-        "Requires confirm: true — show deposit-preview and ask 'Send this deposit request?' first. " +
-        "Reuses existing deposit if lead has one. " +
-        "Blocks if quote is draft or ambiguous — never guesses. " +
-        "409 if already sent. Requires RESEND_API_KEY.",
+        "Sends a deposit request via Gmail API (or Resend fallback). " +
+        "action: 'send' (default) delivers immediately. " +
+        "action: 'draft' saves to Gmail Drafts — no stage advance. " +
+        "Requires confirm: true — show deposit-preview first. " +
+        "Reuses existing deposit if lead has one. 409 if already sent.",
       requestBody: {
         required: true,
         content: {
@@ -1231,6 +1241,11 @@ const paths: Record<string, unknown> = {
                   enum: [true],
                   description: "Must be boolean true. Only set after explicit founder confirmation.",
                 },
+                action: {
+                  type: "string",
+                  enum: ["send", "draft"],
+                  description: "send (default): delivers via Gmail API. draft: saves to Gmail Drafts only — no lead record updates. Omit (or use 'send') unless founder explicitly asks for a draft.",
+                },
               },
               required: ["leadId", "sender", "confirm"],
             },
@@ -1239,7 +1254,7 @@ const paths: Record<string, unknown> = {
       },
       responses: {
         "200": {
-          description: "Deposit request sent. deposit_requests and crm_leads records updated.",
+          description: "Deposit sent or drafted. When sent: deposit_requests and crm_leads records updated. When drafted: draft saved to Gmail Drafts, records not updated.",
           content: {
             "application/json": {
               schema: {
@@ -1249,18 +1264,23 @@ const paths: Record<string, unknown> = {
                   data: {
                     type: "object",
                     properties: {
-                      sent:          { type: "boolean", enum: [true] },
-                      sentVia:       { type: "string", enum: ["resend"] },
-                      isNew:         { type: "boolean", description: "True if a new deposit record was created; false if an existing draft was reused." },
+                      sent:          { type: "boolean", description: "True when action is 'send'." },
+                      drafted:       { type: "boolean", description: "True when action is 'draft'." },
+                      sentVia:       { type: "string", enum: ["gmail", "gmail_draft", "resend"], description: "gmail = sent via Gmail API; gmail_draft = saved to Drafts; resend = Resend fallback." },
+                      draftId:       { type: "string", description: "Gmail draft ID. Present when drafted is true." },
+                      openUrl:       { type: "string", description: "URL to open Gmail Drafts. Present when drafted is true." },
+                      isNew:         { type: "boolean", description: "True if a new deposit record was created; false if an existing draft was reused. Present when sent." },
                       depositId:     { type: "string" },
                       depositNumber: { type: "string", description: "Formatted request number (e.g. TF-D-2026-0001)." },
                       publicLink:    { type: "string", description: "Live deposit URL." },
                       leadId:        { type: "string" },
                       company:       { type: "string", nullable: true },
-                      sentAt:        { type: "string", format: "date-time" },
+                      sentAt:        { type: "string", format: "date-time", description: "Present when sent." },
+                      draftedAt:     { type: "string", format: "date-time", description: "Present when drafted." },
                       emailSubject:  { type: "string" },
+                      note:          { type: "string", description: "Human-readable status. Present when drafted." },
                     },
-                    required: ["sent", "sentVia", "isNew", "depositId", "depositNumber", "publicLink", "leadId", "sentAt", "emailSubject"],
+                    required: ["depositId", "depositNumber", "publicLink", "leadId", "emailSubject"],
                   },
                   meta: { "$ref": "#/components/schemas/Meta" },
                 },
@@ -1272,8 +1292,8 @@ const paths: Record<string, unknown> = {
         "401": { description: "Unauthorized.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "404": { description: "Lead or deposit record not found.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "409": { description: "Deposit already sent. Use HQ SendDepositModal to resend.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "502": { description: "Resend delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
-        "503": { description: "RESEND_API_KEY not configured. Use HQ SendDepositModal.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "502": { description: "Email delivery failed.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
+        "503": { description: "No email service configured — set GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN or RESEND_API_KEY.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
         "500": { description: "Internal error.", content: { "application/json": { schema: { "$ref": "#/components/schemas/ErrorResponse" } } } },
       },
     },
@@ -2984,7 +3004,9 @@ function buildSchema(serverUrl: string): Record<string, unknown> {
         "POST /api/ai/task (create HQ task), " +
         "POST /api/ai/pipeline-stage (move lead to new stage; Deposit Paid blocked), " +
         "POST /api/ai/quote-create (create draft quote for existing CRM lead; requires confirm: true), " +
-        "POST /api/ai/invoice-action/prepare-final-send (prepare final invoice for email send; idempotent token generation; requires confirm: true). " +
+        "POST /api/ai/quote-send (send or draft a quote email via Gmail API; action: send advances lead to Quote Sent; action: draft saves to Gmail Drafts only), " +
+        "POST /api/ai/deposit-send (send or draft a deposit request email via Gmail API; action: send or draft), " +
+        "POST /api/ai/invoice-action/prepare-final-send (prepare final invoice data for email; no email sent; requires confirm: true). " +
         "Read-only preview: GET /api/ai/quote-preview (existing quote data + email templates; no records created). " +
         "Schedule: GET /api/ai/calendar (today's events and next 7 days; read-only). " +
         "No PII is ever returned: no email addresses, phone numbers, physical addresses, " +
