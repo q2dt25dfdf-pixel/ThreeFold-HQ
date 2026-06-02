@@ -51,7 +51,20 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
   const handleSend = async () => {
     setStep("sending");
     try {
-      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailTo,
+          subject: emailSubject,
+          body: emailBody,
+          recordId: "",
+          recordType: "quote",
+        }),
+      });
+      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Send failed");
+      if (data.fallback && data.mailto_url) window.open(data.mailto_url, "_blank");
       setStep("sent");
       setTimeout(() => {
         onSent({ sentAt: new Date().toISOString() });
@@ -61,6 +74,10 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
       setStep("error");
       setErrorMsg(String(err));
     }
+  };
+
+  const handleCreateDraft = async () => {
+    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
   };
 
   const copyToClipboard = async (target: CopyTarget, value: string) => {
@@ -98,14 +115,23 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
         >
           ← Back
         </button>
-        <button
-          type="button"
-          onClick={() => void handleSend()}
-          className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-        >
-          <Send size={14} />
-          Send Design
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleCreateDraft()}
+            className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Create Draft
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSend()}
+            className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            <Send size={14} />
+            Send Design
+          </button>
+        </div>
       </div>
     ) : step === "error" ? (
       <div className="flex items-center justify-between gap-3">
@@ -137,7 +163,7 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
       {step === "sending" && (
         <div className="flex flex-col items-center justify-center gap-4 py-16">
           <Loader2 className="h-8 w-8 animate-spin text-slate-900" />
-          <p className="text-sm text-slate-600">Opening Gmail...</p>
+          <p className="text-sm text-slate-600">Sending email...</p>
         </div>
       )}
 
@@ -178,7 +204,7 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
               Remember to attach the design files to the email before sending.
             </p>
             <p className="mt-1 text-xs text-violet-600">
-              Gmail will open with the email pre-filled. Attach files there before hitting send.
+              Use "Create Draft" if you need to attach files before sending.
             </p>
           </div>
         </div>
@@ -240,10 +266,6 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
             />
           </div>
 
-          <p className="text-xs text-slate-400">
-            Gmail compose opens in a new browser tab. If blocked, your mail app opens as a fallback.
-            Attach your design files before sending.
-          </p>
         </div>
       )}
     </ModalShell>

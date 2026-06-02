@@ -186,7 +186,20 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     if (!quoteResult || !sender) return;
     setStep("sending");
     try {
-      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailTo,
+          subject: emailSubject,
+          body: emailBody,
+          recordId: quoteResult.quoteId,
+          recordType: "quote",
+        }),
+      });
+      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Send failed");
+      if (data.fallback && data.mailto_url) window.open(data.mailto_url, "_blank");
       setStep("sent");
       setTimeout(() => {
         onSent(quoteResult, sender);
@@ -196,6 +209,10 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
       setStep("error");
       setErrorMsg(String(err));
     }
+  };
+
+  const handleCreateDraft = async () => {
+    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
   };
 
   const copyToClipboard = async (target: CopyTarget, value: string) => {
@@ -243,15 +260,24 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           >
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={!sender}
-            className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-          >
-            <Send size={14} />
-            Send Email
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleCreateDraft()}
+              className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Create Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={!sender}
+              className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+            >
+              <Send size={14} />
+              Send Email
+            </button>
+          </div>
         </div>
       </div>
     ) : step === "error" ? (
@@ -407,7 +433,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
       {step === "sending" && (
         <div className="flex flex-col items-center justify-center gap-4 py-16">
           <Loader2 className="h-8 w-8 animate-spin text-slate-900" />
-          <p className="text-sm text-slate-600">Opening Gmail...</p>
+          <p className="text-sm text-slate-600">Sending email...</p>
         </div>
       )}
 
@@ -530,9 +556,6 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
               />
             </div>
 
-            <p className="text-xs text-slate-400">
-              Gmail compose opens in a new browser tab. If the tab is blocked, the mail app opens as a fallback.
-            </p>
           </div>
         </div>
       )}

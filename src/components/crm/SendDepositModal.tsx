@@ -180,7 +180,20 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
     if (!depositResult || !sender) return;
     setStep("sending");
     try {
-      await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailTo,
+          subject: emailSubject,
+          body: emailBody,
+          recordId: depositResult.depositRequestId,
+          recordType: "deposit",
+        }),
+      });
+      const data = await res.json() as { sent?: boolean; fallback?: boolean; mailto_url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Send failed");
+      if (data.fallback && data.mailto_url) window.open(data.mailto_url, "_blank");
       setStep("sent");
       setTimeout(() => {
         onSent(depositResult, sender);
@@ -190,6 +203,10 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
       setStep("error");
       setErrorMsg(String(err));
     }
+  };
+
+  const handleCreateDraft = async () => {
+    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
   };
 
   const copyToClipboard = async (target: CopyTarget, value: string) => {
@@ -235,15 +252,24 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           >
             ← Back
           </button>
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={!sender}
-            className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-          >
-            <Send size={14} />
-            Send Deposit Request
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleCreateDraft()}
+              className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Create Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={!sender}
+              className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+            >
+              <Send size={14} />
+              Send Deposit Request
+            </button>
+          </div>
         </div>
       </div>
     ) : step === "error" ? (
