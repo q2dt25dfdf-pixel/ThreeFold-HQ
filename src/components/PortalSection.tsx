@@ -213,7 +213,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
             onClick={() => void handleCreateEmailDraft()}
             className="min-h-11 rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Create Draft
+            Save as Draft
           </button>
           <button
             type="button"
@@ -221,7 +221,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
             className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
             <Send size={14} />
-            Send Portal Link
+            Send Now
           </button>
         </div>
       </div>

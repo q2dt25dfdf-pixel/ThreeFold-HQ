@@ -3,7 +3,7 @@ import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
-import { sendViaGmail, isGmailConfigured } from "@/lib/gmailSend";
+import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +17,11 @@ export const dynamic = "force-dynamic";
 // NEVER generates a new quote. Only sends an existing one.
 // NEVER sends without confirm: true.
 // NEVER sends if the quote is already marked sent (409).
-// REQUIRES RESEND_API_KEY — without it, returns 503. Use HQ SendQuoteModal instead.
+// Sends via Gmail API (preferred) or Resend (fallback). action: "draft" saves to Gmail Drafts.
+// When action is "send" (default): email is delivered, lead stage advances to "Quote Sent".
+// When action is "draft": email is saved to Gmail Drafts, stage is NOT advanced.
 //
-// Side effects (mirrors HQ handleQuoteSent):
+// Side effects (mirrors HQ handleQuoteSent — send only):
 //   - Quote: status → "sent", sent_date, email_status, email_message_id
 //   - Lead:  stage → "Quote Sent", quote_id, quote_number, value, communicationHistory
 //
@@ -102,7 +104,8 @@ export async function POST(request: Request): Promise<Response> {
     return errResponse("Invalid JSON body", 400);
   }
 
-  const { quoteId, sender, confirm } = rawBody as Record<string, unknown>;
+  const { quoteId, sender, confirm, action } = rawBody as Record<string, unknown>;
+  const emailAction = (typeof action === "string" && action === "draft") ? "draft" : "send";
 
   // ── Hard confirmation gate ──────────────────────────────────────────────────
   if (confirm !== true) {
@@ -124,23 +127,9 @@ export async function POST(request: Request): Promise<Response> {
     return errResponse("sender must be Alliyah, Hannah, or Jordan.", 400);
   }
 
-  // ── Resend requirement ──────────────────────────────────────────────────────
+  // ── Email service vars (Gmail primary; Resend optional fallback) ────────────
   const resendKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL;
-
-  if (!resendKey) {
-    return errResponse(
-      "Email delivery requires RESEND_API_KEY. Use the HQ SendQuoteModal to send this quote via Gmail.",
-      503,
-    );
-  }
-
-  if (!fromEmail) {
-    return errResponse(
-      "Sender email is not configured. Set RESEND_FROM_EMAIL in Vercel.",
-      500,
-    );
-  }
 
   try {
     const db = getSupabaseAdmin();
@@ -231,6 +220,63 @@ export async function POST(request: Request): Promise<Response> {
     );
     const emailHtml = wrapInEmailTemplate(emailBodyText);
 
+    // ── Draft path ──────────────────────────────────────────────────────────────
+    if (emailAction === "draft") {
+      if (!isGmailConfigured()) {
+        return errResponse(
+          "Gmail API credentials are required for draft creation. Configure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.",
+          503,
+        );
+      }
+      try {
+        const draftResult = await createGmailDraft({ to: clientEmail, subject: emailSubject, html: emailHtml });
+        const draftedAt = new Date().toISOString();
+
+        const draftCommEntry = {
+          id:               `comm-quote-draft-${Date.now()}`,
+          type:             "Email",
+          date:             businessTodayISO(),
+          owner:            sender as string,
+          summary:          `${isRevised ? "Revised quote" : "Quote"} draft created by ${sender as string} via Jarvis. Quote #${quoteNumber ?? quoteId}. Draft ID: ${draftResult.draftId}`,
+          email_subject:    emailSubject,
+          email_to:         clientEmail,
+          email_html:       emailHtml,
+          email_quote_link: publicLink,
+          email_draft_id:   draftResult.draftId,
+          email_sent_at:    draftedAt,
+          email_sent_via:   "gmail_draft",
+          requested_by:     sender as string,
+          approved_by:      sender as string,
+        };
+
+        const { error: leadDraftErr } = await db
+          .from("crm_leads")
+          .update({ data: { ...ld, communicationHistory: [draftCommEntry, ...existingHistory] } })
+          .eq("id", leadId);
+
+        if (leadDraftErr) {
+          console.error("[ai/quote-send] Draft created but lead history update failed:", leadDraftErr.message);
+        }
+
+        return okResponse({
+          drafted:     true,
+          draftId:     draftResult.draftId,
+          openUrl:     draftResult.openUrl,
+          quoteId,
+          quoteNumber,
+          publicLink,
+          leadId,
+          company,
+          draftedAt,
+          emailSubject,
+          note:        "Draft saved to Gmail Drafts. Lead stage NOT advanced — send from Gmail to advance to Quote Sent.",
+        });
+      } catch (draftErr) {
+        console.error("[ai/quote-send] Gmail draft creation failed:", draftErr);
+        return errResponse("Gmail draft creation failed. Verify GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.", 502);
+      }
+    }
+
     // ── Send via Gmail (preferred) or Resend (fallback) ─────────────────────────
     let messageId: string | null = null;
     let threadId:  string | null = null;
@@ -251,7 +297,16 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    if (sentVia === "resend") {
+    if (sentVia !== "gmail") {
+      if (!resendKey) {
+        return errResponse(
+          "No email service configured. Set GMAIL_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN for Gmail, or RESEND_API_KEY for Resend fallback.",
+          503,
+        );
+      }
+      if (!fromEmail) {
+        return errResponse("RESEND_FROM_EMAIL is not configured. Set it in Vercel.", 500);
+      }
       const resendRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -259,7 +314,7 @@ export async function POST(request: Request): Promise<Response> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from:     fromEmail ? `ThreeFold Supply Co. <${fromEmail}>` : TF_FROM_HEADER,
+          from:     `ThreeFold Supply Co. <${fromEmail}>`,
           reply_to: [TF_FROM_ADDRESS],
           to:       [clientEmail],
           subject:  emailSubject,

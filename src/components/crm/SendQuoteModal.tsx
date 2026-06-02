@@ -266,7 +266,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
               onClick={() => void handleCreateDraft()}
               className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Create Draft
+              Save as Draft
             </button>
             <button
               type="button"
@@ -275,7 +275,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
               className="flex min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
             >
               <Send size={14} />
-              Send Email
+              Send Now
             </button>
           </div>
         </div>

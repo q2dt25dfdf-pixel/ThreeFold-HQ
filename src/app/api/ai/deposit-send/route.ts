@@ -6,7 +6,7 @@ import { businessTodayISO } from "@/lib/businessDate";
 import { type QuoteRow, selectBestQuote } from "@/lib/quoteSelection";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
-import { sendViaGmail, isGmailConfigured } from "@/lib/gmailSend";
+import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 // Only create new deposit record when no deposit_request_id exists on lead.
 // Amounts for new deposits: pulled from linked quote record, then lead value.
 // NEVER recomputes totals — reads what is already stored.
-// REQUIRES RESEND_API_KEY — without it, returns 503.
+// Sends via Gmail API (preferred) or Resend (fallback). action: "draft" saves to Gmail Drafts.
 //
 // Side effects (mirrors handleDepositSent):
 //   - deposit_requests: status → "sent", sent_date, email_status, email_message_id
@@ -104,7 +104,8 @@ export async function POST(request: Request): Promise<Response> {
     return errResponse("Invalid JSON body", 400);
   }
 
-  const { leadId, sender, confirm } = rawBody as Record<string, unknown>;
+  const { leadId, sender, confirm, action } = rawBody as Record<string, unknown>;
+  const emailAction = (typeof action === "string" && action === "draft") ? "draft" : "send";
 
   // ── Hard confirmation gate ──────────────────────────────────────────────────
   if (confirm !== true) {
@@ -126,23 +127,9 @@ export async function POST(request: Request): Promise<Response> {
     return errResponse("sender must be Alliyah, Hannah, or Jordan.", 400);
   }
 
-  // ── Resend requirement ──────────────────────────────────────────────────────
+  // ── Email service vars (Gmail primary; Resend optional fallback) ────────────
   const resendKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL;
-
-  if (!resendKey) {
-    return errResponse(
-      "Email delivery requires RESEND_API_KEY. Use the HQ SendDepositModal to send this deposit request via Gmail.",
-      503,
-    );
-  }
-
-  if (!fromEmail) {
-    return errResponse(
-      "Sender email is not configured. Set RESEND_FROM_EMAIL in Vercel.",
-      500,
-    );
-  }
 
   try {
     const db = getSupabaseAdmin();
@@ -394,6 +381,64 @@ export async function POST(request: Request): Promise<Response> {
     );
     const emailHtml = wrapInEmailTemplate(emailBodyText);
 
+    // ── Draft path ──────────────────────────────────────────────────────────────
+    if (emailAction === "draft") {
+      if (!isGmailConfigured()) {
+        return errResponse(
+          "Gmail API credentials are required for draft creation. Configure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.",
+          503,
+        );
+      }
+      try {
+        const draftResult = await createGmailDraft({ to: clientEmail, subject: emailSubject, html: emailHtml });
+        const draftedAt = new Date().toISOString();
+
+        const draftCommEntry = {
+          id:                  `comm-deposit-draft-${Date.now()}`,
+          type:                "Email",
+          date:                businessTodayISO(),
+          owner:               sender as string,
+          summary:             `Deposit request draft created by ${sender as string} via Jarvis. Request #${depositNumber ?? depositId}. Draft ID: ${draftResult.draftId}`,
+          email_subject:       emailSubject,
+          email_to:            clientEmail,
+          email_html:          emailHtml,
+          email_deposit_link:  publicLink,
+          email_draft_id:      draftResult.draftId,
+          email_sent_at:       draftedAt,
+          email_sent_via:      "gmail_draft",
+          requested_by:        sender as string,
+          approved_by:         sender as string,
+        };
+
+        const { error: leadDraftErr } = await db
+          .from("crm_leads")
+          .update({ data: { ...ld, deposit_request_id: depositId, deposit_request_number: depositNumber ?? depositId, communicationHistory: [draftCommEntry, ...existingHistory] } })
+          .eq("id", leadId);
+
+        if (leadDraftErr) {
+          console.error("[ai/deposit-send] Draft created but lead history update failed:", leadDraftErr.message);
+        }
+
+        return okResponse({
+          drafted:       true,
+          draftId:       draftResult.draftId,
+          openUrl:       draftResult.openUrl,
+          isNew,
+          depositId,
+          depositNumber: depositNumber ?? depositId,
+          publicLink,
+          leadId,
+          company,
+          draftedAt,
+          emailSubject,
+          note:          "Draft saved to Gmail Drafts. Deposit record created but NOT marked sent — send from Gmail to complete the request.",
+        });
+      } catch (draftErr) {
+        console.error("[ai/deposit-send] Gmail draft creation failed:", draftErr);
+        return errResponse("Gmail draft creation failed. Verify GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.", 502);
+      }
+    }
+
     // ── Send via Gmail (preferred) or Resend (fallback) ─────────────────────────
     let messageId: string | null = null;
     let threadId:  string | null = null;
@@ -414,7 +459,16 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    if (sentVia === "resend") {
+    if (sentVia !== "gmail") {
+      if (!resendKey) {
+        return errResponse(
+          "No email service configured. Set GMAIL_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN for Gmail, or RESEND_API_KEY for Resend fallback.",
+          503,
+        );
+      }
+      if (!fromEmail) {
+        return errResponse("RESEND_FROM_EMAIL is not configured. Set it in Vercel.", 500);
+      }
       const resendRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -422,7 +476,7 @@ export async function POST(request: Request): Promise<Response> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from:     fromEmail ? `ThreeFold Supply Co. <${fromEmail}>` : TF_FROM_HEADER,
+          from:     `ThreeFold Supply Co. <${fromEmail}>`,
           reply_to: [TF_FROM_ADDRESS],
           to:       [clientEmail],
           subject:  emailSubject,
