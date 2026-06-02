@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { wrapInEmailTemplate } from "@/lib/emailSignature";
 import { createGmailDraft, isGmailConfigured, GmailSendParams } from "@/lib/gmailSend";
-import { gmailComposeUrl } from "@/lib/emailCompose";
 
 // ── POST /api/create-email-draft ───────────────────────────────────────────────
 //
@@ -9,11 +8,10 @@ import { gmailComposeUrl } from "@/lib/emailCompose";
 // (including the ThreeFold HubSpot signature). The draft is saved to
 // info@threefoldsupply.com Drafts. Returns a URL to open the draft.
 //
-// Falls back to a Gmail compose URL (plain text) when Gmail is not configured.
-//
-// Used by HQ modals (SendQuoteModal, SendDepositModal, SendFinalInvoiceModal,
-// SendDesignModal, PortalSection) so every compose action creates a proper
-// HTML draft rather than a plain-text compose window.
+// Returns HTTP 503 when Gmail credentials are absent.
+// Returns HTTP 502 when Gmail API returns an error (invalid token, wrong scope).
+// The gmail.send scope alone is insufficient — the refresh token must be created
+// with https://mail.google.com/ scope (full access) for drafts.create to work.
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -35,30 +33,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "body is required" }, { status: 400 });
   }
 
-  const html = wrapInEmailTemplate(emailBody);
-
-  // ── Gmail API draft creation (preferred) ────────────────────────────────────
-  if (isGmailConfigured()) {
-    try {
-      const params: GmailSendParams = { to, subject, html };
-      const draft = await createGmailDraft(params);
-      return NextResponse.json({
-        created: true,
-        via:     "gmail_draft",
-        draftId: draft.draftId,
-        openUrl: draft.openUrl,
-      });
-    } catch (err) {
-      console.error("[create-email-draft] Gmail draft creation failed:", err);
-    }
+  if (!isGmailConfigured()) {
+    return NextResponse.json(
+      { error: "Gmail API is not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in Vercel." },
+      { status: 503 },
+    );
   }
 
-  // ── Fallback: Gmail compose URL (plain text) ────────────────────────────────
-  const fallbackUrl = gmailComposeUrl({ to, subject, body: emailBody });
-  return NextResponse.json({
-    created:     false,
-    via:         "compose_url_fallback",
-    openUrl:     fallbackUrl,
-    warning:     "Gmail API is not configured — opening compose window with plain text body. HTML signature will not be visible until Gmail API env vars are set.",
-  });
+  const html = wrapInEmailTemplate(emailBody);
+
+  try {
+    const params: GmailSendParams = { to, subject, html };
+    const draft = await createGmailDraft(params);
+    return NextResponse.json({
+      created: true,
+      via:     "gmail_draft",
+      draftId: draft.draftId,
+      openUrl: draft.openUrl,
+    });
+  } catch (err) {
+    console.error("[create-email-draft] Gmail draft creation failed:", err);
+    return NextResponse.json(
+      { error: `Gmail draft creation failed: ${String(err)}. Ensure the OAuth refresh token was created with https://mail.google.com/ scope (not just gmail.send).` },
+      { status: 502 },
+    );
+  }
 }

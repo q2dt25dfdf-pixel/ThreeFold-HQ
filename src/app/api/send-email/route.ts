@@ -58,12 +58,14 @@ export async function POST(request: NextRequest) {
     const html = wrapInEmailTemplate(body);
 
     // ── Try Gmail first ──────────────────────────────────────────────────────────
+    let gmailError: string | undefined;
     if (isGmailConfigured()) {
       try {
         const gmailResult = await sendViaGmail({ to, subject, html });
         await updateRecordSent(recordType, recordId, sentAt, "sent", gmailResult.messageId);
         return NextResponse.json({ sent: true, messageId: gmailResult.messageId, sentVia: "gmail" });
       } catch (gmailErr) {
+        gmailError = String(gmailErr);
         console.error("[send-email] Gmail send failed, falling back to Resend:", gmailErr);
       }
     }
@@ -98,7 +100,7 @@ export async function POST(request: NextRequest) {
         if (res.ok) {
           const { id: messageId } = (await res.json()) as { id: string };
           await updateRecordSent(recordType, recordId, sentAt, "sent", messageId);
-          return NextResponse.json({ sent: true, messageId, sentVia: "resend" });
+          return NextResponse.json({ sent: true, messageId, sentVia: "resend", ...(gmailError ? { gmailError } : {}) });
         }
 
         const resendError = await res.text();

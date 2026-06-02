@@ -70,6 +70,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState<CopyTarget | "">("");
   const [sender, setSender] = useState<Sender | "">("");
+  const [sentVia, setSentVia] = useState<"gmail" | "resend" | "">("");
 
   useEffect(() => {
     if (!open || !lead) return;
@@ -79,6 +80,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     setErrorMsg("");
     setCopied("");
     setSender("");
+    setSentVia("");
     setEmailTo(lead.email ?? "");
   }, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -197,8 +199,9 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           recordType: "quote",
         }),
       });
-      const data = await res.json() as { sent?: boolean; error?: string };
+      const data = await res.json() as { sent?: boolean; error?: string; sentVia?: "gmail" | "resend" };
       if (!res.ok) throw new Error(data.error ?? "Send failed");
+      setSentVia(data.sentVia ?? "");
       setStep("sent");
       setTimeout(() => {
         onSent(quoteResult, sender);
@@ -211,7 +214,11 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   };
 
   const handleCreateDraft = async () => {
-    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+    const result = await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+    if (!result.ok) {
+      setErrorMsg(result.error ?? "Failed to create Gmail draft. Check Gmail API credentials in Vercel.");
+      setStep("error");
+    }
   };
 
   const copyToClipboard = async (target: CopyTarget, value: string) => {
@@ -444,6 +451,11 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           <p className="text-sm text-slate-500">
             Lead moved to <strong>Quote Sent</strong>.
           </p>
+          {sentVia && (
+            <p className="text-xs text-slate-400">
+              Sent via {sentVia === "gmail" ? "Gmail API" : "Resend"}
+            </p>
+          )}
         </div>
       )}
 

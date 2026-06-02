@@ -16,7 +16,8 @@
  *   4. In OAuth Playground (https://developers.google.com/oauthplayground):
  *      - Click gear → check "Use your own OAuth credentials"
  *      - Enter Client ID and Client Secret
- *      - Authorize scope: https://www.googleapis.com/auth/gmail.send
+ *      - Authorize scope: https://mail.google.com/
+ *        (full access required — gmail.send alone blocks draft creation)
  *      - Exchange auth code for tokens → copy refresh_token
  *   5. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN in Vercel
  *

@@ -46,6 +46,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState<CopyTarget | "">("");
   const [sender, setSender] = useState<Sender | "">("");
+  const [sentVia, setSentVia] = useState<"gmail" | "resend" | "">("");
 
   useEffect(() => {
     if (!open || !invoice) return;
@@ -54,6 +55,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
     setErrorMsg("");
     setCopied("");
     setSender("");
+    setSentVia("");
 
     const clientName = invoice.client_name || invoice.client || "there";
     const projectName = invoice.order_name || invoice.orderName || "your order";
@@ -89,7 +91,11 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
   }, [open, invoice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreateDraft = async () => {
-    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+    const result = await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+    if (!result.ok) {
+      setErrorMsg(result.error ?? "Failed to create Gmail draft. Check Gmail API credentials in Vercel.");
+      setStep("error");
+    }
   };
 
   const handleSend = async () => {
@@ -107,8 +113,9 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
           recordType: "quote",
         }),
       });
-      const data = await res.json() as { sent?: boolean; error?: string };
+      const data = await res.json() as { sent?: boolean; error?: string; sentVia?: "gmail" | "resend" };
       if (!res.ok) throw new Error(data.error ?? "Send failed");
+      setSentVia(data.sentVia ?? "");
       setStep("sent");
       if (invoice) {
         const clientName = invoice.client_name || invoice.client || "";
@@ -220,6 +227,11 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
           <p className="text-sm text-slate-500">
             Mark the invoice as <strong>Final Paid</strong> once the balance is received.
           </p>
+          {sentVia && (
+            <p className="text-xs text-slate-400">
+              Sent via {sentVia === "gmail" ? "Gmail API" : "Resend"}
+            </p>
+          )}
         </div>
       )}
 

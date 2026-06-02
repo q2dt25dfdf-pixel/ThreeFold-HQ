@@ -32,6 +32,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
   const [emailStep, setEmailStep] = useState<EmailStep>('preview')
   const [emailError, setEmailError] = useState('')
   const [emailCopied, setEmailCopied] = useState<CopyTarget | ''>('')
+  const [emailSentVia, setEmailSentVia] = useState<'gmail' | 'resend' | ''>('')
 
   useEffect(() => {
     if (token) setPortalUrl(getClientPortalBaseUrl() + '/portal/' + token)
@@ -137,6 +138,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
     setEmailStep('preview')
     setEmailError('')
     setEmailCopied('')
+    setEmailSentVia('')
     setEmailOpen(true)
   }
 
@@ -145,7 +147,11 @@ export default function PortalSection({ orderId }: { orderId: string }) {
   }
 
   async function handleCreateEmailDraft() {
-    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody })
+    const result = await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody })
+    if (!result.ok) {
+      setEmailError(result.error ?? 'Failed to create Gmail draft. Check Gmail API credentials in Vercel.')
+      setEmailStep('error')
+    }
   }
 
   async function handleEmailSend() {
@@ -162,8 +168,9 @@ export default function PortalSection({ orderId }: { orderId: string }) {
           recordType: 'quote',
         }),
       })
-      const data = await res.json() as { sent?: boolean; error?: string }
+      const data = await res.json() as { sent?: boolean; error?: string; sentVia?: 'gmail' | 'resend' }
       if (!res.ok) throw new Error(data.error ?? 'Send failed')
+      setEmailSentVia(data.sentVia ?? '')
       setEmailStep('sent')
       void supabase.auth.getSession().then(({ data: { session } }) =>
         fetch('/api/internal/notify', {
@@ -341,6 +348,11 @@ export default function PortalSection({ orderId }: { orderId: string }) {
               <p className="text-sm text-slate-500">
                 The client can now access their portal to track progress and view updates.
               </p>
+              {emailSentVia && (
+                <p className="text-xs text-slate-400">
+                  Sent via {emailSentVia === 'gmail' ? 'Gmail API' : 'Resend'}
+                </p>
+              )}
             </div>
           )}
 

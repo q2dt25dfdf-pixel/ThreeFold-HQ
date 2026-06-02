@@ -72,6 +72,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState<CopyTarget | "">("");
   const [sender, setSender] = useState<Sender | "">("");
+  const [sentVia, setSentVia] = useState<"gmail" | "resend" | "">("");
 
   const depositFieldsInvalid =
     quoteLoading ||
@@ -88,6 +89,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
     setErrorMsg("");
     setCopied("");
     setSender("");
+    setSentVia("");
     setEmailTo(lead.email ?? "");
     setTotalAmount(parseLeadValue(lead.value));
     setDepositPercent(50);
@@ -191,8 +193,9 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           recordType: "deposit",
         }),
       });
-      const data = await res.json() as { sent?: boolean; error?: string };
+      const data = await res.json() as { sent?: boolean; error?: string; sentVia?: "gmail" | "resend" };
       if (!res.ok) throw new Error(data.error ?? "Send failed");
+      setSentVia(data.sentVia ?? "");
       setStep("sent");
       setTimeout(() => {
         onSent(depositResult, sender);
@@ -205,7 +208,11 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   };
 
   const handleCreateDraft = async () => {
-    await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+    const result = await openGmailDraftOrFallback({ to: emailTo, subject: emailSubject, body: emailBody });
+    if (!result.ok) {
+      setErrorMsg(result.error ?? "Failed to create Gmail draft. Check Gmail API credentials in Vercel.");
+      setStep("error");
+    }
   };
 
   const copyToClipboard = async (target: CopyTarget, value: string) => {
@@ -319,6 +326,11 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           <p className="text-sm text-slate-500">
             When the deposit is received, move the lead to <strong>Deposit Paid</strong> to create the order automatically.
           </p>
+          {sentVia && (
+            <p className="text-xs text-slate-400">
+              Sent via {sentVia === "gmail" ? "Gmail API" : "Resend"}
+            </p>
+          )}
         </div>
       )}
 
