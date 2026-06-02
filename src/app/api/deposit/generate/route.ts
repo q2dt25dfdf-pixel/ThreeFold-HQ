@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getPublicBaseUrl } from "@/lib/publicUrl";
+import { getDepositBaseUrl } from "@/lib/publicUrl";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const depositRequestNumber = `TF-D-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
     const token = "tfd-" + randomBytes(12).toString("hex");
-    const publicLink = `${getPublicBaseUrl(request.nextUrl.origin)}/deposit/${token}`;
+    const publicLink = `${getDepositBaseUrl(request.nextUrl.origin)}/deposit/${token}`;
 
     // Use grandTotal as the authoritative total when tax fields are present
     const effectiveTotal = grandTotal ?? totalAmount ?? 0;

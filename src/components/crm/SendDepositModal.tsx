@@ -5,6 +5,7 @@ import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openEmailCompose } from "@/lib/emailCompose";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { fmtTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 
@@ -166,7 +167,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         : "";
       setEmailSubject(`Your Deposit Request — ${data.depositRequestNumber} | Threefold Supply Co.`);
       setEmailBody(
-        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.${itemSummary}\n\nDeposit Request #: ${data.depositRequestNumber}${subtotalLine}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nPlease note: Card payments include a 3% processing fee. Bank account payments do not.\n\nView your full deposit request here:\n${data.publicLink}${paymentInstructions ? `\n\n${paymentInstructions}` : ""}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\nBest,`,
+        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.${itemSummary}\n\nDeposit Request #: ${data.depositRequestNumber}${subtotalLine}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nPlease note: Card payments include a 3% processing fee. Bank account payments do not.\n\nView your full deposit request here:\n${data.publicLink}${paymentInstructions ? `\n\n${paymentInstructions}` : ""}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\n${TF_PLAIN_CLOSING}`,
       );
       setStep("preview");
     } catch (err: unknown) {

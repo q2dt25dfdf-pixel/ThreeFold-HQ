@@ -6,6 +6,7 @@ import {
   type QuoteRow,
   selectBestQuote,
 } from "@/lib/quoteSelection";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,8 @@ const SHARED_TAIL =
   "The remaining 50% balance is due before the completed order is delivered or shipped.\n\n" +
   "If everything looks good, simply reply to this email, give us a call, or send us a text. " +
   "We'll prepare and send your deposit invoice separately and get your project into production.\n\n" +
-  "If you have any questions at all, please don't hesitate to reach out.\n\nBest,";
+  "If you have any questions at all, please don't hesitate to reach out.\n\n" +
+  TF_PLAIN_CLOSING;
 
 function buildNewQuoteBody(
   contactName: string,

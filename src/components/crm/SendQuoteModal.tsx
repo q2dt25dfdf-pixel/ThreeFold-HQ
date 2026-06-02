@@ -5,6 +5,7 @@ import { CheckCircle, Copy, Loader2, Plus, Send, X } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openEmailCompose } from "@/lib/emailCompose";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { calcGrandTotal, calcSalesTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 
@@ -160,7 +161,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         const expFormatted = fmtDate(data.expirationDate);
         const isRevised = lead.stage === "Quote Sent";
 
-        const sharedTail = `This quote is valid for 30 days.\n\nTo move forward, we require a 50% deposit before production begins. The remaining 50% balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, simply reply to this email, give us a call, or send us a text. We'll prepare and send your deposit invoice separately and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\nBest,`;
+        const sharedTail = `This quote is valid for 30 days.\n\nTo move forward, we require a 50% deposit before production begins. The remaining 50% balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, simply reply to this email, give us a call, or send us a text. We'll prepare and send your deposit invoice separately and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\n${TF_PLAIN_CLOSING}`;
 
         if (isRevised) {
           setEmailSubject(`Updated Quote from Threefold Supply Co.`);

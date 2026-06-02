@@ -5,7 +5,7 @@ import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
 import { calcSalesTax, calcGrandTotal } from "@/lib/salesTax";
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
-import { getPublicBaseUrl } from "@/lib/publicUrl";
+import { getQuoteBaseUrl } from "@/lib/publicUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -259,7 +259,7 @@ export async function POST(request: Request): Promise<Response> {
 
     // ── Build and persist quote record ────────────────────────────────────
     const token   = "tfq-" + randomBytes(12).toString("hex");
-    const publicLink = `${getPublicBaseUrl(new URL(request.url).origin)}/quote/${token}`;
+    const publicLink = `${getQuoteBaseUrl(new URL(request.url).origin)}/quote/${token}`;
     const quoteId = `quote-${resolvedLeadId}-${Date.now()}`;
     const expirationDate = addDaysToISODate(businessTodayISO(), 30);
     const isRevised = stage === "Quote Sent";

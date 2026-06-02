@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
 import { calcBalance } from "@/lib/invoiceCalc";
-import { getPublicBaseUrl } from "@/lib/publicUrl";
+import { getInvoiceBaseUrl } from "@/lib/publicUrl";
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     const clientName = (raw.client_name ?? raw.client ?? "") as string;
     const orderName = (raw.order_name ?? raw.orderName ?? "") as string;
-    const origin = getPublicBaseUrl(request.nextUrl.origin);
+    const origin = getInvoiceBaseUrl(request.nextUrl.origin);
     const stripe = getStripe();
 
     const session = await stripe.checkout.sessions.create({

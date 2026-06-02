@@ -5,7 +5,8 @@ import { Check, CheckCircle, Copy, ExternalLink, Loader2, RefreshCw, Send } from
 import { supabase } from '@/lib/supabase'
 import ModalShell from '@/components/ModalShell'
 import { openEmailCompose } from '@/lib/emailCompose'
-import { getClientPublicBaseUrl } from '@/lib/publicUrl'
+import { TF_PLAIN_CLOSING } from '@/lib/emailSignature'
+import { getClientPortalBaseUrl } from '@/lib/publicUrl'
 
 type CopyTarget = 'subject' | 'body' | 'link'
 type EmailStep = 'preview' | 'sending' | 'sent' | 'error'
@@ -33,7 +34,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
   const [emailCopied, setEmailCopied] = useState<CopyTarget | ''>('')
 
   useEffect(() => {
-    if (token) setPortalUrl(getClientPublicBaseUrl() + '/portal/' + token)
+    if (token) setPortalUrl(getClientPortalBaseUrl() + '/portal/' + token)
   }, [token])
 
   useEffect(() => {
@@ -128,8 +129,7 @@ export default function PortalSection({ orderId }: { orderId: string }) {
       '',
       'If you have any questions, simply reply to this email.',
       '',
-      'Best,',
-      'ThreeFold Supply Co.',
+      TF_PLAIN_CLOSING,
     ].join('\n')
 
     setEmailSubject(subject)

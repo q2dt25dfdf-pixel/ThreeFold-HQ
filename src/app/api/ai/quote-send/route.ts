@@ -2,6 +2,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
+import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
+import { sendViaGmail, isGmailConfigured } from "@/lib/gmailSend";
 
 export const dynamic = "force-dynamic";
 
@@ -27,36 +29,6 @@ export const dynamic = "force-dynamic";
 
 const VALID_SENDERS = new Set(["Alliyah", "Hannah", "Jordan"]);
 
-// ── Email template (identical to /api/send-email wrapInEmailTemplate) ──────────
-
-function toHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br>\n");
-}
-
-function wrapInEmailTemplate(body: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F7F3EC;font-family:'Helvetica Neue',Arial,sans-serif;">
-<div style="max-width:600px;margin:0 auto;padding:48px 32px 64px;">
-  <div style="font-size:11px;font-weight:800;letter-spacing:0.22em;color:#0a0a0a;margin-bottom:4px;">THREEFOLD SUPPLY CO.</div>
-  <div style="font-size:10px;letter-spacing:0.08em;color:#6F685D;margin-bottom:32px;">Made by three, worn by all.</div>
-  <div style="height:1px;background:#DDD6CB;margin-bottom:32px;"></div>
-  <div style="font-size:15px;color:#332E28;line-height:1.75;">
-    ${toHtml(body)}
-  </div>
-  <div style="height:1px;background:#DDD6CB;margin-top:40px;margin-bottom:24px;"></div>
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.22em;color:#756D62;margin-bottom:4px;">THREEFOLD SUPPLY CO.</div>
-  <div style="font-size:10px;color:#7F776B;letter-spacing:0.06em;">Made by three, worn by all.</div>
-</div>
-</body>
-</html>`;
-}
-
 // ── Email body builders (match HQ SendQuoteModal exactly) ──────────────────────
 
 const SHARED_TAIL =
@@ -65,7 +37,8 @@ const SHARED_TAIL =
   "The remaining 50% balance is due before the completed order is delivered or shipped.\n\n" +
   "If everything looks good, simply reply to this email, give us a call, or send us a text. " +
   "We'll prepare and send your deposit invoice separately and get your project into production.\n\n" +
-  "If you have any questions at all, please don't hesitate to reach out.\n\nBest,";
+  "If you have any questions at all, please don't hesitate to reach out.\n\n" +
+  TF_PLAIN_CLOSING;
 
 function fmtCurrency(n: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -152,13 +125,20 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // ── Resend requirement ──────────────────────────────────────────────────────
-  const resendKey   = process.env.RESEND_API_KEY;
-  const fromEmail   = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const resendKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
 
   if (!resendKey) {
     return errResponse(
       "Email delivery requires RESEND_API_KEY. Use the HQ SendQuoteModal to send this quote via Gmail.",
       503,
+    );
+  }
+
+  if (!fromEmail) {
+    return errResponse(
+      "Sender email is not configured. Set RESEND_FROM_EMAIL in Vercel.",
+      500,
     );
   }
 
@@ -249,32 +229,54 @@ export async function POST(request: Request): Promise<Response> {
     const emailBodyText = buildEmailBody(
       contactName, quoteNumber, grandTotal, expirationDate, publicLink, isRevised,
     );
+    const emailHtml = wrapInEmailTemplate(emailBodyText);
 
-    // ── Send via Resend ─────────────────────────────────────────────────────────
+    // ── Send via Gmail (preferred) or Resend (fallback) ─────────────────────────
     let messageId: string | null = null;
+    let threadId:  string | null = null;
+    let sentVia:   "gmail" | "resend" = "resend";
 
-    const resendRes = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: `Threefold Supply Co. <${fromEmail}>`,
-        to: [clientEmail],
-        subject: emailSubject,
-        html: wrapInEmailTemplate(emailBodyText),
-      }),
-    });
-
-    if (!resendRes.ok) {
-      const resendError = await resendRes.text();
-      console.error("[ai/quote-send] Resend error:", resendError);
-      return errResponse("Email delivery failed. Try again or send from the HQ SendQuoteModal.", 502);
+    if (isGmailConfigured()) {
+      try {
+        const gmailResult = await sendViaGmail({
+          to: clientEmail,
+          subject: emailSubject,
+          html: emailHtml,
+        });
+        messageId = gmailResult.messageId;
+        threadId  = gmailResult.threadId;
+        sentVia   = "gmail";
+      } catch (gmailErr) {
+        console.error("[ai/quote-send] Gmail send failed, falling back to Resend:", gmailErr);
+      }
     }
 
-    const resendJson = (await resendRes.json()) as { id: string };
-    messageId = resendJson.id;
+    if (sentVia === "resend") {
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from:     fromEmail ? `ThreeFold Supply Co. <${fromEmail}>` : TF_FROM_HEADER,
+          reply_to: [TF_FROM_ADDRESS],
+          to:       [clientEmail],
+          subject:  emailSubject,
+          html:     emailHtml,
+        }),
+      });
+
+      if (!resendRes.ok) {
+        const resendError = await resendRes.text();
+        console.error("[ai/quote-send] Resend error:", resendError);
+        return errResponse("Email delivery failed. Try again or send from the HQ SendQuoteModal.", 502);
+      }
+
+      const resendJson = (await resendRes.json()) as { id: string };
+      messageId = resendJson.id;
+    }
+
     const sentAt = new Date().toISOString();
 
     // ── Update quote record ─────────────────────────────────────────────────────
@@ -287,6 +289,8 @@ export async function POST(request: Request): Promise<Response> {
           sent_date: sentAt,
           email_status: "sent",
           email_message_id: messageId,
+          email_thread_id: threadId,
+          email_sent_via: sentVia,
         },
       })
       .eq("id", quoteId);
@@ -300,11 +304,21 @@ export async function POST(request: Request): Promise<Response> {
 
     // ── Update lead record (mirrors handleQuoteSent) ────────────────────────────
     const commEntry = {
-      id: `comm-quote-${Date.now()}`,
-      type: "Email",
-      date: businessTodayISO(),
-      owner: sender,
+      id:      `comm-quote-${Date.now()}`,
+      type:    "Email",
+      date:    businessTodayISO(),
+      owner:   sender,
       summary: `${isRevised ? "Revised quote" : "Quote"} sent by ${sender} via Jarvis. Quote #${quoteNumber ?? quoteId}. Portal: ${publicLink}`,
+      email_subject:    emailSubject,
+      email_to:         clientEmail,
+      email_html:       emailHtml,
+      email_quote_link: publicLink,
+      email_message_id: messageId,
+      email_thread_id:  threadId,
+      email_sent_at:    sentAt,
+      email_sent_via:   sentVia,
+      requested_by:     sender,
+      approved_by:      sender,
     };
 
     const { error: leadUpdateErr } = await db
@@ -332,7 +346,7 @@ export async function POST(request: Request): Promise<Response> {
     const dbSyncFailed = !!(quoteUpdateErr || leadUpdateErr);
     return okResponse({
       sent: true,
-      sentVia: "resend",
+      sentVia,
       quoteId,
       quoteNumber,
       publicLink,
@@ -343,10 +357,11 @@ export async function POST(request: Request): Promise<Response> {
       isRevised,
       sentAt,
       emailSubject,
+      gmailThreadId: threadId,
       ...(dbSyncFailed && {
         dbSyncFailed: true,
         warning:
-          `Email delivered to ${clientEmail} (Resend ID: ${messageId}) but the HQ database ` +
+          `Email delivered to ${clientEmail} (message ID: ${messageId}) but the HQ database ` +
           `was not updated. Please open HQ and manually mark quote ${quoteNumber ?? quoteId} ` +
           `as Sent and set the lead stage to "Quote Sent".`,
       }),

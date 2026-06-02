@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ function buildEmailBody(
     `Please note: Card payments include a 3% processing fee. Bank account payments do not.\n\n` +
     `View your full deposit request here:\n${publicLink ?? "[DEPOSIT LINK]"}\n\n` +
     `Once your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\n` +
-    `Best,`
+    TF_PLAIN_CLOSING
   );
 }
 

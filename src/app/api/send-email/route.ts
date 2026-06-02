@@ -1,33 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-
-function toHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br>\n");
-}
-
-function wrapInEmailTemplate(body: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F7F3EC;font-family:'Helvetica Neue',Arial,sans-serif;">
-<div style="max-width:600px;margin:0 auto;padding:48px 32px 64px;">
-  <div style="font-size:11px;font-weight:800;letter-spacing:0.22em;color:#0a0a0a;margin-bottom:4px;">THREEFOLD SUPPLY CO.</div>
-  <div style="font-size:10px;letter-spacing:0.08em;color:#6F685D;margin-bottom:32px;">Made by three, worn by all.</div>
-  <div style="height:1px;background:#DDD6CB;margin-bottom:32px;"></div>
-  <div style="font-size:15px;color:#332E28;line-height:1.75;">
-    ${toHtml(body)}
-  </div>
-  <div style="height:1px;background:#DDD6CB;margin-top:40px;margin-bottom:24px;"></div>
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.22em;color:#756D62;margin-bottom:4px;">THREEFOLD SUPPLY CO.</div>
-  <div style="font-size:10px;color:#7F776B;letter-spacing:0.06em;">Made by three, worn by all.</div>
-</div>
-</body>
-</html>`;
-}
+import { TF_FROM_ADDRESS, TF_FROM_HEADER, wrapInEmailTemplate } from "@/lib/emailSignature";
+import { sendViaGmail, isGmailConfigured } from "@/lib/gmailSend";
 
 async function updateRecordSent(
   recordType: string,
@@ -81,11 +55,30 @@ export async function POST(request: NextRequest) {
     }
 
     const sentAt = new Date().toISOString();
+    const html = wrapInEmailTemplate(body);
+
+    // ── Try Gmail first ──────────────────────────────────────────────────────────
+    if (isGmailConfigured()) {
+      try {
+        const gmailResult = await sendViaGmail({ to, subject, html });
+        await updateRecordSent(recordType, recordId, sentAt, "sent", gmailResult.messageId);
+        return NextResponse.json({ sent: true, messageId: gmailResult.messageId, sentVia: "gmail" });
+      } catch (gmailErr) {
+        console.error("[send-email] Gmail send failed, falling back to Resend:", gmailErr);
+      }
+    }
+
+    // ── Try Resend ───────────────────────────────────────────────────────────────
     const resendKey = process.env.RESEND_API_KEY;
-    const fromEmail =
-      process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+    const fromEmail = process.env.RESEND_FROM_EMAIL;
 
     if (resendKey) {
+      if (!fromEmail) {
+        return NextResponse.json(
+          { error: "Sender email is not configured. Set RESEND_FROM_EMAIL in Vercel." },
+          { status: 500 },
+        );
+      }
       try {
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -94,30 +87,30 @@ export async function POST(request: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: `Threefold Supply Co. <${fromEmail}>`,
-            to: [to],
+            from:     `ThreeFold Supply Co. <${fromEmail}>`,
+            reply_to: [TF_FROM_ADDRESS],
+            to:       [to],
             subject,
-            html: wrapInEmailTemplate(body),
+            html,
           }),
         });
 
         if (res.ok) {
           const { id: messageId } = (await res.json()) as { id: string };
           await updateRecordSent(recordType, recordId, sentAt, "sent", messageId);
-          return NextResponse.json({ sent: true, messageId });
+          return NextResponse.json({ sent: true, messageId, sentVia: "resend" });
         }
 
         const resendError = await res.text();
-        console.error("Resend API error:", resendError);
+        console.error("[send-email] Resend API error:", resendError);
       } catch (emailErr) {
-        console.error("Resend fetch error:", emailErr);
+        console.error("[send-email] Resend fetch error:", emailErr);
       }
     }
 
-    // Fallback: record the send and return a mailto URL the client can open
+    // ── Fallback: return mailto URL the client can open ──────────────────────────
     const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     await updateRecordSent(recordType, recordId, sentAt, "sent_via_client", null);
-
     return NextResponse.json({ sent: false, fallback: true, mailto_url: mailtoUrl });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

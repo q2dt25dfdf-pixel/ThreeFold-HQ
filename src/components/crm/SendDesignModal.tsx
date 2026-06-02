@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { openEmailCompose } from "@/lib/emailCompose";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import type { Lead } from "./types";
 
 export interface DesignSentResult {
@@ -42,7 +43,7 @@ export default function SendDesignModal({ open, lead, onClose, onSent }: Props) 
     const link = "https://cal.com/threefold-fwkchj/designconsultation";
     setEmailSubject("Your First Apparel Concepts");
     setEmailBody(
-      `Hi ${firstName},\n\nThank you for taking the time to share your logo, ideas, and the story behind your company with us.\n\nAttached are the first apparel concepts we've created based on everything you told us about your team, brand, and what you'd like your apparel to represent. These are intended as initial creative directions designed to spark conversation and help us refine the collection into something that truly feels like your company.\n\nAs you review the designs, we'd love to hear what stands out to you, what you'd like to see more of, what doesn't resonate, and any new ideas that come to mind. The best designs come from collaboration, and this stage is all about shaping the artwork together.\n\nIf you'd like to walk through the concepts live, discuss the thinking behind the designs, or brainstorm revisions together, you can schedule a video call here:\n\n${link}\n\nOf course, you're also welcome to simply reply to this email, call, or text us with your feedback, whatever is easiest for you.\n\nWe're excited to hear your thoughts and continue building something unique for your team.\n\nBest,`,
+      `Hi ${firstName},\n\nThank you for taking the time to share your logo, ideas, and the story behind your company with us.\n\nAttached are the first apparel concepts we've created based on everything you told us about your team, brand, and what you'd like your apparel to represent. These are intended as initial creative directions designed to spark conversation and help us refine the collection into something that truly feels like your company.\n\nAs you review the designs, we'd love to hear what stands out to you, what you'd like to see more of, what doesn't resonate, and any new ideas that come to mind. The best designs come from collaboration, and this stage is all about shaping the artwork together.\n\nIf you'd like to walk through the concepts live, discuss the thinking behind the designs, or brainstorm revisions together, you can schedule a video call here:\n\n${link}\n\nOf course, you're also welcome to simply reply to this email, call, or text us with your feedback, whatever is easiest for you.\n\nWe're excited to hear your thoughts and continue building something unique for your team.\n\n${TF_PLAIN_CLOSING}`,
     );
     setStep("preview");
   };

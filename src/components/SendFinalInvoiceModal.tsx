@@ -5,6 +5,7 @@ import { CheckCircle, Copy, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openEmailCompose } from "@/lib/emailCompose";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { supabase } from "@/lib/supabase";
 
@@ -77,7 +78,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
         const balance = d.balanceRemaining ?? parseAmount(invoice.balance_remaining);
         setEmailSubject(`Final Invoice – ${projectName}`);
         setEmailBody(
-          `Hello ${clientName},\n\nYour order is complete and the remaining balance is now ready for payment.\n\nRemaining Balance:\n${fmtCurrency(balance)}\n\nView and pay your invoice here:\n${d.publicLink}\n\nPlease note:\nCard payments include a 3% processing fee.\nBank account payments do not.\n\nIf you have any questions, please reply to this email.\n\nBest,\nThreeFold Supply Co.`,
+          `Hello ${clientName},\n\nYour order is complete and the remaining balance is now ready for payment.\n\nRemaining Balance:\n${fmtCurrency(balance)}\n\nView and pay your invoice here:\n${d.publicLink}\n\nPlease note:\nCard payments include a 3% processing fee.\nBank account payments do not.\n\nIf you have any questions, please reply to this email.\n\n${TF_PLAIN_CLOSING}`,
         );
         setStep("preview");
       })

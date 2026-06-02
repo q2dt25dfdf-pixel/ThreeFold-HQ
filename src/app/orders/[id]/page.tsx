@@ -22,7 +22,8 @@ import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
 import type { QuestionnaireFile } from "@/components/crm/types";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { businessTodayISO } from "@/lib/businessDate";
-import { getClientPublicBaseUrl } from "@/lib/publicUrl";
+import { getClientPortalBaseUrl } from "@/lib/publicUrl";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 
 type IntakeSnapshot = {
   contact_title?: string;
@@ -262,42 +263,42 @@ function buildCommButtons(order: Order): CommButton[] {
     {
       key: "quote-followup",
       label: "Copy Quote Follow-Up",
-      message: `Hi ${client},\n\nJust following up on the quote we sent for ${name}. Please let us know if you have any questions or are ready to move forward — we'd love to get this started for you!\n\nBest,\nThreefold`,
+      message: `Hi ${client},\n\nJust following up on the quote we sent for ${name}. Please let us know if you have any questions or are ready to move forward — we'd love to get this started for you!\n\n${TF_PLAIN_CLOSING}`,
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
     {
       key: "deposit-reminder",
       label: "Copy Deposit Reminder",
-      message: `Hi ${client},\n\nA quick reminder that the deposit for your ${name} order is due to lock in your production slot. Once received, we'll get started right away!\n\nBest,\nThreefold`,
+      message: `Hi ${client},\n\nA quick reminder that the deposit for your ${name} order is due to lock in your production slot. Once received, we'll get started right away!\n\n${TF_PLAIN_CLOSING}`,
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
     {
       key: "design-approval",
       label: "Copy Design Approval Request",
-      message: `Hi ${client},\n\nYour design for ${name} is ready for review! Please take a look and let us know if you'd like any changes, or reply with your approval and we'll move to production.\n\nBest,\nThreefold`,
+      message: `Hi ${client},\n\nYour design for ${name} is ready for review! Please take a look and let us know if you'd like any changes, or reply with your approval and we'll move to production.\n\n${TF_PLAIN_CLOSING}`,
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
     {
       key: "production-update",
       label: "Copy Production Update",
-      message: `Hi ${client},\n\nGreat news — your ${name} order${qty ? ` (${qty}${items ? " " + items : ""})` : ""} is currently in production. Estimated delivery: ${due}. We'll keep you posted!\n\nBest,\nThreefold`,
+      message: `Hi ${client},\n\nGreat news — your ${name} order${qty ? ` (${qty}${items ? " " + items : ""})` : ""} is currently in production. Estimated delivery: ${due}. We'll keep you posted!\n\n${TF_PLAIN_CLOSING}`,
       disabled: !hasBase || !hasItems,
       disabledReason: !hasBase ? "Missing client or order name" : "Missing quantity or items",
     },
     {
       key: "delivery-confirm",
       label: "Copy Delivery Confirmation",
-      message: `Hi ${client},\n\nYour ${name} order has been delivered! We hope everything looks great. Please reach out if there's anything we can help with.\n\nThank you for working with Threefold!`,
+      message: `Hi ${client},\n\nYour ${name} order has been delivered! We hope everything looks great. Please reach out if there's anything we can help with.\n\nThank you for working with us!\n\n${TF_PLAIN_CLOSING}`,
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
     {
       key: "reorder-checkin",
       label: "Copy Reorder Check-In",
-      message: `Hi ${client},\n\nWe loved working on ${name} with you! Whenever you're ready for your next project, just let us know and we'll get a quote over right away.\n\nBest,\nThreefold`,
+      message: `Hi ${client},\n\nWe loved working on ${name} with you! Whenever you're ready for your next project, just let us know and we'll get a quote over right away.\n\n${TF_PLAIN_CLOSING}`,
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
@@ -739,7 +740,7 @@ export default function OrderDetailPage() {
 
   const copyPortalLink = async () => {
     if (!order?.portal_token) return;
-    const url = `${getClientPublicBaseUrl()}/portal/${order.portal_token}`;
+    const url = `${getClientPortalBaseUrl()}/portal/${order.portal_token}`;
     await navigator.clipboard.writeText(url);
     setPortalCopied(true);
     window.setTimeout(() => setPortalCopied(false), 2000);
@@ -816,7 +817,7 @@ export default function OrderDetailPage() {
   );
   const portalToken = order.portal_token;
   const portalUrl = portalToken
-    ? getClientPublicBaseUrl() + `/portal/${portalToken}`
+    ? getClientPortalBaseUrl() + `/portal/${portalToken}`
     : null;
 
   const openInvoicePreview = async () => {

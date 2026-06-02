@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { parseAmount, calcDeposit, calcTotal } from "@/lib/invoiceCalc";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 
 export const dynamic = "force-dynamic";
 
@@ -145,7 +146,7 @@ function buildEmailBody(
     linkLine + `\n\n` +
     `Please note:\nCard payments include a 3% processing fee.\nBank account payments do not.\n\n` +
     `If you have any questions, please reply to this email.\n\n` +
-    `Best,\nThreeFold Supply Co.`
+    TF_PLAIN_CLOSING
   );
 }
 
