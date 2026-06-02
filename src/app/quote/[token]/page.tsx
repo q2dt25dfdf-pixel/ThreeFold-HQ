@@ -223,8 +223,8 @@ export default function QuotePage() {
                           )}
                         </div>
                         {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
-                          <div style={{ fontSize: "10px", color: C.textMuted, letterSpacing: "0.05em", marginTop: "3px", textTransform: "none" as const }}>
-                            Custom Pricing Applied
+                          <div style={{ fontSize: "10px", color: C.textMuted, fontStyle: "italic", letterSpacing: "0.04em", marginTop: "3px", textTransform: "none" as const }}>
+                            *Custom pricing applied
                           </div>
                         )}
                       </div>

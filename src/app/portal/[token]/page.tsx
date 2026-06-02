@@ -601,8 +601,8 @@ export default function PortalPage() {
                           )}
                         </div>
                         {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice && (
-                          <div style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.05em', marginTop: '3px' }}>
-                            Custom Pricing Applied
+                          <div style={{ fontSize: '10px', color: C.textMuted, fontStyle: 'italic', letterSpacing: '0.04em', marginTop: '3px' }}>
+                            *Custom pricing applied
                           </div>
                         )}
                       </div>
