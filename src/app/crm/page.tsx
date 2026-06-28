@@ -168,6 +168,10 @@ function isDepositPaid(stage: string): boolean {
   return stage === "Deposit Paid" || stage === "Approved";
 }
 
+function isClosedLost(stage: string): boolean {
+  return stage === "Closed Lost";
+}
+
 const APPAREL_KEYWORDS = [
   "shirt", "shirts", "t-shirt", "tee", "tees",
   "apparel", "hoodie", "hoodies", "sweatshirt", "sweatshirts",
@@ -352,7 +356,10 @@ function CRMContent() {
     return Number.isFinite(amount) ? amount : 0;
   };
 
-  const totalValue = leads.reduce((sum, lead) => sum + leadValueNumber(lead.value), 0);
+  const activePipelineLeads = leads.filter(
+    (lead) => !isDepositPaid(lead.stage as string) && !isClosedLost(lead.stage as string),
+  );
+  const totalValue = activePipelineLeads.reduce((sum, lead) => sum + leadValueNumber(lead.value), 0);
 
   const createId = () => {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -858,7 +865,7 @@ function CRMContent() {
       <div className="grid gap-5 xl:grid-cols-3">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Total leads</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.length}</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{activePipelineLeads.length}</p>
         </div>
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Pipeline value</p>
@@ -927,11 +934,19 @@ function CRMContent() {
       <div className="bg-zinc-100 pb-6 lg:-mx-8 lg:overflow-x-auto lg:px-8 lg:pb-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:gap-4 lg:items-start lg:pr-6">
           {leadsByStage.map(({ stage, leads: stageLeads }, stageIndex) => {
+            const isLostColumn = stage === "Closed Lost";
             return (
-            <div key={stage} className="w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4">
+            <div
+              key={stage}
+              className={
+                isLostColumn
+                  ? "w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-300 bg-slate-100 p-3 shadow-sm md:p-4 lg:ml-4 lg:border-l-4 lg:border-l-slate-400"
+                  : "w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4"
+              }
+            >
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
                 <div>
-                  <h2 className="text-sm font-semibold tracking-tight text-slate-950">{stage}</h2>
+                  <h2 className={`text-sm font-semibold tracking-tight ${isLostColumn ? "text-slate-600" : "text-slate-950"}`}>{stage}</h2>
                   <p className="mt-1 text-xs text-slate-500">{stageLeads.length} lead{stageLeads.length === 1 ? "" : "s"}</p>
                 </div>
                 <div className="flex items-center gap-2">

@@ -18,11 +18,13 @@ const stageBadgeStyles: Record<Lead["stage"], string> = {
   "New Lead": "bg-slate-100 text-slate-700",
   Contacted: "bg-amber-100 text-amber-800",
   "Design Phase": "bg-indigo-100 text-indigo-800",
+  "Mockup Phase": "bg-sky-100 text-sky-800",
   "Client Review": "bg-purple-100 text-purple-800",
   "Design Approved": "bg-green-100 text-green-800",
   "Quote Sent": "bg-blue-100 text-blue-800",
   "Quote Approved": "bg-emerald-100 text-emerald-800",
   "Deposit Paid": "bg-teal-100 text-teal-800",
+  "Closed Lost": "bg-slate-200 text-slate-600",
 };
 
 const statusBadgeStyles: Record<Lead["status"], string> = {
@@ -149,6 +151,11 @@ export default function LeadCard({
           </div>
         </div>
       </div>
+      {lead.stage === "Closed Lost" && lead.lostReason && (
+        <div className="mt-3 rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-600">
+          <span className="font-semibold text-slate-700">Lost:</span> {lead.lostReason}
+        </div>
+      )}
       {canCompleteFollowUp && onCompleteFollowUp && (
         <button
           type="button"

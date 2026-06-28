@@ -9,7 +9,7 @@ import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { businessTodayISO } from "@/lib/businessDate";
 import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch } from "./types";
-import { pipelineStages } from "./types";
+import { pipelineStages, LOST_REASONS } from "./types";
 
 interface Props {
   open: boolean;
@@ -173,10 +173,15 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const [logError, setLogError] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
+  // Closed-Lost reason picker
+  const [lostPickerOpen, setLostPickerOpen] = useState(false);
+  const [pendingLostReason, setPendingLostReason] = useState<string>(LOST_REASONS[0]);
+
   useEffect(() => {
     setData(null);
     setLogDate(businessTodayISO());
     setEditingIndex(null);
+    setLostPickerOpen(false);
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
@@ -481,9 +486,39 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Snapshot — click any field to edit</p>
               <div className="space-y-3">
                 <InlineField label="Estimated value" value={formatLeadValue(current.value)} onSave={(v) => patch({ value: parseLeadValue(v) })} />
-                <InlineField label="Stage" value={current.stage} onSave={(v) => patch({ stage: v as PipelineStage })} type="select" options={[...pipelineStages]} directEdit />
+                <InlineField
+                  label="Stage"
+                  value={current.stage}
+                  onSave={(v) => {
+                    const next = v as PipelineStage;
+                    if (next === current.stage) return;
+                    if (next === "Closed Lost") {
+                      setPendingLostReason(current.lostReason || LOST_REASONS[0]);
+                      setLostPickerOpen(true);
+                      return;
+                    }
+                    if (current.stage === "Closed Lost") {
+                      patch({ stage: next, lostReason: undefined });
+                      return;
+                    }
+                    patch({ stage: next });
+                  }}
+                  type="select"
+                  options={[...pipelineStages]}
+                  directEdit
+                />
                 <InlineField label="Follow-up" value={current.followUpDate} onSave={(v) => patch({ followUpDate: v })} type="date" />
                 <InlineField label="Owner" value={current.owner} onSave={(v) => patch({ owner: v })} />
+                {current.stage === "Closed Lost" && (
+                  <InlineField
+                    label="Lost reason"
+                    value={current.lostReason ?? ""}
+                    onSave={(v) => patch({ lostReason: v })}
+                    type="select"
+                    options={[...LOST_REASONS]}
+                    directEdit
+                  />
+                )}
               </div>
             </div>
 
@@ -628,6 +663,50 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
         </div>
 
       </div>
+
+      {lostPickerOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <h3 className="text-base font-semibold text-slate-950">Move to Closed Lost</h3>
+            <p className="mt-1 text-xs text-slate-600">Pick a reason so we can track why this lead closed.</p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Reason
+            </label>
+            <select
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-slate-500"
+              value={pendingLostReason}
+              onChange={(e) => setPendingLostReason(e.target.value)}
+            >
+              {LOST_REASONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setLostPickerOpen(false)}
+                className="min-h-11 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  patch({ stage: "Closed Lost", lostReason: pendingLostReason });
+                  setLostPickerOpen(false);
+                }}
+                className="min-h-11 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Mark as Closed Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ModalShell>
   );
 }

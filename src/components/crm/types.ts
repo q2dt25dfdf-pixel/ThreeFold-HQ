@@ -2,11 +2,13 @@ export const pipelineStages = [
   "New Lead",
   "Contacted",
   "Design Phase",
+  "Mockup Phase",
   "Client Review",
   "Design Approved",
   "Quote Sent",
   "Quote Approved",
   "Deposit Paid",
+  "Closed Lost",
 ] as const;
 
 export type PipelineStage = (typeof pipelineStages)[number];
@@ -64,7 +66,20 @@ export type Lead = {
   approved_quote_id?: string;  // tracks which quote the client approved; separate from quote_id
   deposit_request_id?: string;
   deposit_request_number?: string;
+  // Set when stage moves to "Closed Lost"; cleared on move back to an active stage.
+  lostReason?: string;
 };
+
+export const LOST_REASONS = [
+  "Not interested",
+  "Ghosted / no response",
+  "Price / budget",
+  "Went with competitor",
+  "Bad timing",
+  "Not a fit",
+  "Other",
+] as const;
+export type LostReason = (typeof LOST_REASONS)[number];
 
 export type QuestionnaireFileCategory = "logo" | "inspiration" | "pdf" | "mockup" | "other";
 
