@@ -26,6 +26,8 @@ interface Props {
   onSendDepositRequest?: (lead: Lead) => void;
   onCompleteFollowUp?: (lead: Lead) => void;
   canCompleteFollowUp?: boolean;
+  onArchive?: (lead: Lead) => void;
+  onUnarchive?: (lead: Lead) => void;
 }
 
 const OWNERS = ["Alliyah", "Hannah", "Jordan"];
@@ -161,7 +163,7 @@ function InlineField({
   );
 }
 
-export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendDesign, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false }: Props) {
+export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendDesign, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false, onArchive, onUnarchive }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
 
@@ -356,13 +358,36 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+          >
+            Delete
+          </button>
+          {current.archived ? (
+            onUnarchive && (
+              <button
+                type="button"
+                onClick={() => { onUnarchive(current); onClose(); }}
+                className="min-h-11 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                Unarchive
+              </button>
+            )
+          ) : (
+            onArchive && (
+              <button
+                type="button"
+                onClick={() => { onArchive(current); onClose(); }}
+                className="min-h-11 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Archive
+              </button>
+            )
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {/* Desktop: workflow action buttons */}
           {showSendDesign && (

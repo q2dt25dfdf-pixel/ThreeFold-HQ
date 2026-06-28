@@ -317,6 +317,7 @@ function CRMContent() {
   const [depositLead, setDepositLead] = useState<Lead | null>(null);
   const [completingLead, setCompletingLead] = useState<Lead | null>(null);
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
   const viewParam = searchParams.get("view");
@@ -333,13 +334,16 @@ function CRMContent() {
     let list = leads.filter((lead) =>
       JSON.stringify(lead).toLowerCase().includes(search.toLowerCase()),
     );
+    list = showArchived
+      ? list.filter((lead) => lead.archived === true)
+      : list.filter((lead) => lead.archived !== true);
     if (viewMode === "open") {
       list = list.filter((lead) => !isDepositPaid(lead.stage as string));
     } else if (viewMode === "followups") {
       list = list.filter((lead) => isLeadFollowUpDueWithin(lead, tasks, sevenDaysAheadISO));
     }
     return list;
-  }, [leads, search, viewMode, tasks, sevenDaysAheadISO]);
+  }, [leads, search, viewMode, tasks, sevenDaysAheadISO, showArchived]);
 
   const leadsByStage = useMemo(
     () =>
@@ -357,7 +361,10 @@ function CRMContent() {
   };
 
   const activePipelineLeads = leads.filter(
-    (lead) => !isDepositPaid(lead.stage as string) && !isClosedLost(lead.stage as string),
+    (lead) =>
+      lead.archived !== true &&
+      !isDepositPaid(lead.stage as string) &&
+      !isClosedLost(lead.stage as string),
   );
   const totalValue = activePipelineLeads.reduce((sum, lead) => sum + leadValueNumber(lead.value), 0);
 
@@ -705,6 +712,17 @@ function CRMContent() {
     if (viewLeadId === lead.id) setViewLeadId(null);
   };
 
+  const handleArchiveLead = async (lead: Lead) => {
+    await upsertItem({ ...lead, archived: true, archivedAt: new Date().toISOString() });
+    if (viewLeadId === lead.id) setViewLeadId(null);
+    setToastMessage(`Archived ${lead.company}.`);
+  };
+
+  const handleUnarchiveLead = async (lead: Lead) => {
+    await upsertItem({ ...lead, archived: false, archivedAt: undefined });
+    setToastMessage(`Restored ${lead.company} to ${lead.stage}.`);
+  };
+
   const handleOpenSendDesign = (lead: Lead) => {
     setViewLeadId(null);
     setDesignLead(lead);
@@ -853,6 +871,18 @@ function CRMContent() {
           </div>
           <button
             type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            aria-pressed={showArchived}
+            className={
+              showArchived
+                ? "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-slate-500 bg-slate-900 px-4 py-2 text-xs font-semibold text-white md:py-2.5 md:text-sm"
+                : "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:py-2.5 md:text-sm"
+            }
+          >
+            {showArchived ? "Showing archived" : "Show archived"}
+          </button>
+          <button
+            type="button"
             onClick={() => openAddLeadModal()}
             className="flex min-h-11 items-center justify-center gap-2 rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:hidden"
           >
@@ -880,6 +910,7 @@ function CRMContent() {
       {(() => {
         const followUpLeads = leads
           .filter((l) => (
+            l.archived !== true &&
             !isDepositPaid(l.stage as string) &&
             canCompleteLeadFollowUp(l, tasks)
           ))
@@ -1029,6 +1060,8 @@ function CRMContent() {
         onSendDesign={handleOpenSendDesign}
         onSendQuote={handleOpenSendQuote}
         onSendDepositRequest={handleOpenSendDeposit}
+        onArchive={handleArchiveLead}
+        onUnarchive={handleUnarchiveLead}
       />
 
       <SendDesignModal

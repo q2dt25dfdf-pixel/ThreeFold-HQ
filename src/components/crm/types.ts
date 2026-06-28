@@ -68,6 +68,10 @@ export type Lead = {
   deposit_request_number?: string;
   // Set when stage moves to "Closed Lost"; cleared on move back to an active stage.
   lostReason?: string;
+  // Archived leads stay in the data store but are hidden from the active board and
+  // active-pipeline rollups. Delete is still the hard-remove path; archive is reversible.
+  archived?: boolean;
+  archivedAt?: string;
 };
 
 export const LOST_REASONS = [
