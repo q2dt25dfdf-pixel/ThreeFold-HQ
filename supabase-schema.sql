@@ -63,6 +63,14 @@ create table if not exists public.notes (
   data jsonb not null
 );
 
+-- Smart folders for /notes. Each row is one user-defined folder that
+-- auto-collects notes tagged with any of the folder's tags. Pure config
+-- table; no per-note re-tagging required.
+create table if not exists public.note_folders (
+  id text primary key,
+  data jsonb not null
+);
+
 -- Quote + Deposit workflow tables (added for Send Quote / Send Deposit Request flow)
 create table if not exists public.quotes (
   id text primary key,
