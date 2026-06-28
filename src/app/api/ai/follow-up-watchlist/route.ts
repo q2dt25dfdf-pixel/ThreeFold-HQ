@@ -9,7 +9,7 @@ import {
   hasFollowUpDate,
   leadFollowUpDate,
 } from "@/lib/followUps";
-import { normalizeCRMStage, type DashboardRecord } from "@/lib/dashboardMetrics";
+import { normalizeCRMStage, isInactiveLeadStage, type DashboardRecord } from "@/lib/dashboardMetrics";
 import { parseAmount } from "@/lib/invoiceCalc";
 
 export const dynamic = "force-dynamic";
@@ -130,12 +130,12 @@ export async function GET(request: Request): Promise<Response> {
     const openLeads = leads.filter((l) => statusText(l) !== "won");
 
     // ── Section 1: Stale leads ─────────────────────────────────────────────────
-    // Open leads (not "won", not "Deposit Paid") where followUpDate < today
-    // and an active follow-up task still exists.
+    // Open leads (not "won", not "Deposit Paid", not "Closed Lost") where
+    // followUpDate < today and an active follow-up task still exists.
 
     const staleLeadItems = openLeads
       .filter((lead) => {
-        if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+        if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
         const followUp = leadFollowUpDate(lead);
         return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
       })

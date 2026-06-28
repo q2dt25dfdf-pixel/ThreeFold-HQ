@@ -15,7 +15,7 @@ import {
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 import { hasActiveFollowUpTask, hasFollowUpDate } from "@/lib/followUps";
-import { normalizeCRMStage } from "@/lib/dashboardMetrics";
+import { normalizeCRMStage, isInactiveLeadStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
 
@@ -135,7 +135,7 @@ function computeBriefing(
   });
 
   const staleLeads = leads.filter((lead) => {
-    if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+    if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
     const followUp = readField(lead, "followUpDate", "follow_up_date");
     return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
   });
@@ -437,7 +437,7 @@ function computeAudit(
   }
 
   const staleLeads = leads.filter((lead) => {
-    if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+    if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
     const followUp = readField(lead, "followUpDate", "follow_up_date");
     return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
   });

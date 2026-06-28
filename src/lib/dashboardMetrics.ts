@@ -168,6 +168,13 @@ export function normalizeCRMStage(stage: string): PipelineStage {
   return "New Lead";
 }
 
+// Stages that should be excluded from "active pipeline" rollups (counters, watchlists,
+// briefings, reports). Pass an already-normalized stage; legacy "Approved" maps to
+// "Deposit Paid" via normalizeCRMStage and is covered.
+export function isInactiveLeadStage(stage: string): boolean {
+  return stage === "Deposit Paid" || stage === "Closed Lost";
+}
+
 export function pipelineOverview(leads: DashboardRecord[]): ChartDatum[] {
   const openLeads = leads.filter((lead) => statusText(lead) !== "won");
   return pipelineStages.map((stage) => {
@@ -355,7 +362,7 @@ export function attentionSummary(
 
   // Stale: open lead with a follow-up date that has passed and still has an active follow-up task
   const staleLeads = leads.filter((lead) => {
-    if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+    if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
     const followUp = readField(lead, "followUpDate", "follow_up_date");
     return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
   }).length;

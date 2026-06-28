@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 import { hasActiveFollowUpTask, hasFollowUpDate, leadFollowUpDate } from "@/lib/followUps";
-import { normalizeCRMStage } from "@/lib/dashboardMetrics";
+import { normalizeCRMStage, isInactiveLeadStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
@@ -444,7 +444,7 @@ export async function GET(request: Request): Promise<Response> {
 
     const followUpsDueTomorrow = leads
       .filter((lead) => {
-        if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+        if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
         const followUp = leadFollowUpDate(lead);
         return hasFollowUpDate(followUp) && followUp === tomorrowISO && hasActiveFollowUpTask(lead, tasks);
       })

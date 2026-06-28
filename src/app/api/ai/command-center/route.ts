@@ -15,6 +15,7 @@ import {
 } from "@/lib/followUps";
 import {
   normalizeCRMStage,
+  isInactiveLeadStage,
   monthlyRevenueProgress,
   monthlyRevenueGoal,
   parseDashboardDate,
@@ -229,7 +230,7 @@ export async function GET(request: Request): Promise<Response> {
 
     const staleLeads = openLeads
       .filter((lead) => {
-        if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+        if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
         const fu = leadFollowUpDate(lead);
         return hasFollowUpDate(fu) && fu < todayISO && hasActiveFollowUpTask(lead, tasks);
       })

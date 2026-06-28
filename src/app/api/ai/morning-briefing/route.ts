@@ -11,6 +11,7 @@ import { readField, statusText, stringField } from "@/lib/recordUtils";
 import { hasActiveFollowUpTask, hasFollowUpDate, leadFollowUpDate } from "@/lib/followUps";
 import {
   normalizeCRMStage,
+  isInactiveLeadStage,
   monthlyRevenueProgress,
   monthlyRevenueGoal,
   parseDashboardDate,
@@ -135,7 +136,7 @@ export async function GET(request: Request): Promise<Response> {
     // ── Stale leads ──────────────────────────────────────────────────────────
 
     const staleLeads = leads.filter((lead) => {
-      if (normalizeCRMStage(stringField(lead, "stage")) === "Deposit Paid") return false;
+      if (isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage")))) return false;
       const followUp = leadFollowUpDate(lead);
       return hasFollowUpDate(followUp) && followUp < todayISO && hasActiveFollowUpTask(lead, tasks);
     });
