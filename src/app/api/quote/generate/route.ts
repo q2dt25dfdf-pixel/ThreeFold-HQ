@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
-import { calcGrandTotal, calcSalesTax } from "@/lib/salesTax";
+import {
+  calcGrandTotal,
+  calcSalesTax,
+  calcDiscountedSubtotal,
+  normalizeDiscount,
+  type QuoteDiscount,
+} from "@/lib/salesTax";
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 
@@ -20,6 +26,7 @@ export async function POST(request: NextRequest) {
     const {
       leadId, clientName, clientEmail, totalAmount, lineItems, items, notes,
       subtotal: bodySubtotal,
+      discount: bodyDiscount,
       clientAddressText, clientZip, deliveryZip,
     } =
       await request.json() as {
@@ -31,6 +38,7 @@ export async function POST(request: NextRequest) {
         items: string[];
         notes: string;
         subtotal?: number;
+        discount?: QuoteDiscount | null;
         clientAddressText?: string;
         clientZip?: string;
         deliveryZip?: string;
@@ -38,6 +46,24 @@ export async function POST(request: NextRequest) {
 
     if (!leadId) {
       return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
+    }
+
+    // A discount can only apply to a quote built from explicit line items (which
+    // carry a real pre-tax subtotal). Reject a discount on the legacy total-only
+    // path, where subtotal would fall back to a grand total.
+    const hasLineItems = Array.isArray(lineItems) && lineItems.length > 0;
+    const discount = normalizeDiscount(bodyDiscount);
+    if (discount && !hasLineItems) {
+      return NextResponse.json(
+        { error: "A discount requires line items and an explicit subtotal." },
+        { status: 400 },
+      );
+    }
+    if (discount && !discount.label) {
+      return NextResponse.json(
+        { error: "A discount requires a label." },
+        { status: 400 },
+      );
     }
 
     const db = getSupabaseAdmin();
@@ -78,9 +104,15 @@ export async function POST(request: NextRequest) {
       clientAddressText: clientAddressText ?? "",
     });
 
+    // Order of operations: subtotal → discount → discountedSubtotal → tax → grand.
+    // subtotal stays PRE-discount; when there is no discount, discountedSubtotal is
+    // exactly computedSubtotal so tax/grand are byte-identical to the old behavior.
     const taxRate = taxLookup.rate;
-    const salesTaxAmount = calcSalesTax(computedSubtotal, taxRate);
-    const grandTotal = calcGrandTotal(computedSubtotal, taxRate);
+    const discountedSubtotal = discount
+      ? calcDiscountedSubtotal(computedSubtotal, discount)
+      : computedSubtotal;
+    const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
+    const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
 
     const quoteId = `quote-${leadId}-${Date.now()}`;
     const quoteData = {
@@ -92,6 +124,7 @@ export async function POST(request: NextRequest) {
       items: items ?? [],
       line_items: lineItems ?? null,
       subtotal: computedSubtotal,
+      discount: discount,
       sales_tax_rate: taxRate,
       sales_tax_amount: salesTaxAmount,
       grand_total: grandTotal,

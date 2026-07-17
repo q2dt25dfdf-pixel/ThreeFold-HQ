@@ -4,6 +4,7 @@ import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
 import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
+import { calcDiscountAmount, normalizeDiscount } from "@/lib/salesTax";
 
 export const dynamic = "force-dynamic";
 
@@ -58,15 +59,35 @@ function fmtDate(iso: string): string {
   });
 }
 
+// Pricing block for the email body: full breakdown only when a discount applies;
+// otherwise just the project total, so no-discount emails are unchanged.
+function buildPricingBlock(
+  subtotal: number | null,
+  discount: import("@/lib/salesTax").QuoteDiscount | null,
+  salesTaxAmount: number | null,
+  grandTotal: number | null,
+): string {
+  const grandTotalFormatted = grandTotal != null ? fmtCurrency(grandTotal) : "[QUOTE TOTAL]";
+  if (discount && subtotal != null && salesTaxAmount != null) {
+    const discountAmount = calcDiscountAmount(subtotal, discount);
+    return (
+      `Subtotal: ${fmtCurrency(subtotal)}\n` +
+      `${discount.label}: -${fmtCurrency(discountAmount)}\n` +
+      `Sales Tax: ${fmtCurrency(salesTaxAmount)}\n` +
+      `Project Total: ${grandTotalFormatted}`
+    );
+  }
+  return `Project Total: ${grandTotalFormatted}`;
+}
+
 function buildEmailBody(
   contactName: string,
   quoteNumber: string | null,
-  grandTotal: number | null,
+  pricingBlock: string,
   expirationDate: string | null,
   publicLink: string,
   isRevised: boolean,
 ): string {
-  const grandTotalFormatted = grandTotal != null ? fmtCurrency(grandTotal) : "[QUOTE TOTAL]";
   const expFormatted = expirationDate ? fmtDate(expirationDate) : "[EXPIRY DATE]";
   const qn = quoteNumber ?? "[QUOTE NUMBER]";
 
@@ -77,7 +98,7 @@ function buildEmailBody(
       `You can view your updated quote and pricing breakdown here:\n${publicLink}\n\n` +
       `Please take a look and let us know if everything looks correct. If you'd like to make any additional adjustments, simply reply to this email and we'll be happy to update it further.\n\n` +
       `Once you're ready to move forward, you can approve the quote directly from the quote page.\n\n` +
-      `Quote Number: ${qn}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\n` +
+      `Quote Number: ${qn}\n${pricingBlock}\nValid Through: ${expFormatted}\n\n` +
       SHARED_TAIL
     );
   }
@@ -85,7 +106,7 @@ function buildEmailBody(
   return (
     `Hi ${contactName},\n\n` +
     `Thank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\n` +
-    `Quote Number: ${qn}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\n` +
+    `Quote Number: ${qn}\n${pricingBlock}\nValid Through: ${expFormatted}\n\n` +
     `View your full quote — including pricing breakdown — here:\n${publicLink}\n\n` +
     SHARED_TAIL
   );
@@ -167,6 +188,9 @@ export async function POST(request: Request): Promise<Response> {
     const publicToken    = qd.public_token as string | null;
     const quoteNumber    = (qd.quote_number as string) ?? null;
     const grandTotal     = (qd.grand_total as number | null) ?? (qd.total_amount as number | null) ?? null;
+    const subtotal       = (qd.subtotal as number | null) ?? null;
+    const salesTaxAmount = (qd.sales_tax_amount as number | null) ?? null;
+    const discount       = normalizeDiscount(qd.discount);
     const expirationDate = (qd.expiration_date as string) ?? null;
     const leadId         = (qd.lead_id as string) ?? null;
 
@@ -215,8 +239,9 @@ export async function POST(request: Request): Promise<Response> {
       ? "Updated Quote from Threefold Supply Co."
       : "Your Custom Quote from Threefold Supply Co.";
 
+    const pricingBlock = buildPricingBlock(subtotal, discount, salesTaxAmount, grandTotal);
     const emailBodyText = buildEmailBody(
-      contactName, quoteNumber, grandTotal, expirationDate, publicLink, isRevised,
+      contactName, quoteNumber, pricingBlock, expirationDate, publicLink, isRevised,
     );
     const emailHtml = wrapInEmailTemplate(emailBodyText);
 

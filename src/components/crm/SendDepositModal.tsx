@@ -6,7 +6,7 @@ import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
-import { fmtTaxRate } from "@/lib/salesTax";
+import { fmtTaxRate, calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 
 interface DepositResult {
@@ -31,6 +31,7 @@ type QuoteSnapshot = {
   lineItems: QuoteItem[];
   totalAmount: number;
   subtotal?: number;
+  discount?: QuoteDiscount | null;
   salesTaxRate?: number;
   salesTaxAmount?: number;
   grandTotal?: number;
@@ -100,7 +101,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
       setQuoteLoading(true);
       fetch(`/api/quote/by-id?id=${encodeURIComponent(lead.quote_id)}`)
         .then((r) => r.json())
-        .then((d: { quoteId?: string; quoteNumber?: string; lineItems?: QuoteItem[] | null; totalAmount?: number; subtotal?: number; salesTaxRate?: number; salesTaxAmount?: number; grandTotal?: number; error?: string }) => {
+        .then((d: { quoteId?: string; quoteNumber?: string; lineItems?: QuoteItem[] | null; totalAmount?: number; subtotal?: number; discount?: QuoteDiscount | null; salesTaxRate?: number; salesTaxAmount?: number; grandTotal?: number; error?: string }) => {
           if (!d.error && d.lineItems && d.lineItems.length > 0 && d.quoteId && d.quoteNumber && d.totalAmount != null) {
             const effectiveTotal = d.grandTotal ?? d.totalAmount;
             setQuoteData({
@@ -109,6 +110,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
               lineItems: d.lineItems,
               totalAmount: effectiveTotal,
               subtotal: d.subtotal,
+              discount: d.discount ?? null,
               salesTaxRate: d.salesTaxRate ?? undefined,
               salesTaxAmount: d.salesTaxAmount ?? undefined,
               grandTotal: d.grandTotal,
@@ -140,6 +142,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           paymentInstructions,
           notes: "",
           ...(quoteData?.subtotal != null && { subtotal: quoteData.subtotal }),
+          ...(quoteData?.discount != null && { discount: quoteData.discount }),
           ...(quoteData?.salesTaxRate != null && { salesTaxRate: quoteData.salesTaxRate }),
           ...(quoteData?.salesTaxAmount != null && { salesTaxAmount: quoteData.salesTaxAmount }),
           ...(quoteData?.grandTotal != null && { grandTotal: quoteData.grandTotal }),
@@ -161,11 +164,14 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         ? `\n\nItems included:\n${quoteData.lineItems.map((i) => `• ${i.name} (×${i.quantity})`).join("\n")}`
         : "";
 
+      const discountLine = quoteData?.discount != null && quoteData.subtotal != null
+        ? `\n${quoteData.discount.label}: -${fmtCurrency(calcDiscountAmount(quoteData.subtotal, quoteData.discount))}`
+        : "";
       const taxLine = quoteData?.salesTaxAmount != null && quoteData.salesTaxAmount > 0
         ? `\nSales Tax (${fmtTaxRate(quoteData.salesTaxRate)}): ${fmtCurrency(quoteData.salesTaxAmount)}`
         : "";
       const subtotalLine = quoteData?.subtotal != null && quoteData.subtotal !== data.totalAmount
-        ? `\nSubtotal: ${fmtCurrency(quoteData.subtotal)}${taxLine}`
+        ? `\nSubtotal: ${fmtCurrency(quoteData.subtotal)}${discountLine}${taxLine}`
         : "";
       setEmailSubject(`Your Deposit Request — ${data.depositRequestNumber} | Threefold Supply Co.`);
       setEmailBody(
@@ -389,6 +395,14 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
                     <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Subtotal</span>
                     <span className="text-xs font-semibold text-slate-600">{fmtCurrency(quoteData.subtotal)}</span>
                   </div>
+                  {quoteData.discount != null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                        {quoteData.discount.label}{quoteData.discount.type === "percent" ? ` (-${quoteData.discount.value}%)` : ""}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500">-{fmtCurrency(calcDiscountAmount(quoteData.subtotal, quoteData.discount))}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">CA Tax ({fmtTaxRate(quoteData.salesTaxRate)})</span>
                     <span className="text-xs font-semibold text-slate-500">{fmtCurrency(quoteData.salesTaxAmount)}</span>

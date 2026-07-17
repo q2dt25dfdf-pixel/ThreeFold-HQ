@@ -5,6 +5,55 @@ export function salesTaxRate(): number {
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SALES_TAX_RATE;
 }
 
+/** A named discount applied to a quote before tax. */
+export type QuoteDiscount = {
+  type: "percent" | "fixed";
+  value: number;
+  label: string;
+};
+
+/**
+ * Dollar amount a discount removes from the pre-tax subtotal.
+ * Returns 0 when discount is null. Clamped to [0, subtotal] and rounded to cents.
+ * `percent` uses value as a percentage (15 → 15%); `fixed` uses value as dollars.
+ */
+export function calcDiscountAmount(
+  subtotal: number,
+  discount: QuoteDiscount | null | undefined,
+): number {
+  if (!discount) return 0;
+  const raw =
+    discount.type === "percent"
+      ? subtotal * (discount.value / 100)
+      : discount.value;
+  const clamped = Math.min(Math.max(raw, 0), Math.max(subtotal, 0));
+  return Math.round(clamped * 100) / 100;
+}
+
+/** Pre-tax subtotal after the discount is removed (subtotal − discountAmount). */
+export function calcDiscountedSubtotal(
+  subtotal: number,
+  discount: QuoteDiscount | null | undefined,
+): number {
+  return Math.round((subtotal - calcDiscountAmount(subtotal, discount)) * 100) / 100;
+}
+
+/**
+ * Coerce untrusted input (request body, stored jsonb) into a QuoteDiscount or null.
+ * Returns null when there is effectively no discount (missing, wrong shape, or
+ * value ≤ 0). A returned object may still have an empty label — callers that
+ * require a label (e.g. the quote writers) must validate that separately.
+ */
+export function normalizeDiscount(input: unknown): QuoteDiscount | null {
+  if (!input || typeof input !== "object") return null;
+  const d = input as Record<string, unknown>;
+  const type = d.type === "fixed" ? "fixed" : d.type === "percent" ? "percent" : null;
+  const value = Number(d.value);
+  const label = typeof d.label === "string" ? d.label.trim() : "";
+  if (!type || !Number.isFinite(value) || value <= 0) return null;
+  return { type, value, label };
+}
+
 /** Sales tax on a subtotal at the given rate (defaults to configured rate). */
 export function calcSalesTax(subtotal: number, rate?: number): number {
   const r = rate ?? salesTaxRate();

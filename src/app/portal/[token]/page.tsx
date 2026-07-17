@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { BUSINESS_EMAIL } from '@/lib/config'
 import { C } from '@/lib/clientTheme'
+import { calcDiscountAmount, type QuoteDiscount } from '@/lib/salesTax'
 
 function fmtBytes(b: number): string {
   if (b < 1024) return `${b} B`
@@ -97,6 +98,7 @@ interface PortalData {
   items: string
   invoiceTotal: string | number
   subtotal?: number | null
+  discount?: QuoteDiscount | null
   salesTaxRate?: number | null
   salesTaxAmount?: number | null
   grandTotal?: number | null
@@ -302,6 +304,17 @@ export default function PortalPage() {
   const isPaidInFull = data.finalPaid === true
   const hasPayment = totalVal > 0
   const hasLineItems = (data.lineItems?.length ?? 0) > 0
+
+  // Discount display (inherited from the quote/deposit; subtotal stays pre-discount).
+  const discount = data.discount ?? null
+  const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0
+  const hasDiscount = discount != null && discountAmount > 0
+  const hasSubtotal = (data.subtotal ?? 0) > 0
+  const discountLabel = discount
+    ? discount.type === 'percent'
+      ? `${discount.label} (-${discount.value}%)`
+      : discount.label
+    : ''
 
   return (
     <div style={s.page}>
@@ -535,7 +548,7 @@ export default function PortalPage() {
                       {isPaidInFull ? 'PAID IN FULL ✓' : fmtCurrency(balanceVal)}
                     </span>
                   </div>
-                  {hasTax && (
+                  {(hasTax || hasDiscount) && (
                     <>
                       <button
                         onClick={() => setShowBreakdown((v) => !v)}
@@ -545,14 +558,24 @@ export default function PortalPage() {
                       </button>
                       {showBreakdown && (
                         <div style={s.breakdownExpanded}>
-                          <div style={s.cardRow}>
-                            <span style={s.cardRowLabel}>SUBTOTAL</span>
-                            <span style={{ ...s.cardRowValue, fontSize: '16px' }}>{fmtCurrency(data.subtotal ?? 0)}</span>
-                          </div>
-                          <div style={s.cardRow}>
-                            <span style={s.cardRowLabel}>SALES TAX ({data.salesTaxRate != null ? `${Math.round(data.salesTaxRate * 10000) / 100}%` : '9.375%'})</span>
-                            <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
-                          </div>
+                          {hasSubtotal && (
+                            <div style={s.cardRow}>
+                              <span style={s.cardRowLabel}>SUBTOTAL</span>
+                              <span style={{ ...s.cardRowValue, fontSize: '16px' }}>{fmtCurrency(data.subtotal ?? 0)}</span>
+                            </div>
+                          )}
+                          {hasDiscount && (
+                            <div style={s.cardRow}>
+                              <span style={s.cardRowLabel}>{discountLabel}</span>
+                              <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textMuted }}>-{fmtCurrency(discountAmount)}</span>
+                            </div>
+                          )}
+                          {hasTax && (
+                            <div style={s.cardRow}>
+                              <span style={s.cardRowLabel}>SALES TAX ({data.salesTaxRate != null ? `${Math.round(data.salesTaxRate * 10000) / 100}%` : '9.375%'})</span>
+                              <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
+                            </div>
+                          )}
                           <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
                             <span style={{ ...s.cardRowLabel, fontWeight: 700 }}>TOTAL</span>
                             <span style={s.cardRowValue}>{fmtCurrency(totalVal)}</span>
@@ -611,6 +634,12 @@ export default function PortalPage() {
                       </span>
                     </div>
                   ))}
+                  {hasDiscount && (
+                    <div style={s.cardRow}>
+                      <span style={{ ...s.cardRowLabel, color: C.textSecondary }}>{discountLabel}</span>
+                      <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textMuted }}>-{fmtCurrency(discountAmount)}</span>
+                    </div>
+                  )}
                   {hasTax && (
                     <>
                       <div style={s.cardRow}>

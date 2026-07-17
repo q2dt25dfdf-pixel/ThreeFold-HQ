@@ -7,6 +7,7 @@ import { type QuoteRow, selectBestQuote } from "@/lib/quoteSelection";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
 import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
+import { calcDiscountAmount, normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ function buildEmailBody(
   subtotal: number | null,
   salesTaxRate: number | null,
   salesTaxAmount: number | null,
+  discount: QuoteDiscount | null,
   publicLink: string,
 ): string {
   const depositPct =
@@ -71,9 +73,13 @@ function buildEmailBody(
   const taxLine = hasTax
     ? `\nSales Tax (${fmtTaxRate(salesTaxRate)}): ${fmtCurrency(salesTaxAmount!)}`
     : "";
+  const discountLine =
+    discount && subtotal != null
+      ? `\n${discount.label}: -${fmtCurrency(calcDiscountAmount(subtotal, discount))}`
+      : "";
   const subtotalLine =
     subtotal != null && subtotal !== totalAmount
-      ? `\nSubtotal: ${fmtCurrency(subtotal)}${taxLine}`
+      ? `\nSubtotal: ${fmtCurrency(subtotal)}${discountLine}${taxLine}`
       : "";
 
   return (
@@ -211,6 +217,7 @@ export async function POST(request: Request): Promise<Response> {
       let salesTaxRate: number | null = null;
       let salesTaxAmount: number | null = null;
       let grandTotal: number | null = null;
+      let discount: QuoteDiscount | null = null;
       let quoteId: string | null = null;
 
       // Fetch all quotes for this lead and select the best one
@@ -268,6 +275,7 @@ export async function POST(request: Request): Promise<Response> {
           if (qd.sales_tax_rate != null) salesTaxRate = Number(qd.sales_tax_rate);
           if (qd.sales_tax_amount != null) salesTaxAmount = Number(qd.sales_tax_amount);
           if (qd.grand_total != null) grandTotal = Number(qd.grand_total);
+          discount = normalizeDiscount(qd.discount);
           if (Array.isArray(qd.line_items)) lineItems = qd.line_items as unknown[];
         }
       }
@@ -330,6 +338,7 @@ export async function POST(request: Request): Promise<Response> {
       };
 
       if (subtotal != null) newDepositData.subtotal = subtotal;
+      if (discount != null) newDepositData.discount = discount;
       if (salesTaxRate != null) newDepositData.sales_tax_rate = salesTaxRate;
       if (salesTaxAmount != null) newDepositData.sales_tax_amount = salesTaxAmount;
       if (grandTotal != null) newDepositData.grand_total = grandTotal;
@@ -356,6 +365,7 @@ export async function POST(request: Request): Promise<Response> {
     const subtotal = (depositData.subtotal as number | null) ?? null;
     const salesTaxRate = (depositData.sales_tax_rate as number | null) ?? null;
     const salesTaxAmount = (depositData.sales_tax_amount as number | null) ?? null;
+    const emailDiscount = normalizeDiscount(depositData.discount);
 
     if (!publicLink) {
       return errResponse("Deposit record has no public link. Regenerate from HQ.", 400);
@@ -377,6 +387,7 @@ export async function POST(request: Request): Promise<Response> {
       subtotal,
       salesTaxRate,
       salesTaxAmount,
+      emailDiscount,
       publicLink,
     );
     const emailHtml = wrapInEmailTemplate(emailBodyText);

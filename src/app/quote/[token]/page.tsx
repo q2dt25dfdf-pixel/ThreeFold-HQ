@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
 import { C, dk } from "@/lib/clientTheme";
+import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 
 interface LineItem {
   name: string;
@@ -22,6 +23,7 @@ interface QuoteData {
   items: string[];
   line_items?: LineItem[] | null;
   subtotal?: number | null;
+  discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
   sales_tax_amount?: number | null;
   grand_total?: number | null;
@@ -148,6 +150,17 @@ export default function QuotePage() {
     ? `${Math.round(data.sales_tax_rate * 10000) / 100}%`
     : "9.375%";
 
+  // Discount display (derived — subtotal stays pre-discount).
+  const discount = data.discount ?? null;
+  const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0;
+  const hasDiscount = discount != null && discountAmount > 0;
+  const hasSubtotal = (data.subtotal ?? 0) > 0;
+  const discountLabel = discount
+    ? discount.type === "percent"
+      ? `${discount.label} (-${discount.value}%)`
+      : discount.label
+    : "";
+
   return (
     <PortalShell>
       <style>{QUOTE_CSS}</style>
@@ -233,16 +246,26 @@ export default function QuotePage() {
                       </span>
                     </div>
                   ))}
-                  {hasTax && (
+                  {(hasTax || hasDiscount) && (
                     <>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>{discountLabel}</span>
+                          <span style={{ ...s.detailVal, color: C.textMuted }}>-{fmt(discountAmount)}</span>
+                        </div>
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   <div style={{ ...s.detailRow, marginTop: "4px" }}>
@@ -263,16 +286,26 @@ export default function QuotePage() {
                         <span style={s.detailVal}>—</span>
                       </div>
                     ))}
-                  {hasTax && (
+                  {(hasTax || hasDiscount) && (
                     <>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>{discountLabel}</span>
+                          <span style={{ ...s.detailVal, color: C.textMuted }}>-{fmt(discountAmount)}</span>
+                        </div>
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   <div style={{ ...s.detailRow, marginTop: "4px" }}>

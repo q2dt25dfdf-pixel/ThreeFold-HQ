@@ -6,7 +6,15 @@ import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
-import { calcGrandTotal, calcSalesTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
+import {
+  calcGrandTotal,
+  calcSalesTax,
+  calcDiscountAmount,
+  calcDiscountedSubtotal,
+  fmtTaxRate,
+  salesTaxRate,
+  type QuoteDiscount,
+} from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 
 interface QuoteResult {
@@ -71,6 +79,10 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const [copied, setCopied] = useState<CopyTarget | "">("");
   const [sender, setSender] = useState<Sender | "">("");
   const [sentVia, setSentVia] = useState<"gmail" | "resend" | "">("");
+  const [discountActive, setDiscountActive] = useState(false);
+  const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent");
+  const [discountValueInput, setDiscountValueInput] = useState("");
+  const [discountLabel, setDiscountLabel] = useState("");
 
   useEffect(() => {
     if (!open || !lead) return;
@@ -81,6 +93,10 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     setCopied("");
     setSender("");
     setSentVia("");
+    setDiscountActive(false);
+    setDiscountType("percent");
+    setDiscountValueInput("");
+    setDiscountLabel("");
     setEmailTo(lead.email ?? "");
   }, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -116,19 +132,46 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const addItem = () => setLineItems((prev) => [...prev, newItem()]);
   const removeItem = (idx: number) => setLineItems((prev) => prev.filter((_, i) => i !== idx));
 
+  const clearDiscount = () => {
+    setDiscountActive(false);
+    setDiscountType("percent");
+    setDiscountValueInput("");
+    setDiscountLabel("");
+  };
+
   const subTotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const taxRate = salesTaxRate();
-  const salesTaxAmount = calcSalesTax(subTotal, taxRate);
-  const grandTotal = calcGrandTotal(subTotal, taxRate);
+
+  // Discount (client-side, using the shared lib helpers — no local math).
+  // subtotal stays PRE-discount; discountedSubtotal feeds tax + grand total.
+  const discountValue = parseFloat(discountValueInput) || 0;
+  const discount: QuoteDiscount | null =
+    discountActive && discountValue > 0
+      ? { type: discountType, value: discountValue, label: discountLabel.trim() }
+      : null;
+  const discountAmount = calcDiscountAmount(subTotal, discount);
+  const discountedSubtotal = discount ? calcDiscountedSubtotal(subTotal, discount) : subTotal;
+  const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
+  const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
+  const discountRowLabel =
+    (discountLabel.trim() || "Discount") + (discountType === "percent" ? ` (-${discountValue}%)` : "");
+
   const hasValidItems = lineItems.some((i) => i.name.trim() && i.quantity > 0);
+  // Label is required once a positive discount value is entered.
+  const discountLabelMissing = discountActive && discountValue > 0 && !discountLabel.trim();
+  const canPreview = hasValidItems && !discountLabelMissing;
 
   const handlePreviewEmail = () => {
-    if (!lead || !hasValidItems) return;
+    if (!lead || !canPreview) return;
 
     const validItems = lineItems.filter((i) => i.name.trim());
     const computedSubtotal = validItems.reduce((sum, i) => sum + i.lineTotal, 0);
-    const computedTax = calcSalesTax(computedSubtotal, taxRate);
-    const computedGrandTotal = computedSubtotal + computedTax;
+    const computedDiscountAmount = calcDiscountAmount(computedSubtotal, discount);
+    const computedDiscountedSubtotal = discount
+      ? calcDiscountedSubtotal(computedSubtotal, discount)
+      : computedSubtotal;
+    const computedTax = calcSalesTax(computedDiscountedSubtotal, taxRate);
+    const computedGrandTotal = computedDiscountedSubtotal + computedTax;
 
     setStep("generating");
 
@@ -141,6 +184,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         clientEmail: lead.email,
         clientAddressText: lead.companyProfile?.address ?? "",
         subtotal: computedSubtotal,
+        discount,
         totalAmount: computedGrandTotal,
         lineItems: validItems,
         items: validItems.map((i) => i.name),
@@ -163,17 +207,23 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         const expFormatted = fmtDate(data.expirationDate);
         const isRevised = lead.stage === "Quote Sent";
 
+        // Pricing block: full breakdown only when a discount applies; otherwise the
+        // email is unchanged (just the project total), so no-discount emails are identical.
+        const pricingLines = discount
+          ? `Subtotal: ${fmtCurrency(computedSubtotal)}\n${discount.label}: -${fmtCurrency(computedDiscountAmount)}\nSales Tax: ${fmtCurrency(computedTax)}\nProject Total: ${grandTotalFormatted}`
+          : `Project Total: ${grandTotalFormatted}`;
+
         const sharedTail = `This quote is valid for 30 days.\n\nTo move forward, we require a 50% deposit before production begins. The remaining 50% balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, simply reply to this email, give us a call, or send us a text. We'll prepare and send your deposit invoice separately and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\n${TF_PLAIN_CLOSING}`;
 
         if (isRevised) {
           setEmailSubject(`Updated Quote from Threefold Supply Co.`);
           setEmailBody(
-            `Hello ${contactName},\n\nWe've updated your quote based on the changes discussed and attached the revised pricing for your review.\n\nYou can view your updated quote and pricing breakdown here:\n${data.publicLink}\n\nPlease take a look and let us know if everything looks correct. If you'd like to make any additional adjustments, simply reply to this email and we'll be happy to update it further.\n\nOnce you're ready to move forward, you can approve the quote directly from the quote page.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\n${sharedTail}`,
+            `Hello ${contactName},\n\nWe've updated your quote based on the changes discussed and attached the revised pricing for your review.\n\nYou can view your updated quote and pricing breakdown here:\n${data.publicLink}\n\nPlease take a look and let us know if everything looks correct. If you'd like to make any additional adjustments, simply reply to this email and we'll be happy to update it further.\n\nOnce you're ready to move forward, you can approve the quote directly from the quote page.\n\nQuote Number: ${data.quoteNumber}\n${pricingLines}\nValid Through: ${expFormatted}\n\n${sharedTail}`,
           );
         } else {
           setEmailSubject(`Your Custom Quote from Threefold Supply Co.`);
           setEmailBody(
-            `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\nProject Total: ${grandTotalFormatted}\nValid Through: ${expFormatted}\n\nView your full quote — including pricing breakdown — here:\n${data.publicLink}\n\n${sharedTail}`,
+            `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\n${pricingLines}\nValid Through: ${expFormatted}\n\nView your full quote — including pricing breakdown — here:\n${data.publicLink}\n\n${sharedTail}`,
           );
         }
         setStep("preview");
@@ -245,7 +295,8 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         <button
           type="button"
           onClick={handlePreviewEmail}
-          disabled={!hasValidItems}
+          disabled={!canPreview}
+          title={discountLabelMissing ? "Add a discount label first" : undefined}
           className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
         >
           Preview Email
@@ -400,14 +451,83 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={addItem}
-            className="flex w-fit items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add item
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={addItem}
+              className="flex w-fit items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add item
+            </button>
+
+            {/* Discount */}
+            {!discountActive ? (
+              <button
+                type="button"
+                onClick={() => setDiscountActive(true)}
+                className="w-fit text-xs font-semibold text-slate-500 hover:text-slate-700"
+              >
+                + Add discount
+              </button>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Discount</span>
+                  <button
+                    type="button"
+                    onClick={clearDiscount}
+                    aria-label="Remove discount"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {/* Toggle + value on one row (wraps safely at 375px); label full width beneath */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="inline-flex shrink-0 overflow-hidden rounded-2xl border border-slate-300">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("percent")}
+                      className={`px-3.5 py-2.5 text-xs font-semibold ${discountType === "percent" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      %
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("fixed")}
+                      className={`px-3.5 py-2.5 text-xs font-semibold ${discountType === "fixed" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      $
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    step={discountType === "percent" ? 1 : 0.01}
+                    value={discountValueInput}
+                    onChange={(e) => setDiscountValueInput(e.target.value)}
+                    placeholder={discountType === "percent" ? "0" : "0.00"}
+                    aria-label="Discount value"
+                    className="w-24 shrink-0 rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={discountLabel}
+                  onChange={(e) => setDiscountLabel(e.target.value)}
+                  placeholder="e.g. Loyalty discount"
+                  aria-label="Discount label"
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                />
+                {discountLabelMissing && (
+                  <p className="mt-1.5 text-[10px] font-semibold text-rose-500">
+                    Add a label to apply this discount (e.g. &quot;Loyalty discount&quot;).
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Totals */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
@@ -415,6 +535,12 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Subtotal</span>
               <span className="text-sm font-semibold text-slate-950">{fmtCurrency(subTotal)}</span>
             </div>
+            {discountAmount > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{discountRowLabel}</span>
+                <span className="text-sm font-semibold text-slate-500">-{fmtCurrency(discountAmount)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Sales Tax ({fmtTaxRate(taxRate)})</span>
               <span className="text-sm font-semibold text-slate-500">{fmtCurrency(salesTaxAmount)}</span>

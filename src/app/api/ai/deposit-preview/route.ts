@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
+import { calcDiscountAmount, normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +90,7 @@ function buildEmailBody(
   subtotal: number | null,
   salesTaxRate: number | null,
   salesTaxAmount: number | null,
+  discount: QuoteDiscount | null,
   publicLink: string | null,
 ): string {
   const depositPercent = totalAmount > 0
@@ -103,8 +105,11 @@ function buildEmailBody(
   const taxLine = hasTax
     ? `\nSales Tax (${fmtTaxRate(salesTaxRate)}): ${fmtCurrency(salesTaxAmount!)}`
     : "";
+  const discountLine = discount && subtotal != null
+    ? `\n${discount.label}: -${fmtCurrency(calcDiscountAmount(subtotal, discount))}`
+    : "";
   const subtotalLine = subtotal != null && subtotal !== totalAmount
-    ? `\nSubtotal: ${fmtCurrency(subtotal)}${taxLine}`
+    ? `\nSubtotal: ${fmtCurrency(subtotal)}${discountLine}${taxLine}`
     : "";
 
   return (
@@ -144,6 +149,7 @@ function buildPreview(
     Math.max(totalAmount - depositAmount, 0);
   const lineItems      = (d.line_items as LineItem[] | null) ?? null;
   const subtotal       = (d.subtotal as number | null) ?? null;
+  const discount       = normalizeDiscount(d.discount);
   const salesTaxRate   = (d.sales_tax_rate as number | null) ?? null;
   const salesTaxAmount = (d.sales_tax_amount as number | null) ?? null;
   const publicLink     = (d.public_link as string | null) ?? null;
@@ -155,7 +161,7 @@ function buildPreview(
 
   const emailBodyPreview = buildEmailBody(
     contactName, depositNumber, totalAmount, depositAmount, balanceRemaining,
-    lineItems, subtotal, salesTaxRate, salesTaxAmount, publicLink,
+    lineItems, subtotal, salesTaxRate, salesTaxAmount, discount, publicLink,
   );
 
   const depositPct = totalAmount > 0
@@ -183,6 +189,7 @@ function buildPreview(
     sentDate,
     lineItems,
     subtotal,
+    discount,
     salesTaxRate,
     salesTaxAmount,
     publicLink,

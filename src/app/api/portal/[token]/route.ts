@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSignedUrls, getDesignSignedUrls } from '@/lib/getSignedUrl'
+import { normalizeDiscount, type QuoteDiscount } from '@/lib/salesTax'
 
 export async function GET(
   _request: Request,
@@ -62,6 +63,9 @@ export async function GET(
   const salesTaxRateVal = depData?.sales_tax_rate != null ? Number(depData.sales_tax_rate)
     : inv?.sales_tax_rate != null ? Number(inv.sales_tax_rate) : null
   const grandTotalVal = Number(depData?.grand_total ?? inv?.grand_total ?? 0) || null
+  // Discount inherited from the deposit request / finance record (falls back to the
+  // related quote below when line items are pulled from there).
+  let discountVal: QuoteDiscount | null = normalizeDiscount(depData?.discount ?? inv?.discount ?? null)
 
   // Payment status from the finance record (updated by Stripe webhook or manual marking)
   const depositIsPaid = inv?.deposit_paid === true || inv?.deposit_paid === 'true'
@@ -125,6 +129,7 @@ export async function GET(
       .limit(1)
     if (quoteRows && quoteRows.length > 0) {
       const qd = quoteRows[0].data as Record<string, unknown>
+      if (discountVal === null && qd.discount != null) discountVal = normalizeDiscount(qd.discount)
       if (Array.isArray(qd.line_items)) {
         lineItems = (qd.line_items as RawLineItem[]).map((li) => ({
           name: String(li.name ?? ''),
@@ -150,6 +155,7 @@ export async function GET(
     items: Array.isArray(d.items) ? d.items.join(', ') : d.items || '',
     invoiceTotal: (grandTotalVal ?? totalAmount) > 0 ? (grandTotalVal ?? totalAmount) : '',
     subtotal: subtotalVal,
+    discount: discountVal,
     salesTaxRate: salesTaxRateVal,
     salesTaxAmount: salesTaxAmountVal,
     grandTotal: grandTotalVal,

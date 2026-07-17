@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
       quoteId: raw.id,
       quoteNumber: raw.quote_number,
       lineItems: raw.line_items ?? null,
-      subtotal: raw.subtotal ?? raw.total_amount,
+      // subtotal is PRE-tax and must never fall back to total_amount (grand total).
+      // Reading grand total as a subtotal double-counts tax and, once discounts
+      // exist, would leak a post-discount grand total into a pre-tax slot.
+      subtotal: raw.subtotal ?? null,
+      discount: raw.discount ?? null,
       salesTaxRate: raw.sales_tax_rate ?? null,
       salesTaxAmount: raw.sales_tax_amount ?? null,
       grandTotal: raw.grand_total ?? raw.total_amount,

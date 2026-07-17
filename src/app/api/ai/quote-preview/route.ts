@@ -7,6 +7,7 @@ import {
   selectBestQuote,
 } from "@/lib/quoteSelection";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
+import { calcDiscountAmount, normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 
 export const dynamic = "force-dynamic";
 
@@ -68,10 +69,31 @@ const SHARED_TAIL =
   "If you have any questions at all, please don't hesitate to reach out.\n\n" +
   TF_PLAIN_CLOSING;
 
+// Pricing block for the email body: full breakdown only when a discount applies;
+// otherwise just the project total, so no-discount previews are unchanged.
+function buildPricingBlock(
+  subtotal: number | null,
+  discount: QuoteDiscount | null,
+  salesTaxAmount: number | null,
+  grandTotal: number | null,
+): string {
+  const grandTotalFormatted = grandTotal != null ? fmtCurrency(grandTotal) : "[QUOTE TOTAL]";
+  if (discount && subtotal != null && salesTaxAmount != null) {
+    const discountAmount = calcDiscountAmount(subtotal, discount);
+    return (
+      `Subtotal: ${fmtCurrency(subtotal)}\n` +
+      `${discount.label}: -${fmtCurrency(discountAmount)}\n` +
+      `Sales Tax: ${fmtCurrency(salesTaxAmount)}\n` +
+      `Project Total: ${grandTotalFormatted}`
+    );
+  }
+  return `Project Total: ${grandTotalFormatted}`;
+}
+
 function buildNewQuoteBody(
   contactName: string,
   quoteNumber: string | null,
-  grandTotal: number | null,
+  pricingBlock: string,
   expirationDate: string | null,
   publicLink: string | null,
 ): string {
@@ -79,7 +101,7 @@ function buildNewQuoteBody(
     `Hi ${contactName},\n\n` +
     `Thank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\n` +
     `Quote Number: ${quoteNumber ?? "[QUOTE NUMBER]"}\n` +
-    `Project Total: ${grandTotal != null ? fmtCurrency(grandTotal) : "[QUOTE TOTAL]"}\n` +
+    `${pricingBlock}\n` +
     `Valid Through: ${expirationDate ? fmtDate(expirationDate) : "[EXPIRY DATE]"}\n\n` +
     `View your full quote — including pricing breakdown — here:\n${publicLink ?? "[QUOTE LINK]"}\n\n` +
     SHARED_TAIL
@@ -89,7 +111,7 @@ function buildNewQuoteBody(
 function buildRevisedQuoteBody(
   contactName: string,
   quoteNumber: string | null,
-  grandTotal: number | null,
+  pricingBlock: string,
   expirationDate: string | null,
   publicLink: string | null,
 ): string {
@@ -100,7 +122,7 @@ function buildRevisedQuoteBody(
     `Please take a look and let us know if everything looks correct. If you'd like to make any additional adjustments, simply reply to this email and we'll be happy to update it further.\n\n` +
     `Once you're ready to move forward, you can approve the quote directly from the quote page.\n\n` +
     `Quote Number: ${quoteNumber ?? "[QUOTE NUMBER]"}\n` +
-    `Project Total: ${grandTotal != null ? fmtCurrency(grandTotal) : "[QUOTE TOTAL]"}\n` +
+    `${pricingBlock}\n` +
     `Valid Through: ${expirationDate ? fmtDate(expirationDate) : "[EXPIRY DATE]"}\n\n` +
     SHARED_TAIL
   );
@@ -127,6 +149,7 @@ function buildPreviewResponse(
   const expirationDate  = (qd.expiration_date as string) ?? null;
   const lineItems       = (qd.line_items as unknown[] | null) ?? null;
   const subtotal        = (qd.subtotal as number | null) ?? null;
+  const discount        = normalizeDiscount(qd.discount);
   const salesTaxRate    = (qd.sales_tax_rate as number | null) ?? null;
   const salesTaxAmount  = (qd.sales_tax_amount as number | null) ?? null;
   const grandTotal      = (qd.grand_total as number | null) ?? null;
@@ -142,9 +165,10 @@ function buildPreviewResponse(
     ? "Updated Quote from Threefold Supply Co."
     : "Your Custom Quote from Threefold Supply Co.";
 
+  const pricingBlock = buildPricingBlock(subtotal, discount, salesTaxAmount, grandTotal);
   const emailBodyPreview = isRevised
-    ? buildRevisedQuoteBody(contactName, quoteNumber, grandTotal, expirationDate, publicLink)
-    : buildNewQuoteBody(contactName, quoteNumber, grandTotal, expirationDate, publicLink);
+    ? buildRevisedQuoteBody(contactName, quoteNumber, pricingBlock, expirationDate, publicLink)
+    : buildNewQuoteBody(contactName, quoteNumber, pricingBlock, expirationDate, publicLink);
 
   return okResponse({
     leadId,
@@ -158,6 +182,7 @@ function buildPreviewResponse(
     expirationDate,
     lineItems,
     subtotal,
+    discount,
     salesTaxRate,
     salesTaxAmount,
     grandTotal,

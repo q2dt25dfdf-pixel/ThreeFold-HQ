@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
+import { normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 
 export async function GET(
   _request: NextRequest,
@@ -30,6 +31,7 @@ export async function GET(
     let salesTaxRateVal: number | null = null;
     let salesTaxAmountVal: number | null = null;
     let grandTotalVal: number | null = null;
+    let discountVal: QuoteDiscount | null = null;
 
     if (raw.deposit_request_id) {
       const { data: depRows } = await getSupabaseAdmin()
@@ -47,6 +49,7 @@ export async function GET(
         if (dep.sales_tax_rate != null) salesTaxRateVal = Number(dep.sales_tax_rate);
         if (dep.sales_tax_amount != null) salesTaxAmountVal = parseAmount(dep.sales_tax_amount);
         if (dep.grand_total != null) grandTotalVal = parseAmount(dep.grand_total);
+        if (dep.discount != null) discountVal = normalizeDiscount(dep.discount);
         if (Array.isArray(dep.line_items)) {
           lineItems = (dep.line_items as RawLineItem[]).map((li) => ({
             name: String(li.name ?? ""),
@@ -65,6 +68,7 @@ export async function GET(
     if (salesTaxRateVal === null && raw.sales_tax_rate != null) salesTaxRateVal = Number(raw.sales_tax_rate);
     if (salesTaxAmountVal === null && raw.sales_tax_amount != null) salesTaxAmountVal = parseAmount(raw.sales_tax_amount);
     if (grandTotalVal === null && raw.grand_total != null) grandTotalVal = parseAmount(raw.grand_total);
+    if (discountVal === null && raw.discount != null) discountVal = normalizeDiscount(raw.discount);
 
     // Fall back to line items stored directly on the finance record
     if (lineItems.length === 0 && Array.isArray(raw.line_items)) {
@@ -85,6 +89,7 @@ export async function GET(
       order_name: (raw.order_name ?? raw.orderName ?? "") as string,
       client_name: (raw.client_name ?? raw.client ?? "") as string,
       subtotal: subtotalVal,
+      discount: discountVal,
       sales_tax_rate: salesTaxRateVal,
       sales_tax_amount: salesTaxAmountVal,
       grand_total: grandTotalVal,

@@ -5,6 +5,7 @@ import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
 import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import { C, dk } from "@/lib/clientTheme";
+import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 
 interface LineItem {
   name: string;
@@ -20,6 +21,7 @@ interface InvoiceData {
   order_name: string;
   client_name: string;
   subtotal?: number | null;
+  discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
   sales_tax_amount?: number | null;
   grand_total?: number | null;
@@ -152,6 +154,18 @@ export default function InvoicePage() {
   const isDepositPaid = data.deposit_paid;
   const hasTax = (data.sales_tax_amount ?? 0) > 0;
   const grandTotalDisplay = data.grand_total ?? data.total_amount;
+
+  // Discount display (inherited from the quote; subtotal stays pre-discount).
+  const discount = data.discount ?? null;
+  const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0;
+  const hasDiscount = discount != null && discountAmount > 0;
+  const hasSubtotal = (data.subtotal ?? 0) > 0;
+  const discountLabel = discount
+    ? discount.type === "percent"
+      ? `${discount.label} (-${discount.value}%)`
+      : discount.label
+    : "";
+
   const isOverdue = data.final_due_date
     ? !isPaidInFull && new Date(data.final_due_date + "T23:59:59") < new Date()
     : false;
@@ -303,7 +317,7 @@ export default function InvoicePage() {
                   )}
                 </div>
               </div>
-              {hasTax && (
+              {(hasTax || hasDiscount) && (
                 <>
                   <button
                     onClick={() => setShowBreakdown((v) => !v)}
@@ -313,14 +327,24 @@ export default function InvoicePage() {
                   </button>
                   {showBreakdown && (
                     <div style={s.breakdownExpanded}>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>{discountLabel}</span>
+                          <span style={{ ...s.detailVal, color: C.textMuted }}>-{fmt(discountAmount)}</span>
+                        </div>
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                       <div style={{ ...s.detailRow, borderBottom: "none" }}>
                         <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL</span>
                         <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>

@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         if (t > 0) totalAmount = t;
         if (d > 0) depositAmount = d;
         if (dep.subtotal != null) taxFields.subtotal = dep.subtotal;
+        if (dep.discount != null) taxFields.discount = dep.discount;
         if (dep.sales_tax_rate != null) taxFields.sales_tax_rate = dep.sales_tax_rate;
         if (dep.sales_tax_amount != null) taxFields.sales_tax_amount = dep.sales_tax_amount;
         if (dep.grand_total != null) taxFields.grand_total = dep.grand_total;
