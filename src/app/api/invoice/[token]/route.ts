@@ -101,6 +101,8 @@ export async function GET(
       final_paid: raw.final_paid === true,
       final_paid_date: (raw.final_paid_date ?? null) as string | null,
       final_due_date: (raw.final_due_date ?? null) as string | null,
+      deposit_payment_method: (raw.deposit_payment_method ?? null) as string | null,
+      final_payment_method: (raw.final_payment_method ?? null) as string | null,
       status: (raw.status ?? "Draft") as string,
       line_items: lineItems,
     };

@@ -6,6 +6,8 @@ import { Search, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
+import SendReceiptModal from "@/components/SendReceiptModal";
+import { PAYMENT_METHOD_OPTIONS, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
@@ -38,15 +40,22 @@ type Invoice = {
   deposit_amount: string | number;
   deposit_paid: boolean;
   deposit_paid_date?: string;
+  deposit_payment_method?: string | null;
+  deposit_receipt_sent_at?: string;
   balance_remaining: string | number;
   final_due_date?: string;
   final_paid: boolean;
   final_paid_date?: string;
+  final_payment_method?: string | null;
+  final_receipt_sent_at?: string;
   dueDate?: string;
   status: InvoiceStatus;
   notes: string;
   stripe_invoice_url?: string;
+  public_token?: string;
+  public_link?: string;
   subtotal?: number;
+  discount?: unknown;
   sales_tax_rate?: number;
   sales_tax_amount?: number;
   grand_total?: number;
@@ -213,7 +222,7 @@ function expenseCategoryBadgeClass(category: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
-const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
+const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", deposit_payment_method: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", final_payment_method: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
 
 type FinanceTab = "overview" | "invoices" | "expenses" | "sales-tax";
@@ -453,6 +462,7 @@ function FinancesContent() {
   const invoiceParamId = searchParams.get("invoice");
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
+  const [receiptInvoice, setReceiptInvoice] = useState<Invoice | null>(null);
   const addSave = useSaveState();
   const editSave = useSaveState();
   const [form, setForm] = useState(emptyForm);
@@ -957,6 +967,27 @@ function FinancesContent() {
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
   };
 
+  // Explicit "Send Receipt" flow. Persists the current edits (method/date) first so
+  // the receipt reflects saved data, then opens the receipt modal.
+  const handleOpenReceipt = async () => {
+    if (!editInvoice) return;
+    const info = resolveReceipt(editInvoice);
+    if (!info) return;
+    const alreadyAt = editInvoice[info.sentField] as string | undefined;
+    if (alreadyAt && !window.confirm(`A receipt was already sent on ${fmtReceiptDate(alreadyAt)}. Send another receipt to the client?`)) return;
+    const linked = normalizeInvoice(editInvoice);
+    await upsertItem(linked);
+    await syncInvoiceToOrder(linked);
+    setReceiptInvoice(linked);
+    setEditInvoice(null);
+    setFormError("");
+  };
+
+  const handleReceiptSent = async (updated: Invoice) => {
+    await upsertItem(updated);
+    setReceiptInvoice(null);
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
     setDeletingId(id);
@@ -1162,6 +1193,18 @@ function FinancesContent() {
             onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, deposit_paid_date: event.target.value }))}
           />
         </div>
+        <div className="md:col-span-2">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Deposit payment method</label>
+          <select
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
+            value={data.deposit_payment_method || ""}
+            disabled={!data.deposit_paid}
+            onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, deposit_payment_method: event.target.value }))}
+          >
+            <option value="">Not specified</option>
+            {PAYMENT_METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Final payment due date */}
@@ -1203,6 +1246,18 @@ function FinancesContent() {
             onClick={(event) => event.currentTarget.showPicker?.()}
             onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, final_paid_date: event.target.value }))}
           />
+        </div>
+        <div className="md:col-span-2">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Final payment method</label>
+          <select
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
+            value={data.final_payment_method || ""}
+            disabled={!data.final_paid}
+            onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, final_payment_method: event.target.value }))}
+          >
+            <option value="">Not specified</option>
+            {PAYMENT_METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
       </div>
 
@@ -2109,6 +2164,26 @@ function FinancesContent() {
                   Cancel
                 </button>
               </div>
+              {(() => {
+                const r = resolveReceipt(editInvoice);
+                const email = (editInvoice.client_email || "").trim();
+                const sentAt = r ? (editInvoice[r.sentField] as string | undefined) : undefined;
+                const disabled = !r || !email;
+                const reason = !r ? "Mark a payment as received to send a receipt." : !email ? "Add a client email on this invoice to send a receipt." : "";
+                return (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => void handleOpenReceipt()}
+                      className="min-h-11 w-full rounded-3xl border border-emerald-200 bg-emerald-50 py-3 text-xs md:text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:hover:bg-emerald-50"
+                    >
+                      {sentAt ? `Resend receipt (sent ${fmtReceiptDate(sentAt)})` : "Send receipt"}
+                    </button>
+                    {reason && <p className="text-center text-[11px] text-slate-500">{reason}</p>}
+                  </div>
+                );
+              })()}
               <button type="button" className="min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" disabled={deletingId === editInvoice.id} onClick={() => handleDelete(editInvoice.id)}>
                 Delete invoice
               </button>
@@ -2118,6 +2193,13 @@ function FinancesContent() {
             {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
         </ModalShell>
       )}
+
+      <SendReceiptModal
+        open={!!receiptInvoice}
+        invoice={receiptInvoice}
+        onClose={() => setReceiptInvoice(null)}
+        onSent={(updated) => void handleReceiptSent(updated as Invoice)}
+      />
       {/* Expense add / edit modal */}
       {showExpenseModal && (
         <ModalShell

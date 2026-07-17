@@ -184,6 +184,7 @@ async function fulfillDepositPaid(
         deposit_paid: true,
         deposit_paid_date: today,
         status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
+        ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
         ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
       },
     }).eq("id", fin.id);
@@ -209,6 +210,7 @@ async function fulfillDepositPaid(
       depositRequestId,
       depData,
       depositTaxCollected,
+      depositPaymentMethod: meta.payment_method ?? null,
       leadId: effectiveLeadId,
       clientName,
       totalAmount,
@@ -334,13 +336,14 @@ type BootstrapOpts = {
   today: string;
   paidAt: string;
   depositTaxCollected?: number;
+  depositPaymentMethod?: string | null;
 };
 
 async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
   const {
     depositRequestId, depData, leadId, clientName,
     totalAmount, depositAmount, balanceRemaining, today, paidAt,
-    depositTaxCollected,
+    depositTaxCollected, depositPaymentMethod,
   } = opts;
 
   const db = getSupabaseAdmin();
@@ -478,6 +481,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
       status: "Deposit Paid",
       created_at: paidAt,
     };
+    if (depositPaymentMethod) financeData.deposit_payment_method = depositPaymentMethod;
     if (depData.subtotal != null) financeData.subtotal = depData.subtotal;
     if (depData.discount != null) financeData.discount = depData.discount;
     if (depData.sales_tax_rate != null) financeData.sales_tax_rate = depData.sales_tax_rate;
@@ -583,6 +587,7 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         stripe_final_session_id: session.id,
         stripe_final_payment_intent_id: paymentIntentId,
         final_paid_at: paidAt,
+        ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
         ...finalTaxFields,
       });
       notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
@@ -658,6 +663,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       status: "Paid",
       stripe_final_payment_intent_id: paymentIntentId,
       final_paid_at: paidAt,
+      ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
       ...asyncFinalTaxFields,
     });
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));

@@ -7,6 +7,7 @@ import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import { C, dk } from "@/lib/clientTheme";
 import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
+import { resolveReceipt, receiptPaidPhrase } from "@/lib/receipt";
 
 interface LineItem {
   name: string;
@@ -34,6 +35,8 @@ interface InvoiceData {
   final_paid: boolean;
   final_paid_date: string | null;
   final_due_date: string | null;
+  deposit_payment_method?: string | null;
+  final_payment_method?: string | null;
   status: string;
   line_items: LineItem[];
 }
@@ -156,7 +159,12 @@ export default function InvoicePage() {
     );
   }
 
-  const isPaidInFull = data.final_paid;
+  // Receipt framing. A deposit that covers the whole order reads as paid in full;
+  // a deposit with an outstanding balance stays an invoice (unchanged from today).
+  const receipt = resolveReceipt(data);
+  const isPaidInFull = data.final_paid || (data.deposit_paid && data.balance_remaining <= 0);
+  const isReceipt = receipt?.paidInFull === true;
+  const receiptPaidLine = receipt ? receiptPaidPhrase(receipt.method, receipt.datePaid) : "";
   const isDepositPaid = data.deposit_paid;
   const hasTax = (data.sales_tax_amount ?? 0) > 0;
   const grandTotalDisplay = data.grand_total ?? data.total_amount;
@@ -196,7 +204,7 @@ export default function InvoicePage() {
 
       <div style={s.rule} />
 
-      <div style={s.eyebrow}>FINAL INVOICE</div>
+      <div style={s.eyebrow}>{isReceipt ? "RECEIPT" : "FINAL INVOICE"}</div>
       <div className="inv-headline">{data.client_name.toUpperCase()}</div>
 
       <div style={s.summaryStrip}>
@@ -376,18 +384,19 @@ export default function InvoicePage() {
                   <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
                 </div>
               )
-            ) : hasDiscount ? (
-              <div style={{ ...s.calloutPaid, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+            ) : (
+              <div style={{ ...s.calloutPaid, flexDirection: "column", alignItems: "stretch", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ ...s.calloutLabel, color: C.green }}>INVOICE</span>
+                  <span style={{ ...s.calloutLabel, color: C.green }}>{isReceipt ? "RECEIPT" : "INVOICE"}</span>
                   <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
                 </div>
-                <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
-              </div>
-            ) : (
-              <div style={s.calloutPaid}>
-                <span style={{ ...s.calloutLabel, color: C.green }}>INVOICE</span>
-                <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
+                {receipt && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <div style={s.receiptMetaStrong}>AMOUNT PAID {fmt(receipt.amountPaid)}</div>
+                    {receiptPaidLine && <div style={s.receiptMetaSub}>{receiptPaidLine}</div>}
+                  </div>
+                )}
+                {hasDiscount && <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />}
               </div>
             )}
           </div>
@@ -521,5 +530,19 @@ const s: Record<string, React.CSSProperties> = {
     borderTop: `1px solid ${C.border}`,
     marginTop: "4px",
     paddingTop: "4px",
+  },
+  receiptMetaStrong: {
+    fontSize: "11px",
+    fontWeight: 800,
+    letterSpacing: "0.12em",
+    color: C.greenText,
+    textTransform: "uppercase" as const,
+  },
+  receiptMetaSub: {
+    fontSize: "12px",
+    fontWeight: 600,
+    letterSpacing: "0.01em",
+    color: C.greenText,
+    opacity: 0.75,
   },
 };
