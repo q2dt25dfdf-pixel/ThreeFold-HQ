@@ -334,7 +334,7 @@ export default function QuotePage() {
             <div className="dk-card">
               <div style={s.cardEyebrow}>QUOTE APPROVED</div>
               <div style={{ ...s.bodyText, color: C.greenText, fontWeight: 600, marginBottom: "12px" }}>
-                Your quote has been approved. Threefold Supply Co. will follow up with your deposit request.
+                Your quote has been approved. Threefold Supply Co. will follow up with your invoice.
               </div>
               <div style={s.bodyText}>
                 Questions? Reply to the email you received or contact us directly.

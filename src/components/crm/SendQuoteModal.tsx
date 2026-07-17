@@ -159,9 +159,9 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const hasValidItems = lineItems.some((i) => i.name.trim() && i.quantity > 0);
   // Label is required once a positive discount value is entered.
   const discountLabelMissing = discountActive && discountValue > 0 && !discountLabel.trim();
-  // A discount that wipes out the whole subtotal leaves a $0 total, which has no
-  // payable deposit and Stripe rejects. Block it here to match the server guard.
-  const discountZeroesTotal = discount != null && discountedSubtotal <= 0;
+  // A discount that leaves a sub-$1.00 total is unpayable (Stripe rejects charges
+  // under ~$0.50). Block it here to match the server guard.
+  const discountZeroesTotal = discount != null && discountedSubtotal < 1;
   const canPreview = hasValidItems && !discountLabelMissing && !discountZeroesTotal;
 
   const handlePreviewEmail = () => {
@@ -303,7 +303,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
             discountLabelMissing
               ? "Add a discount label first"
               : discountZeroesTotal
-              ? "Discount reduces the total to $0"
+              ? "Discount reduces the total below $1.00"
               : undefined
           }
           className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
@@ -536,7 +536,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                 )}
                 {discountZeroesTotal && (
                   <p className="mt-1.5 text-[10px] font-semibold text-rose-500">
-                    This discount reduces the total to $0. Lower it so a balance remains.
+                    A discount cannot reduce the total below $1.00. Lower it so a balance remains.
                   </p>
                 )}
               </div>

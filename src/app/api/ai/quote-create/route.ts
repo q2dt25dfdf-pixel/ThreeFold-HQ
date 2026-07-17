@@ -266,12 +266,12 @@ export async function POST(request: Request): Promise<Response> {
     const discountedSubtotal = discount
       ? calcDiscountedSubtotal(subtotal, discount)
       : subtotal;
-    // A discount must not zero out the quote — a $0 grand total has no payable
-    // deposit and Stripe rejects $0 charges. Block it (the only path that can
-    // produce a $0 total) rather than create an unpayable quote.
-    if (discount && discountedSubtotal <= 0) {
+    // A discount must not drive the total near zero. Stripe rejects charges under
+    // ~$0.50 and a sub-dollar order is not a real order, so require at least $1.00
+    // pre-tax after the discount — the only path that can produce a tiny total.
+    if (discount && discountedSubtotal < 1) {
       return errResponse(
-        "A discount cannot reduce the total to $0. Lower the discount so a balance remains.",
+        "A discount cannot reduce the total below $1.00.",
         400,
       );
     }

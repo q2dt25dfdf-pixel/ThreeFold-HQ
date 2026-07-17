@@ -111,12 +111,13 @@ export async function POST(request: NextRequest) {
     const discountedSubtotal = discount
       ? calcDiscountedSubtotal(computedSubtotal, discount)
       : computedSubtotal;
-    // A discount must not zero out the quote. A $0 grand total has no payable
-    // deposit and Stripe rejects $0 charges, so block it here (the only path that
-    // can produce a $0 total in this app) rather than ship a dead pay button.
-    if (discount && discountedSubtotal <= 0) {
+    // A discount must not drive the total near zero. Stripe rejects charges under
+    // ~$0.50, and a sub-dollar order is not a real order, so require at least
+    // $1.00 pre-tax after the discount. This is the only path that can produce a
+    // tiny total in this app, so blocking here keeps every pay surface valid.
+    if (discount && discountedSubtotal < 1) {
       return NextResponse.json(
-        { error: "A discount cannot reduce the total to $0. Lower the discount so a balance remains." },
+        { error: "A discount cannot reduce the total below $1.00." },
         { status: 400 },
       );
     }
