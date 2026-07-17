@@ -377,7 +377,7 @@ export default function PortalPage() {
               </div>
               {data.estimatedDelivery && (
                 <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '8px', letterSpacing: '0.04em' }}>
-                  Est. Delivery — {data.estimatedDelivery}
+                  Est. Delivery: {data.estimatedDelivery}
                 </div>
               )}
             </div>
@@ -460,7 +460,7 @@ export default function PortalPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={v.image_signed_url}
-                            alt={`Design — ${v.name || `Version ${v.version_number || i + 1}`}`}
+                            alt={`Design: ${v.name || `Version ${v.version_number || i + 1}`}`}
                             style={{ maxWidth: '100%', maxHeight: '440px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', margin: '0 auto' }}
                           />
                         ) : url ? (

@@ -190,7 +190,7 @@ export default function QuotePage() {
             <div style={s.chipLabel}>VALID THROUGH</div>
             <div style={{ ...s.chipValue, color: isExpired ? C.red : C.textPrimary }}>
               {fmtDate(data.expiration_date)}
-              {isExpired ? " — EXPIRED" : ""}
+              {isExpired ? " (EXPIRED)" : ""}
             </div>
           </div>
         )}

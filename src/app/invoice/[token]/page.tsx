@@ -300,7 +300,7 @@ export default function InvoicePage() {
                   </span>
                   {data.final_due_date && !isPaidInFull && (
                     <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: isOverdue ? C.red : C.textMuted, textTransform: "none" as const }}>
-                      Due {fmtDate(data.final_due_date)}{isOverdue ? " — OVERDUE" : ""}
+                      Due {fmtDate(data.final_due_date)}{isOverdue ? " (OVERDUE)" : ""}
                     </div>
                   )}
                   {isPaidInFull && data.final_paid_date && (
@@ -376,7 +376,7 @@ export default function InvoicePage() {
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your final payment has been received and confirmed. Thank you for
-                your business — it&apos;s been a pleasure working with you.
+                your business. It&apos;s been a pleasure working with you.
               </div>
             </div>
           ) : paymentParam === "success" ? (
@@ -384,7 +384,7 @@ export default function InvoicePage() {
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your payment is being confirmed. Bank transfers may take a moment to
-                process — this page will reflect the updated status once confirmed.
+                process. This page will reflect the updated status once confirmed.
                 No further action is needed.
               </div>
             </div>
@@ -424,7 +424,7 @@ export default function InvoicePage() {
           </div>
         </div>
         <a
-          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice — ${data.order_name || data.client_name}`}
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice for ${data.order_name || data.client_name}`}
           style={s.btnOutline}
         >
           CONTACT THREEFOLD →

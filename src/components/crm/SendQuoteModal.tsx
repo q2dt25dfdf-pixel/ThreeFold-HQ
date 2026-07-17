@@ -159,7 +159,10 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const hasValidItems = lineItems.some((i) => i.name.trim() && i.quantity > 0);
   // Label is required once a positive discount value is entered.
   const discountLabelMissing = discountActive && discountValue > 0 && !discountLabel.trim();
-  const canPreview = hasValidItems && !discountLabelMissing;
+  // A discount that wipes out the whole subtotal leaves a $0 total, which has no
+  // payable deposit and Stripe rejects. Block it here to match the server guard.
+  const discountZeroesTotal = discount != null && discountedSubtotal <= 0;
+  const canPreview = hasValidItems && !discountLabelMissing && !discountZeroesTotal;
 
   const handlePreviewEmail = () => {
     if (!lead || !canPreview) return;
@@ -213,7 +216,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           ? `Subtotal: ${fmtCurrency(computedSubtotal)}\n${discount.label}: -${fmtCurrency(computedDiscountAmount)}\nSales Tax: ${fmtCurrency(computedTax)}\nProject Total: ${grandTotalFormatted}`
           : `Project Total: ${grandTotalFormatted}`;
 
-        const sharedTail = `This quote is valid for 30 days.\n\nTo move forward, we require a 50% deposit before production begins. The remaining 50% balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, simply reply to this email, give us a call, or send us a text. We'll prepare and send your deposit invoice separately and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\n${TF_PLAIN_CLOSING}`;
+        const sharedTail = `This quote is valid for 30 days.\n\nTo move forward, we require at least a 50% deposit before production begins. Any remaining balance is due before the completed order is delivered or shipped.\n\nIf everything looks good, approve your quote at the link above, give us a call, or send us a text. We'll send your invoice and get your project into production.\n\nIf you have any questions at all, please don't hesitate to reach out.\n\n${TF_PLAIN_CLOSING}`;
 
         if (isRevised) {
           setEmailSubject(`Updated Quote from Threefold Supply Co.`);
@@ -223,7 +226,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         } else {
           setEmailSubject(`Your Custom Quote from Threefold Supply Co.`);
           setEmailBody(
-            `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\n${pricingLines}\nValid Through: ${expFormatted}\n\nView your full quote — including pricing breakdown — here:\n${data.publicLink}\n\n${sharedTail}`,
+            `Hi ${contactName},\n\nThank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\nQuote Number: ${data.quoteNumber}\n${pricingLines}\nValid Through: ${expFormatted}\n\nView your full quote, including pricing breakdown:\n${data.publicLink}\n\n${sharedTail}`,
           );
         }
         setStep("preview");
@@ -296,7 +299,13 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
           type="button"
           onClick={handlePreviewEmail}
           disabled={!canPreview}
-          title={discountLabelMissing ? "Add a discount label first" : undefined}
+          title={
+            discountLabelMissing
+              ? "Add a discount label first"
+              : discountZeroesTotal
+              ? "Discount reduces the total to $0"
+              : undefined
+          }
           className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
         >
           Preview Email
@@ -523,6 +532,11 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                 {discountLabelMissing && (
                   <p className="mt-1.5 text-[10px] font-semibold text-rose-500">
                     Add a label to apply this discount (e.g. &quot;Loyalty discount&quot;).
+                  </p>
+                )}
+                {discountZeroesTotal && (
+                  <p className="mt-1.5 text-[10px] font-semibold text-rose-500">
+                    This discount reduces the total to $0. Lower it so a balance remains.
                   </p>
                 )}
               </div>

@@ -8,6 +8,7 @@ import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
 import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
 import { calcDiscountAmount, normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
+import { depositTerms } from "@/lib/depositTerms";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ function buildEmailBody(
 ): string {
   const depositPct =
     totalAmount > 0 ? Math.round((depositAmount / totalAmount) * 100) : 50;
+  const terms = depositTerms(depositPct);
 
   const itemSummary =
     lineItems && lineItems.length > 0
@@ -81,18 +83,20 @@ function buildEmailBody(
     subtotal != null && subtotal !== totalAmount
       ? `\nSubtotal: ${fmtCurrency(subtotal)}${discountLine}${taxLine}`
       : "";
+  const balanceLine = terms.showBalance
+    ? `\nBalance Due on Completion: ${fmtCurrency(balanceRemaining)}`
+    : "";
 
   return (
     `Hi ${contactName},\n\n` +
     `Your project with Threefold Supply Co. is approved and ready to move into production!\n\n` +
-    `To kick things off, we require a deposit as shown below.${itemSummary}\n\n` +
-    `Deposit Request #: ${depositNumber ?? "[DEPOSIT NUMBER]"}${subtotalLine}\n` +
+    `To kick things off, we require ${terms.isFull ? "payment" : "a deposit"} as shown below.${itemSummary}\n\n` +
+    `${terms.requestNoun} #: ${depositNumber ?? "[DEPOSIT NUMBER]"}${subtotalLine}\n` +
     `Total Project Value: ${fmtCurrency(totalAmount)}\n` +
-    `Deposit Due (${depositPct}%): ${fmtCurrency(depositAmount)}\n` +
-    `Balance Due on Completion: ${fmtCurrency(balanceRemaining)}\n\n` +
-    `Please note: Card payments include a 3% processing fee. Bank account payments do not.\n\n` +
-    `View your full deposit request here:\n${publicLink}\n\n` +
-    `Once your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\n` +
+    `${terms.dueLabelWithPct}: ${fmtCurrency(depositAmount)}${balanceLine}\n\n` +
+    `Please note: Card payments include a 3% processing fee. Bank account payments and checks do not.\n\n` +
+    `View your full ${terms.requestNoun.toLowerCase()} here:\n${publicLink}\n\n` +
+    `${terms.oncePaidSentence} Questions? Just reply to this email.\n\n` +
     TF_PLAIN_CLOSING
   );
 }
@@ -373,9 +377,10 @@ export async function POST(request: Request): Promise<Response> {
 
     // ── Build email ─────────────────────────────────────────────────────────────
     const contactName = company ?? "there";
+    const subjectTerms = depositTerms(totalAmount > 0 ? Math.round((depositAmount / totalAmount) * 100) : 50);
     const emailSubject = depositNumber
-      ? `Your Deposit Request — ${depositNumber} | Threefold Supply Co.`
-      : "Your Deposit Request | Threefold Supply Co.";
+      ? `${subjectTerms.subjectPrefix} ${depositNumber} | Threefold Supply Co.`
+      : `${subjectTerms.subjectPrefix} | Threefold Supply Co.`;
 
     const emailBodyText = buildEmailBody(
       contactName,

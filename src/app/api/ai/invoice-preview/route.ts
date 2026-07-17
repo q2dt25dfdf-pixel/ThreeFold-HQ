@@ -144,7 +144,7 @@ function buildEmailBody(
     `Your order is complete and the remaining balance is now ready for payment.\n\n` +
     `Remaining Balance:\n${fmtCurrency(balanceRemaining)}\n\n` +
     linkLine + `\n\n` +
-    `Please note:\nCard payments include a 3% processing fee.\nBank account payments do not.\n\n` +
+    `Please note:\nCard payments include a 3% processing fee.\nBank account payments and checks do not.\n\n` +
     `If you have any questions, please reply to this email.\n\n` +
     TF_PLAIN_CLOSING
   );
@@ -216,7 +216,7 @@ async function buildPreview(
 
   const clientName = company ?? "there";
   const projectName = orderName ?? "your order";
-  const emailSubject = `Final Invoice – ${projectName}`;
+  const emailSubject = `Final Invoice for ${projectName}`;
   const emailBodyPreview = buildEmailBody(
     clientName,
     projectName,

@@ -36,10 +36,10 @@ const VALID_SENDERS = new Set(["Alliyah", "Hannah", "Jordan"]);
 
 const SHARED_TAIL =
   "This quote is valid for 30 days.\n\n" +
-  "To move forward, we require a 50% deposit before production begins. " +
-  "The remaining 50% balance is due before the completed order is delivered or shipped.\n\n" +
-  "If everything looks good, simply reply to this email, give us a call, or send us a text. " +
-  "We'll prepare and send your deposit invoice separately and get your project into production.\n\n" +
+  "To move forward, we require at least a 50% deposit before production begins. " +
+  "Any remaining balance is due before the completed order is delivered or shipped.\n\n" +
+  "If everything looks good, approve your quote at the link above, give us a call, or send us a text. " +
+  "We'll send your invoice and get your project into production.\n\n" +
   "If you have any questions at all, please don't hesitate to reach out.\n\n" +
   TF_PLAIN_CLOSING;
 
@@ -107,7 +107,7 @@ function buildEmailBody(
     `Hi ${contactName},\n\n` +
     `Thank you for considering Threefold Supply Co.! We've prepared a custom quote for your project.\n\n` +
     `Quote Number: ${qn}\n${pricingBlock}\nValid Through: ${expFormatted}\n\n` +
-    `View your full quote — including pricing breakdown — here:\n${publicLink}\n\n` +
+    `View your full quote, including pricing breakdown:\n${publicLink}\n\n` +
     SHARED_TAIL
   );
 }

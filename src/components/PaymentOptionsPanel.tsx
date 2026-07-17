@@ -60,7 +60,7 @@ export default function PaymentOptionsPanel({
       </div>
 
       <div style={s.feeNotice}>
-        * Card payments include a 3% processing fee. Bank account payments do not.
+        * Card payments include a 3% processing fee. Bank account payments and checks do not.
       </div>
 
       {checkoutError && <div style={s.errorText}>{checkoutError}</div>}

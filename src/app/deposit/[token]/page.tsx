@@ -6,6 +6,7 @@ import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import PortalShell from "@/components/PortalShell";
 import { C, dk } from "@/lib/clientTheme";
 import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
+import { depositTerms } from "@/lib/depositTerms";
 
 interface LineItem {
   name: string;
@@ -148,6 +149,7 @@ export default function DepositPage() {
   const depositPercent = grandTotalDisplay > 0
     ? Math.round((data.deposit_amount / grandTotalDisplay) * 100)
     : 50;
+  const terms = depositTerms(depositPercent);
 
   // Discount display (inherited from the quote; subtotal stays pre-discount).
   const discount = data.discount ?? null;
@@ -172,7 +174,7 @@ export default function DepositPage() {
 
       <div style={s.rule} />
 
-      <div style={s.eyebrow}>DEPOSIT REQUEST</div>
+      <div style={s.eyebrow}>{terms.requestNoun.toUpperCase()}</div>
       <div className="dep-headline">{data.client_name.toUpperCase()}</div>
 
       <div style={s.summaryStrip}>
@@ -248,14 +250,16 @@ export default function DepositPage() {
                 <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
                 <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailKey}>DEPOSIT REQUIRED ({depositPercent}%)</span>
+              <div style={terms.showBalance ? s.detailRow : { ...s.detailRow, borderBottom: "none" }}>
+                <span style={s.detailKey}>{terms.requiredLabel.toUpperCase()}</span>
                 <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
               </div>
-              <div style={{ ...s.detailRow, borderBottom: "none" }}>
-                <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
-                <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
-              </div>
+              {terms.showBalance && (
+                <div style={{ ...s.detailRow, borderBottom: "none" }}>
+                  <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
+                  <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
+                </div>
+              )}
               {(hasTax || hasDiscount) && (
                 <>
                   <button
@@ -296,12 +300,12 @@ export default function DepositPage() {
 
             {!isPaid ? (
               <div style={s.calloutPending}>
-                <span style={s.calloutLabel}>DEPOSIT DUE</span>
+                <span style={s.calloutLabel}>{terms.dueLabel.toUpperCase()}</span>
                 <span style={s.calloutAmountPending}>{fmt(data.deposit_amount)}</span>
               </div>
             ) : (
               <div style={s.calloutPaid}>
-                <span style={{ ...s.calloutLabel, color: C.green }}>DEPOSIT</span>
+                <span style={{ ...s.calloutLabel, color: C.green }}>{terms.isFull ? "PAYMENT" : "DEPOSIT"}</span>
                 <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
               </div>
             )}
@@ -345,7 +349,7 @@ export default function DepositPage() {
               <div style={s.cardEyebrow}>PAYMENT IN PROGRESS</div>
               <div style={s.bodyText}>
                 Your bank transfer is being processed. ACH payments typically settle
-                within 3–5 business days. You will receive confirmation once the
+                within 3 to 5 business days. You will receive confirmation once the
                 payment clears.
               </div>
             </div>
@@ -356,7 +360,7 @@ export default function DepositPage() {
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your payment is being confirmed. Bank transfers may take a moment to
-                process — this page will reflect the updated status once confirmed.
+                process. This page will reflect the updated status once confirmed.
                 No further action is needed.
               </div>
             </div>
@@ -371,7 +375,7 @@ export default function DepositPage() {
               <div style={{ marginTop: "20px" }}>
                 <PaymentOptionsPanel
                   amount={data.deposit_amount}
-                  label="DEPOSIT AMOUNT"
+                  label={terms.amountLabel}
                   eyebrow=""
                   onPayCard={() => void handlePay("card")}
                   onPayBank={() => void handlePay("bank")}
@@ -386,7 +390,8 @@ export default function DepositPage() {
             <div className="dk-card">
               <PaymentOptionsPanel
                 amount={data.deposit_amount}
-                label="DEPOSIT AMOUNT"
+                label={terms.amountLabel}
+                eyebrow={terms.payEyebrow}
                 onPayCard={() => void handlePay("card")}
                 onPayBank={() => void handlePay("bank")}
                 checkoutLoading={checkoutLoading}
@@ -423,7 +428,7 @@ export default function DepositPage() {
           </div>
         </div>
         <a
-          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: ${terms.requestNoun} ${data.deposit_request_number}`}
           style={s.btnOutline}
         >
           CONTACT THREEFOLD →

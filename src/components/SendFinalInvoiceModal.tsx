@@ -78,9 +78,9 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
         setPublicLink(d.publicLink);
         // Use API-returned balance (cross-referenced with deposit request) for accuracy
         const balance = d.balanceRemaining ?? parseAmount(invoice.balance_remaining);
-        setEmailSubject(`Final Invoice – ${projectName}`);
+        setEmailSubject(`Final Invoice for ${projectName}`);
         setEmailBody(
-          `Hello ${clientName},\n\nYour order is complete and the remaining balance is now ready for payment.\n\nRemaining Balance:\n${fmtCurrency(balance)}\n\nView and pay your invoice here:\n${d.publicLink}\n\nPlease note:\nCard payments include a 3% processing fee.\nBank account payments do not.\n\nIf you have any questions, please reply to this email.\n\n${TF_PLAIN_CLOSING}`,
+          `Hello ${clientName},\n\nYour order is complete and the remaining balance is now ready for payment.\n\nRemaining Balance:\n${fmtCurrency(balance)}\n\nView and pay your invoice here:\n${d.publicLink}\n\nPlease note:\nCard payments include a 3% processing fee.\nBank account payments and checks do not.\n\nIf you have any questions, please reply to this email.\n\n${TF_PLAIN_CLOSING}`,
         );
         setStep("preview");
       })
