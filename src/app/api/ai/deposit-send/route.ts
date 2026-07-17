@@ -7,6 +7,8 @@ import { type QuoteRow, selectBestQuote } from "@/lib/quoteSelection";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
 import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
+import { calcDiscountAmount, normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
+import { depositTerms } from "@/lib/depositTerms";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +59,12 @@ function buildEmailBody(
   subtotal: number | null,
   salesTaxRate: number | null,
   salesTaxAmount: number | null,
+  discount: QuoteDiscount | null,
   publicLink: string,
 ): string {
   const depositPct =
     totalAmount > 0 ? Math.round((depositAmount / totalAmount) * 100) : 50;
+  const terms = depositTerms(depositPct);
 
   const itemSummary =
     lineItems && lineItems.length > 0
@@ -71,22 +75,28 @@ function buildEmailBody(
   const taxLine = hasTax
     ? `\nSales Tax (${fmtTaxRate(salesTaxRate)}): ${fmtCurrency(salesTaxAmount!)}`
     : "";
+  const discountLine =
+    discount && subtotal != null
+      ? `\n${discount.label}: -${fmtCurrency(calcDiscountAmount(subtotal, discount))}`
+      : "";
   const subtotalLine =
     subtotal != null && subtotal !== totalAmount
-      ? `\nSubtotal: ${fmtCurrency(subtotal)}${taxLine}`
+      ? `\nSubtotal: ${fmtCurrency(subtotal)}${discountLine}${taxLine}`
       : "";
+  const balanceLine = terms.showBalance
+    ? `\nBalance Due on Completion: ${fmtCurrency(balanceRemaining)}`
+    : "";
 
   return (
     `Hi ${contactName},\n\n` +
     `Your project with Threefold Supply Co. is approved and ready to move into production!\n\n` +
-    `To kick things off, we require a deposit as shown below.${itemSummary}\n\n` +
-    `Deposit Request #: ${depositNumber ?? "[DEPOSIT NUMBER]"}${subtotalLine}\n` +
+    `To kick things off, we require ${terms.isFull ? "payment" : "a deposit"} as shown below.${itemSummary}\n\n` +
+    `${terms.requestNoun} #: ${depositNumber ?? "[DEPOSIT NUMBER]"}${subtotalLine}\n` +
     `Total Project Value: ${fmtCurrency(totalAmount)}\n` +
-    `Deposit Due (${depositPct}%): ${fmtCurrency(depositAmount)}\n` +
-    `Balance Due on Completion: ${fmtCurrency(balanceRemaining)}\n\n` +
-    `Please note: Card payments include a 3% processing fee. Bank account payments do not.\n\n` +
-    `View your full deposit request here:\n${publicLink}\n\n` +
-    `Once your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\n` +
+    `${terms.dueLabelWithPct}: ${fmtCurrency(depositAmount)}${balanceLine}\n\n` +
+    `Please note: Card payments include a 3% processing fee. Bank account payments and checks do not.\n\n` +
+    `View your full ${terms.requestNoun.toLowerCase()} here:\n${publicLink}\n\n` +
+    `${terms.oncePaidSentence} Questions? Just reply to this email.\n\n` +
     TF_PLAIN_CLOSING
   );
 }
@@ -211,6 +221,7 @@ export async function POST(request: Request): Promise<Response> {
       let salesTaxRate: number | null = null;
       let salesTaxAmount: number | null = null;
       let grandTotal: number | null = null;
+      let discount: QuoteDiscount | null = null;
       let quoteId: string | null = null;
 
       // Fetch all quotes for this lead and select the best one
@@ -268,6 +279,7 @@ export async function POST(request: Request): Promise<Response> {
           if (qd.sales_tax_rate != null) salesTaxRate = Number(qd.sales_tax_rate);
           if (qd.sales_tax_amount != null) salesTaxAmount = Number(qd.sales_tax_amount);
           if (qd.grand_total != null) grandTotal = Number(qd.grand_total);
+          discount = normalizeDiscount(qd.discount);
           if (Array.isArray(qd.line_items)) lineItems = qd.line_items as unknown[];
         }
       }
@@ -330,6 +342,7 @@ export async function POST(request: Request): Promise<Response> {
       };
 
       if (subtotal != null) newDepositData.subtotal = subtotal;
+      if (discount != null) newDepositData.discount = discount;
       if (salesTaxRate != null) newDepositData.sales_tax_rate = salesTaxRate;
       if (salesTaxAmount != null) newDepositData.sales_tax_amount = salesTaxAmount;
       if (grandTotal != null) newDepositData.grand_total = grandTotal;
@@ -356,6 +369,7 @@ export async function POST(request: Request): Promise<Response> {
     const subtotal = (depositData.subtotal as number | null) ?? null;
     const salesTaxRate = (depositData.sales_tax_rate as number | null) ?? null;
     const salesTaxAmount = (depositData.sales_tax_amount as number | null) ?? null;
+    const emailDiscount = normalizeDiscount(depositData.discount);
 
     if (!publicLink) {
       return errResponse("Deposit record has no public link. Regenerate from HQ.", 400);
@@ -363,9 +377,10 @@ export async function POST(request: Request): Promise<Response> {
 
     // ── Build email ─────────────────────────────────────────────────────────────
     const contactName = company ?? "there";
+    const subjectTerms = depositTerms(totalAmount > 0 ? Math.round((depositAmount / totalAmount) * 100) : 50);
     const emailSubject = depositNumber
-      ? `Your Deposit Request — ${depositNumber} | Threefold Supply Co.`
-      : "Your Deposit Request | Threefold Supply Co.";
+      ? `${subjectTerms.subjectPrefix} ${depositNumber} | Threefold Supply Co.`
+      : `${subjectTerms.subjectPrefix} | Threefold Supply Co.`;
 
     const emailBodyText = buildEmailBody(
       contactName,
@@ -377,6 +392,7 @@ export async function POST(request: Request): Promise<Response> {
       subtotal,
       salesTaxRate,
       salesTaxAmount,
+      emailDiscount,
       publicLink,
     );
     const emailHtml = wrapInEmailTemplate(emailBodyText);

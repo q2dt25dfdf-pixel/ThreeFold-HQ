@@ -25,6 +25,7 @@ export async function GET(
       deposit_request_number: raw.deposit_request_number,
       client_name: raw.client_name,
       subtotal: raw.subtotal ?? null,
+      discount: raw.discount ?? null,
       sales_tax_rate: raw.sales_tax_rate ?? null,
       sales_tax_amount: raw.sales_tax_amount ?? null,
       grand_total: raw.grand_total ?? null,

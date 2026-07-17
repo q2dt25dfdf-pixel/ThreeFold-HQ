@@ -6,7 +6,8 @@ import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
-import { fmtTaxRate } from "@/lib/salesTax";
+import { fmtTaxRate, calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
+import { depositTerms } from "@/lib/depositTerms";
 import type { Lead, QuoteItem } from "./types";
 
 interface DepositResult {
@@ -31,6 +32,7 @@ type QuoteSnapshot = {
   lineItems: QuoteItem[];
   totalAmount: number;
   subtotal?: number;
+  discount?: QuoteDiscount | null;
   salesTaxRate?: number;
   salesTaxAmount?: number;
   grandTotal?: number;
@@ -64,6 +66,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
   const [depositPercent, setDepositPercent] = useState(50);
   const depositAmount = Math.round((totalAmount * depositPercent) / 100 * 100) / 100;
   const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
+  const terms = depositTerms(depositPercent);
 
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [emailTo, setEmailTo] = useState("");
@@ -100,7 +103,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
       setQuoteLoading(true);
       fetch(`/api/quote/by-id?id=${encodeURIComponent(lead.quote_id)}`)
         .then((r) => r.json())
-        .then((d: { quoteId?: string; quoteNumber?: string; lineItems?: QuoteItem[] | null; totalAmount?: number; subtotal?: number; salesTaxRate?: number; salesTaxAmount?: number; grandTotal?: number; error?: string }) => {
+        .then((d: { quoteId?: string; quoteNumber?: string; lineItems?: QuoteItem[] | null; totalAmount?: number; subtotal?: number; discount?: QuoteDiscount | null; salesTaxRate?: number; salesTaxAmount?: number; grandTotal?: number; error?: string }) => {
           if (!d.error && d.lineItems && d.lineItems.length > 0 && d.quoteId && d.quoteNumber && d.totalAmount != null) {
             const effectiveTotal = d.grandTotal ?? d.totalAmount;
             setQuoteData({
@@ -109,6 +112,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
               lineItems: d.lineItems,
               totalAmount: effectiveTotal,
               subtotal: d.subtotal,
+              discount: d.discount ?? null,
               salesTaxRate: d.salesTaxRate ?? undefined,
               salesTaxAmount: d.salesTaxAmount ?? undefined,
               grandTotal: d.grandTotal,
@@ -140,6 +144,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
           paymentInstructions,
           notes: "",
           ...(quoteData?.subtotal != null && { subtotal: quoteData.subtotal }),
+          ...(quoteData?.discount != null && { discount: quoteData.discount }),
           ...(quoteData?.salesTaxRate != null && { salesTaxRate: quoteData.salesTaxRate }),
           ...(quoteData?.salesTaxAmount != null && { salesTaxAmount: quoteData.salesTaxAmount }),
           ...(quoteData?.grandTotal != null && { grandTotal: quoteData.grandTotal }),
@@ -161,15 +166,21 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
         ? `\n\nItems included:\n${quoteData.lineItems.map((i) => `• ${i.name} (×${i.quantity})`).join("\n")}`
         : "";
 
+      const discountLine = quoteData?.discount != null && quoteData.subtotal != null
+        ? `\n${quoteData.discount.label}: -${fmtCurrency(calcDiscountAmount(quoteData.subtotal, quoteData.discount))}`
+        : "";
       const taxLine = quoteData?.salesTaxAmount != null && quoteData.salesTaxAmount > 0
         ? `\nSales Tax (${fmtTaxRate(quoteData.salesTaxRate)}): ${fmtCurrency(quoteData.salesTaxAmount)}`
         : "";
       const subtotalLine = quoteData?.subtotal != null && quoteData.subtotal !== data.totalAmount
-        ? `\nSubtotal: ${fmtCurrency(quoteData.subtotal)}${taxLine}`
+        ? `\nSubtotal: ${fmtCurrency(quoteData.subtotal)}${discountLine}${taxLine}`
         : "";
-      setEmailSubject(`Your Deposit Request — ${data.depositRequestNumber} | Threefold Supply Co.`);
+      const balanceLine = terms.showBalance
+        ? `\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}`
+        : "";
+      setEmailSubject(`${terms.subjectPrefix} ${data.depositRequestNumber} | Threefold Supply Co.`);
       setEmailBody(
-        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require a deposit as shown below.${itemSummary}\n\nDeposit Request #: ${data.depositRequestNumber}${subtotalLine}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\nDeposit Due (${depositPercent}%): ${fmtCurrency(data.depositAmount)}\nBalance Due on Completion: ${fmtCurrency(data.balanceRemaining)}\n\nPlease note: Card payments include a 3% processing fee. Bank account payments do not.\n\nView your full deposit request here:\n${data.publicLink}${paymentInstructions ? `\n\n${paymentInstructions}` : ""}\n\nOnce your deposit is received, we'll get started right away. Questions? Just reply to this email.\n\n${TF_PLAIN_CLOSING}`,
+        `Hi ${contactName},\n\nYour project with Threefold Supply Co. is approved and ready to move into production!\n\nTo kick things off, we require ${terms.isFull ? "payment" : "a deposit"} as shown below.${itemSummary}\n\n${terms.requestNoun} #: ${data.depositRequestNumber}${subtotalLine}\nTotal Project Value: ${fmtCurrency(data.totalAmount)}\n${terms.dueLabelWithPct}: ${fmtCurrency(data.depositAmount)}${balanceLine}\n\nPlease note: Card payments include a 3% processing fee. Bank account payments and checks do not.\n\nView your full ${terms.requestNoun.toLowerCase()} here:\n${data.publicLink}${paymentInstructions ? `\n\n${paymentInstructions}` : ""}\n\n${terms.oncePaidSentence} Questions? Just reply to this email.\n\n${TF_PLAIN_CLOSING}`,
       );
       setStep("preview");
     } catch (err: unknown) {
@@ -299,7 +310,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
 
   return (
     <ModalShell
-      title="Send Deposit Request"
+      title={terms.sendTitle}
       subtitle={`${lead.company} · ${lead.email}`}
       onClose={onClose}
       maxWidth="max-w-2xl"
@@ -344,7 +355,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
       {step === "configure" && (
         <div className="flex flex-col gap-6">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Deposit Details
+            {terms.detailsHeading}
           </p>
 
           {/* Quote items summary — only shown when a quote with line_items is found */}
@@ -389,6 +400,14 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
                     <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Subtotal</span>
                     <span className="text-xs font-semibold text-slate-600">{fmtCurrency(quoteData.subtotal)}</span>
                   </div>
+                  {quoteData.discount != null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                        {quoteData.discount.label}{quoteData.discount.type === "percent" ? ` (-${quoteData.discount.value}%)` : ""}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500">-{fmtCurrency(calcDiscountAmount(quoteData.subtotal, quoteData.discount))}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">CA Tax ({fmtTaxRate(quoteData.salesTaxRate)})</span>
                     <span className="text-xs font-semibold text-slate-500">{fmtCurrency(quoteData.salesTaxAmount)}</span>
@@ -427,7 +446,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
             )}
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">Deposit Percentage</label>
+              <label className="text-xs font-semibold text-slate-600">{terms.percentageLabel}</label>
               <div className="relative">
                 <input
                   type="number"
@@ -444,20 +463,22 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
             </div>
           </div>
 
-          {/* Summary strip */}
-          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          {/* Summary strip — the Balance Later tile is hidden when paying in full */}
+          <div className={`grid ${terms.showBalance ? "grid-cols-3" : "grid-cols-2"} gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4`}>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-                Deposit Due
+                {terms.dueLabel}
               </p>
               <p className="mt-1 text-base font-bold text-slate-950">{fmtCurrency(depositAmount)}</p>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-                Balance Later
-              </p>
-              <p className="mt-1 text-base font-bold text-slate-950">{fmtCurrency(balanceRemaining)}</p>
-            </div>
+            {terms.showBalance && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                  Balance Later
+                </p>
+                <p className="mt-1 text-base font-bold text-slate-950">{fmtCurrency(balanceRemaining)}</p>
+              </div>
+            )}
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Total</p>
               <p className="mt-1 text-base font-bold text-slate-950">{fmtCurrency(totalAmount)}</p>
@@ -492,7 +513,7 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Deposit Due
+                {terms.dueLabel}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-950">
                 {fmtCurrency(depositResult.depositAmount)}

@@ -3,7 +3,12 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
-import { calcSalesTax, calcGrandTotal } from "@/lib/salesTax";
+import {
+  calcSalesTax,
+  calcGrandTotal,
+  calcDiscountedSubtotal,
+  normalizeDiscount,
+} from "@/lib/salesTax";
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 
@@ -102,6 +107,7 @@ export async function POST(request: Request): Promise<Response> {
     confirm,
     deliveryZip,
     clientZip,
+    discount: rawDiscount,
   } = body as Record<string, unknown>;
 
   // ── Require confirm: true ─────────────────────────────────────────────────
@@ -120,6 +126,12 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   const inputLineItems = rawLineItems as InputLineItem[];
+
+  // ── Validate discount (optional) ──────────────────────────────────────────
+  const discount = normalizeDiscount(rawDiscount);
+  if (discount && !discount.label) {
+    return errResponse("A discount requires a label.", 400);
+  }
 
   // ── Require leadId or company ─────────────────────────────────────────────
   const hasLeadId  = leadId  && typeof leadId  === "string" && leadId.trim();
@@ -247,9 +259,24 @@ export async function POST(request: Request): Promise<Response> {
       clientZip:   typeof clientZip === "string" ? clientZip : undefined,
       clientAddressText: "",
     });
+    // Order of operations: subtotal → discount → discountedSubtotal → tax → grand.
+    // subtotal stays PRE-discount; with no discount, discountedSubtotal === subtotal
+    // so tax/grand are byte-identical to the old behavior.
     const taxRate = taxLookup.rate;
-    const salesTaxAmount = calcSalesTax(subtotal, taxRate);
-    const grandTotal = calcGrandTotal(subtotal, taxRate);
+    const discountedSubtotal = discount
+      ? calcDiscountedSubtotal(subtotal, discount)
+      : subtotal;
+    // A discount must not drive the total near zero. Stripe rejects charges under
+    // ~$0.50 and a sub-dollar order is not a real order, so require at least $1.00
+    // pre-tax after the discount — the only path that can produce a tiny total.
+    if (discount && discountedSubtotal < 1) {
+      return errResponse(
+        "A discount cannot reduce the total below $1.00.",
+        400,
+      );
+    }
+    const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
+    const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
 
     // ── Quote number ──────────────────────────────────────────────────────
     // Sequential: count all existing quotes + 1 (matches /api/quote/generate logic)
@@ -273,6 +300,7 @@ export async function POST(request: Request): Promise<Response> {
       items:                  computedLineItems.map((i) => i.name),
       line_items:             computedLineItems,
       subtotal:               Math.round(subtotal * 100) / 100,
+      discount:               discount,
       sales_tax_rate:         taxRate,
       sales_tax_amount:       salesTaxAmount,
       grand_total:            Math.round(grandTotal * 100) / 100,
@@ -316,6 +344,7 @@ export async function POST(request: Request): Promise<Response> {
       existingQuoteCount: existingQuotes.length,
       lineItems:          computedLineItems,
       subtotal:           Math.round(subtotal * 100) / 100,
+      discount,
       salesTaxRate:       taxRate,
       salesTaxAmount,
       grandTotal:         Math.round(grandTotal * 100) / 100,

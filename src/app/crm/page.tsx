@@ -123,6 +123,11 @@ type InvoiceRecord = {
   final_paid: boolean;
   status: string;
   notes: string;
+  subtotal?: number;
+  discount?: unknown;
+  sales_tax_rate?: number;
+  sales_tax_amount?: number;
+  grand_total?: number;
 };
 
 function normalizeForMatch(s: string): string {
@@ -526,7 +531,16 @@ function CRMContent() {
 
     // Look up the deposit request for this lead using the specific ID on the lead,
     // so we always get the latest request rather than an arbitrary old one.
-    type DepositRow = { total_amount: number; deposit_amount: number; balance_remaining: number };
+    type MoneyRow = {
+      total_amount?: number;
+      deposit_amount?: number;
+      balance_remaining?: number;
+      subtotal?: number;
+      grand_total?: number;
+      discount?: unknown;
+      sales_tax_rate?: number;
+      sales_tax_amount?: number;
+    };
     const leadDepositRequestId = lead.deposit_request_id;
     const { data: depositRows } = leadDepositRequestId
       ? await supabase
@@ -540,7 +554,22 @@ function CRMContent() {
           .eq("data->>lead_id", lead.id)
           .order("id", { ascending: false })
           .limit(1);
-    const depositData = depositRows?.[0]?.data as DepositRow | undefined;
+    const depositData = depositRows?.[0]?.data as MoneyRow | undefined;
+
+    // Also read the source quote so the order/invoice total (and any discount) can
+    // never disagree with the quote — the quote's grand_total is already discounted.
+    let quoteData: MoneyRow | undefined;
+    if (lead.quote_id) {
+      const { data: quoteRows } = await supabase
+        .from("quotes")
+        .select("data")
+        .eq("id", lead.quote_id)
+        .limit(1);
+      quoteData = quoteRows?.[0]?.data as MoneyRow | undefined;
+    }
+    // Prefer the deposit request's inherited money, then the quote's, for each field.
+    const moneySource: MoneyRow = { ...(quoteData ?? {}), ...(depositData ?? {}) };
+    const inheritedDiscount = depositData?.discount ?? quoteData?.discount ?? null;
 
     // Preserve any vendor already on this order (manual edits, prior runs); auto-detect only when blank
     const { data: existingOrderRows } = await supabase
@@ -557,9 +586,20 @@ function CRMContent() {
       typeof rawValue === "number"
         ? rawValue
         : Number(String(rawValue).replace(/[^0-9.-]/g, "")) || 0;
+    // Total priority: deposit request → quote grand_total (both already discounted) →
+    // lead.value. This keeps the order/invoice total aligned with the quote even when
+    // a discount was applied (lead.value can lag behind the quote's discounted total).
+    const quoteTotal =
+      moneySource.grand_total != null && Number(moneySource.grand_total) > 0
+        ? Number(moneySource.grand_total)
+        : moneySource.total_amount != null && Number(moneySource.total_amount) > 0
+        ? Number(moneySource.total_amount)
+        : 0;
     const totalAmount =
       depositData?.total_amount != null && Number(depositData.total_amount) > 0
         ? Number(depositData.total_amount)
+        : quoteTotal > 0
+        ? quoteTotal
         : leadTotal;
     const depositAmount = depositData?.deposit_amount ?? Math.round(totalAmount * 0.5 * 100) / 100;
     const balanceRemaining = depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0);
@@ -642,6 +682,19 @@ function CRMContent() {
       lead.deposit_request_number ? `Deposit Request: ${lead.deposit_request_number}.` : "",
     ].filter(Boolean).join(" ");
 
+    // Carry the quote's discount (and its pre-tax subtotal / tax) onto the invoice so
+    // the invoice + portal breakdown matches the quote. Only added when a discount
+    // exists, so no-discount invoices are written exactly as before.
+    const discountFinanceFields: Partial<InvoiceRecord> = inheritedDiscount
+      ? {
+          discount: inheritedDiscount,
+          ...(moneySource.subtotal != null ? { subtotal: Number(moneySource.subtotal) } : {}),
+          ...(moneySource.sales_tax_rate != null ? { sales_tax_rate: Number(moneySource.sales_tax_rate) } : {}),
+          ...(moneySource.sales_tax_amount != null ? { sales_tax_amount: Number(moneySource.sales_tax_amount) } : {}),
+          ...(moneySource.grand_total != null ? { grand_total: Number(moneySource.grand_total) } : {}),
+        }
+      : {};
+
     await upsertFinance({
       id: invoiceId,
       client: lead.company,
@@ -664,6 +717,7 @@ function CRMContent() {
       final_paid: false,
       status: "Deposit Paid",
       notes: invoiceNotes,
+      ...discountFinanceFields,
     });
 
     setToastMessage(

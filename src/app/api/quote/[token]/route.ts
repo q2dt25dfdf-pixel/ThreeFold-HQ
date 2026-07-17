@@ -25,6 +25,7 @@ export async function GET(
       items: raw.items,
       line_items: raw.line_items ?? null,
       subtotal: raw.subtotal ?? null,
+      discount: raw.discount ?? null,
       sales_tax_rate: raw.sales_tax_rate ?? null,
       sales_tax_amount: raw.sales_tax_amount ?? null,
       grand_total: raw.grand_total ?? null,

@@ -479,6 +479,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
       created_at: paidAt,
     };
     if (depData.subtotal != null) financeData.subtotal = depData.subtotal;
+    if (depData.discount != null) financeData.discount = depData.discount;
     if (depData.sales_tax_rate != null) financeData.sales_tax_rate = depData.sales_tax_rate;
     if (salesTaxAmount > 0) {
       financeData.sales_tax_amount = salesTaxAmount;

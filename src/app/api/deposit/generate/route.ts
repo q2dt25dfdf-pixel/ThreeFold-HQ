@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
+import { normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
       paymentInstructions,
       notes,
       subtotal,
+      discount,
       salesTaxRate,
       salesTaxAmount,
       grandTotal,
@@ -39,6 +41,7 @@ export async function POST(request: NextRequest) {
       paymentInstructions?: string;
       notes?: string;
       subtotal?: number;
+      discount?: QuoteDiscount | null;
       salesTaxRate?: number;
       salesTaxAmount?: number;
       grandTotal?: number;
@@ -86,6 +89,10 @@ export async function POST(request: NextRequest) {
     };
 
     if (subtotal != null) depositData.subtotal = subtotal;
+    // Discount is inherited from the quote (derived math done upstream); persist the
+    // object so the deposit portal/email can render it. Never recomputed here.
+    const normalizedDiscount = normalizeDiscount(discount);
+    if (normalizedDiscount) depositData.discount = normalizedDiscount;
     if (salesTaxRate != null) depositData.sales_tax_rate = salesTaxRate;
     if (salesTaxAmount != null) depositData.sales_tax_amount = salesTaxAmount;
     if (grandTotal != null) depositData.grand_total = grandTotal;

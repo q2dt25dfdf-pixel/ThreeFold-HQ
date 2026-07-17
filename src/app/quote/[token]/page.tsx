@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
 import { C, dk } from "@/lib/clientTheme";
+import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
+import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
 
 interface LineItem {
   name: string;
@@ -22,6 +24,7 @@ interface QuoteData {
   items: string[];
   line_items?: LineItem[] | null;
   subtotal?: number | null;
+  discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
   sales_tax_amount?: number | null;
   grand_total?: number | null;
@@ -148,6 +151,17 @@ export default function QuotePage() {
     ? `${Math.round(data.sales_tax_rate * 10000) / 100}%`
     : "9.375%";
 
+  // Discount display (derived — subtotal stays pre-discount).
+  const discount = data.discount ?? null;
+  const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0;
+  const hasDiscount = discount != null && discountAmount > 0;
+  const hasSubtotal = (data.subtotal ?? 0) > 0;
+  const discountLabel = discount
+    ? discount.type === "percent"
+      ? `${discount.label} (-${discount.value}%)`
+      : discount.label
+    : "";
+
   return (
     <PortalShell>
       <style>{QUOTE_CSS}</style>
@@ -177,7 +191,7 @@ export default function QuotePage() {
             <div style={s.chipLabel}>VALID THROUGH</div>
             <div style={{ ...s.chipValue, color: isExpired ? C.red : C.textPrimary }}>
               {fmtDate(data.expiration_date)}
-              {isExpired ? " — EXPIRED" : ""}
+              {isExpired ? " (EXPIRED)" : ""}
             </div>
           </div>
         )}
@@ -216,16 +230,14 @@ export default function QuotePage() {
                               <span style={{ textDecoration: "line-through", color: C.textMuted, marginRight: "6px" }}>
                                 {fmt(item.originalUnitPrice)}
                               </span>
-                              {fmt(item.unitPrice)}
+                              <span style={{ color: C.greenText }}>{fmt(item.unitPrice)}</span>
                             </>
                           ) : (
                             fmt(item.unitPrice)
                           )}
                         </div>
                         {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
-                          <div style={{ fontSize: "10px", color: C.textMuted, fontStyle: "italic", letterSpacing: "0.04em", marginTop: "3px", textTransform: "none" as const }}>
-                            *Custom pricing applied
-                          </div>
+                          <SaveChip perUnit={item.originalUnitPrice - item.unitPrice} />
                         )}
                       </div>
                       <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
@@ -233,16 +245,28 @@ export default function QuotePage() {
                       </span>
                     </div>
                   ))}
-                  {hasTax && (
+                  {(hasTax || hasDiscount) && (
                     <>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <DiscountBand
+                          label={discountLabel}
+                          amount={fmt(discountAmount)}
+                          labelStyle={s.detailKey}
+                          valueStyle={s.detailVal}
+                        />
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   <div style={{ ...s.detailRow, marginTop: "4px" }}>
@@ -263,16 +287,28 @@ export default function QuotePage() {
                         <span style={s.detailVal}>—</span>
                       </div>
                     ))}
-                  {hasTax && (
+                  {(hasTax || hasDiscount) && (
                     <>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <DiscountBand
+                          label={discountLabel}
+                          amount={fmt(discountAmount)}
+                          labelStyle={s.detailKey}
+                          valueStyle={s.detailVal}
+                        />
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({taxRateDisplay})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   <div style={{ ...s.detailRow, marginTop: "4px" }}>
@@ -287,10 +323,20 @@ export default function QuotePage() {
               )}
             </div>
 
-            <div style={s.paymentCallout}>
-              <span style={s.paymentCalloutLabel}>QUOTE TOTAL</span>
-              <span style={s.paymentCalloutAmount}>{fmt(grandTotalDisplay)}</span>
-            </div>
+            {hasDiscount ? (
+              <div style={{ ...s.paymentCallout, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={s.paymentCalloutLabel}>QUOTE TOTAL</span>
+                  <span style={s.paymentCalloutAmount}>{fmt(grandTotalDisplay)}</span>
+                </div>
+                <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
+              </div>
+            ) : (
+              <div style={s.paymentCallout}>
+                <span style={s.paymentCalloutLabel}>QUOTE TOTAL</span>
+                <span style={s.paymentCalloutAmount}>{fmt(grandTotalDisplay)}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -301,7 +347,7 @@ export default function QuotePage() {
             <div className="dk-card">
               <div style={s.cardEyebrow}>QUOTE APPROVED</div>
               <div style={{ ...s.bodyText, color: C.greenText, fontWeight: 600, marginBottom: "12px" }}>
-                Your quote has been approved. Threefold Supply Co. will follow up with your deposit request.
+                Your quote has been approved. Threefold Supply Co. will follow up with your invoice.
               </div>
               <div style={s.bodyText}>
                 Questions? Reply to the email you received or contact us directly.

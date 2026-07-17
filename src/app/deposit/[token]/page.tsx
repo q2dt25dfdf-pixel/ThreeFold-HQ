@@ -5,6 +5,9 @@ import { BUSINESS_EMAIL } from "@/lib/config";
 import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import PortalShell from "@/components/PortalShell";
 import { C, dk } from "@/lib/clientTheme";
+import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
+import { depositTerms } from "@/lib/depositTerms";
+import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
 
 interface LineItem {
   name: string;
@@ -21,6 +24,7 @@ interface DepositData {
   client_name: string;
   client_email: string;
   subtotal?: number | null;
+  discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
   sales_tax_amount?: number | null;
   grand_total?: number | null;
@@ -82,7 +86,12 @@ export default function DepositPage() {
       .then((r) => r.json())
       .then((d: DepositData & { error?: string }) => {
         if (d.error) setError(d.error);
-        else setData(d);
+        else {
+          setData(d);
+          // Default the pricing breakdown open when a discount exists (Step 4).
+          const disc = d.discount ?? null;
+          if (disc && calcDiscountAmount(d.subtotal ?? 0, disc) > 0) setShowBreakdown(true);
+        }
       })
       .catch(() => setError("Failed to load deposit request"))
       .finally(() => setLoading(false));
@@ -146,6 +155,18 @@ export default function DepositPage() {
   const depositPercent = grandTotalDisplay > 0
     ? Math.round((data.deposit_amount / grandTotalDisplay) * 100)
     : 50;
+  const terms = depositTerms(depositPercent);
+
+  // Discount display (inherited from the quote; subtotal stays pre-discount).
+  const discount = data.discount ?? null;
+  const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0;
+  const hasDiscount = discount != null && discountAmount > 0;
+  const hasSubtotal = (data.subtotal ?? 0) > 0;
+  const discountLabel = discount
+    ? discount.type === "percent"
+      ? `${discount.label} (-${discount.value}%)`
+      : discount.label
+    : "";
 
   return (
     <PortalShell>
@@ -159,7 +180,7 @@ export default function DepositPage() {
 
       <div style={s.rule} />
 
-      <div style={s.eyebrow}>DEPOSIT REQUEST</div>
+      <div style={s.eyebrow}>{terms.requestNoun.toUpperCase()}</div>
       <div className="dep-headline">{data.client_name.toUpperCase()}</div>
 
       <div style={s.summaryStrip}>
@@ -202,16 +223,14 @@ export default function DepositPage() {
                             <span style={{ textDecoration: "line-through", color: C.textMuted, marginRight: "6px" }}>
                               {fmt(item.originalUnitPrice)}
                             </span>
-                            {fmt(item.unitPrice)}
+                            <span style={{ color: C.greenText }}>{fmt(item.unitPrice)}</span>
                           </>
                         ) : (
                           fmt(item.unitPrice)
                         )}
                       </div>
                       {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
-                        <div style={{ fontSize: "10px", color: C.textMuted, fontStyle: "italic", letterSpacing: "0.04em", marginTop: "3px", textTransform: "none" as const }}>
-                          *Custom pricing applied
-                        </div>
+                        <SaveChip perUnit={item.originalUnitPrice - item.unitPrice} />
                       )}
                     </div>
                     <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
@@ -235,15 +254,17 @@ export default function DepositPage() {
                 <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
                 <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailKey}>DEPOSIT REQUIRED ({depositPercent}%)</span>
+              <div style={terms.showBalance ? s.detailRow : { ...s.detailRow, borderBottom: "none" }}>
+                <span style={s.detailKey}>{terms.requiredLabel.toUpperCase()}</span>
                 <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
               </div>
-              <div style={{ ...s.detailRow, borderBottom: "none" }}>
-                <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
-                <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
-              </div>
-              {hasTax && (
+              {terms.showBalance && (
+                <div style={{ ...s.detailRow, borderBottom: "none" }}>
+                  <span style={s.detailKey}>BALANCE DUE ON COMPLETION</span>
+                  <span style={s.detailVal}>{fmt(data.balance_remaining)}</span>
+                </div>
+              )}
+              {(hasTax || hasDiscount) && (
                 <>
                   <button
                     onClick={() => setShowBreakdown((v) => !v)}
@@ -253,14 +274,26 @@ export default function DepositPage() {
                   </button>
                   {showBreakdown && (
                     <div style={s.breakdownExpanded}>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <DiscountBand
+                          label={discountLabel}
+                          amount={fmt(discountAmount)}
+                          labelStyle={s.detailKey}
+                          valueStyle={s.detailVal}
+                        />
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                       <div style={{ ...s.detailRow, borderBottom: "none" }}>
                         <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL</span>
                         <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
@@ -272,13 +305,31 @@ export default function DepositPage() {
             </div>
 
             {!isPaid ? (
-              <div style={s.calloutPending}>
-                <span style={s.calloutLabel}>DEPOSIT DUE</span>
-                <span style={s.calloutAmountPending}>{fmt(data.deposit_amount)}</span>
+              hasDiscount ? (
+                <div style={{ ...s.calloutPending, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={s.calloutLabel}>{terms.dueLabel.toUpperCase()}</span>
+                    <span style={s.calloutAmountPending}>{fmt(data.deposit_amount)}</span>
+                  </div>
+                  <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
+                </div>
+              ) : (
+                <div style={s.calloutPending}>
+                  <span style={s.calloutLabel}>{terms.dueLabel.toUpperCase()}</span>
+                  <span style={s.calloutAmountPending}>{fmt(data.deposit_amount)}</span>
+                </div>
+              )
+            ) : hasDiscount ? (
+              <div style={{ ...s.calloutPaid, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ ...s.calloutLabel, color: C.green }}>{terms.isFull ? "PAYMENT" : "DEPOSIT"}</span>
+                  <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
+                </div>
+                <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
               </div>
             ) : (
               <div style={s.calloutPaid}>
-                <span style={{ ...s.calloutLabel, color: C.green }}>DEPOSIT</span>
+                <span style={{ ...s.calloutLabel, color: C.green }}>{terms.isFull ? "PAYMENT" : "DEPOSIT"}</span>
                 <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
               </div>
             )}
@@ -322,7 +373,7 @@ export default function DepositPage() {
               <div style={s.cardEyebrow}>PAYMENT IN PROGRESS</div>
               <div style={s.bodyText}>
                 Your bank transfer is being processed. ACH payments typically settle
-                within 3–5 business days. You will receive confirmation once the
+                within 3 to 5 business days. You will receive confirmation once the
                 payment clears.
               </div>
             </div>
@@ -333,7 +384,7 @@ export default function DepositPage() {
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your payment is being confirmed. Bank transfers may take a moment to
-                process — this page will reflect the updated status once confirmed.
+                process. This page will reflect the updated status once confirmed.
                 No further action is needed.
               </div>
             </div>
@@ -348,7 +399,7 @@ export default function DepositPage() {
               <div style={{ marginTop: "20px" }}>
                 <PaymentOptionsPanel
                   amount={data.deposit_amount}
-                  label="DEPOSIT AMOUNT"
+                  label={terms.amountLabel}
                   eyebrow=""
                   onPayCard={() => void handlePay("card")}
                   onPayBank={() => void handlePay("bank")}
@@ -363,7 +414,8 @@ export default function DepositPage() {
             <div className="dk-card">
               <PaymentOptionsPanel
                 amount={data.deposit_amount}
-                label="DEPOSIT AMOUNT"
+                label={terms.amountLabel}
+                eyebrow={terms.payEyebrow}
                 onPayCard={() => void handlePay("card")}
                 onPayBank={() => void handlePay("bank")}
                 checkoutLoading={checkoutLoading}
@@ -400,7 +452,7 @@ export default function DepositPage() {
           </div>
         </div>
         <a
-          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: ${terms.requestNoun} ${data.deposit_request_number}`}
           style={s.btnOutline}
         >
           CONTACT THREEFOLD →

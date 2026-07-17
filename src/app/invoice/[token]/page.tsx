@@ -5,6 +5,8 @@ import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
 import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import { C, dk } from "@/lib/clientTheme";
+import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
+import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
 
 interface LineItem {
   name: string;
@@ -20,6 +22,7 @@ interface InvoiceData {
   order_name: string;
   client_name: string;
   subtotal?: number | null;
+  discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
   sales_tax_amount?: number | null;
   grand_total?: number | null;
@@ -91,7 +94,12 @@ export default function InvoicePage() {
       .then((r) => r.json())
       .then((d: InvoiceData & { error?: string }) => {
         if (d.error) setError(d.error);
-        else setData(d);
+        else {
+          setData(d);
+          // Default the pricing breakdown open when a discount exists (Step 4).
+          const disc = d.discount ?? null;
+          if (disc && calcDiscountAmount(d.subtotal ?? 0, disc) > 0) setShowBreakdown(true);
+        }
       })
       .catch(() => setError("Failed to load invoice"))
       .finally(() => setLoading(false));
@@ -152,6 +160,18 @@ export default function InvoicePage() {
   const isDepositPaid = data.deposit_paid;
   const hasTax = (data.sales_tax_amount ?? 0) > 0;
   const grandTotalDisplay = data.grand_total ?? data.total_amount;
+
+  // Discount display (inherited from the quote; subtotal stays pre-discount).
+  const discount = data.discount ?? null;
+  const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0;
+  const hasDiscount = discount != null && discountAmount > 0;
+  const hasSubtotal = (data.subtotal ?? 0) > 0;
+  const discountLabel = discount
+    ? discount.type === "percent"
+      ? `${discount.label} (-${discount.value}%)`
+      : discount.label
+    : "";
+
   const isOverdue = data.final_due_date
     ? !isPaidInFull && new Date(data.final_due_date + "T23:59:59") < new Date()
     : false;
@@ -228,16 +248,14 @@ export default function InvoicePage() {
                             <span style={{ textDecoration: "line-through", color: C.textMuted, marginRight: "6px" }}>
                               {fmt(item.originalUnitPrice)}
                             </span>
-                            {fmt(item.unitPrice)}
+                            <span style={{ color: C.greenText }}>{fmt(item.unitPrice)}</span>
                           </>
                         ) : (
                           fmt(item.unitPrice)
                         )}
                       </div>
                       {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
-                        <div style={{ fontSize: "10px", color: C.textMuted, fontStyle: "italic", letterSpacing: "0.04em", marginTop: "3px", textTransform: "none" as const }}>
-                          *Custom pricing applied
-                        </div>
+                        <SaveChip perUnit={item.originalUnitPrice - item.unitPrice} />
                       )}
                     </div>
                     <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
@@ -286,7 +304,7 @@ export default function InvoicePage() {
                   </span>
                   {data.final_due_date && !isPaidInFull && (
                     <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: isOverdue ? C.red : C.textMuted, textTransform: "none" as const }}>
-                      Due {fmtDate(data.final_due_date)}{isOverdue ? " — OVERDUE" : ""}
+                      Due {fmtDate(data.final_due_date)}{isOverdue ? " (OVERDUE)" : ""}
                     </div>
                   )}
                   {isPaidInFull && data.final_paid_date && (
@@ -303,7 +321,7 @@ export default function InvoicePage() {
                   )}
                 </div>
               </div>
-              {hasTax && (
+              {(hasTax || hasDiscount) && (
                 <>
                   <button
                     onClick={() => setShowBreakdown((v) => !v)}
@@ -313,14 +331,26 @@ export default function InvoicePage() {
                   </button>
                   {showBreakdown && (
                     <div style={s.breakdownExpanded}>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SUBTOTAL</span>
-                        <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
-                      </div>
-                      <div style={s.detailRow}>
-                        <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
-                        <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
-                      </div>
+                      {hasSubtotal && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SUBTOTAL</span>
+                          <span style={s.detailVal}>{fmt(data.subtotal ?? 0)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <DiscountBand
+                          label={discountLabel}
+                          amount={fmt(discountAmount)}
+                          labelStyle={s.detailKey}
+                          valueStyle={s.detailVal}
+                        />
+                      )}
+                      {hasTax && (
+                        <div style={s.detailRow}>
+                          <span style={s.detailKey}>SALES TAX ({data.sales_tax_rate != null ? `${Math.round(data.sales_tax_rate * 10000) / 100}%` : "9.375%"})</span>
+                          <span style={{ ...s.detailVal, color: C.textSecondary }}>{fmt(data.sales_tax_amount ?? 0)}</span>
+                        </div>
+                      )}
                       <div style={{ ...s.detailRow, borderBottom: "none" }}>
                         <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL</span>
                         <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
@@ -332,9 +362,27 @@ export default function InvoicePage() {
             </div>
 
             {!isPaidInFull ? (
-              <div style={s.calloutPending}>
-                <span style={s.calloutLabel}>BALANCE DUE</span>
-                <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
+              hasDiscount ? (
+                <div style={{ ...s.calloutPending, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={s.calloutLabel}>BALANCE DUE</span>
+                    <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
+                  </div>
+                  <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
+                </div>
+              ) : (
+                <div style={s.calloutPending}>
+                  <span style={s.calloutLabel}>BALANCE DUE</span>
+                  <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
+                </div>
+              )
+            ) : hasDiscount ? (
+              <div style={{ ...s.calloutPaid, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ ...s.calloutLabel, color: C.green }}>INVOICE</span>
+                  <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
+                </div>
+                <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
               </div>
             ) : (
               <div style={s.calloutPaid}>
@@ -352,7 +400,7 @@ export default function InvoicePage() {
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your final payment has been received and confirmed. Thank you for
-                your business — it&apos;s been a pleasure working with you.
+                your business. It&apos;s been a pleasure working with you.
               </div>
             </div>
           ) : paymentParam === "success" ? (
@@ -360,7 +408,7 @@ export default function InvoicePage() {
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
                 Your payment is being confirmed. Bank transfers may take a moment to
-                process — this page will reflect the updated status once confirmed.
+                process. This page will reflect the updated status once confirmed.
                 No further action is needed.
               </div>
             </div>
@@ -400,7 +448,7 @@ export default function InvoicePage() {
           </div>
         </div>
         <a
-          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice — ${data.order_name || data.client_name}`}
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice for ${data.order_name || data.client_name}`}
           style={s.btnOutline}
         >
           CONTACT THREEFOLD →
