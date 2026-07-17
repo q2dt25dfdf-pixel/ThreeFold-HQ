@@ -6,6 +6,7 @@ import PortalShell from "@/components/PortalShell";
 import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import { C, dk } from "@/lib/clientTheme";
 import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
+import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
 
 interface LineItem {
   name: string;
@@ -93,7 +94,12 @@ export default function InvoicePage() {
       .then((r) => r.json())
       .then((d: InvoiceData & { error?: string }) => {
         if (d.error) setError(d.error);
-        else setData(d);
+        else {
+          setData(d);
+          // Default the pricing breakdown open when a discount exists (Step 4).
+          const disc = d.discount ?? null;
+          if (disc && calcDiscountAmount(d.subtotal ?? 0, disc) > 0) setShowBreakdown(true);
+        }
       })
       .catch(() => setError("Failed to load invoice"))
       .finally(() => setLoading(false));
@@ -242,16 +248,14 @@ export default function InvoicePage() {
                             <span style={{ textDecoration: "line-through", color: C.textMuted, marginRight: "6px" }}>
                               {fmt(item.originalUnitPrice)}
                             </span>
-                            {fmt(item.unitPrice)}
+                            <span style={{ color: C.greenText }}>{fmt(item.unitPrice)}</span>
                           </>
                         ) : (
                           fmt(item.unitPrice)
                         )}
                       </div>
                       {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
-                        <div style={{ fontSize: "10px", color: C.textMuted, fontStyle: "italic", letterSpacing: "0.04em", marginTop: "3px", textTransform: "none" as const }}>
-                          *Custom pricing applied
-                        </div>
+                        <SaveChip perUnit={item.originalUnitPrice - item.unitPrice} />
                       )}
                     </div>
                     <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
@@ -334,10 +338,12 @@ export default function InvoicePage() {
                         </div>
                       )}
                       {hasDiscount && (
-                        <div style={s.detailRow}>
-                          <span style={s.detailKey}>{discountLabel}</span>
-                          <span style={{ ...s.detailVal, color: C.textMuted }}>-{fmt(discountAmount)}</span>
-                        </div>
+                        <DiscountBand
+                          label={discountLabel}
+                          amount={fmt(discountAmount)}
+                          labelStyle={s.detailKey}
+                          valueStyle={s.detailVal}
+                        />
                       )}
                       {hasTax && (
                         <div style={s.detailRow}>
@@ -356,9 +362,27 @@ export default function InvoicePage() {
             </div>
 
             {!isPaidInFull ? (
-              <div style={s.calloutPending}>
-                <span style={s.calloutLabel}>BALANCE DUE</span>
-                <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
+              hasDiscount ? (
+                <div style={{ ...s.calloutPending, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={s.calloutLabel}>BALANCE DUE</span>
+                    <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
+                  </div>
+                  <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
+                </div>
+              ) : (
+                <div style={s.calloutPending}>
+                  <span style={s.calloutLabel}>BALANCE DUE</span>
+                  <span style={s.calloutAmountPending}>{fmt(data.balance_remaining)}</span>
+                </div>
+              )
+            ) : hasDiscount ? (
+              <div style={{ ...s.calloutPaid, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ ...s.calloutLabel, color: C.green }}>INVOICE</span>
+                  <span style={s.calloutAmountPaid}>PAID IN FULL ✓</span>
+                </div>
+                <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />
               </div>
             ) : (
               <div style={s.calloutPaid}>
