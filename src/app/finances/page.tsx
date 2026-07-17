@@ -35,6 +35,7 @@ type Invoice = {
   client_company?: string;
   order_id?: string;
   order_name?: string;
+  lead_id?: string;
   amount?: string | number;
   total_amount: string | number;
   deposit_amount: string | number;
@@ -446,6 +447,8 @@ function FinancesContent() {
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
   const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
+  // Read-only: used to resolve a lead email fallback for receipts (same source /api/invoice/generate uses).
+  const { data: leads } = useSupabaseTable<{ id: string; email?: string }>("crm_leads", []);
   const [filter, setFilter] = useState<InvoiceStatus | "All" | "Unpaid">(() => {
     const p = searchParams.get("filter") ?? "";
     if (p.toLowerCase() === "unpaid") return "Unpaid";
@@ -987,6 +990,10 @@ function FinancesContent() {
     await upsertItem(updated);
     setReceiptInvoice(null);
   };
+
+  // Lead email fallback (matches /api/invoice/generate). Empty string when none.
+  const leadEmailFor = (inv: Invoice | null): string =>
+    inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.email ?? "").trim() : "";
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
@@ -2166,10 +2173,10 @@ function FinancesContent() {
               </div>
               {(() => {
                 const r = resolveReceipt(editInvoice);
-                const email = (editInvoice.client_email || "").trim();
+                const effectiveEmail = (editInvoice.client_email || "").trim() || leadEmailFor(editInvoice);
                 const sentAt = r ? (editInvoice[r.sentField] as string | undefined) : undefined;
-                const disabled = !r || !email;
-                const reason = !r ? "Mark a payment as received to send a receipt." : !email ? "Add a client email on this invoice to send a receipt." : "";
+                const disabled = !r || !effectiveEmail;
+                const reason = !r ? "Mark a payment as received to send a receipt." : !effectiveEmail ? "No client email on the invoice or lead. Add one to send a receipt." : "";
                 return (
                   <div className="space-y-1.5">
                     <button
@@ -2197,6 +2204,7 @@ function FinancesContent() {
       <SendReceiptModal
         open={!!receiptInvoice}
         invoice={receiptInvoice}
+        fallbackEmail={leadEmailFor(receiptInvoice)}
         onClose={() => setReceiptInvoice(null)}
         onSent={(updated) => void handleReceiptSent(updated as Invoice)}
       />

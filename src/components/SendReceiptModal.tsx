@@ -27,13 +27,16 @@ export interface ReceiptInvoice {
 interface Props {
   open: boolean;
   invoice: ReceiptInvoice | null;
+  // Lead email fallback (same source /api/invoice/generate uses) — shown in the
+  // editable recipient field when the invoice has no client_email of its own.
+  fallbackEmail?: string;
   onClose: () => void;
   onSent: (updated: ReceiptInvoice) => void;
 }
 
 type Step = "generating" | "preview" | "sending" | "sent" | "error";
 
-export default function SendReceiptModal({ open, invoice, onClose, onSent }: Props) {
+export default function SendReceiptModal({ open, invoice, fallbackEmail, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("generating");
   const [publicToken, setPublicToken] = useState("");
   const [publicLink, setPublicLink] = useState("");
@@ -51,6 +54,8 @@ export default function SendReceiptModal({ open, invoice, onClose, onSent }: Pro
     setStep("generating");
     setErrorMsg("");
     setSentVia("");
+    // Prefill the visible recipient up front: invoice email, else lead fallback.
+    setEmailTo((invoice.client_email || fallbackEmail || "").trim());
 
     const info = resolveReceipt(invoice);
     if (!info) {
@@ -79,7 +84,8 @@ export default function SendReceiptModal({ open, invoice, onClose, onSent }: Pro
         }
         setPublicToken(d.publicToken ?? "");
         setPublicLink(d.publicLink);
-        setEmailTo(d.clientEmail || invoice.client_email || "");
+        // Only fill from the server if the founder has not already got an address shown.
+        setEmailTo((cur) => (cur.trim() ? cur : (d.clientEmail || "")));
 
         const { subject, body } = buildReceiptEmail({
           clientName,
@@ -124,9 +130,13 @@ export default function SendReceiptModal({ open, invoice, onClose, onSent }: Pro
       setSentVia(data.sentVia ?? "");
 
       const stampedAt = new Date().toISOString();
+      // If the address came from the fallback (invoice had no client_email), persist
+      // the one we actually sent to so the record stops being empty.
+      const hadInvoiceEmail = ((invoice.client_email as string) || "").trim().length > 0;
       const updated: ReceiptInvoice = {
         ...invoice,
         ...(publicToken ? { public_token: publicToken, public_link: publicLink } : {}),
+        ...(!hadInvoiceEmail && emailTo.trim() ? { client_email: emailTo.trim() } : {}),
         [receipt.sentField]: stampedAt,
       };
       onSent(updated);
@@ -167,7 +177,7 @@ export default function SendReceiptModal({ open, invoice, onClose, onSent }: Pro
       <div className="flex flex-col gap-3">
         {!emailTo.trim() && (
           <p className="text-xs font-semibold text-rose-600">
-            No client email on file. Add one on the invoice before sending.
+            No email on file for this client. Enter a recipient above to send.
           </p>
         )}
         {alreadySentAt && (
