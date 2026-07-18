@@ -379,6 +379,15 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     // Create the client record first so we can link it to the order
     const { clientId, isNew: isNewClient } = await upsertClientRecord(db, leadId, clientName, leadData, depData);
 
+    // Copy the deposit's line items (which carry the quote's blank + colors + print_detail)
+    // as a stable snapshot on the order; derive the item names + total qty. Older deposits
+    // with no line items fall back to items:[]/quantity:0 exactly as before.
+    const bootLineItems = Array.isArray(depData.line_items) ? (depData.line_items as unknown[]) : [];
+    const bootItems = bootLineItems
+      .map((li) => String((li as { name?: unknown }).name ?? "").trim())
+      .filter(Boolean);
+    const bootQuantity = bootLineItems.reduce((s: number, li) => s + (Number((li as { quantity?: unknown }).quantity) || 0), 0);
+
     await db.from("orders").upsert({
       id: orderId,
       data: {
@@ -390,8 +399,9 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
         client_id: clientId,
         client_name: clientName,
         vendor: "",
-        items: [],
-        quantity: 0,
+        items: bootItems,
+        line_items: bootLineItems,
+        quantity: bootQuantity,
         estimatedDeliveryDate: "",
         notes: "",
         lead_id: leadId,

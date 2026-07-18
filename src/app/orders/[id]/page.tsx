@@ -43,6 +43,19 @@ type IntakeSnapshot = {
   files?: QuestionnaireFile[];
 };
 
+type OrderLineItem = {
+  name?: string;
+  description?: string;
+  quantity?: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  originalUnitPrice?: number;
+  // Internal production spec copied from the quote (never client-facing).
+  blank?: string;
+  colors?: { color: string; qty: number }[];
+  print_detail?: string;
+};
+
 type Order = {
   id: string;
   orderName: string;
@@ -52,6 +65,7 @@ type Order = {
   vendor_id?: string;
   vendor_name?: string;
   items: string[];
+  line_items?: OrderLineItem[];
   quantity: number;
   amount: number;
   status: string;
@@ -1417,13 +1431,37 @@ export default function OrderDetailPage() {
         </button>
       </div>
       <div className="space-y-2">
+        {order.line_items && order.line_items.length > 0 && (
+          <div className="mb-1 space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">What we&apos;re making</p>
+            {order.line_items.map((li, i) => {
+              const colorText = (li.colors ?? [])
+                .filter((c) => (c.color || "").trim() || Number(c.qty) > 0)
+                .map((c) => `${Number(c.qty) || 0} ${(c.color || "").trim()}`.trim())
+                .join(" · ");
+              return (
+                <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words text-xs font-semibold text-slate-950">{li.name || "Item"}</span>
+                    <span className="shrink-0 text-xs font-medium text-slate-700">{Number(li.quantity) || 0} pcs</span>
+                  </div>
+                  {li.blank && <p className="mt-1 text-[11px] text-slate-500">Blank: {li.blank}</p>}
+                  {colorText && <p className="mt-0.5 text-[11px] text-slate-600">Colors: {colorText}</p>}
+                  {li.print_detail && <p className="mt-0.5 text-[11px] text-slate-500">Print: {li.print_detail}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {([
-          { label: "Items", value: order.items.length ? order.items.join(", ") : "None selected" },
+          ...(order.line_items && order.line_items.length > 0
+            ? []
+            : [{ label: "Items", value: order.items.length ? order.items.join(", ") : "None selected" }]),
           { label: "Quantity", value: String(order.quantity || 0) },
           { label: "Amount", value: formatCurrency(order.amount) },
           { label: "Vendor", value: order.vendor || "Not assigned" },
           { label: "Est. delivery", value: order.estimatedDeliveryDate || "TBD" },
-        ] as const).map(({ label, value }) => (
+        ] as { label: string; value: string }[]).map(({ label, value }) => (
           <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
             <span className="shrink-0 text-xs text-slate-500">{label}</span>
             <span className="min-w-0 break-words text-right text-xs font-medium text-slate-950">{value}</span>
