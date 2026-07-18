@@ -68,7 +68,8 @@ type CostLine = {
   status: "not_ordered" | "ordered" | "paid";
   paid_by: "" | "Alliyah" | "Hannah" | "Jordan" | "Company Account";
   supplier?: string;          // free text; vendors list is autocomplete-only, no vendor_id
-  receipt_path?: string;      // reserved for Step 2 (receipt upload) — not wired yet
+  receipt_url?: string;       // pasted link (Drive, etc.) — HQ-only, never client-facing
+  receipt_path?: string;      // uploaded file in the private order-receipts bucket
 };
 
 type Order = {
@@ -764,6 +765,7 @@ export default function OrderDetailPage() {
         label: l.label.trim(),
         amount_cents: Math.max(0, Math.round(Number(l.amount_cents) || 0)),
         supplier: (l.supplier ?? "").trim(),
+        receipt_url: (l.receipt_url ?? "").trim() || undefined,
       }))
       .filter((l) => l.label || l.amount_cents > 0);
     // Derived roll-up keeps finances + AI routes working unchanged.
@@ -902,37 +904,57 @@ export default function OrderDetailPage() {
   // immediately (fixed path per line, upsert overwrites on replace); the receipt_path is
   // set on the draft line and persists with the normal Production Costs Save. Mirrors the
   // design-version upload but points at order-receipts (never client-reachable).
+  // Upload goes through the auth-gated, service-role /api/internal/receipt-upload endpoint
+  // (the private order-receipts bucket rejects direct browser uploads via RLS). The file
+  // is stored immediately; the returned receipt_path persists with the normal Save.
   const handleReceiptUpload = async (lineId: string, file: File) => {
     if (!order) return;
     setUploadingReceiptLineId(lineId);
     setReceiptErrors((prev) => { const n = { ...prev }; delete n[lineId]; return n; });
-
-    const path = `orders/${order.id}/${lineId}/receipt`;
-
-    const { error: uploadErr } = await supabase.storage
-      .from('order-receipts')
-      .upload(path, file, { upsert: true, contentType: file.type });
-
-    if (uploadErr) {
-      setReceiptErrors((prev) => ({
-        ...prev,
-        [lineId]: /bucket|not found|does not exist/i.test(uploadErr.message)
-          ? "Upload failed — the 'order-receipts' storage bucket doesn't exist yet."
-          : uploadErr.message || "Upload failed.",
-      }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('orderId', order.id);
+      fd.append('lineId', lineId);
+      const res = await fetch('/api/internal/receipt-upload', {
+        method: 'POST',
+        headers: { ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.path) {
+        setReceiptErrors((prev) => ({
+          ...prev,
+          [lineId]: /bucket|not found|does not exist/i.test(json?.error ?? "")
+            ? "Upload failed — the 'order-receipts' storage bucket doesn't exist yet."
+            : json?.error || "Upload failed.",
+        }));
+        return;
+      }
+      updateCostLine(lineId, { receipt_path: json.path });
+    } catch {
+      setReceiptErrors((prev) => ({ ...prev, [lineId]: "Upload failed." }));
+    } finally {
       setUploadingReceiptLineId(null);
-      return;
     }
-
-    updateCostLine(lineId, { receipt_path: path });
-    setUploadingReceiptLineId(null);
   };
 
   const removeReceiptFromLine = (lineId: string) => {
-    // Clears the reference only; the stored file is intentionally left in the bucket
+    // Clears both references only; an uploaded file is intentionally left in the bucket
     // (no hard storage delete in this pass).
-    updateCostLine(lineId, { receipt_path: undefined });
+    updateCostLine(lineId, { receipt_path: undefined, receipt_url: undefined });
     setReceiptErrors((prev) => { const n = { ...prev }; delete n[lineId]; return n; });
+  };
+
+  // Open a line's receipt: a pasted URL opens directly; an uploaded file mints a signed
+  // URL first. Uploaded file wins if both are present.
+  const openLineReceipt = (l: CostLine) => {
+    if (l.receipt_path) { void openReceipt(l.receipt_path); return; }
+    if (l.receipt_url) {
+      const href = /^https?:\/\//i.test(l.receipt_url) ? l.receipt_url : `https://${l.receipt_url}`;
+      window.open(href, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const openReceipt = async (path: string) => {
@@ -1906,8 +1928,8 @@ export default function OrderDetailPage() {
                         {l.supplier}{l.supplier && l.paid_by ? " · " : ""}{l.paid_by ? `paid by ${l.paid_by}` : ""}
                       </p>
                     )}
-                    {l.receipt_path ? (
-                      <button type="button" onClick={() => openReceipt(l.receipt_path!)} disabled={openingReceiptPath === l.receipt_path} className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">
+                    {(l.receipt_path || l.receipt_url) ? (
+                      <button type="button" onClick={() => openLineReceipt(l)} disabled={openingReceiptPath === l.receipt_path} className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">
                         <Check className="h-3 w-3" /> {openingReceiptPath === l.receipt_path ? "Opening…" : "Receipt"}
                       </button>
                     ) : (
@@ -1998,25 +2020,32 @@ export default function OrderDetailPage() {
               </div>
             </div>
             <div className="mt-2">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Receipt</label>
-              {l.receipt_path ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><Check className="h-3.5 w-3.5" /> Receipt uploaded</span>
-                  <button type="button" onClick={() => openReceipt(l.receipt_path!)} disabled={openingReceiptPath === l.receipt_path} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-slate-50 disabled:opacity-50">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Receipt (link or file)</label>
+              <input
+                type="url"
+                inputMode="url"
+                value={l.receipt_url ?? ""}
+                onChange={(e) => updateCostLine(l.id, { receipt_url: e.target.value })}
+                placeholder="Paste a link (Drive, etc.)"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+              />
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 ${uploadingReceiptLineId === l.id ? "cursor-not-allowed opacity-50" : ""}`}>
+                  <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={uploadingReceiptLineId === l.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReceiptUpload(l.id, f); e.target.value = ''; }} />
+                  {uploadingReceiptLineId === l.id ? "Uploading…" : l.receipt_path ? "Replace file" : "Upload file"}
+                </label>
+                {l.receipt_path && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><Check className="h-3.5 w-3.5" /> File uploaded</span>
+                )}
+                {(l.receipt_path || l.receipt_url) && (
+                  <button type="button" onClick={() => openLineReceipt(l)} disabled={openingReceiptPath === l.receipt_path} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-slate-50 disabled:opacity-50">
                     {openingReceiptPath === l.receipt_path ? "Opening…" : "View"}
                   </button>
-                  <label className={`cursor-pointer rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 ${uploadingReceiptLineId === l.id ? "cursor-not-allowed opacity-50" : ""}`}>
-                    <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={uploadingReceiptLineId === l.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReceiptUpload(l.id, f); e.target.value = ''; }} />
-                    {uploadingReceiptLineId === l.id ? "Uploading…" : "Replace"}
-                  </label>
+                )}
+                {(l.receipt_path || l.receipt_url) && (
                   <button type="button" onClick={() => removeReceiptFromLine(l.id)} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50">Remove</button>
-                </div>
-              ) : (
-                <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 ${uploadingReceiptLineId === l.id ? "cursor-not-allowed opacity-50" : ""}`}>
-                  <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={uploadingReceiptLineId === l.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReceiptUpload(l.id, f); e.target.value = ''; }} />
-                  {uploadingReceiptLineId === l.id ? "Uploading…" : "Upload receipt"}
-                </label>
-              )}
+                )}
+              </div>
               {receiptErrors[l.id] && <p className="mt-1 text-[11px] text-rose-600">{receiptErrors[l.id]}</p>}
             </div>
           </div>
