@@ -5,6 +5,7 @@ import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
 import { TASK_DONE_STATUSES, FOUNDERS } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
+import { isCrmTask } from "@/lib/followUps";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,9 @@ export async function GET(request: Request): Promise<Response> {
     const todayISO = businessTodayISO();
     const weekAheadISO = addDaysToISODate(todayISO, 7);
 
-    const openTasks = tasks.filter((t) => !isTaskDone(t));
+    // Exclude CRM follow-up tasks — the Tasks board hides them; they surface via the
+    // lead follow-up path, not as phantom board tasks (shared isCrmTask).
+    const openTasks = tasks.filter((t) => !isTaskDone(t) && !isCrmTask(t));
 
     function isOverdue(t: DashboardRecord): boolean {
       const due = taskDue(t);

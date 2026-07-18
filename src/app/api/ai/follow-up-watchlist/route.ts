@@ -7,6 +7,7 @@ import { readField, statusText, stringField } from "@/lib/recordUtils";
 import {
   hasActiveFollowUpTask,
   hasFollowUpDate,
+  isCrmTask,
   leadFollowUpDate,
 } from "@/lib/followUps";
 import { normalizeCRMStage, isInactiveLeadStage, type DashboardRecord } from "@/lib/dashboardMetrics";
@@ -285,7 +286,9 @@ export async function GET(request: Request): Promise<Response> {
 
     const overdueTaskItems = tasks
       .filter((t) => {
-        if (isTaskDone(t)) return false;
+        // Skip CRM follow-up tasks — the Tasks board hides them; they surface via this
+        // route's lead follow-up sections, not as phantom overdue board tasks.
+        if (isTaskDone(t) || isCrmTask(t)) return false;
         const due = taskDueDate(t);
         return isValidISO(due) && due < todayISO;
       })
