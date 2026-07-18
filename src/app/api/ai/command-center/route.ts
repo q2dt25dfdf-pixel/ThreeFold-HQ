@@ -11,6 +11,7 @@ import { readField, statusText, stringField } from "@/lib/recordUtils";
 import {
   hasActiveFollowUpTask,
   hasFollowUpDate,
+  isCrmTask,
   leadFollowUpDate,
 } from "@/lib/followUps";
 import {
@@ -214,7 +215,9 @@ export async function GET(request: Request): Promise<Response> {
 
     // ── Tasks ──────────────────────────────────────────────────────────────────
 
-    const openTasks = tasks.filter((t) => !isTaskDone(t));
+    // Exclude CRM follow-up tasks — the Tasks board hides them; they surface via the
+    // lead follow-up path, not as phantom overdue board tasks (shared isCrmTask).
+    const openTasks = tasks.filter((t) => !isTaskDone(t) && !isCrmTask(t));
 
     const overdueTasks = openTasks
       .filter((t) => { const d = taskDueDate(t); return isValidISO(d) && d < todayISO; })

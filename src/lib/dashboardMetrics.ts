@@ -2,7 +2,7 @@ import { pipelineStages, type PipelineStage } from "@/components/crm/types";
 import { FOUNDERS, INACTIVE_FINANCE_STATUSES, INACTIVE_ORDER_STATUSES, TASK_DONE_STATUSES } from "@/lib/constants";
 import { addDaysToISODate, dateOnlyToDate } from "@/lib/businessDate";
 import { calcBalance, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
-import { hasActiveFollowUpTask, hasFollowUpDate, isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
+import { hasActiveFollowUpTask, hasFollowUpDate, isCrmTask, isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
 
 export type DashboardRecord = Record<string, unknown> & { id: string };
@@ -255,7 +255,9 @@ function taskOwner(task: DashboardRecord): string {
 }
 
 export function taskLoadByFounder(tasks: DashboardRecord[], todayISO: string): TaskLoadDatum[] {
-  const openTasks = tasks.filter((task) => !isTaskDone(task));
+  // CRM follow-up tasks live on the CRM board, not the founder Tasks board — exclude
+  // them so this mirrors what /tasks actually shows (see isCrmTask).
+  const openTasks = tasks.filter((task) => !isTaskDone(task) && !isCrmTask(task));
   return FOUNDERS.map((name) => {
     const owned = openTasks.filter((task) => taskOwner(task).toLowerCase().includes(name.toLowerCase()));
     return {
@@ -316,6 +318,10 @@ export function needsAttention(
   }
 
   for (const task of tasks) {
+    // Skip CRM follow-up tasks — the Tasks board hides them, and they surface via the
+    // lead follow-up path above; counting them here made deleted-looking CRM tasks haunt
+    // Needs Attention.
+    if (isCrmTask(task)) continue;
     const dueDate = readField(task, "dueDate", "due_date");
     if (!isTaskDone(task) && dueDate && dueDate !== "TBD" && dueDate < todayISO) {
       items.push({
@@ -350,7 +356,7 @@ export function attentionSummary(
   sevenDaysAheadISO: string,
 ): AttentionSummary {
   const overdueTasks = tasks.filter((task) => {
-    if (isTaskDone(task)) return false;
+    if (isTaskDone(task) || isCrmTask(task)) return false;
     const due = readField(task, "dueDate", "due_date");
     return Boolean(due && due !== "TBD" && /^\d{4}-\d{2}-\d{2}$/.test(due) && due < todayISO);
   }).length;

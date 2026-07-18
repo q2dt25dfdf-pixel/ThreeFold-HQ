@@ -8,7 +8,7 @@ import {
   TASK_DONE_STATUSES,
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
-import { hasActiveFollowUpTask, hasFollowUpDate, leadFollowUpDate } from "@/lib/followUps";
+import { hasActiveFollowUpTask, hasFollowUpDate, isCrmTask, leadFollowUpDate } from "@/lib/followUps";
 import { normalizeCRMStage, isInactiveLeadStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
@@ -317,8 +317,11 @@ export async function GET(request: Request): Promise<Response> {
 
     // ── overdueItems ───────────────────────────────────────────────────────────
 
+    // Exclude CRM follow-up tasks — the Tasks board hides them; they surface via the
+    // lead follow-up path, not as phantom overdue board tasks (shared isCrmTask).
+    // NB: only the OPEN/overdue scan is guarded — the "completed today" list is separate.
     const openTasks = tasks.filter(
-      (t) => t.completed !== true && !TASK_DONE_STATUSES.has(statusText(t)),
+      (t) => t.completed !== true && !TASK_DONE_STATUSES.has(statusText(t)) && !isCrmTask(t),
     );
 
     const overdueTasks = openTasks
