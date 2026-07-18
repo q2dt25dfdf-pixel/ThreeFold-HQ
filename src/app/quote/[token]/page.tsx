@@ -29,6 +29,7 @@ interface QuoteData {
   sales_tax_amount?: number | null;
   grand_total?: number | null;
   total_amount: number;
+  deposit_minimum?: number | null;
   expiration_date: string;
   status: string;
   created_at: string;
