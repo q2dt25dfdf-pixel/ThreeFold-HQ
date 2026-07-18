@@ -521,6 +521,78 @@ export default function PortalPage() {
         {(hasPayment || hasLineItems) && (
           <div className="po-bottom-grid">
 
+            {/* Order Breakdown card */}
+            {hasLineItems && (
+              <div style={s.dashCard}>
+                <div style={s.cardEyebrow}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                  </svg>
+                  ORDER BREAKDOWN
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {data.lineItems.map((li, i) => (
+                    <div key={i} style={s.cardRow}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={s.cardRowLabel}>{li.name.toUpperCase()}</div>
+                        {li.description && (
+                          <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>{li.description}</div>
+                        )}
+                        <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>
+                          {li.quantity} ×{' '}
+                          {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice ? (
+                            <>
+                              <span style={{ textDecoration: 'line-through', marginRight: '6px' }}>
+                                {fmtCurrency(li.originalUnitPrice)}
+                              </span>
+                              <span style={{ color: C.greenText }}>{fmtCurrency(li.unitPrice)}</span>
+                            </>
+                          ) : (
+                            fmtCurrency(li.unitPrice)
+                          )}
+                        </div>
+                        {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice && (
+                          <SaveChip perUnit={li.originalUnitPrice - li.unitPrice} />
+                        )}
+                      </div>
+                      <span style={{ ...s.cardRowValue, flexShrink: 0, marginLeft: '16px' }}>
+                        {fmtCurrency(li.lineTotal)}
+                      </span>
+                    </div>
+                  ))}
+                  {hasDiscount && (
+                    <DiscountBand
+                      label={discountLabel}
+                      amount={fmtCurrency(discountAmount)}
+                      labelStyle={s.cardRowLabel}
+                      valueStyle={{ ...s.cardRowValue, fontSize: '16px' }}
+                    />
+                  )}
+                  {hasTax && (
+                    <>
+                      <div style={s.cardRow}>
+                        <span style={{ ...s.cardRowLabel, color: C.textSecondary }}>SALES TAX</span>
+                        <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: hasDiscount ? '2px' : '4px' }}>
+                    <span style={{ ...s.cardRowLabel, color: C.textSecondary, fontWeight: 700 }}>ORDER TOTAL</span>
+                    <span style={{ ...s.cardRowValue, color: C.gold, fontSize: '22px' }}>
+                      {fmtCurrency(totalVal)}
+                    </span>
+                  </div>
+                  {hasDiscount && (
+                    <SavingsNote
+                      amount={fmtCurrency(discountAmount)}
+                      label={discount?.label ?? ''}
+                      style={{ textAlign: 'right', paddingBottom: '4px' }}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Payment Summary card */}
             {hasPayment && (
               <div style={s.dashCard}>
@@ -599,78 +671,6 @@ export default function PortalPage() {
                     VIEW INVOICE →
                   </a>
                 )}
-              </div>
-            )}
-
-            {/* Order Breakdown card */}
-            {hasLineItems && (
-              <div style={s.dashCard}>
-                <div style={s.cardEyebrow}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                  </svg>
-                  ORDER BREAKDOWN
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {data.lineItems.map((li, i) => (
-                    <div key={i} style={s.cardRow}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={s.cardRowLabel}>{li.name.toUpperCase()}</div>
-                        {li.description && (
-                          <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>{li.description}</div>
-                        )}
-                        <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '4px' }}>
-                          {li.quantity} ×{' '}
-                          {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice ? (
-                            <>
-                              <span style={{ textDecoration: 'line-through', marginRight: '6px' }}>
-                                {fmtCurrency(li.originalUnitPrice)}
-                              </span>
-                              <span style={{ color: C.greenText }}>{fmtCurrency(li.unitPrice)}</span>
-                            </>
-                          ) : (
-                            fmtCurrency(li.unitPrice)
-                          )}
-                        </div>
-                        {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice && (
-                          <SaveChip perUnit={li.originalUnitPrice - li.unitPrice} />
-                        )}
-                      </div>
-                      <span style={{ ...s.cardRowValue, flexShrink: 0, marginLeft: '16px' }}>
-                        {fmtCurrency(li.lineTotal)}
-                      </span>
-                    </div>
-                  ))}
-                  {hasDiscount && (
-                    <DiscountBand
-                      label={discountLabel}
-                      amount={fmtCurrency(discountAmount)}
-                      labelStyle={s.cardRowLabel}
-                      valueStyle={{ ...s.cardRowValue, fontSize: '16px' }}
-                    />
-                  )}
-                  {hasTax && (
-                    <>
-                      <div style={s.cardRow}>
-                        <span style={{ ...s.cardRowLabel, color: C.textSecondary }}>SALES TAX</span>
-                        <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
-                      </div>
-                    </>
-                  )}
-                  <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: hasDiscount ? '2px' : '4px' }}>
-                    <span style={{ ...s.cardRowLabel, color: C.textSecondary, fontWeight: 700 }}>ORDER TOTAL</span>
-                    <span style={{ ...s.cardRowValue, color: C.gold, fontSize: '22px' }}>
-                      {fmtCurrency(totalVal)}
-                    </span>
-                  </div>
-                  {hasDiscount && (
-                    <SavingsNote
-                      amount={fmtCurrency(discountAmount)}
-                      label={discount?.label ?? ''}
-                      style={{ textAlign: 'right', paddingBottom: '4px' }}
-                    />
-                  )}
-                </div>
               </div>
             )}
 
