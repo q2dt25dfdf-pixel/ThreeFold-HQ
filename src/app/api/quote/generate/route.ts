@@ -11,6 +11,7 @@ import {
 } from "@/lib/salesTax";
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
+import { voidDepositOnRevision } from "@/lib/supersede";
 
 type LineItem = {
   name: string;
@@ -164,6 +165,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Revision handling (STEP 2): read the lead to find the previous quote (a
+    // descriptor for the send step to supersede) and the existing deposit request.
+    // Void the deposit here, server-side, hard-guarded against paid/pending. The old
+    // quote is NOT marked superseded here — that happens only on an actual send.
+    let supersededQuoteId: string | null = null;
+    let voidedDeposit: { number: string | null } | null = null;
+    let blockedDeposit: { number: string | null; status: string } | null = null;
+    const { data: leadRows } = await db
+      .from("crm_leads")
+      .select("id,data")
+      .eq("id", leadId)
+      .limit(1);
+    const leadData = leadRows?.[0]?.data as Record<string, unknown> | undefined;
+    if (leadData) {
+      supersededQuoteId = (leadData.quote_id as string) || null;
+      const result = await voidDepositOnRevision(db, leadData.deposit_request_id as string | undefined);
+      if (result.outcome === "voided") voidedDeposit = { number: result.depositNumber };
+      else if (result.outcome === "blocked") blockedDeposit = { number: result.depositNumber, status: result.status };
+    }
+
     return NextResponse.json({
       quoteId,
       quoteNumber,
@@ -175,6 +196,9 @@ export async function POST(request: NextRequest) {
       salesTaxAmount,
       taxJurisdictionLabel: taxLookup.jurisdictionLabel,
       taxRateWarning: taxLookup.warning ?? null,
+      supersededQuoteId,
+      voidedDeposit,
+      blockedDeposit,
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

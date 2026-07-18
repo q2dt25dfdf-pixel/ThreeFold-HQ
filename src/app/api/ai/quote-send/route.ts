@@ -5,6 +5,7 @@ import { businessTodayISO } from "@/lib/businessDate";
 import { TF_FROM_ADDRESS, TF_FROM_HEADER, TF_PLAIN_CLOSING, wrapInEmailTemplate } from "@/lib/emailSignature";
 import { sendViaGmail, createGmailDraft, isGmailConfigured } from "@/lib/gmailSend";
 import { calcDiscountAmount, normalizeDiscount } from "@/lib/salesTax";
+import { markQuoteSuperseded } from "@/lib/supersede";
 
 export const dynamic = "force-dynamic";
 
@@ -423,6 +424,10 @@ export async function POST(request: Request): Promise<Response> {
         { quoteId, leadId, clientEmail, messageId, sentAt, error: leadUpdateErr.message },
       );
     }
+
+    // Supersede the previous quote now that the replacement is actually sent
+    // (ld.quote_id is the previous quote; the update above repoints it to quoteId).
+    await markQuoteSuperseded(db, ld.quote_id as string | undefined, quoteId);
 
     // ── Return ──────────────────────────────────────────────────────────────────
     const dbSyncFailed = !!(quoteUpdateErr || leadUpdateErr);

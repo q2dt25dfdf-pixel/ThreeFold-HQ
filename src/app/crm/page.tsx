@@ -14,6 +14,7 @@ import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile, type CommunicationEntry } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
+import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 import {
   autoFollowUpTaskId,
@@ -858,6 +859,10 @@ function CRMContent() {
         ...lead.communicationHistory,
       ],
     };
+    // Supersede the PREVIOUS quote only now that a replacement is actually sent
+    // (a preview-then-bail must never mark the still-current quote superseded).
+    // lead.quote_id here is the previous quote — `updated` repoints it to the new one.
+    await markQuoteSuperseded(supabase, lead.quote_id, result.quoteId);
     await saveLead(updated);
     syncFollowUpTask(updated);
     postNotification({

@@ -32,6 +32,15 @@ export async function POST(request: NextRequest) {
     const row = rows[0];
     const raw = row.data as Record<string, unknown>;
 
+    // Load-bearing guard: refuse checkout for a deposit voided by a quote revision.
+    // This is what actually stops a client paying the old (pre-revision) amount.
+    if (raw.voided_at) {
+      return NextResponse.json(
+        { error: "This deposit request is no longer current. Please contact Threefold Supply Co. for an updated payment link." },
+        { status: 409 },
+      );
+    }
+
     // Guard: do not create a duplicate session if already paid or pending
     const status = raw.status as string | undefined;
     if (status === "paid") {

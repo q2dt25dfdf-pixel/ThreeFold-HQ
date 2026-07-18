@@ -33,6 +33,8 @@ export async function GET(
       expiration_date: raw.expiration_date,
       status: raw.status,
       created_at: raw.created_at,
+      superseded_by: (raw.superseded_by ?? null) as string | null,
+      superseded_at: (raw.superseded_at ?? null) as string | null,
     };
     return NextResponse.json(clientSafe);
   } catch (err) {
@@ -71,6 +73,15 @@ export async function PATCH(
 
     if (quoteData.status === "approved") {
       return NextResponse.json({ alreadyApproved: true });
+    }
+
+    // A superseded quote is no longer an offer — the client must not approve a
+    // price we no longer stand behind.
+    if (quoteData.superseded_by) {
+      return NextResponse.json(
+        { error: "An updated quote has been sent. Please review the current version before approving." },
+        { status: 409 },
+      );
     }
 
     const now = new Date().toISOString();
