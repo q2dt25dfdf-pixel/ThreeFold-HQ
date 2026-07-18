@@ -458,7 +458,7 @@ export default function OrderDetailPage() {
   const [editingUpdatesForm, setEditingUpdatesForm] = useState(false);
   const [editingReminder, setEditingReminder] = useState(false);
 
-  // Vendor Cost
+  // Production costs (data keys keep the vendor_* names for the 5 downstream consumers)
   const [vendorCostCents, setVendorCostCents] = useState("");
   const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
   const [vendorPaymentStatus, setVendorPaymentStatus] = useState("unpaid");
@@ -1426,14 +1426,14 @@ export default function OrderDetailPage() {
           <button
             type="button"
             onClick={() => setSendInvoiceOpen(true)}
-            className="flex w-full items-center gap-3 rounded-2xl border border-blue-600 bg-blue-600 px-4 py-3 text-left text-white shadow-sm transition hover:bg-blue-700"
+            className="flex w-full items-center gap-3 rounded-2xl border border-blue-200 bg-blue-100 px-4 py-3 text-left text-slate-700 transition hover:bg-blue-200"
           >
-            <Send className="h-4 w-4 shrink-0" />
+            <Send className="h-4 w-4 shrink-0 text-blue-600" />
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-semibold">Send final invoice</span>
-              <span className="block text-[10px] text-blue-100">Deposit is paid — collect the balance</span>
+              <span className="block text-[10px] text-slate-500">Deposit is paid — collect the balance</span>
             </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-blue-200" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-blue-400" />
           </button>
         )}
         {nextStage && (
@@ -1553,16 +1553,8 @@ export default function OrderDetailPage() {
 
   const OrderDetailsSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Details</h2>
-        <button
-          type="button"
-          onClick={openOrderEditor}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-        >
-          <Edit2 className="h-3 w-3" />
-          Edit
-        </button>
       </div>
       <div className="space-y-2">
         {/* Editable line-item list (order.line_items). Internal only — blank/colors/
@@ -1696,7 +1688,6 @@ export default function OrderDetailPage() {
         {([
           { label: "Quantity", value: String(order.quantity || 0) },
           { label: "Amount", value: formatCurrency(order.amount) },
-          { label: "Vendor", value: order.vendor || "Not assigned" },
           { label: "Est. delivery", value: order.estimatedDeliveryDate || "TBD" },
         ] as { label: string; value: string }[]).map(({ label, value }) => (
           <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -1729,7 +1720,7 @@ export default function OrderDetailPage() {
   const VendorCostSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Vendor Cost</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Production Costs</h2>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorInvoiceBadge}`}>
             {vendorInvoiceStatus === "received" ? "Invoice received" : "Invoice pending"}
@@ -1772,7 +1763,7 @@ export default function OrderDetailPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Vendor Invoice</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Supplier Invoice</label>
             <select
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
               value={vendorInvoiceStatus}
@@ -1815,7 +1806,7 @@ export default function OrderDetailPage() {
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Vendor Notes</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Notes</label>
           <textarea
             rows={3}
             className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
@@ -2354,12 +2345,12 @@ export default function OrderDetailPage() {
                 placeholder="Type to search clients..."
               />
               <SmartSearchInput
-                label="Vendor"
+                label="Supplier"
                 value={orderDraft.vendor}
                 onChange={(v) => setOrderDraft({ ...orderDraft, vendor: v })}
                 onSelect={(r) => setOrderDraft({ ...orderDraft, vendor: recordName(r), vendor_name: recordName(r), vendor_id: r.id })}
                 records={vendors}
-                placeholder="Type to search vendors..."
+                placeholder="Type to search suppliers..."
               />
             </div>
             <div>
