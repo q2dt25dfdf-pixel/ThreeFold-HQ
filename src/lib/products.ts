@@ -26,7 +26,7 @@ export const PRODUCT_CATALOG: ProductCatalogEntry[] = [
     description:
       "Premium moisture-wicking performance apparel custom designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
     unitPrice: 40,
-    blank: "Sport-Tek PosiCharge Competitor",
+    blank: "DSG Movement Tee",
     colors: ["Black", "White", "Navy", "Red", "Royal", "Charcoal", "Grey"],
   },
 ];
