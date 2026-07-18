@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, RotateCcw, Send, Trash2, User } from "lucide-react";
+import { Archive, ArrowLeft, Check, ClipboardCopy, DollarSign, Edit2, ExternalLink, Eye, EyeOff, FileText, Hash, Plus, RotateCcw, Send, Trash2, User } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -70,6 +70,7 @@ type Order = {
   portal_enabled?: boolean;
   deposit_request_id?: string;
   vendor_cost_cents?: number;
+  cost_lines?: CostLine[];
   vendor_invoice_status?: string;
   vendor_payment_status?: string;
   vendor_paid_by?: string;
@@ -86,6 +87,17 @@ type Order = {
 };
 
 type ClientUpdate = { id: string; date: string; text: string };
+
+// Itemized production cost. Source of truth this page owns; its sum is rolled up into
+// the existing vendor_cost_cents field on every save (keeps finances + AI unchanged).
+type CostLine = {
+  id: string;
+  label: string;
+  kind: "per_unit" | "flat";
+  qty: number;
+  unit_price_cents: number;
+  total_cents: number;
+};
 
 type DesignVersionStatus = "In Review" | "Needs Revision" | "Approved" | "Production Ready";
 
@@ -241,6 +253,22 @@ function formatDesignVersionDate(value: string): string {
 function formatCurrency(value: string | number): string {
   const n = typeof value === "number" ? value : Number(String(value).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }) : "$0.00";
+}
+
+function newCostLineId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `cl-${Math.random().toString(36).slice(2)}`;
+}
+
+// Default cost lines seeded on first use (no cost_lines saved yet). per_unit qty
+// pre-fills from the order unit count but stays editable.
+function seedCostLines(unitCount: number): CostLine[] {
+  return [
+    { id: newCostLineId(), label: "Blanks", kind: "per_unit", qty: unitCount, unit_price_cents: 0, total_cents: 0 },
+    { id: newCostLineId(), label: "Transfers — NinjaTransfer", kind: "per_unit", qty: unitCount, unit_price_cents: 0, total_cents: 0 },
+    { id: newCostLineId(), label: "Shipping", kind: "flat", qty: 0, unit_price_cents: 0, total_cents: 0 },
+  ];
 }
 
 function normalizeOrder(order: Order): Order {
@@ -431,7 +459,7 @@ export default function OrderDetailPage() {
   const clientUpdatesSave = useSaveState();
 
   // Vendor Cost
-  const [vendorCostCents, setVendorCostCents] = useState("");
+  const [costLines, setCostLines] = useState<CostLine[]>([]);
   const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
   const [vendorPaymentStatus, setVendorPaymentStatus] = useState("unpaid");
   const [vendorPaidBy, setVendorPaidBy] = useState("");
@@ -488,7 +516,11 @@ export default function OrderDetailPage() {
     if (order && !initialized) {
       setNextAction(order.nextAction ?? "");
       setInternalNotes(order.internalNotes ?? "");
-      setVendorCostCents(order.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
+      setCostLines(
+        Array.isArray(order.cost_lines) && order.cost_lines.length > 0
+          ? order.cost_lines
+          : seedCostLines(Number(order.quantity) || 0),
+      );
       setVendorInvoiceStatus(order.vendor_invoice_status ?? "not_received");
       setVendorPaymentStatus(order.vendor_payment_status ?? "unpaid");
       setVendorPaidBy(order.vendor_paid_by ?? "");
@@ -588,14 +620,36 @@ export default function OrderDetailPage() {
     notesSave.runSave(() => upsertItem({ ...order, internalNotes }));
   };
 
+  // per_unit lines auto-compute total = qty × unit_price; flat lines take total directly.
+  const updateCostLine = (id: string, patch: Partial<CostLine>) => {
+    setCostLines((lines) =>
+      lines.map((l) => {
+        if (l.id !== id) return l;
+        const n = { ...l, ...patch };
+        if (n.kind === "per_unit") {
+          n.total_cents = Math.round((Number(n.qty) || 0) * (Number(n.unit_price_cents) || 0));
+        }
+        return n;
+      }),
+    );
+  };
+  const addCostLine = () =>
+    setCostLines((lines) => [
+      ...lines,
+      { id: newCostLineId(), label: "", kind: "per_unit", qty: Number(order?.quantity) || 0, unit_price_cents: 0, total_cents: 0 },
+    ]);
+  const removeCostLine = (id: string) => setCostLines((lines) => lines.filter((l) => l.id !== id));
+
   const saveVendorCost = () => {
     if (!order) return;
-    const cents = parseInt(vendorCostCents || "0", 10);
-    if (isNaN(cents) || cents < 0) return;
+    // Roll the itemized lines up into the EXISTING vendor_cost_cents field so
+    // finances/page.tsx + the AI profit routes keep working with zero changes.
+    const rollupCents = costLines.reduce((s, l) => s + (Number(l.total_cents) || 0), 0);
     vendorCostSave.runSave(() =>
       upsertItem({
         ...order,
-        vendor_cost_cents: cents,
+        cost_lines: costLines,
+        vendor_cost_cents: rollupCents,
         vendor_invoice_status: vendorInvoiceStatus,
         vendor_payment_status: vendorPaymentStatus,
         vendor_paid_by: vendorPaidBy,
@@ -1439,9 +1493,12 @@ export default function OrderDetailPage() {
     </div>
   );
 
-  const vendorCostDisplay = vendorCostCents
-    ? formatCurrency(parseInt(vendorCostCents, 10) / 100)
-    : "$0.00";
+  const costLinesTotalCents = costLines.reduce((s, l) => s + (Number(l.total_cents) || 0), 0);
+  const productionCostDollars = costLinesTotalCents / 100;
+  const marginRevenue = totalAmount; // authoritative order total already on the page
+  const marginProfit = marginRevenue - productionCostDollars;
+  const marginPct = marginRevenue > 0 ? Math.round((marginProfit / marginRevenue) * 100) : null;
+  const vendorCostDisplay = costLinesTotalCents ? formatCurrency(productionCostDollars) : "$0.00";
   const vendorInvoiceBadge =
     vendorInvoiceStatus === "received"
       ? "bg-emerald-100 text-emerald-700"
@@ -1454,7 +1511,7 @@ export default function OrderDetailPage() {
   const VendorCostSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Vendor Cost</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Production Cost &amp; Margin</h2>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorInvoiceBadge}`}>
             {vendorInvoiceStatus === "received" ? "Invoice received" : "Invoice pending"}
@@ -1471,21 +1528,115 @@ export default function OrderDetailPage() {
         )}
       </div>
       <div className="space-y-3">
-        <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cost (USD)</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
-            placeholder="$0.00"
-            value={centsToCurrency(vendorCostCents)}
-            onKeyDown={(e) => handleCurrencyKeyDown(e, setVendorCostCents)}
-            onPaste={(e) => {
-              e.preventDefault();
-              setVendorCostCents((c) => (c + e.clipboardData.getData("text").replace(/\D/g, "")).replace(/^0+(?=\d)/, ""));
-            }}
-            onChange={() => {}}
-          />
+        {/* Itemized cost lines — the sum rolls up into vendor_cost_cents on save. */}
+        <div className="space-y-2">
+          <label className="block text-xs font-semibold text-slate-600">Cost breakdown</label>
+          {costLines.map((line) => (
+            <div key={line.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-2">
+                {line.kind === "per_unit"
+                  ? <Hash className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                  : <DollarSign className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
+                <input
+                  type="text"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+                  placeholder="Cost label"
+                  value={line.label}
+                  onChange={(e) => updateCostLine(line.id, { label: e.target.value })}
+                />
+                <select
+                  className="shrink-0 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-slate-400 focus:outline-none"
+                  value={line.kind}
+                  onChange={(e) => updateCostLine(line.id, { kind: e.target.value as CostLine["kind"] })}
+                >
+                  <option value="per_unit">Per unit</option>
+                  <option value="flat">Flat</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeCostLine(line.id)}
+                  className="shrink-0 rounded-xl p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                  aria-label="Remove cost line"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              {line.kind === "per_unit" ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Qty</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+                      value={line.qty}
+                      onChange={(e) => updateCostLine(line.id, { qty: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Unit price</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="0.01"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+                      value={line.unit_price_cents ? line.unit_price_cents / 100 : ""}
+                      onChange={(e) => updateCostLine(line.id, { unit_price_cents: Math.max(0, Math.round((Number(e.target.value) || 0) * 100)) })}
+                    />
+                  </div>
+                  <div className="col-span-2 text-right text-xs text-slate-500">
+                    Line total {formatCurrency((line.total_cents || 0) / 100)}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amount</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
+                    value={line.total_cents ? line.total_cents / 100 : ""}
+                    onChange={(e) => updateCostLine(line.id, { total_cents: Math.max(0, Math.round((Number(e.target.value) || 0) * 100)) })}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addCostLine}
+            className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-slate-300 py-2.5 text-xs font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700"
+          >
+            <Plus className="h-4 w-4" /> Add cost line
+          </button>
+        </div>
+
+        {/* Margin — internal only */}
+        <div className="rounded-2xl bg-slate-950 p-4 text-white">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Margin</div>
+          <div className="mt-3 space-y-1.5 text-xs md:text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-300">Order total</span>
+              <span className="font-semibold">{formatCurrency(marginRevenue)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-300">&minus; Production cost</span>
+              <span className="font-semibold text-slate-200">{formatCurrency(productionCostDollars)}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between border-t border-white/10 pt-2">
+              <span className="text-slate-300">Profit</span>
+              <span className={`font-bold ${marginProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{formatCurrency(marginProfit)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-300">Margin</span>
+              <span className="font-semibold">{marginPct === null ? "—" : `${marginPct}%`}</span>
+            </div>
+          </div>
+          <div className="mt-3 text-[10px] text-slate-500">Internal only — never shown to the client.</div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
