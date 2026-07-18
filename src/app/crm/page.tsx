@@ -784,6 +784,24 @@ function CRMContent() {
   };
 
   const handleDeleteLead = async (lead: Lead) => {
+    // Guard: never hard-delete real money. "Deposit Paid" stage / "Won" status are set
+    // together by the Stripe webhook; also catch a paid deposit or a deposit_paid finance
+    // recorded manually without a stage move. Refuse the delete and offer Archive instead.
+    let paidOrWon = lead.stage === "Deposit Paid" || lead.status === "Won";
+    if (!paidOrWon) {
+      const [fin, dep] = await Promise.all([
+        supabase.from("finances").select("id").eq("data->>lead_id", lead.id).eq("data->>deposit_paid", "true").limit(1),
+        supabase.from("deposit_requests").select("id").eq("data->>lead_id", lead.id).eq("data->>status", "paid").limit(1),
+      ]);
+      paidOrWon = (fin.data?.length ?? 0) > 0 || (dep.data?.length ?? 0) > 0;
+    }
+    if (paidOrWon) {
+      if (window.confirm(`${lead.company} has a paid deposit — its order and finances are real and cannot be deleted. Archive it instead?`)) {
+        await handleArchiveLead(lead);
+      }
+      return;
+    }
+
     // Cascade: remove every child row linked to this lead so nothing is orphaned.
     // finances is included ON PURPOSE — an orphaned finances row keeps inflating the
     // Sales Tax total. Clients are intentionally NOT cascaded (they are shared/deduped
