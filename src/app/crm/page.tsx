@@ -784,6 +784,16 @@ function CRMContent() {
   };
 
   const handleDeleteLead = async (lead: Lead) => {
+    // Cascade: remove every child row linked to this lead so nothing is orphaned.
+    // finances is included ON PURPOSE — an orphaned finances row keeps inflating the
+    // Sales Tax total. Clients are intentionally NOT cascaded (they are shared/deduped
+    // across leads); the order's portal token lives on the order row and dies with it.
+    await Promise.all([
+      supabase.from("quotes").delete().eq("data->>lead_id", lead.id),
+      supabase.from("deposit_requests").delete().eq("data->>lead_id", lead.id),
+      supabase.from("orders").delete().eq("data->>lead_id", lead.id),
+      supabase.from("finances").delete().eq("data->>lead_id", lead.id),
+    ]);
     await deleteItem(lead.id);
     deleteTask(autoFollowUpTaskId(lead.id));
     if (viewLeadId === lead.id) setViewLeadId(null);
