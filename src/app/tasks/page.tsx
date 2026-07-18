@@ -7,6 +7,7 @@ import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO, dateToBusinessISO } from "@/lib/businessDate";
+import { isCrmTask } from "@/lib/followUps";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
 type TaskAssignee = TaskOwner | "All" | "";
@@ -57,10 +58,6 @@ type TaskFormData = Omit<Task, "id">;
 
 function taskAssignee(task: Task): TaskAssignee {
   return task.owner ?? task.assignedTo ?? "";
-}
-
-function isCrmTask(task: Task) {
-  return task.source === "CRM" || Boolean(task.crmLeadId || task.leadId);
 }
 
 function taskMatchesSearch(task: Task, query: string): boolean {

@@ -35,6 +35,18 @@ export function isCrmFollowUpTask(task: FollowUpTaskRecord): boolean {
   );
 }
 
+/**
+ * True when a task belongs to the CRM (a lead follow-up), not the Tasks board.
+ * The founder Tasks board hides these; the dashboard's task metrics must apply the
+ * SAME rule so CRM tasks never masquerade as board tasks. Covers every key variant:
+ *   source === "CRM"  ||  crmLeadId  ||  leadId  ||  crm_lead_id  ||  lead_id
+ * (the four lead-id spellings are collapsed by taskLeadId). Shared by tasks/page.tsx
+ * and lib/dashboardMetrics.ts so the two views can never drift.
+ */
+export function isCrmTask(task: FollowUpTaskRecord): boolean {
+  return stringField(task, "source") === CRM_FOLLOW_UP_SOURCE || Boolean(taskLeadId(task));
+}
+
 export function findFollowUpTaskForLead(
   tasks: FollowUpTaskRecord[],
   leadId: string,
