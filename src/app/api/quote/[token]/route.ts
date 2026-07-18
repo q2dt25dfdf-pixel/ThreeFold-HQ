@@ -61,7 +61,18 @@ export async function GET(
       quote_number: raw.quote_number,
       client_name: raw.client_name,
       items: raw.items,
-      line_items: raw.line_items ?? null,
+      // Whitelist to the six client-facing keys only (mirrors invoice/portal routes).
+      // Internal production spec (blank / colors / print_detail) must NOT ship to the client.
+      line_items: Array.isArray(raw.line_items)
+        ? (raw.line_items as Record<string, unknown>[]).map((li) => ({
+            name: String(li.name ?? ""),
+            description: String(li.description ?? ""),
+            quantity: Number(li.quantity ?? 0),
+            unitPrice: Number(li.unitPrice ?? 0),
+            lineTotal: Number(li.lineTotal ?? 0),
+            ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
+          }))
+        : null,
       subtotal: raw.subtotal ?? null,
       discount: raw.discount ?? null,
       sales_tax_rate: raw.sales_tax_rate ?? null,
