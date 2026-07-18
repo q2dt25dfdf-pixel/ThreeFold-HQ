@@ -276,7 +276,7 @@ export async function POST(request: Request): Promise<Response> {
 
         const { error: leadDraftErr } = await db
           .from("crm_leads")
-          .update({ data: { ...ld, communicationHistory: [draftCommEntry, ...existingHistory] } })
+          .update({ data: { ...ld, last_activity_at: new Date().toISOString(), communicationHistory: [draftCommEntry, ...existingHistory] } })
           .eq("id", leadId);
 
         if (leadDraftErr) {
@@ -410,6 +410,8 @@ export async function POST(request: Request): Promise<Response> {
           quote_id: quoteId,
           quote_number: quoteNumber,
           ...(grandTotal != null && grandTotal > 0 ? { value: grandTotal } : {}),
+          stage_changed_at: sentAt,
+          last_activity_at: sentAt,
           communicationHistory: [commEntry, ...existingHistory],
         },
       })

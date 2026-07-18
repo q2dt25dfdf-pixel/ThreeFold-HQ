@@ -72,6 +72,18 @@ export type Lead = {
   // active-pipeline rollups. Delete is still the hard-remove path; archive is reversible.
   archived?: boolean;
   archivedAt?: string;
+  // Lifecycle timestamps (additive; null on legacy records = "unknown", never backfilled).
+  // created_at + stage_changed_at are stamped at creation (initial stage counts as a
+  // stage-set); stage_changed_at re-stamps on every stage change; last_activity_at on
+  // every meaningful write. All written centrally via saveLead() on the client and
+  // inline on the server/Jarvis stage-write routes.
+  created_at?: string;
+  stage_changed_at?: string;
+  last_activity_at?: string;
+  // Per-action dismiss/snooze (shape only this phase; nothing writes it yet). Keyed by an
+  // action key so one lead can dismiss one pending action without silencing the others.
+  // until=null => dismissed permanently ("decided not to"); a date => snooze until then.
+  dismissed_actions?: Record<string, { until: string | null; at: string; by: string; reason?: string }>;
 };
 
 export const LOST_REASONS = [

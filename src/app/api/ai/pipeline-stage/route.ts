@@ -89,7 +89,8 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     // ── Update stage ────────────────────────────────────────────────────────
-    const updatedData = { ...existingData, stage: resolvedNewStage };
+    const stageChangedAt = new Date().toISOString();
+    const updatedData = { ...existingData, stage: resolvedNewStage, stage_changed_at: stageChangedAt, last_activity_at: stageChangedAt };
 
     const { error: upsertErr } = await db
       .from("crm_leads")

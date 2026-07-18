@@ -428,7 +428,7 @@ export async function POST(request: Request): Promise<Response> {
 
         const { error: leadDraftErr } = await db
           .from("crm_leads")
-          .update({ data: { ...ld, deposit_request_id: depositId, deposit_request_number: depositNumber ?? depositId, communicationHistory: [draftCommEntry, ...existingHistory] } })
+          .update({ data: { ...ld, deposit_request_id: depositId, deposit_request_number: depositNumber ?? depositId, last_activity_at: new Date().toISOString(), communicationHistory: [draftCommEntry, ...existingHistory] } })
           .eq("id", leadId);
 
         if (leadDraftErr) {
@@ -565,6 +565,7 @@ export async function POST(request: Request): Promise<Response> {
           ...ld,
           deposit_request_id: depositId,
           deposit_request_number: depositRequestNumber,
+          last_activity_at: sentAt,
           communicationHistory: [commEntry, ...existingHistory],
         },
       })
