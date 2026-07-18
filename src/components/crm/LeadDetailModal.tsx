@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Pin, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { businessTodayISO } from "@/lib/businessDate";
-import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch } from "./types";
-import { pipelineStages, LOST_REASONS } from "./types";
+import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch, NoteEntry } from "./types";
+import { pipelineStages, LOST_REASONS, flattenNotes } from "./types";
 
 interface Props {
   open: boolean;
@@ -65,6 +65,13 @@ function parseLeadValue(value: string) {
 
 function fmtDate(iso: string) {
   return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtNoteDate(iso: string) {
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime())
+    ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "";
 }
 
 // Time-in-current-stage from stage_changed_at (feat/timestamps). Never guesses —
@@ -192,6 +199,41 @@ function StripCell({ label, className, children }: { label: string; className?: 
   );
 }
 
+// One note. Pinned notes get an amber tint/border; unpinned are plain white.
+function NoteCard({ note, onTogglePin, onDelete }: { note: NoteEntry; onTogglePin: () => void; onDelete: () => void }) {
+  return (
+    <div className={`rounded-2xl border p-3 ${note.pinned ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-slate-800">{note.text}</p>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onTogglePin}
+            aria-label={note.pinned ? "Unpin note" : "Pin note"}
+            title={note.pinned ? "Unpin" : "Pin"}
+            className={`flex h-9 w-9 items-center justify-center rounded-lg ${note.pinned ? "text-amber-600 hover:bg-amber-100" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}`}
+          >
+            <Pin className="h-4 w-4" fill={note.pinned ? "currentColor" : "none"} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete note"
+            title="Delete"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-400">
+        {note.pinned && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">PINNED</span>}
+        <span className="truncate">{note.author} · {fmtNoteDate(note.created_at)}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendDesign, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false, onArchive, onUnarchive }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
@@ -207,8 +249,14 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const [showAllActivity, setShowAllActivity] = useState(false);
   const composerNoteRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Left column tab — Contact fields vs Notes (Notes is usually empty).
-  const [leftTab, setLeftTab] = useState<"contact" | "notes">("contact");
+  // Notes composer state (separate from the activity composer)
+  const [noteComposerOpen, setNoteComposerOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteDraftPinned, setNoteDraftPinned] = useState(false);
+  const noteDraftRef = useRef<HTMLTextAreaElement | null>(null);
+  // Stable migration timestamp per lead open (so the imported note's date/key don't
+  // churn across renders before the first save).
+  const migratedAtRef = useRef<{ id: string; iso: string } | null>(null);
 
   // Closed-Lost reason picker
   const [lostPickerOpen, setLostPickerOpen] = useState(false);
@@ -220,15 +268,22 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     setEditingIndex(null);
     setComposerOpen(false);
     setShowAllActivity(false);
-    setLeftTab("contact");
+    setNoteComposerOpen(false);
+    setNoteDraft("");
+    setNoteDraftPinned(false);
     setLostPickerOpen(false);
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
 
-  // Focus the note field whenever the composer opens (new entry or edit).
+  // Focus the activity note field whenever that composer opens (new entry or edit).
   useEffect(() => {
     if (composerOpen) composerNoteRef.current?.focus();
   }, [composerOpen]);
+
+  // Focus the note field when the notes composer opens.
+  useEffect(() => {
+    if (noteComposerOpen) noteDraftRef.current?.focus();
+  }, [noteComposerOpen]);
 
   if (!open || !lead) return null;
 
@@ -244,6 +299,65 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const patchProfile = (fields: Partial<Lead["companyProfile"]>) => {
     patch({ companyProfile: { ...current.companyProfile, ...fields } });
   };
+
+  // ── Notes: notes_list is the source of truth; `notes` is a flat mirror; ──────
+  // notes_original is a write-once undo. Migration is on first render (rendered
+  // here) but only PERSISTED on the next save via commitNotes.
+  if (!migratedAtRef.current || migratedAtRef.current.id !== lead.id) {
+    migratedAtRef.current = { id: lead.id, iso: new Date().toISOString() };
+  }
+  const migrationTime = migratedAtRef.current.iso;
+
+  const notesList: NoteEntry[] = Array.isArray(current.notes_list)
+    ? current.notes_list
+    : current.notes && current.notes.trim()
+      ? [{ id: "note-import", text: current.notes, pinned: true, author: "Imported", created_at: migrationTime }]
+      : [];
+
+  // Every notes change writes notes_list, regenerates the `notes` mirror, and (once,
+  // at migration) captures notes_original verbatim.
+  const commitNotes = (nextList: NoteEntry[]) => {
+    const migrating = !Array.isArray(current.notes_list);
+    patch({
+      notes_list: nextList,
+      notes: flattenNotes(nextList),
+      ...(migrating && current.notes_original === undefined && (current.notes ?? "").trim()
+        ? { notes_original: current.notes }
+        : {}),
+    });
+  };
+
+  const addNote = () => {
+    const text = noteDraft.trim();
+    if (!text) return;
+    const entry: NoteEntry = {
+      id: `note-${Date.now()}`,
+      text,
+      pinned: noteDraftPinned,
+      author: current.owner || "Alliyah",
+      created_at: new Date().toISOString(),
+    };
+    commitNotes([entry, ...notesList]);
+    setNoteDraft("");
+    setNoteDraftPinned(false);
+    setNoteComposerOpen(false);
+  };
+
+  const toggleNotePin = (id: string) => {
+    commitNotes(notesList.map((n) => (n.id === id ? { ...n, pinned: !n.pinned } : n)));
+  };
+
+  const removeNote = (id: string) => {
+    const note = notesList.find((n) => n.id === id);
+    if (!note) return;
+    // Unpinned = disposable, delete immediately. Pinned = confirm (they meant it).
+    if (note.pinned && !window.confirm("Delete this pinned note?")) return;
+    commitNotes(notesList.filter((n) => n.id !== id));
+  };
+
+  const byNewest = (a: NoteEntry, b: NoteEntry) => (b.created_at || "").localeCompare(a.created_at || "");
+  const pinnedNotes = notesList.filter((n) => n.pinned).sort(byNewest);
+  const unpinnedNotes = notesList.filter((n) => !n.pinned).sort(byNewest);
 
   const changeStage = (next: PipelineStage) => {
     if (next === current.stage) return;
@@ -524,46 +638,99 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
         {/* Main layout — stacked on mobile, 2-column on desktop */}
         <div className="grid gap-5 md:grid-cols-[2fr_3fr] md:items-start">
 
-          {/* Left column — Contact fields / Notes behind a tab */}
-          <div className="flex min-w-0 flex-col gap-4">
-            <div className="flex gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
-              {(["contact", "notes"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setLeftTab(tab)}
-                  className={`flex-1 rounded-xl px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${
-                    leftTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+          {/* Left column — Contact fields, then Notes below a divider */}
+          <div className="flex min-w-0 flex-col gap-5">
+            <div className="min-w-0 rounded-2xl border border-slate-200 px-2 py-1">
+              <Row label="Contact name" value={current.contact} onSave={(v) => patch({ contact: v })} />
+              <Row label="Email" value={current.email} onSave={(v) => patch({ email: v })} />
+              <Row label="Phone" value={current.phone} onSave={(v) => patch({ phone: v })} />
+              <Row label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
+              <Row label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
+              <Row label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
+              {current.stage === "Closed Lost" && (
+                <Row label="Lost reason" value={current.lostReason ?? ""} onSave={(v) => patch({ lostReason: v })} type="select" options={[...LOST_REASONS]} />
+              )}
             </div>
 
-            {leftTab === "contact" ? (
-              <div className="min-w-0 rounded-2xl border border-slate-200 px-2 py-1">
-                <Row label="Contact name" value={current.contact} onSave={(v) => patch({ contact: v })} />
-                <Row label="Email" value={current.email} onSave={(v) => patch({ email: v })} />
-                <Row label="Phone" value={current.phone} onSave={(v) => patch({ phone: v })} />
-                <Row label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
-                <Row label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
-                <Row label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
-                {current.stage === "Closed Lost" && (
-                  <Row label="Lost reason" value={current.lostReason ?? ""} onSave={(v) => patch({ lostReason: v })} type="select" options={[...LOST_REASONS]} />
-                )}
+            {/* Notes — separate, pinnable, deletable entries */}
+            <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Notes</h3>
+                <span className="text-xs font-semibold text-slate-400">{notesList.length}</span>
               </div>
-            ) : (
-              <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <textarea
-                  rows={10}
-                  className="w-full resize-none rounded-2xl border border-slate-300 bg-white p-4 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
-                  value={current.notes}
-                  placeholder="Add notes about this lead..."
-                  onChange={(e) => patch({ notes: e.target.value })}
-                />
-              </div>
-            )}
+
+              {noteComposerOpen ? (
+                <div className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                  <textarea
+                    ref={noteDraftRef}
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                    placeholder="Write a note…"
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNoteDraftPinned((v) => !v)}
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-xs font-semibold ${
+                        noteDraftPinned ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Pin className="h-3.5 w-3.5" fill={noteDraftPinned ? "currentColor" : "none"} aria-hidden="true" />
+                      {noteDraftPinned ? "Pinned" : "Pin"}
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setNoteComposerOpen(false); setNoteDraft(""); setNoteDraftPinned(false); }}
+                        className="min-h-9 rounded-2xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addNote}
+                        disabled={!noteDraft.trim()}
+                        className="min-h-9 rounded-2xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        Add note
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setNoteComposerOpen(true)}
+                  className="mb-4 flex min-h-11 w-full items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50"
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">+</span>
+                  Add a note
+                </button>
+              )}
+
+              {notesList.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500 md:text-sm">
+                  Standing facts about this lead go here. Pin the ones that always matter.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {pinnedNotes.map((note) => (
+                    <NoteCard key={note.id} note={note} onTogglePin={() => toggleNotePin(note.id)} onDelete={() => removeNote(note.id)} />
+                  ))}
+                  {pinnedNotes.length > 0 && unpinnedNotes.length > 0 && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Other</span>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
+                  )}
+                  {unpinnedNotes.map((note) => (
+                    <NoteCard key={note.id} note={note} onTogglePin={() => toggleNotePin(note.id)} onDelete={() => removeNote(note.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right column — next step, warnings, activity, notes */}
@@ -667,7 +834,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                   className="mb-4 flex min-h-11 w-full items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50"
                 >
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">+</span>
-                  Log a call, email, or note
+                  Log a call, email, or meeting
                 </button>
               )}
 

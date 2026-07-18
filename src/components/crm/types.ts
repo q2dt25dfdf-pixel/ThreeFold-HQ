@@ -27,6 +27,26 @@ export type CompanyProfile = {
   website: string;
 };
 
+// A single lead note. notes_list is the source of truth; `notes` (string) is a
+// regenerated flat mirror the rest of the app still reads.
+export type NoteEntry = {
+  id: string;
+  text: string;
+  pinned: boolean;
+  created_at: string;
+  author: string;
+};
+
+// Flat mirror written to lead.notes on every notes_list change: pinned first
+// (newest first), then unpinned (newest first), text only, joined by newlines —
+// so the six downstream consumers keep seeing a plain, current notes string.
+export function flattenNotes(list: NoteEntry[]): string {
+  const byNewest = (a: NoteEntry, b: NoteEntry) => (b.created_at || "").localeCompare(a.created_at || "");
+  const pinned = list.filter((n) => n.pinned).sort(byNewest);
+  const unpinned = list.filter((n) => !n.pinned).sort(byNewest);
+  return [...pinned, ...unpinned].map((n) => n.text).join("\n");
+}
+
 export type LeadStatus = "Open" | "Pending" | "At Risk" | "Won";
 
 export type Lead = {
@@ -84,6 +104,11 @@ export type Lead = {
   // action key so one lead can dismiss one pending action without silencing the others.
   // until=null => dismissed permanently ("decided not to"); a date => snooze until then.
   dismissed_actions?: Record<string, { until: string | null; at: string; by: string; reason?: string }>;
+  // Notes as separate pinnable entries. notes_list is the source of truth; `notes`
+  // (above) is a regenerated flat mirror; notes_original is the write-once, never-read
+  // undo capturing the pre-migration `notes` verbatim.
+  notes_list?: NoteEntry[];
+  notes_original?: string;
 };
 
 export const LOST_REASONS = [
