@@ -1652,7 +1652,6 @@ export default function OrderDetailPage() {
   ].map((group) => ({ ...group, fields: group.fields.filter((f) => f.value?.trim()) })).filter((group) => group.fields.length > 0);
 
   const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
-  const hasIntake = intakeGroups.length > 0 || intakeFiles.length > 0;
   const longIntakeLabels = new Set(["Company description", "Meaning / brand story", "Style preferences", "Original notes"]);
 
   const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
@@ -1854,6 +1853,11 @@ export default function OrderDetailPage() {
                 <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClass(order.status)}`}>
                   {order.status}
                 </span>
+                {order.quantity ? (
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
+                    {order.quantity} units
+                  </span>
+                ) : null}
                 {order.owner && (
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
                     {order.owner}
@@ -1883,61 +1887,35 @@ export default function OrderDetailPage() {
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {/* Order timeline stepper — pulled up directly under the command header */}
+      {TimelineSection}
+
+      {/* Quick action bar */}
       {QuickActionsSection}
 
-      {/* Mobile layout — single column (InternalNotes appears full-width below PortalSection) */}
-      <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
-        {TimelineSection}
-        {NextActionSection}
-        {DesignVersionsSection}
-        {PaymentStatusSection}
-        {OrderDetailsSection}
-        {VendorCostSection}
-        {DeliveryAddressSection}
-        {IntakeSection}
-        {CommunicationSection}
-        {ClientUpdatesSection}
+      {/* Command center — left: the work + money; right: status detail + client-facing.
+          One responsive grid: stacks to a single column on mobile (left group first,
+          then right group), 2/3-split on desktop. Section vars are unchanged; each still
+          owns its exact save handler and field keys. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+        {/* LEFT — the work + money */}
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:gap-6">
+          {VendorCostSection}
+          {OrderDetailsSection}
+          {DesignVersionsSection}
+          {PaymentStatusSection}
+        </div>
+        {/* RIGHT — status detail + client-facing */}
+        <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
+          {NextActionSection}
+          {DeliveryAddressSection}
+          {order && <PortalSection orderId={params.id} />}
+          {CommunicationSection}
+          {ClientUpdatesSection}
+          {InternalNotesSection}
+          {IntakeSection}
+        </div>
       </div>
-
-      {/* Desktop layout — 3 columns with intake data, 2 columns without */}
-      {/* InternalNotes is rendered full-width below PortalSection for all layouts */}
-      {hasIntake ? (
-        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
-          <div className="flex flex-col gap-6">
-            {PaymentStatusSection}
-            {OrderDetailsSection}
-            {VendorCostSection}
-            {DeliveryAddressSection}
-            {IntakeSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {TimelineSection}
-            {DesignVersionsSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {CommunicationSection}
-            {NextActionSection}
-            {ClientUpdatesSection}
-          </div>
-        </div>
-      ) : (
-        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-6">
-          <div className="flex flex-col gap-6">
-            {PaymentStatusSection}
-            {OrderDetailsSection}
-            {VendorCostSection}
-            {DeliveryAddressSection}
-            {CommunicationSection}
-            {ClientUpdatesSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {TimelineSection}
-            {DesignVersionsSection}
-            {NextActionSection}
-          </div>
-        </div>
-      )}
 
       {/* Add design version modal */}
       {isAddVersionOpen && (
@@ -2002,11 +1980,6 @@ export default function OrderDetailPage() {
           </div>
         </ModalShell>
       )}
-
-      {order && <PortalSection orderId={params.id} />}
-
-      {/* Internal Notes — full-width below Client Portal for all order types */}
-      {InternalNotesSection}
 
       {/* Send final invoice modal */}
       <SendFinalInvoiceModal
