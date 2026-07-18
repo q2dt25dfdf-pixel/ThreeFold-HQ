@@ -90,6 +90,7 @@ type Order = {
   client_name?: string;
   vendor: string;
   items: string[];
+  line_items?: unknown[];
   quantity: number;
   amount: number;
   status: string;
@@ -561,6 +562,7 @@ function CRMContent() {
       sales_tax_rate?: number;
       sales_tax_amount?: number;
       client_payment_method_intent?: string;
+      line_items?: unknown[];
     };
     const leadDepositRequestId = lead.deposit_request_id;
     const { data: depositRows } = leadDepositRequestId
@@ -626,7 +628,17 @@ function CRMContent() {
     const balanceRemaining = depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0);
     const today = businessTodayISO();
 
-    // Create the order
+    // Create the order. Copy the quote's line items (full array incl. blank + colors +
+    // print_detail) as a stable snapshot; derive the string[] item names + total qty so
+    // the existing items/quantity fields stay populated. moneySource already prefers the
+    // deposit request's copy, then the quote. Older leads with no line items fall back to
+    // items:[]/quantity:0 exactly as before.
+    const sourceLineItems = moneySource.line_items;
+    const orderLineItems = Array.isArray(sourceLineItems) ? sourceLineItems : [];
+    const derivedItems = orderLineItems
+      .map((li) => String((li as { name?: unknown }).name ?? "").trim())
+      .filter(Boolean);
+    const derivedQuantity = orderLineItems.reduce((s: number, li) => s + (Number((li as { quantity?: unknown }).quantity) || 0), 0);
     const nowIso = new Date().toISOString();
     const existingOrder = orders.find((o) => o.id === orderId);
     await upsertOrder({
@@ -638,8 +650,9 @@ function CRMContent() {
       client_id: clientId,
       client_name: lead.company,
       vendor: vendorToAssign,
-      items: [],
-      quantity: 0,
+      items: derivedItems,
+      line_items: orderLineItems,
+      quantity: derivedQuantity,
       amount: totalAmount,
       status: "Production",
       created_at: existingOrder?.created_at ?? nowIso,
