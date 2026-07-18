@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       leadId, clientName, clientEmail, totalAmount, lineItems, items, notes,
       subtotal: bodySubtotal,
       discount: bodyDiscount,
+      depositMinimum,
       clientAddressText, clientZip, deliveryZip,
     } =
       await request.json() as {
@@ -40,10 +41,17 @@ export async function POST(request: NextRequest) {
         notes: string;
         subtotal?: number;
         discount?: QuoteDiscount | null;
+        depositMinimum?: number;
         clientAddressText?: string;
         clientZip?: string;
         deliveryZip?: string;
       };
+
+    // Deposit minimum as a decimal fraction of the total (0 < x <= 1); default 50%.
+    const depositMinimumFraction =
+      typeof depositMinimum === "number" && depositMinimum > 0 && depositMinimum <= 1
+        ? depositMinimum
+        : 0.5;
 
     if (!leadId) {
       return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
@@ -146,6 +154,7 @@ export async function POST(request: NextRequest) {
       tax_zip_used: taxLookup.zipUsed ?? null,
       tax_jurisdiction_label: taxLookup.jurisdictionLabel,
       tax_rate_warning: taxLookup.warning ?? null,
+      deposit_minimum: depositMinimumFraction,
       expiration_date: expirationDateStr,
       public_token: token,
       public_link: publicLink,

@@ -1,9 +1,9 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
-import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
-import { calcDiscountAmount, normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
+import { normalizeDiscount } from "@/lib/salesTax";
 import { depositTerms } from "@/lib/depositTerms";
+import { buildDepositEmailBody } from "@/lib/depositEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -55,11 +55,6 @@ function fmtCurrency(n: number): string {
   }).format(n);
 }
 
-function fmtTaxRate(rate: number | null | undefined): string {
-  if (rate == null) return "";
-  return (rate * 100).toFixed(2).replace(/\.?0+$/, "") + "%";
-}
-
 // ── Deposit recency sort ───────────────────────────────────────────────────────
 
 function effectiveTs(d: Row): string {
@@ -77,59 +72,8 @@ function sortByRecency(deposits: Row[]): Row[] {
   });
 }
 
-// ── Email template (matches HQ SendDepositModal exactly) ──────────────────────
-
+// Line-item shape shared with the extracted email builder.
 type LineItem = { name: string; quantity: number; [key: string]: unknown };
-
-function buildEmailBody(
-  contactName: string,
-  depositNumber: string | null,
-  totalAmount: number,
-  depositAmount: number,
-  balanceRemaining: number,
-  lineItems: LineItem[] | null,
-  subtotal: number | null,
-  salesTaxRate: number | null,
-  salesTaxAmount: number | null,
-  discount: QuoteDiscount | null,
-  publicLink: string | null,
-): string {
-  const depositPercent = totalAmount > 0
-    ? Math.round((depositAmount / totalAmount) * 100)
-    : 50;
-  const terms = depositTerms(depositPercent);
-
-  const itemSummary = lineItems && lineItems.length > 0
-    ? `\n\nItems included:\n${lineItems.map((i) => `• ${i.name} (×${i.quantity})`).join("\n")}`
-    : "";
-
-  const hasTax = salesTaxAmount != null && salesTaxAmount > 0;
-  const taxLine = hasTax
-    ? `\nSales Tax (${fmtTaxRate(salesTaxRate)}): ${fmtCurrency(salesTaxAmount!)}`
-    : "";
-  const discountLine = discount && subtotal != null
-    ? `\n${discount.label}: -${fmtCurrency(calcDiscountAmount(subtotal, discount))}`
-    : "";
-  const subtotalLine = subtotal != null && subtotal !== totalAmount
-    ? `\nSubtotal: ${fmtCurrency(subtotal)}${discountLine}${taxLine}`
-    : "";
-  const balanceLine = terms.showBalance
-    ? `\nBalance Due on Completion: ${fmtCurrency(balanceRemaining)}`
-    : "";
-
-  return (
-    `Hi ${contactName},\n\n` +
-    `Your project with Threefold Supply Co. is approved and ready to move into production!\n\n` +
-    `To kick things off, we require ${terms.isFull ? "payment" : "a deposit"} as shown below.${itemSummary}\n\n` +
-    `${terms.requestNoun} #: ${depositNumber ?? "[DEPOSIT NUMBER]"}${subtotalLine}\n` +
-    `Total Project Value: ${fmtCurrency(totalAmount)}\n` +
-    `${terms.dueLabelWithPct}: ${fmtCurrency(depositAmount)}${balanceLine}\n\n` +
-    `Please note: Card payments include a 3% processing fee. Bank account payments and checks do not.\n\n` +
-    `View your full ${terms.requestNoun.toLowerCase()} here:\n${publicLink ?? "[DEPOSIT LINK]"}\n\n` +
-    `${terms.oncePaidSentence} Questions? Just reply to this email.\n\n` +
-    TF_PLAIN_CLOSING
-  );
-}
 
 // ── Preview builder ────────────────────────────────────────────────────────────
 
@@ -164,7 +108,7 @@ function buildPreview(
     ? `${subjectTerms.subjectPrefix} ${depositNumber} | Threefold Supply Co.`
     : `${subjectTerms.subjectPrefix} | Threefold Supply Co.`;
 
-  const emailBodyPreview = buildEmailBody(
+  const emailBodyPreview = buildDepositEmailBody(
     contactName, depositNumber, totalAmount, depositAmount, balanceRemaining,
     lineItems, subtotal, salesTaxRate, salesTaxAmount, discount, publicLink,
   );

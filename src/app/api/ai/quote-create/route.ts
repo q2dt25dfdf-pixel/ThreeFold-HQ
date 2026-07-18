@@ -109,7 +109,14 @@ export async function POST(request: Request): Promise<Response> {
     deliveryZip,
     clientZip,
     discount: rawDiscount,
+    depositMinimum: rawDepositMinimum,
   } = body as Record<string, unknown>;
+
+  // Deposit minimum as a decimal fraction (0 < x <= 1); default 50%.
+  const depositMinimumFraction =
+    typeof rawDepositMinimum === "number" && rawDepositMinimum > 0 && rawDepositMinimum <= 1
+      ? rawDepositMinimum
+      : 0.5;
 
   // ── Require confirm: true ─────────────────────────────────────────────────
   if (confirm !== true) {
@@ -311,6 +318,7 @@ export async function POST(request: Request): Promise<Response> {
       tax_zip_used:           taxLookup.zipUsed ?? null,
       tax_jurisdiction_label: taxLookup.jurisdictionLabel,
       tax_rate_warning:       taxLookup.warning ?? null,
+      deposit_minimum:        depositMinimumFraction,
       expiration_date:        expirationDate,
       public_token:           token,  // stored but never returned to Jarvis
       public_link:            publicLink,

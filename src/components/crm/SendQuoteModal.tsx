@@ -84,6 +84,9 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent");
   const [discountValueInput, setDiscountValueInput] = useState("");
   const [discountLabel, setDiscountLabel] = useState("");
+  // Minimum deposit the client must pay at approval (percent of total). Default 50%.
+  const [depositMinPct, setDepositMinPct] = useState(50);
+  const [depositCustom, setDepositCustom] = useState(false);
 
   useEffect(() => {
     if (!open || !lead) return;
@@ -98,6 +101,8 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     setDiscountType("percent");
     setDiscountValueInput("");
     setDiscountLabel("");
+    setDepositMinPct(50);
+    setDepositCustom(false);
     setEmailTo(lead.email ?? "");
   }, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -219,6 +224,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         clientAddressText: lead.companyProfile?.address ?? "",
         subtotal: computedSubtotal,
         discount,
+        depositMinimum: depositMinPct / 100,
         totalAmount: computedGrandTotal,
         lineItems: validItems,
         items: validItems.map((i) => i.name),
@@ -593,6 +599,53 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
             <div className="flex items-center justify-between border-t border-slate-200 pt-2">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Total</span>
               <span className="text-xl font-bold text-slate-950">{fmtCurrency(grandTotal)}</span>
+            </div>
+          </div>
+
+          {/* Minimum deposit — the least the client may pay when they approve */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Minimum deposit</span>
+              <span className="text-xs font-semibold text-slate-500">min {fmtCurrency(Math.round(grandTotal * depositMinPct) / 100)}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {[50, 75, 100].map((p) => {
+                const active = !depositCustom && depositMinPct === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => { setDepositMinPct(p); setDepositCustom(false); }}
+                    className={`rounded-2xl border px-3 py-1.5 text-xs font-semibold ${active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    {p}%
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setDepositCustom(true)}
+                className={`rounded-2xl border px-3 py-1.5 text-xs font-semibold ${depositCustom ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                Custom
+              </button>
+              {depositCustom && (
+                <div className="inline-flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={depositMinPct}
+                    onChange={(e) => {
+                      const n = Math.round(Number(e.target.value));
+                      setDepositMinPct(Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 1);
+                    }}
+                    aria-label="Custom minimum deposit percent"
+                    className="w-16 rounded-2xl border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  />
+                  <span className="text-xs font-semibold text-slate-500">%</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
