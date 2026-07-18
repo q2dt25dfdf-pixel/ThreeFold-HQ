@@ -14,7 +14,7 @@ import {
   TASK_DONE_STATUSES,
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
-import { hasActiveFollowUpTask, hasFollowUpDate } from "@/lib/followUps";
+import { hasActiveFollowUpTask, hasFollowUpDate, isCrmTask } from "@/lib/followUps";
 import { normalizeCRMStage, isInactiveLeadStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
@@ -115,7 +115,9 @@ function computeBriefing(
   currentYear: string,
 ): Briefing {
   const overdueTasks = tasks.filter((task) => {
-    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
+    // Skip CRM follow-up tasks — the Tasks board hides them; they surface via the lead
+    // follow-up path, not as phantom overdue board tasks (shared isCrmTask).
+    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task)) || isCrmTask(task)) return false;
     const due = readField(task, "dueDate", "due_date");
     return Boolean(due && due !== "TBD" && /^\d{4}-\d{2}-\d{2}$/.test(due) && due < todayISO);
   });
@@ -369,7 +371,9 @@ function computeAudit(
   }
 
   const tasksNoTitle = tasks.filter((task) => {
-    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
+    // CRM tasks aren't shown on the Tasks board, so an untitled one isn't fixable there —
+    // exclude from this /tasks-linked auditor warning (shared isCrmTask).
+    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task)) || isCrmTask(task)) return false;
     return !stringField(task, "title").trim();
   });
   if (tasksNoTitle.length > 0) {
@@ -388,7 +392,9 @@ function computeAudit(
   }
 
   const overdueTasks = tasks.filter((task) => {
-    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task))) return false;
+    // Skip CRM follow-up tasks — the Tasks board hides them; they surface via the lead
+    // follow-up path, not as phantom overdue board tasks (shared isCrmTask).
+    if (task.completed === true || TASK_DONE_STATUSES.has(statusText(task)) || isCrmTask(task)) return false;
     const due = readField(task, "dueDate", "due_date");
     return Boolean(due && due !== "TBD" && /^\d{4}-\d{2}-\d{2}$/.test(due) && due < todayISO);
   });
