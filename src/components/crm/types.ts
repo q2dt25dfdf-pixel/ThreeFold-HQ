@@ -142,6 +142,12 @@ export type QuoteItem = {
   unitPrice: number;
   lineTotal: number;
   originalUnitPrice?: number;
+  // Internal production spec — never shown to the client. Additive only; the six keys
+  // above are unchanged. `colors` sums to `quantity` (quantity stays source of truth).
+  // Structured so a future { color, size, qty } is a clean extension of the color row.
+  blank?: string;
+  colors?: { color: string; qty: number }[];
+  print_detail?: string;
 };
 
 export type DuplicateMatchType = "likely_existing" | "possible_duplicate";

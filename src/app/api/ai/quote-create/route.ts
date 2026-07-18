@@ -13,6 +13,7 @@ import {
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
 import { voidDepositOnRevision } from "@/lib/supersede";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
+import { findProduct } from "@/lib/products";
 
 export const dynamic = "force-dynamic";
 
@@ -33,21 +34,19 @@ export const dynamic = "force-dynamic";
 //   - Mark the quote as sent
 //   - Return publicToken or clientEmail
 
-// Mirrors QUOTE_ITEM_PRESETS in SendQuoteModal.tsx — keep in sync.
-const KNOWN_PRODUCTS: Record<string, { defaultPrice: number; description: string }> = {
-  "Custom Performance Dri-Fit Tee": {
-    defaultPrice: 40,
-    description:
-      "Premium moisture-wicking performance apparel custom designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
-  },
-};
+// Products come from the shared catalog (src/lib/products.ts) — same source as the HQ
+// quote modal, so HQ and Jarvis can never drift.
 
 type InputLineItem = {
   name: string;
   description?: string;
   quantity: number;
   unitPrice: number;
-  originalUnitPrice?: number; // explicit override; auto-detected from KNOWN_PRODUCTS when omitted
+  originalUnitPrice?: number; // explicit override; auto-detected from the catalog when omitted
+  // Internal production spec (additive; never client-facing).
+  blank?: string;
+  colors?: { color: string; qty: number }[];
+  print_detail?: string;
 };
 
 type ComputedLineItem = {
@@ -57,6 +56,9 @@ type ComputedLineItem = {
   unitPrice: number;
   lineTotal: number;
   originalUnitPrice?: number; // present only when unitPrice < default price
+  blank?: string;
+  colors?: { color: string; qty: number }[];
+  print_detail?: string;
 };
 
 type LeadRow = { id: string; data: Record<string, unknown> | null };
@@ -234,13 +236,13 @@ export async function POST(request: Request): Promise<Response> {
     // ── Compute line items and subtotal ───────────────────────────────────
     const computedLineItems: ComputedLineItem[] = inputLineItems.map((item) => {
       const trimmedName = item.name.trim();
-      const known       = KNOWN_PRODUCTS[trimmedName];
+      const known       = findProduct(trimmedName);
 
       // Resolve originalUnitPrice:
       //   1. Use explicit value from request if provided
-      //   2. Fall back to KNOWN_PRODUCTS default price
+      //   2. Fall back to the shared catalog default price
       //   3. Only store it when it's strictly greater than unitPrice (i.e. a real discount)
-      const candidateOriginal = item.originalUnitPrice ?? known?.defaultPrice;
+      const candidateOriginal = item.originalUnitPrice ?? known?.unitPrice;
       const originalUnitPrice =
         candidateOriginal != null && candidateOriginal > item.unitPrice
           ? candidateOriginal
@@ -258,6 +260,14 @@ export async function POST(request: Request): Promise<Response> {
         lineTotal:   Math.round(item.quantity * item.unitPrice * 100) / 100,
       };
       if (originalUnitPrice !== undefined) out.originalUnitPrice = originalUnitPrice;
+      // Internal production spec: blank (from input, else catalog default), colors, print_detail.
+      const blank = (item.blank ?? "").trim() || (known?.blank ?? "");
+      if (blank) out.blank = blank;
+      if (Array.isArray(item.colors) && item.colors.length > 0) {
+        out.colors = item.colors.map((c) => ({ color: String(c.color ?? ""), qty: Number(c.qty ?? 0) }));
+      }
+      const printDetail = (item.print_detail ?? "").trim();
+      if (printDetail) out.print_detail = printDetail;
       return out;
     });
     const subtotal = computedLineItems.reduce((sum, i) => sum + i.lineTotal, 0);

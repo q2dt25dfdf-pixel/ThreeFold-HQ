@@ -17,6 +17,7 @@ import {
   type QuoteDiscount,
 } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
+import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 
 interface QuoteResult {
   quoteId: string;
@@ -40,17 +41,8 @@ interface Props {
 type Step = "details" | "generating" | "preview" | "sending" | "sent" | "error";
 type CopyTarget = "subject" | "body" | "link";
 
-const QUOTE_ITEM_PRESETS = [
-  {
-    name: "Custom Performance Dri-Fit Tee",
-    description:
-      "Premium moisture-wicking performance apparel custom designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
-    unitPrice: 40,
-  },
-] as const;
-
 function newItem(): QuoteItem {
-  return { name: "", description: "", quantity: 1, unitPrice: 0, lineTotal: 0 };
+  return { name: "", description: "", quantity: 1, unitPrice: 0, lineTotal: 0, blank: "", colors: [{ color: "", qty: 1 }], print_detail: "" };
 }
 
 function fmtCurrency(n: number) {
@@ -112,22 +104,29 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         if (i !== idx) return item;
         const updated = { ...item, [field]: value };
         updated.lineTotal = updated.quantity * updated.unitPrice;
+        // With exactly one color row, its qty mirrors the line quantity (quantity stays
+        // the source of truth). Multiple rows are allocated by hand and validated below.
+        if (field === "quantity" && (updated.colors?.length ?? 0) === 1) {
+          updated.colors = [{ ...updated.colors![0], qty: Number(value) || 0 }];
+        }
         return updated;
       }),
     );
   };
 
-  // Selects a preset item name and auto-fills its description.
-  // Manual edits to description afterwards are independent of this.
+  // Selects a product name and auto-fills its description + price + default blank from
+  // the shared catalog. Manual edits afterwards are independent of this.
   const selectPresetItem = (idx: number, name: string) => {
-    const preset = QUOTE_ITEM_PRESETS.find((p) => p.name === name);
+    const preset = findProduct(name);
     setLineItems((prev) =>
       prev.map((item, i) => {
         if (i !== idx) return item;
         const updated = {
           ...item,
           name,
-          ...(preset ? { description: preset.description, unitPrice: preset.unitPrice, originalUnitPrice: preset.unitPrice } : {}),
+          ...(preset
+            ? { description: preset.description, unitPrice: preset.unitPrice, originalUnitPrice: preset.unitPrice, blank: item.blank || preset.blank }
+            : {}),
         };
         updated.lineTotal = updated.quantity * updated.unitPrice;
         return updated;
@@ -137,6 +136,21 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
 
   const addItem = () => setLineItems((prev) => [...prev, newItem()]);
   const removeItem = (idx: number) => setLineItems((prev) => prev.filter((_, i) => i !== idx));
+
+  // Color-breakdown row helpers (internal production spec).
+  const updateColor = (itemIdx: number, colorIdx: number, field: "color" | "qty", value: string | number) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== itemIdx) return item;
+        const colors = (item.colors ?? []).map((c, ci) => (ci === colorIdx ? { ...c, [field]: value } : c));
+        return { ...item, colors };
+      }),
+    );
+  };
+  const addColor = (itemIdx: number) =>
+    setLineItems((prev) => prev.map((item, i) => (i === itemIdx ? { ...item, colors: [...(item.colors ?? []), { color: "", qty: 0 }] } : item)));
+  const removeColor = (itemIdx: number, colorIdx: number) =>
+    setLineItems((prev) => prev.map((item, i) => (i === itemIdx ? { ...item, colors: (item.colors ?? []).filter((_, ci) => ci !== colorIdx) } : item)));
 
   const clearDiscount = () => {
     setDiscountActive(false);
@@ -414,7 +428,10 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
       {step === "details" && (
         <div className="flex flex-col gap-5">
           <div className="space-y-3">
-            {lineItems.map((item, idx) => (
+            {lineItems.map((item, idx) => {
+              const product = findProduct(item.name);
+              const catalogColors = product?.colors ?? [];
+              return (
               <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 {/* Name + Description */}
                 <div className="grid gap-2 sm:grid-cols-[5fr_7fr]">
@@ -426,7 +443,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                       className="w-full cursor-pointer rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
                     >
                       <option value="">Select an item…</option>
-                      {QUOTE_ITEM_PRESETS.map((preset) => (
+                      {PRODUCT_CATALOG.map((preset) => (
                         <option key={preset.name} value={preset.name}>
                           {preset.name}
                         </option>
@@ -493,8 +510,96 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                     </button>
                   )}
                 </div>
+
+                {/* ── Production spec (internal — never shown to the client) ── */}
+                <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Production spec (internal)</p>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Blank</label>
+                    <input
+                      type="text"
+                      list={`blanks-${idx}`}
+                      value={item.blank ?? ""}
+                      onChange={(e) => updateItem(idx, "blank", e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                      placeholder="e.g. Comfort Colors 1717"
+                    />
+                    {product?.blank && (
+                      <datalist id={`blanks-${idx}`}>
+                        <option value={product.blank} />
+                      </datalist>
+                    )}
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Color breakdown</label>
+                    <div className="space-y-2">
+                      {(item.colors ?? []).map((c, ci) => (
+                        <div key={ci} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            list={`colors-${idx}`}
+                            value={c.color}
+                            onChange={(e) => updateColor(idx, ci, "color", e.target.value)}
+                            className="min-w-0 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                            placeholder="Color"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            value={c.qty === 0 ? "" : c.qty}
+                            onChange={(e) => updateColor(idx, ci, "qty", Number(e.target.value) || 0)}
+                            className="w-20 shrink-0 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                            placeholder="Qty"
+                          />
+                          {(item.colors?.length ?? 0) > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeColor(idx, ci)}
+                              aria-label="Remove color"
+                              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {catalogColors.length > 0 && (
+                      <datalist id={`colors-${idx}`}>
+                        {catalogColors.map((col) => (
+                          <option key={col} value={col} />
+                        ))}
+                      </datalist>
+                    )}
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <button type="button" onClick={() => addColor(idx)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                        + Add color
+                      </button>
+                      {(() => {
+                        const colorSum = (item.colors ?? []).reduce((s, c) => s + (Number(c.qty) || 0), 0);
+                        const mismatch = (item.colors?.length ?? 0) > 0 && colorSum !== item.quantity;
+                        return (
+                          <span className={`text-[11px] font-semibold ${mismatch ? "text-amber-600" : "text-slate-400"}`}>
+                            Colors {colorSum} / qty {item.quantity}{mismatch ? " (should match)" : ""}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Print / detail (optional)</label>
+                    <input
+                      type="text"
+                      value={item.print_detail ?? ""}
+                      onChange={(e) => updateItem(idx, "print_detail", e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                      placeholder="e.g. Front left chest + full back, white ink"
+                    />
+                  </div>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="flex flex-col gap-3">
