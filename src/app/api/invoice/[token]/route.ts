@@ -32,6 +32,7 @@ export async function GET(
     let salesTaxAmountVal: number | null = null;
     let grandTotalVal: number | null = null;
     let discountVal: QuoteDiscount | null = null;
+    let depositNumberVal: string | null = null;
 
     if (raw.deposit_request_id) {
       const { data: depRows } = await getSupabaseAdmin()
@@ -50,6 +51,7 @@ export async function GET(
         if (dep.sales_tax_amount != null) salesTaxAmountVal = parseAmount(dep.sales_tax_amount);
         if (dep.grand_total != null) grandTotalVal = parseAmount(dep.grand_total);
         if (dep.discount != null) discountVal = normalizeDiscount(dep.discount);
+        if (dep.deposit_request_number != null) depositNumberVal = String(dep.deposit_request_number);
         if (Array.isArray(dep.line_items)) {
           lineItems = (dep.line_items as RawLineItem[]).map((li) => ({
             name: String(li.name ?? ""),
@@ -69,6 +71,7 @@ export async function GET(
     if (salesTaxAmountVal === null && raw.sales_tax_amount != null) salesTaxAmountVal = parseAmount(raw.sales_tax_amount);
     if (grandTotalVal === null && raw.grand_total != null) grandTotalVal = parseAmount(raw.grand_total);
     if (discountVal === null && raw.discount != null) discountVal = normalizeDiscount(raw.discount);
+    if (depositNumberVal === null && raw.deposit_request_number != null) depositNumberVal = String(raw.deposit_request_number);
 
     // Fall back to line items stored directly on the finance record
     if (lineItems.length === 0 && Array.isArray(raw.line_items)) {
@@ -84,10 +87,27 @@ export async function GET(
 
     const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
 
+    // Resolve the contact person from the lead so the page can greet the person
+    // (company stays the fallback). The finance row stores no contact of its own.
+    let contactName: string | null = null;
+    const leadIdForContact = (raw.lead_id ?? "") as string;
+    if (leadIdForContact) {
+      const { data: leadRows } = await getSupabaseAdmin()
+        .from("crm_leads")
+        .select("data")
+        .eq("id", leadIdForContact)
+        .limit(1);
+      const ld = leadRows?.[0]?.data as Record<string, unknown> | undefined;
+      const c = ((ld?.contact ?? "") as string).trim();
+      if (c) contactName = c;
+    }
+
     const clientSafe = {
       id: raw.id,
       order_name: (raw.order_name ?? raw.orderName ?? "") as string,
       client_name: (raw.client_name ?? raw.client ?? "") as string,
+      contact_name: contactName,
+      deposit_request_number: depositNumberVal,
       subtotal: subtotalVal,
       discount: discountVal,
       sales_tax_rate: salesTaxRateVal,

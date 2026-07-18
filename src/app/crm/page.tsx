@@ -122,6 +122,7 @@ type InvoiceRecord = {
   deposit_amount: number;
   deposit_paid: boolean;
   deposit_paid_date?: string;
+  deposit_payment_method?: string;
   balance_remaining: number;
   final_due_date?: string;
   final_paid: boolean;
@@ -559,6 +560,7 @@ function CRMContent() {
       discount?: unknown;
       sales_tax_rate?: number;
       sales_tax_amount?: number;
+      client_payment_method_intent?: string;
     };
     const leadDepositRequestId = lead.deposit_request_id;
     const { data: depositRows } = leadDepositRequestId
@@ -735,6 +737,9 @@ function CRMContent() {
       deposit_amount: depositAmount,
       deposit_paid: true,
       deposit_paid_date: today,
+      // Carry the client's declared method (e.g. "check") from the deposit_request
+      // onto the finance row so the editor and receipt show it. Editable afterward.
+      deposit_payment_method: depositData?.client_payment_method_intent ?? "",
       balance_remaining: balanceRemaining,
       final_due_date: "",
       final_paid: false,

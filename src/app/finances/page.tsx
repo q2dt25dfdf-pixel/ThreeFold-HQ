@@ -449,10 +449,10 @@ function FinancesContent() {
   const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
   // Read-only: used to resolve a lead email fallback for receipts (same source /api/invoice/generate uses)
   // and to detect stale (superseded-quote) deposit requests below.
-  const { data: leads } = useSupabaseTable<{ id: string; email?: string; quote_id?: string }>("crm_leads", []);
+  const { data: leads } = useSupabaseTable<{ id: string; email?: string; quote_id?: string; contact?: string }>("crm_leads", []);
   // Read-only retro-scan: flags deposit requests left stale by a quote revision that
   // predates the supersede/void feature. Detect only — never auto-voids.
-  const { data: depositRequests } = useSupabaseTable<{ id: string; lead_id?: string; quote_id?: string; status?: string; voided_at?: string; grand_total?: number | string; deposit_request_number?: string }>("deposit_requests", []);
+  const { data: depositRequests } = useSupabaseTable<{ id: string; lead_id?: string; quote_id?: string; status?: string; voided_at?: string; grand_total?: number | string; deposit_request_number?: string; client_payment_method_intent?: string }>("deposit_requests", []);
   const { data: quotesForScan } = useSupabaseTable<{ id: string; grand_total?: number | string }>("quotes", []);
   // The audit's stale-deposit query, computed read-only: an unpaid, un-voided deposit
   // whose lead has repointed to a newer quote, or whose stored total no longer matches
@@ -906,16 +906,29 @@ function FinancesContent() {
         }
       : linked;
 
+    // Prefill the deposit method from the client's declared intent when the finance
+    // row has none yet (legacy rows created before the method was carried over).
+    const invLinks = invoiceWithClient as Invoice & { deposit_request_id?: string; quote_id?: string };
+    const matchedDeposit = depositRequests.find((d) =>
+      (invLinks.deposit_request_id && d.id === invLinks.deposit_request_id) ||
+      (invLinks.lead_id && d.lead_id === invLinks.lead_id) ||
+      (invLinks.quote_id && d.quote_id === invLinks.quote_id),
+    );
+    const depositMethodPrefill = (!invLinks.deposit_payment_method && matchedDeposit?.client_payment_method_intent)
+      ? { deposit_payment_method: matchedDeposit.client_payment_method_intent }
+      : {};
+
     const linkedOrderName = invoiceOrderName(invoiceWithClient).trim().toLowerCase();
     const matchingOrders = orders.filter((order) => orderMatchesClient(order, invoiceWithClient.client_id, invoiceClientName(invoiceWithClient)));
     const matchedOrder = invoiceWithClient.order_id
       ? orders.find((order) => order.id === invoiceWithClient.order_id)
       : matchingOrders.find((order) => orderDisplayName(order).trim().toLowerCase() === linkedOrderName);
 
-    if (!matchedOrder) return normalizeInvoice(invoiceWithClient);
+    if (!matchedOrder) return normalizeInvoice({ ...invoiceWithClient, ...depositMethodPrefill });
 
     return normalizeInvoice({
       ...invoiceWithClient,
+      ...depositMethodPrefill,
       orderName: orderDisplayName(matchedOrder),
       order_id: matchedOrder.id,
       order_name: orderDisplayName(matchedOrder),
@@ -1016,6 +1029,23 @@ function FinancesContent() {
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
   const leadEmailFor = (inv: Invoice | null): string =>
     inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.email ?? "").trim() : "";
+
+  // Contact person for the greeting (receipt email greets the person, not the company).
+  const leadContactFor = (inv: Invoice | null): string =>
+    inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.contact ?? "").trim() : "";
+
+  // Deposit request number for the receipt reference line — matched from the loaded
+  // deposit_requests by deposit_request_id, else lead_id, else quote_id.
+  const depositNumberFor = (inv: Invoice | null): string => {
+    if (!inv) return "";
+    const rec = inv as Invoice & { deposit_request_id?: string; quote_id?: string };
+    const d = depositRequests.find((x) =>
+      (rec.deposit_request_id && x.id === rec.deposit_request_id) ||
+      (rec.lead_id && x.lead_id === rec.lead_id) ||
+      (rec.quote_id && x.quote_id === rec.quote_id),
+    );
+    return (d?.deposit_request_number ?? "").trim();
+  };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
@@ -2244,6 +2274,8 @@ function FinancesContent() {
         open={!!receiptInvoice}
         invoice={receiptInvoice}
         fallbackEmail={leadEmailFor(receiptInvoice)}
+        fallbackContact={leadContactFor(receiptInvoice)}
+        depositNumber={depositNumberFor(receiptInvoice)}
         onClose={() => setReceiptInvoice(null)}
         onSent={(updated) => void handleReceiptSent(updated as Invoice)}
       />
