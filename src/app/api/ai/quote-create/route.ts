@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
@@ -287,10 +288,8 @@ export async function POST(request: Request): Promise<Response> {
     const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
 
     // ── Quote number ──────────────────────────────────────────────────────
-    // Sequential: count all existing quotes + 1 (matches /api/quote/generate logic)
-    const year = new Date().getFullYear();
-    const { count } = await db.from("quotes").select("*", { count: "exact", head: true });
-    const quoteNumber = `TF-Q-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+    // max(existing number)+1 via shared helper — collision-safe on delete.
+    const quoteNumber = await nextSequenceNumber(db, { table: "quotes", field: "quote_number", prefix: "TF-Q" });
 
     // ── Build and persist quote record ────────────────────────────────────
     const token   = "tfq-" + randomBytes(12).toString("hex");

@@ -14,6 +14,7 @@ import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile, type CommunicationEntry } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 import {
@@ -542,12 +543,8 @@ function CRMContent() {
     await syncClientFromLead(lead);
     await reloadClients();
 
-    // Generate a sequential order number
-    const year = new Date().getFullYear();
-    const { count: orderCount } = await supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true });
-    const orderNumber = `TF-ORD-${year}-${String((orderCount ?? 0) + 1).padStart(4, "0")}`;
+    // Generate a sequential order number — max(existing)+1 via shared helper (collision-safe on delete).
+    const orderNumber = await nextSequenceNumber(supabase, { table: "orders", field: "order_number", prefix: "TF-ORD" });
     const orderId = `order-lead-${lead.id}`;
     const orderName = `${lead.company} — ${orderNumber}`;
 

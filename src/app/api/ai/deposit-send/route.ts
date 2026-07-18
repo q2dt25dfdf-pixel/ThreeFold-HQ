@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
@@ -307,12 +308,9 @@ export async function POST(request: Request): Promise<Response> {
       const depositAmount = Math.round(totalAmount * 0.5 * 100) / 100;
       const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
 
-      // Sequential deposit request number (mirrors /api/deposit/generate exactly)
-      const year = new Date().getFullYear();
-      const { count } = await db
-        .from("deposit_requests")
-        .select("*", { count: "exact", head: true });
-      const depositRequestNumber = `TF-D-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+      // Sequential deposit request number — max(existing)+1 via shared helper
+      // (collision-safe on delete). New-deposit branch only; the reuse path above is untouched.
+      const depositRequestNumber = await nextSequenceNumber(db, { table: "deposit_requests", field: "deposit_request_number", prefix: "TF-D" });
 
       const token = "tfd-" + randomBytes(12).toString("hex");
       const publicLink = `${getDepositBaseUrl(new URL(request.url).origin)}/deposit/${token}`;

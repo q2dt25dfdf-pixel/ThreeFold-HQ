@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { getStripe } from "@/lib/stripe";
 import { createNotification } from "@/lib/notifications";
 
@@ -369,12 +370,9 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
   let orderName: string;
 
   if (!existingOrders || existingOrders.length === 0) {
-    // Generate order number and portal token
-    const year = new Date().getFullYear();
-    const { count: orderCount } = await db
-      .from("orders")
-      .select("*", { count: "exact", head: true });
-    const orderNumber = `TF-ORD-${year}-${String((orderCount ?? 0) + 1).padStart(4, "0")}`;
+    // Generate order number and portal token — max(existing)+1 via shared helper
+    // (collision-safe on delete). Only the number generator changed; payment logic untouched.
+    const orderNumber = await nextSequenceNumber(db, { table: "orders", field: "order_number", prefix: "TF-ORD" });
     orderName = `${clientName} — ${orderNumber}`;
     const portalToken = "tf-" + randomBytes(12).toString("hex");
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 
@@ -52,12 +53,8 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getSupabaseAdmin();
-    const year = new Date().getFullYear();
-    const { count } = await db
-      .from("deposit_requests")
-      .select("*", { count: "exact", head: true });
-
-    const depositRequestNumber = `TF-D-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+    // max(existing number)+1 via shared helper — collision-safe on delete.
+    const depositRequestNumber = await nextSequenceNumber(db, { table: "deposit_requests", field: "deposit_request_number", prefix: "TF-D" });
     const token = "tfd-" + randomBytes(12).toString("hex");
     const publicLink = `${getDepositBaseUrl(request.nextUrl.origin)}/deposit/${token}`;
 

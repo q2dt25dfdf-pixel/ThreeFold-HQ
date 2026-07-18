@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { createNotification } from "@/lib/notifications";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { buildDepositEmailBody, buildDepositEmailSubject } from "@/lib/depositEmail";
@@ -208,9 +209,8 @@ export async function PATCH(
         sendEmail = usable.data.status !== "sent"; // don't re-email an already-sent one
       } else if (grandTotal > 0) {
         // Create a fresh deposit request seeded at the minimum. Mirrors /api/deposit/generate.
-        const year = new Date().getFullYear();
-        const { count } = await db.from("deposit_requests").select("*", { count: "exact", head: true });
-        newDepositNumber = `TF-D-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+        // max(existing number)+1 via shared helper — collision-safe on delete.
+        newDepositNumber = await nextSequenceNumber(db, { table: "deposit_requests", field: "deposit_request_number", prefix: "TF-D" });
         const token = "tfd-" + randomBytes(12).toString("hex");
         const link = `${getDepositBaseUrl(request.nextUrl.origin)}/deposit/${token}`;
         newDepositId = `deposit-${leadId}-${Date.now()}`;
