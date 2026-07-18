@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BUSINESS_EMAIL } from "@/lib/config";
 import PortalShell from "@/components/PortalShell";
+import PaymentOptionsPanel from "@/components/PaymentOptionsPanel";
 import { C, dk } from "@/lib/clientTheme";
 import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
@@ -35,6 +36,9 @@ interface QuoteData {
   created_at: string;
   superseded_by?: string | null;
   superseded_at?: string | null;
+  deposit_public_token?: string | null;
+  deposit_public_link?: string | null;
+  deposit_status?: string | null;
 }
 
 function fmt(amount: number) {
@@ -77,6 +81,19 @@ export default function QuotePage() {
   const [approveError, setApproveError] = useState("");
   const [approved, setApproved] = useState(false);
 
+  // Deposit handoff from the approve PATCH (or, on a reload, from the GET).
+  const [depositToken, setDepositToken] = useState<string | null>(null);
+  const [depositLink, setDepositLink] = useState<string | null>(null);
+  const [depositStatus, setDepositStatus] = useState<string | null>(null);
+
+  // Amount picker + pay state.
+  const [amountMode, setAmountMode] = useState<"min" | "full" | "custom">("min");
+  const [customAmount, setCustomAmount] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [checkDeclared, setCheckDeclared] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
+
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
     if (!token) return;
@@ -87,7 +104,13 @@ export default function QuotePage() {
         if (d.error) setError(d.error);
         else {
           setData(d);
-          if (d.status === "approved") setApproved(true);
+          if (d.status === "approved") {
+            setApproved(true);
+            // Fresh load of an already-approved quote: the deposit comes from GET.
+            if (d.deposit_public_token) setDepositToken(d.deposit_public_token);
+            if (d.deposit_public_link) setDepositLink(d.deposit_public_link);
+            if (d.deposit_status) setDepositStatus(d.deposit_status);
+          }
         }
       })
       .catch(() => setError("Failed to load quote"))
@@ -104,9 +127,17 @@ export default function QuotePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ acknowledgementAccepted: true }),
       });
-      const json = await res.json() as { success?: boolean; alreadyApproved?: boolean; error?: string };
+      const json = await res.json() as {
+        success?: boolean; alreadyApproved?: boolean; error?: string;
+        depositToken?: string; depositLink?: string; depositStatus?: string;
+      };
       if (json.success || json.alreadyApproved) {
         setApproved(true);
+        // Just-approved: the deposit token/link/status come from the PATCH response
+        // (the page does not refetch). Piece 3 renders the pay card from these.
+        if (json.depositToken) setDepositToken(json.depositToken);
+        if (json.depositLink) setDepositLink(json.depositLink);
+        if (json.depositStatus) setDepositStatus(json.depositStatus);
       } else {
         setApproveError(json.error ?? "Something went wrong. Please try again.");
       }
@@ -115,6 +146,72 @@ export default function QuotePage() {
     } finally {
       setApproving(false);
     }
+  }
+
+  // Persist the chosen amount server-side (clamped there) BEFORE any pay/declare
+  // action, so the stored deposit_amount always matches what the client sees.
+  // Returns true on success; surfaces the server message otherwise.
+  async function persistAmount(amount: number): Promise<boolean> {
+    const token = window.location.pathname.split("/").pop() ?? "";
+    try {
+      const res = await fetch(`/api/quote/${token}/deposit`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const json = await res.json() as { deposit_amount?: number; error?: string };
+      if (json.error) { setCheckoutError(json.error); return false; }
+      return true;
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+      return false;
+    }
+  }
+
+  async function handlePay(method: "card" | "bank", amount: number) {
+    if (!depositToken || checkoutLoading) return;
+    setCheckoutLoading(method);
+    setCheckoutError("");
+    if (!(await persistAmount(amount))) { setCheckoutLoading(null); return; }
+    const token = window.location.pathname.split("/").pop() ?? "";
+    // Record the intended method (non-blocking — it must not delay checkout).
+    void fetch(`/api/quote/${token}/deposit`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method }),
+    });
+    try {
+      const res = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ depositToken, method }),
+      });
+      const d = await res.json() as { url?: string; error?: string };
+      if (d.error) setCheckoutError(d.error);
+      else if (d.url) { window.location.href = d.url; return; }
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+    }
+    setCheckoutLoading(null);
+  }
+
+  async function handleDeclareCheck(amount: number) {
+    if (!depositToken || checkLoading) return;
+    setCheckLoading(true);
+    setCheckoutError("");
+    if (!(await persistAmount(amount))) { setCheckLoading(false); return; }
+    const token = window.location.pathname.split("/").pop() ?? "";
+    try {
+      const res = await fetch(`/api/quote/${token}/deposit`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "check" }),
+      });
+      const d = await res.json() as { success?: boolean; error?: string };
+      if (d.success) setCheckDeclared(true);
+      else setCheckoutError(d.error ?? "Something went wrong. Please try again.");
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+    }
+    setCheckLoading(false);
   }
 
   if (loading) {
@@ -192,6 +289,26 @@ export default function QuotePage() {
       ? `${discount.label} (-${discount.value}%)`
       : discount.label
     : "";
+
+  // ── Deposit amount picker ─────────────────────────────────────────────────────
+  // Minimum = grand_total × (deposit_minimum ?? 0.5); maximum = grand_total.
+  const minFraction = data.deposit_minimum ?? 0.5;
+  const depositMinimum = Math.round(grandTotalDisplay * minFraction * 100) / 100;
+  // When the minimum equals the total (100% minimum), a picker is a fake choice —
+  // render none and just state the amount due.
+  const fullOnly = depositMinimum >= grandTotalDisplay;
+  const customParsed = parseFloat(customAmount);
+  const customClamped = Number.isFinite(customParsed)
+    ? Math.round(Math.min(Math.max(customParsed, depositMinimum), grandTotalDisplay) * 100) / 100
+    : depositMinimum;
+  const selectedAmount = fullOnly
+    ? grandTotalDisplay
+    : amountMode === "full"
+      ? grandTotalDisplay
+      : amountMode === "custom"
+        ? customClamped
+        : depositMinimum;
+  const balanceBeforeDelivery = Math.max(Math.round((grandTotalDisplay - selectedAmount) * 100) / 100, 0);
 
   return (
     <PortalShell>
@@ -375,18 +492,143 @@ export default function QuotePage() {
         <div className="portal-col-side">
 
           {approved ? (
-            <div className="dk-card">
-              <div style={s.cardEyebrow}>QUOTE APPROVED</div>
-              <div style={{ ...s.bodyText, color: C.greenText, fontWeight: 600, marginBottom: "12px" }}>
-                Your quote has been approved. Threefold Supply Co. will follow up with your invoice.
+            depositStatus === "paid" ? (
+              // Mirrors the deposit portal's isPaid state — payment received, no pay card.
+              <div className="dk-card">
+                <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
+                <div style={{ ...s.bodyText, color: C.greenText, fontWeight: 600 }}>
+                  Your deposit has been received and confirmed. Your order has now entered production.
+                </div>
+                <div style={{ ...s.bodyText, marginTop: "16px" }}>
+                  You&apos;ll receive access to your Client Portal shortly. Thank you for choosing
+                  Threefold Supply Co.
+                </div>
+                <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
+                  CONTACT THREEFOLD →
+                </a>
               </div>
-              <div style={s.bodyText}>
-                Questions? Reply to the email you received or contact us directly.
+            ) : depositStatus === "pending" ? (
+              // Mirrors the deposit portal's isPending state — processing, no pay card.
+              <div className="dk-card">
+                <div style={s.cardEyebrow}>PAYMENT IN PROGRESS</div>
+                <div style={s.bodyText}>
+                  Your bank transfer is being processed. ACH payments typically settle within 3 to 5
+                  business days. You&apos;ll receive confirmation once the payment clears.
+                </div>
+                <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
+                  CONTACT THREEFOLD →
+                </a>
               </div>
-              <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
-                CONTACT THREEFOLD →
-              </a>
-            </div>
+            ) : depositToken ? (
+              // Payable: amount picker + reused PaymentOptionsPanel (card / bank / check).
+              <div className="dk-card">
+                <div style={s.cardEyebrow}>APPROVED — COMPLETE YOUR DEPOSIT</div>
+
+                {fullOnly ? (
+                  <div style={s.amountDueLine}>
+                    <span style={s.payLabel}>AMOUNT DUE</span>
+                    <span style={s.payValue}>{fmt(grandTotalDisplay)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div style={s.pickerLabel}>HOW MUCH WOULD YOU LIKE TO PAY NOW?</div>
+                    <div style={s.pickerRow}>
+                      <button
+                        type="button"
+                        onClick={() => setAmountMode("min")}
+                        style={amountMode === "min" ? { ...s.pill, ...s.pillActive } : s.pill}
+                      >
+                        MINIMUM DEPOSIT
+                        <span style={s.pillSub}>{fmt(depositMinimum)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAmountMode("full")}
+                        style={amountMode === "full" ? { ...s.pill, ...s.pillActive } : s.pill}
+                      >
+                        PAY IN FULL
+                        <span style={s.pillSub}>{fmt(grandTotalDisplay)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAmountMode("custom")}
+                        style={amountMode === "custom" ? { ...s.pill, ...s.pillActive } : s.pill}
+                      >
+                        ANOTHER AMOUNT
+                        <span style={s.pillSub}>
+                          {fmt(depositMinimum)}–{fmt(grandTotalDisplay)}
+                        </span>
+                      </button>
+                    </div>
+                    {amountMode === "custom" && (
+                      <div style={s.customWrap}>
+                        <span style={s.customPrefix}>$</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={depositMinimum}
+                          max={grandTotalDisplay}
+                          step="0.01"
+                          value={customAmount}
+                          onChange={(e) => setCustomAmount(e.target.value)}
+                          placeholder={depositMinimum.toFixed(2)}
+                          style={s.customInput}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div style={s.payBreakdown}>
+                  <div style={s.payBreakRow}>
+                    <span style={s.payLabel}>PAYING NOW</span>
+                    <span style={s.payValue}>{fmt(selectedAmount)}</span>
+                  </div>
+                  <div style={{ ...s.payBreakRow, borderBottom: "none" }}>
+                    <span style={s.payLabel}>BALANCE BEFORE DELIVERY</span>
+                    <span style={{ ...s.payValue, color: C.textSecondary }}>{fmt(balanceBeforeDelivery)}</span>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "20px" }}>
+                  <PaymentOptionsPanel
+                    amount={selectedAmount}
+                    label="PAYING NOW"
+                    eyebrow=""
+                    onPayCard={() => void handlePay("card", selectedAmount)}
+                    onPayBank={() => void handlePay("bank", selectedAmount)}
+                    checkoutLoading={checkoutLoading}
+                    checkoutError={checkoutError || undefined}
+                    onDeclareCheck={() => void handleDeclareCheck(selectedAmount)}
+                    checkDeclared={checkDeclared}
+                    checkLoading={checkLoading}
+                    checkMemo={`Quote ${data.quote_number}`}
+                    onResetMethod={() => setCheckDeclared(false)}
+                  />
+                </div>
+
+                {depositLink && !checkDeclared && (
+                  <a href={depositLink} style={s.depositLink}>
+                    View your deposit page →
+                  </a>
+                )}
+              </div>
+            ) : (
+              // No deposit token — a quote with no lead cannot mint one. Keep the
+              // contact fallback rather than render a broken picker.
+              <div className="dk-card">
+                <div style={s.cardEyebrow}>QUOTE APPROVED</div>
+                <div style={{ ...s.bodyText, color: C.greenText, fontWeight: 600, marginBottom: "12px" }}>
+                  Your quote has been approved. Threefold Supply Co. will follow up with payment details.
+                </div>
+                <div style={s.bodyText}>
+                  Questions? Reply to the email you received or contact us directly.
+                </div>
+                <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
+                  CONTACT THREEFOLD →
+                </a>
+              </div>
+            )
           ) : (
             <>
               <div className="dk-card">
@@ -532,5 +774,119 @@ const s: Record<string, React.CSSProperties> = {
     color: C.red,
     marginBottom: "12px",
     fontWeight: 500,
+  },
+  pickerLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.16em",
+    color: C.textSecondary,
+    textTransform: "uppercase" as const,
+    marginBottom: "12px",
+  },
+  pickerRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "8px",
+    marginBottom: "8px",
+  },
+  pill: {
+    flex: "1 1 92px",
+    minWidth: "92px",
+    minHeight: "56px",
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "3px",
+    padding: "10px 8px",
+    borderRadius: "8px",
+    border: `1.5px solid ${C.border}`,
+    backgroundColor: "#ffffff",
+    color: C.textSecondary,
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textAlign: "center" as const,
+    cursor: "pointer",
+    lineHeight: 1.2,
+  },
+  pillActive: {
+    border: `1.5px solid ${C.textPrimary}`,
+    backgroundColor: C.bgSubtle,
+    color: C.textPrimary,
+  },
+  pillSub: {
+    fontSize: "12px",
+    fontWeight: 700,
+    letterSpacing: "-0.01em",
+    color: "inherit",
+  },
+  customWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    marginTop: "10px",
+    border: `1.5px solid ${C.textPrimary}`,
+    borderRadius: "8px",
+    padding: "0 14px",
+    height: "52px",
+  },
+  customPrefix: {
+    fontSize: "18px",
+    fontWeight: 700,
+    color: C.textPrimary,
+  },
+  customInput: {
+    flex: 1,
+    minWidth: 0,
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    fontSize: "18px",
+    fontWeight: 700,
+    color: C.textPrimary,
+    height: "100%",
+  },
+  payBreakdown: {
+    marginTop: "18px",
+    border: `1px solid ${C.border}`,
+    backgroundColor: C.bgSubtle,
+    borderRadius: "8px",
+    padding: "6px 18px",
+  },
+  payBreakRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    borderBottom: `1px solid ${C.border}`,
+    padding: "13px 0",
+  },
+  amountDueLine: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: "4px",
+  },
+  payLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.16em",
+    color: C.textMuted,
+    textTransform: "uppercase" as const,
+  },
+  payValue: {
+    fontSize: "18px",
+    fontWeight: 700,
+    color: C.textPrimary,
+  },
+  depositLink: {
+    display: "block",
+    marginTop: "16px",
+    fontSize: "12px",
+    fontWeight: 600,
+    letterSpacing: "0.04em",
+    color: C.textMuted,
+    textAlign: "center" as const,
+    textDecoration: "none",
   },
 };

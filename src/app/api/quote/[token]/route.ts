@@ -12,7 +12,8 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
-    const { data: rows, error } = await getSupabaseAdmin()
+    const db = getSupabaseAdmin();
+    const { data: rows, error } = await db
       .from("quotes")
       .select("id,data")
       .eq("data->>public_token", token)
@@ -23,6 +24,38 @@ export async function GET(
     }
 
     const raw = rows[0].data as Record<string, unknown>;
+
+    // For an approved quote, surface its deposit so the page can render the pay card
+    // on a FRESH load (a reload has no PATCH response to read from). Status is read
+    // LIVE — so paid/pending reflect reality — and a voided deposit is treated as
+    // absent (the page falls back to "contact us"). The link is via the canonical
+    // pointer the approve PATCH maintains: lead.deposit_request_id.
+    let deposit_public_token: string | null = null;
+    let deposit_public_link: string | null = null;
+    let deposit_status: string | null = null;
+    if (raw.status === "approved" && raw.lead_id) {
+      const { data: leadRows } = await db
+        .from("crm_leads")
+        .select("data")
+        .eq("id", raw.lead_id as string)
+        .limit(1);
+      const depId = (leadRows?.[0]?.data as Record<string, unknown> | undefined)
+        ?.deposit_request_id as string | undefined;
+      if (depId) {
+        const { data: depRows } = await db
+          .from("deposit_requests")
+          .select("data")
+          .eq("id", depId)
+          .limit(1);
+        const dep = depRows?.[0]?.data as Record<string, unknown> | undefined;
+        if (dep && !dep.voided_at) {
+          deposit_public_token = (dep.public_token as string) ?? null;
+          deposit_public_link = (dep.public_link as string) ?? null;
+          deposit_status = (dep.status as string) ?? null;
+        }
+      }
+    }
+
     const clientSafe = {
       quote_number: raw.quote_number,
       client_name: raw.client_name,
@@ -40,6 +73,9 @@ export async function GET(
       created_at: raw.created_at,
       superseded_by: (raw.superseded_by ?? null) as string | null,
       superseded_at: (raw.superseded_at ?? null) as string | null,
+      deposit_public_token,
+      deposit_public_link,
+      deposit_status,
     };
     return NextResponse.json(clientSafe);
   } catch (err) {

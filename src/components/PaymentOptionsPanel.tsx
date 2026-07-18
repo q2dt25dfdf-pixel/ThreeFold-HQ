@@ -10,6 +10,13 @@ interface PaymentOptionsPanelProps {
   onPayBank: () => void;
   checkoutLoading: "card" | "bank" | null;
   checkoutError?: string;
+  // Optional interactive check flow (approved-quote page). When onDeclareCheck is
+  // omitted (e.g. the deposit portal), the check block stays a static address card.
+  onDeclareCheck?: () => void;
+  checkDeclared?: boolean;
+  checkLoading?: boolean;
+  checkMemo?: string;
+  onResetMethod?: () => void;
 }
 
 function fmt(amount: number) {
@@ -28,10 +35,53 @@ export default function PaymentOptionsPanel({
   onPayBank,
   checkoutLoading,
   checkoutError,
+  onDeclareCheck,
+  checkDeclared = false,
+  checkLoading = false,
+  checkMemo,
+  onResetMethod,
 }: PaymentOptionsPanelProps) {
   const cardFee = Math.round(amount * 0.03 * 100) / 100;
   const cardTotal = amount + cardFee;
-  const isLoading = checkoutLoading !== null;
+  const isLoading = checkoutLoading !== null || checkLoading;
+
+  // Check declared: this is a DECLARATION, not a payment. No card fee, no Stripe —
+  // just where to mail it and what happens next. A way back to card/bank is offered.
+  if (checkDeclared) {
+    return (
+      <div>
+        {eyebrow && <div style={s.eyebrow}>{eyebrow}</div>}
+        <div style={s.checkBlock}>
+          <div style={s.altLabel}>MAIL A CHECK</div>
+          <div style={s.optionBody}>Make checks payable to:</div>
+          <div style={s.checkPayee}>ThreeFold Supply Co.</div>
+          <div style={{ ...s.optionBody, marginTop: "16px" }}>Mail checks to:</div>
+          <div style={s.checkAddress}>
+            1957 California St Apt 6<br />
+            Mountain View, CA 94040
+          </div>
+          <div style={s.checkDetailRow}>
+            <span style={s.breakdownKey}>AMOUNT</span>
+            <span style={s.breakdownVal}>{fmt(amount)}</span>
+          </div>
+          {checkMemo && (
+            <div style={{ ...s.checkDetailRow, borderBottom: "none" }}>
+              <span style={s.breakdownKey}>MEMO</span>
+              <span style={{ ...s.breakdownVal, fontSize: "14px" }}>{checkMemo}</span>
+            </div>
+          )}
+          <div style={s.checkNote}>
+            Production starts once your check clears. You&apos;ll receive a receipt the day it does.
+          </div>
+        </div>
+        {onResetMethod && (
+          <button onClick={onResetMethod} style={s.btnBackMethod}>
+            ‹ CHOOSE A DIFFERENT METHOD
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -96,6 +146,15 @@ export default function PaymentOptionsPanel({
           1957 California St Apt 6<br />
           Mountain View, CA 94040
         </div>
+        {onDeclareCheck && (
+          <button
+            onClick={onDeclareCheck}
+            disabled={isLoading}
+            style={isLoading ? { ...s.btnCheck, opacity: 0.5, cursor: "not-allowed" } : s.btnCheck}
+          >
+            {checkLoading ? "SAVING…" : "I'LL MAIL A CHECK →"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -226,5 +285,50 @@ const s: Record<string, React.CSSProperties> = {
     color: C.textSecondary,
     lineHeight: 1.65,
     marginBottom: "4px",
+  },
+  btnCheck: {
+    display: "block",
+    width: "100%",
+    minHeight: "48px",
+    marginTop: "20px",
+    backgroundColor: "transparent",
+    color: C.textPrimary,
+    fontSize: "12px",
+    fontWeight: 700,
+    letterSpacing: "0.18em",
+    padding: "15px 24px",
+    border: `1.5px solid ${C.textSecondary}`,
+    cursor: "pointer",
+    textAlign: "center" as const,
+    borderRadius: "8px",
+  },
+  checkDetailRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    borderBottom: `1px solid ${C.border}`,
+    padding: "14px 0",
+    marginTop: "18px",
+  },
+  checkNote: {
+    fontSize: "13px",
+    color: C.textSecondary,
+    lineHeight: 1.6,
+    marginTop: "18px",
+  },
+  btnBackMethod: {
+    display: "block",
+    width: "100%",
+    minHeight: "48px",
+    marginTop: "16px",
+    background: "none",
+    border: "none",
+    color: C.textMuted,
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.16em",
+    cursor: "pointer",
+    textAlign: "center" as const,
+    textTransform: "uppercase" as const,
   },
 };
