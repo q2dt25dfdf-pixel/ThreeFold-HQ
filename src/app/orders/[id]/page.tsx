@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, RotateCcw, Send, Trash2, User } from "lucide-react";
+import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, Plus, RotateCcw, Send, Trash2, User, X } from "lucide-react";
+import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
+import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -444,6 +446,10 @@ export default function OrderDetailPage() {
   const [newUpdateText, setNewUpdateText] = useState('');
   const clientUpdatesSave = useSaveState();
 
+  // Manual line-item editor (order.line_items)
+  const [lineItemsDraft, setLineItemsDraft] = useState<OrderLineItem[]>([]);
+  const lineItemsSave = useSaveState();
+
   // Vendor Cost
   const [vendorCostCents, setVendorCostCents] = useState("");
   const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
@@ -503,6 +509,7 @@ export default function OrderDetailPage() {
       setNextAction(order.nextAction ?? "");
       setInternalNotes(order.internalNotes ?? "");
       setVendorCostCents(order.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
+      setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []);
       setVendorInvoiceStatus(order.vendor_invoice_status ?? "not_received");
       setVendorPaymentStatus(order.vendor_payment_status ?? "unpaid");
       setVendorPaidBy(order.vendor_paid_by ?? "");
@@ -600,6 +607,58 @@ export default function OrderDetailPage() {
   const saveInternalNotes = () => {
     if (!order) return;
     notesSave.runSave(() => upsertItem({ ...order, internalNotes }));
+  };
+
+  // ── Manual line-item editor (order.line_items) ─────────────────────────────
+  const updateLineItem = (idx: number, patch: Partial<OrderLineItem>) => {
+    setLineItemsDraft((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const n = { ...it, ...patch };
+        n.lineTotal = (Number(n.quantity) || 0) * (Number(n.unitPrice) || 0);
+        // One color row mirrors the line quantity (quantity is the source of truth).
+        if (patch.quantity != null && (n.colors?.length ?? 0) === 1) {
+          n.colors = [{ ...n.colors![0], qty: Number(patch.quantity) || 0 }];
+        }
+        return n;
+      }),
+    );
+  };
+  const selectLineProduct = (idx: number, name: string) => {
+    const preset = findProduct(name);
+    setLineItemsDraft((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const n: OrderLineItem = {
+          ...it,
+          name,
+          ...(preset
+            ? { description: preset.description, unitPrice: preset.unitPrice, originalUnitPrice: preset.unitPrice, blank: it.blank || preset.blank }
+            : {}),
+        };
+        n.lineTotal = (Number(n.quantity) || 0) * (Number(n.unitPrice) || 0);
+        return n;
+      }),
+    );
+  };
+  const addLineItem = () =>
+    setLineItemsDraft((prev) => [...prev, { name: "", description: "", quantity: 1, unitPrice: 0, lineTotal: 0, blank: "", colors: [{ color: "", qty: 1 }], print_detail: "" }]);
+  const removeLineItem = (idx: number) => setLineItemsDraft((prev) => prev.filter((_, i) => i !== idx));
+  const updateLineColor = (idx: number, ci: number, field: "color" | "qty", value: string | number) => {
+    setLineItemsDraft((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, colors: (it.colors ?? []).map((c, j) => (j === ci ? { ...c, [field]: value } : c)) } : it)),
+    );
+  };
+  const addLineColor = (idx: number) =>
+    setLineItemsDraft((prev) => prev.map((it, i) => (i === idx ? { ...it, colors: [...(it.colors ?? []), { color: "", qty: 0 }] } : it)));
+  const removeLineColor = (idx: number, ci: number) =>
+    setLineItemsDraft((prev) => prev.map((it, i) => (i === idx ? { ...it, colors: (it.colors ?? []).filter((_, j) => j !== ci) } : it)));
+
+  const saveLineItems = () => {
+    if (!order) return;
+    // Re-derive items[] + quantity from the edited lines (shared helper), keep them in sync.
+    const { items, quantity } = deriveItemsAndQuantity(lineItemsDraft);
+    lineItemsSave.runSave(() => upsertItem({ ...order, line_items: lineItemsDraft, items, quantity }));
   };
 
   const saveVendorCost = () => {
@@ -1431,32 +1490,95 @@ export default function OrderDetailPage() {
         </button>
       </div>
       <div className="space-y-2">
-        {order.line_items && order.line_items.length > 0 && (
-          <div className="mb-1 space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">What we&apos;re making</p>
-            {order.line_items.map((li, i) => {
-              const colorText = (li.colors ?? [])
-                .filter((c) => (c.color || "").trim() || Number(c.qty) > 0)
-                .map((c) => `${Number(c.qty) || 0} ${(c.color || "").trim()}`.trim())
-                .join(" · ");
-              return (
-                <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="min-w-0 break-words text-xs font-semibold text-slate-950">{li.name || "Item"}</span>
-                    <span className="shrink-0 text-xs font-medium text-slate-700">{Number(li.quantity) || 0} pcs</span>
-                  </div>
-                  {li.blank && <p className="mt-1 text-[11px] text-slate-500">Blank: {li.blank}</p>}
-                  {colorText && <p className="mt-0.5 text-[11px] text-slate-600">Colors: {colorText}</p>}
-                  {li.print_detail && <p className="mt-0.5 text-[11px] text-slate-500">Print: {li.print_detail}</p>}
+        {/* Editable line-item list (order.line_items). Internal only — blank/colors/
+            print_detail never reach the client (portal whitelists to 6 keys). Save
+            re-derives order.items + order.quantity via the shared helper. */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">What we&apos;re making</p>
+          {order.items.length > 0 && lineItemsDraft.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+              Previously recorded: {order.items.join(", ")}
+            </p>
+          )}
+          {lineItemsDraft.map((li, idx) => {
+            const product = findProduct(li.name ?? "");
+            const catalogColors = product?.colors ?? [];
+            const colorSum = (li.colors ?? []).reduce((s, c) => s + (Number(c.qty) || 0), 0);
+            const mismatch = (li.colors?.length ?? 0) > 0 && colorSum !== (Number(li.quantity) || 0);
+            return (
+              <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={li.name ?? ""}
+                    onChange={(e) => selectLineProduct(idx, e.target.value)}
+                    className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  >
+                    <option value="">Select product…</option>
+                    {PRODUCT_CATALOG.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => removeLineItem(idx)} aria-label="Remove item" className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              );
-            })}
+                <input
+                  type="text"
+                  value={li.description ?? ""}
+                  onChange={(e) => updateLineItem(idx, { description: e.target.value })}
+                  placeholder="Description"
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                />
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Qty</label>
+                    <input type="number" min={0} value={li.quantity === 0 ? "" : (li.quantity ?? "")} onChange={(e) => updateLineItem(idx, { quantity: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Unit price</label>
+                    <input type="number" min={0} step="0.01" value={li.unitPrice ? li.unitPrice : ""} onChange={(e) => updateLineItem(idx, { unitPrice: Math.max(0, Number(e.target.value) || 0) })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Blank</label>
+                  <input type="text" list={`ord-blanks-${idx}`} value={li.blank ?? ""} onChange={(e) => updateLineItem(idx, { blank: e.target.value })} placeholder="e.g. DSG Movement Tee" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                  {product?.blank && <datalist id={`ord-blanks-${idx}`}><option value={product.blank} /></datalist>}
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Color breakdown</label>
+                  <div className="space-y-2">
+                    {(li.colors ?? []).map((c, ci) => (
+                      <div key={ci} className="flex items-center gap-2">
+                        <input type="text" list={`ord-colors-${idx}`} value={c.color} onChange={(e) => updateLineColor(idx, ci, "color", e.target.value)} placeholder="Color" className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                        <input type="number" min={0} value={c.qty === 0 ? "" : c.qty} onChange={(e) => updateLineColor(idx, ci, "qty", Number(e.target.value) || 0)} placeholder="Qty" className="w-16 shrink-0 rounded-xl border border-slate-300 bg-white px-2 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                        {(li.colors?.length ?? 0) > 1 && (
+                          <button type="button" onClick={() => removeLineColor(idx, ci)} aria-label="Remove color" className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {catalogColors.length > 0 && <datalist id={`ord-colors-${idx}`}>{catalogColors.map((col) => <option key={col} value={col} />)}</datalist>}
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => addLineColor(idx)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700">+ Add color</button>
+                    <span className={`text-[11px] font-semibold ${mismatch ? "text-amber-600" : "text-slate-400"}`}>Colors {colorSum} / qty {Number(li.quantity) || 0}{mismatch ? " (should match)" : ""}</span>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Print / detail</label>
+                  <input type="text" value={li.print_detail ?? ""} onChange={(e) => updateLineItem(idx, { print_detail: e.target.value })} placeholder="e.g. Front left chest + full back" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={addLineItem} className="flex items-center gap-1.5 rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50">
+              <Plus className="h-3.5 w-3.5" /> Add item
+            </button>
+            <SaveButton state={lineItemsSave.saveState} onClick={saveLineItems} mode="edit" />
           </div>
-        )}
+        </div>
+
         {([
-          ...(order.line_items && order.line_items.length > 0
-            ? []
-            : [{ label: "Items", value: order.items.length ? order.items.join(", ") : "None selected" }]),
           { label: "Quantity", value: String(order.quantity || 0) },
           { label: "Amount", value: formatCurrency(order.amount) },
           { label: "Vendor", value: order.vendor || "Not assigned" },
@@ -1690,7 +1812,6 @@ export default function OrderDetailPage() {
   ].map((group) => ({ ...group, fields: group.fields.filter((f) => f.value?.trim()) })).filter((group) => group.fields.length > 0);
 
   const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
-  const hasIntake = intakeGroups.length > 0 || intakeFiles.length > 0;
   const longIntakeLabels = new Set(["Company description", "Meaning / brand story", "Style preferences", "Original notes"]);
 
   const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
@@ -1892,6 +2013,11 @@ export default function OrderDetailPage() {
                 <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClass(order.status)}`}>
                   {order.status}
                 </span>
+                {order.quantity ? (
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
+                    {order.quantity} units
+                  </span>
+                ) : null}
                 {order.owner && (
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
                     {order.owner}
@@ -1921,61 +2047,32 @@ export default function OrderDetailPage() {
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {/* Order timeline stepper — pulled up directly under the command header */}
+      {TimelineSection}
+
+      {/* Quick action bar */}
       {QuickActionsSection}
 
-      {/* Mobile layout — single column (InternalNotes appears full-width below PortalSection) */}
-      <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
-        {TimelineSection}
-        {NextActionSection}
-        {DesignVersionsSection}
-        {PaymentStatusSection}
-        {OrderDetailsSection}
-        {VendorCostSection}
-        {DeliveryAddressSection}
-        {IntakeSection}
-        {CommunicationSection}
-        {ClientUpdatesSection}
+      {/* Command center — one responsive grid (replaces the prior 3 layout variants).
+          LEFT (col-span-2) = the work + money; RIGHT = status detail + client-facing.
+          Stacks to a single column on mobile: left group first, then right group. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:gap-6">
+          {OrderDetailsSection}
+          {DesignVersionsSection}
+          {PaymentStatusSection}
+          {VendorCostSection}
+        </div>
+        <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
+          {NextActionSection}
+          {DeliveryAddressSection}
+          {order && <PortalSection orderId={params.id} />}
+          {CommunicationSection}
+          {ClientUpdatesSection}
+          {InternalNotesSection}
+          {IntakeSection}
+        </div>
       </div>
-
-      {/* Desktop layout — 3 columns with intake data, 2 columns without */}
-      {/* InternalNotes is rendered full-width below PortalSection for all layouts */}
-      {hasIntake ? (
-        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
-          <div className="flex flex-col gap-6">
-            {PaymentStatusSection}
-            {OrderDetailsSection}
-            {VendorCostSection}
-            {DeliveryAddressSection}
-            {IntakeSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {TimelineSection}
-            {DesignVersionsSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {CommunicationSection}
-            {NextActionSection}
-            {ClientUpdatesSection}
-          </div>
-        </div>
-      ) : (
-        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-6">
-          <div className="flex flex-col gap-6">
-            {PaymentStatusSection}
-            {OrderDetailsSection}
-            {VendorCostSection}
-            {DeliveryAddressSection}
-            {CommunicationSection}
-            {ClientUpdatesSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {TimelineSection}
-            {DesignVersionsSection}
-            {NextActionSection}
-          </div>
-        </div>
-      )}
 
       {/* Add design version modal */}
       {isAddVersionOpen && (
@@ -2040,11 +2137,6 @@ export default function OrderDetailPage() {
           </div>
         </ModalShell>
       )}
-
-      {order && <PortalSection orderId={params.id} />}
-
-      {/* Internal Notes — full-width below Client Portal for all order types */}
-      {InternalNotesSection}
 
       {/* Send final invoice modal */}
       <SendFinalInvoiceModal

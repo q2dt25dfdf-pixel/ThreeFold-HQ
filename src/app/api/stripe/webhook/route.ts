@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { nextSequenceNumber } from "@/lib/sequenceNumber";
+import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { getStripe } from "@/lib/stripe";
 import { createNotification } from "@/lib/notifications";
 
@@ -383,10 +384,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     // as a stable snapshot on the order; derive the item names + total qty. Older deposits
     // with no line items fall back to items:[]/quantity:0 exactly as before.
     const bootLineItems = Array.isArray(depData.line_items) ? (depData.line_items as unknown[]) : [];
-    const bootItems = bootLineItems
-      .map((li) => String((li as { name?: unknown }).name ?? "").trim())
-      .filter(Boolean);
-    const bootQuantity = bootLineItems.reduce((s: number, li) => s + (Number((li as { quantity?: unknown }).quantity) || 0), 0);
+    const { items: bootItems, quantity: bootQuantity } = deriveItemsAndQuantity(bootLineItems);
 
     await db.from("orders").upsert({
       id: orderId,
