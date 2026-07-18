@@ -449,7 +449,7 @@ function FinancesContent() {
   const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
   // Read-only: used to resolve a lead email fallback for receipts (same source /api/invoice/generate uses)
   // and to detect stale (superseded-quote) deposit requests below.
-  const { data: leads } = useSupabaseTable<{ id: string; email?: string; quote_id?: string }>("crm_leads", []);
+  const { data: leads } = useSupabaseTable<{ id: string; email?: string; quote_id?: string; contact?: string }>("crm_leads", []);
   // Read-only retro-scan: flags deposit requests left stale by a quote revision that
   // predates the supersede/void feature. Detect only — never auto-voids.
   const { data: depositRequests } = useSupabaseTable<{ id: string; lead_id?: string; quote_id?: string; status?: string; voided_at?: string; grand_total?: number | string; deposit_request_number?: string; client_payment_method_intent?: string }>("deposit_requests", []);
@@ -1029,6 +1029,10 @@ function FinancesContent() {
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
   const leadEmailFor = (inv: Invoice | null): string =>
     inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.email ?? "").trim() : "";
+
+  // Contact person for the greeting (receipt email greets the person, not the company).
+  const leadContactFor = (inv: Invoice | null): string =>
+    inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.contact ?? "").trim() : "";
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
@@ -2257,6 +2261,7 @@ function FinancesContent() {
         open={!!receiptInvoice}
         invoice={receiptInvoice}
         fallbackEmail={leadEmailFor(receiptInvoice)}
+        fallbackContact={leadContactFor(receiptInvoice)}
         onClose={() => setReceiptInvoice(null)}
         onSent={(updated) => void handleReceiptSent(updated as Invoice)}
       />

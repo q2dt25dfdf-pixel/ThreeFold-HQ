@@ -30,13 +30,15 @@ interface Props {
   // Lead email fallback (same source /api/invoice/generate uses) — shown in the
   // editable recipient field when the invoice has no client_email of its own.
   fallbackEmail?: string;
+  // Contact person for the greeting; the email greets the person, company as fallback.
+  fallbackContact?: string;
   onClose: () => void;
   onSent: (updated: ReceiptInvoice) => void;
 }
 
 type Step = "generating" | "preview" | "sending" | "sent" | "error";
 
-export default function SendReceiptModal({ open, invoice, fallbackEmail, onClose, onSent }: Props) {
+export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbackContact, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("generating");
   const [publicToken, setPublicToken] = useState("");
   const [publicLink, setPublicLink] = useState("");
@@ -64,7 +66,8 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, onClose
       return;
     }
 
-    const clientName = invoice.client_name || invoice.client || "there";
+    // Greet the contact person; fall back to company, then a neutral default.
+    const clientName = (fallbackContact || "").trim() || invoice.client_name || invoice.client || "there";
     const orderName = invoice.order_name || invoice.orderName || "";
     const subtotal = invoice.subtotal ?? null;
     const discount = invoice.discount != null ? normalizeDiscount(invoice.discount) : null;

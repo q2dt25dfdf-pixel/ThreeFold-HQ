@@ -84,10 +84,26 @@ export async function GET(
 
     const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
 
+    // Resolve the contact person from the lead so the page can greet the person
+    // (company stays the fallback). The finance row stores no contact of its own.
+    let contactName: string | null = null;
+    const leadIdForContact = (raw.lead_id ?? "") as string;
+    if (leadIdForContact) {
+      const { data: leadRows } = await getSupabaseAdmin()
+        .from("crm_leads")
+        .select("data")
+        .eq("id", leadIdForContact)
+        .limit(1);
+      const ld = leadRows?.[0]?.data as Record<string, unknown> | undefined;
+      const c = ((ld?.contact ?? "") as string).trim();
+      if (c) contactName = c;
+    }
+
     const clientSafe = {
       id: raw.id,
       order_name: (raw.order_name ?? raw.orderName ?? "") as string,
       client_name: (raw.client_name ?? raw.client ?? "") as string,
+      contact_name: contactName,
       subtotal: subtotalVal,
       discount: discountVal,
       sales_tax_rate: salesTaxRateVal,

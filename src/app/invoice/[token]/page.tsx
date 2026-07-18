@@ -22,6 +22,7 @@ interface InvoiceData {
   id: string;
   order_name: string;
   client_name: string;
+  contact_name?: string | null;
   subtotal?: number | null;
   discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
@@ -209,7 +210,7 @@ export default function InvoicePage() {
       <div style={s.rule} />
 
       <div style={{ ...s.eyebrow, ...(isDepositReceipt ? { color: C.green } : {}) }}>{(isReceipt || isDepositReceipt) ? "RECEIPT" : "FINAL INVOICE"}</div>
-      <div className="inv-headline">{data.client_name.toUpperCase()}</div>
+      <div className="inv-headline">{(data.contact_name || data.client_name).toUpperCase()}</div>
       {isDepositReceipt && <div style={s.depositStamp}>DEPOSIT RECEIVED ✓</div>}
 
       <div style={s.summaryStrip}>
