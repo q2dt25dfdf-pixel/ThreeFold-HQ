@@ -2,6 +2,10 @@ import { supabase } from "./supabase";
 
 const INTAKE_BUCKET = "intake-files";
 const DESIGNS_BUCKET = "order-designs";
+// Private, HQ-only. Production-cost receipts. Deliberately separate from order-designs
+// (whose URLs reach the client portal) and intake-files (client questionnaire uploads),
+// so receipts can never be surfaced through any client route.
+const RECEIPTS_BUCKET = "order-receipts";
 
 async function _getSignedUrl(
   bucket: string,
@@ -73,4 +77,20 @@ export async function getDesignSignedUrls(
   expiresInSeconds = 3600,
 ): Promise<Record<string, string>> {
   return _getSignedUrls(DESIGNS_BUCKET, paths, expiresInSeconds);
+}
+
+// ── order-receipts (private, HQ-only) ─────────────────────────────────────────
+
+export async function getReceiptSignedUrl(
+  path: string,
+  expiresInSeconds = 3600,
+): Promise<string | null> {
+  return _getSignedUrl(RECEIPTS_BUCKET, path, expiresInSeconds);
+}
+
+export async function getReceiptSignedUrls(
+  paths: string[],
+  expiresInSeconds = 3600,
+): Promise<Record<string, string>> {
+  return _getSignedUrls(RECEIPTS_BUCKET, paths, expiresInSeconds);
 }

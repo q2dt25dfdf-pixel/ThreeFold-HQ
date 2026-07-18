@@ -518,6 +518,9 @@ export default function OrderDetailPage() {
   const [designImageUrls, setDesignImageUrls] = useState<Record<string, string>>({});
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  const [uploadingReceiptLineId, setUploadingReceiptLineId] = useState<string | null>(null);
+  const [receiptErrors, setReceiptErrors] = useState<Record<string, string>>({});
+  const [openingReceiptPath, setOpeningReceiptPath] = useState<string | null>(null);
 
   // Signed URLs for intake file attachments — generated server-side to avoid browser auth/RLS mismatch
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
@@ -893,6 +896,72 @@ export default function OrderDetailPage() {
     setDesignVersionDrafts(updatedVersions);
     saveDesignVersions(updatedVersions);
     setUploadingVersionId(null);
+  };
+
+  // Upload a cost-line receipt to the private order-receipts bucket. The file is stored
+  // immediately (fixed path per line, upsert overwrites on replace); the receipt_path is
+  // set on the draft line and persists with the normal Production Costs Save. Mirrors the
+  // design-version upload but points at order-receipts (never client-reachable).
+  const handleReceiptUpload = async (lineId: string, file: File) => {
+    if (!order) return;
+    setUploadingReceiptLineId(lineId);
+    setReceiptErrors((prev) => { const n = { ...prev }; delete n[lineId]; return n; });
+
+    const path = `orders/${order.id}/${lineId}/receipt`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from('order-receipts')
+      .upload(path, file, { upsert: true, contentType: file.type });
+
+    if (uploadErr) {
+      setReceiptErrors((prev) => ({
+        ...prev,
+        [lineId]: /bucket|not found|does not exist/i.test(uploadErr.message)
+          ? "Upload failed — the 'order-receipts' storage bucket doesn't exist yet."
+          : uploadErr.message || "Upload failed.",
+      }));
+      setUploadingReceiptLineId(null);
+      return;
+    }
+
+    updateCostLine(lineId, { receipt_path: path });
+    setUploadingReceiptLineId(null);
+  };
+
+  const removeReceiptFromLine = (lineId: string) => {
+    // Clears the reference only; the stored file is intentionally left in the bucket
+    // (no hard storage delete in this pass).
+    updateCostLine(lineId, { receipt_path: undefined });
+    setReceiptErrors((prev) => { const n = { ...prev }; delete n[lineId]; return n; });
+  };
+
+  const openReceipt = async (path: string) => {
+    if (!path || openingReceiptPath) return;
+    setOpeningReceiptPath(path);
+    // Open a tab synchronously to keep the user-gesture (avoids popup blocking after await).
+    const win = typeof window !== "undefined" ? window.open('', '_blank', 'noopener,noreferrer') : null;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/internal/receipt-signed-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ paths: [path] }),
+      });
+      const urls: Record<string, string> = res.ok ? await res.json() : {};
+      if (urls[path]) {
+        if (win) win.location.href = urls[path];
+        else window.open(urls[path], '_blank', 'noopener,noreferrer');
+      } else if (win) {
+        win.close();
+      }
+    } catch {
+      if (win) win.close();
+    } finally {
+      setOpeningReceiptPath(null);
+    }
   };
 
   const handleInvoiceSent = (sender: string, invoiceLink: string) => {
@@ -1837,6 +1906,13 @@ export default function OrderDetailPage() {
                         {l.supplier}{l.supplier && l.paid_by ? " · " : ""}{l.paid_by ? `paid by ${l.paid_by}` : ""}
                       </p>
                     )}
+                    {l.receipt_path ? (
+                      <button type="button" onClick={() => openReceipt(l.receipt_path!)} disabled={openingReceiptPath === l.receipt_path} className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">
+                        <Check className="h-3 w-3" /> {openingReceiptPath === l.receipt_path ? "Opening…" : "Receipt"}
+                      </button>
+                    ) : (
+                      <span className="mt-0.5 block text-[10px] text-slate-300">No receipt</span>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="text-xs font-semibold text-slate-950">{formatCurrency((Number(l.amount_cents) || 0) / 100)}</span>
@@ -1920,6 +1996,28 @@ export default function OrderDetailPage() {
                   {vendors.map((v) => <option key={v.id} value={recordName(v)} />)}
                 </datalist>
               </div>
+            </div>
+            <div className="mt-2">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Receipt</label>
+              {l.receipt_path ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><Check className="h-3.5 w-3.5" /> Receipt uploaded</span>
+                  <button type="button" onClick={() => openReceipt(l.receipt_path!)} disabled={openingReceiptPath === l.receipt_path} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-slate-50 disabled:opacity-50">
+                    {openingReceiptPath === l.receipt_path ? "Opening…" : "View"}
+                  </button>
+                  <label className={`cursor-pointer rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 ${uploadingReceiptLineId === l.id ? "cursor-not-allowed opacity-50" : ""}`}>
+                    <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={uploadingReceiptLineId === l.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReceiptUpload(l.id, f); e.target.value = ''; }} />
+                    {uploadingReceiptLineId === l.id ? "Uploading…" : "Replace"}
+                  </label>
+                  <button type="button" onClick={() => removeReceiptFromLine(l.id)} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50">Remove</button>
+                </div>
+              ) : (
+                <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 ${uploadingReceiptLineId === l.id ? "cursor-not-allowed opacity-50" : ""}`}>
+                  <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={uploadingReceiptLineId === l.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReceiptUpload(l.id, f); e.target.value = ''; }} />
+                  {uploadingReceiptLineId === l.id ? "Uploading…" : "Upload receipt"}
+                </label>
+              )}
+              {receiptErrors[l.id] && <p className="mt-1 text-[11px] text-rose-600">{receiptErrors[l.id]}</p>}
             </div>
           </div>
         ))}
