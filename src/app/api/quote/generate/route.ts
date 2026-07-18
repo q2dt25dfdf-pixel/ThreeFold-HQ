@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 import {
   calcGrandTotal,
@@ -76,12 +77,8 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getSupabaseAdmin();
-    const year = new Date().getFullYear();
-    const { count } = await db
-      .from("quotes")
-      .select("*", { count: "exact", head: true });
-
-    const quoteNumber = `TF-Q-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+    // max(existing number)+1 via shared helper — collision-safe on delete.
+    const quoteNumber = await nextSequenceNumber(db, { table: "quotes", field: "quote_number", prefix: "TF-Q" });
     const token = "tfq-" + randomBytes(12).toString("hex");
     const publicLink = `${getQuoteBaseUrl(request.nextUrl.origin)}/quote/${token}`;
 

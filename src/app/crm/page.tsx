@@ -14,6 +14,7 @@ import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile, type CommunicationEntry } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
 import {
@@ -542,12 +543,8 @@ function CRMContent() {
     await syncClientFromLead(lead);
     await reloadClients();
 
-    // Generate a sequential order number
-    const year = new Date().getFullYear();
-    const { count: orderCount } = await supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true });
-    const orderNumber = `TF-ORD-${year}-${String((orderCount ?? 0) + 1).padStart(4, "0")}`;
+    // Generate a sequential order number — max(existing)+1 via shared helper (collision-safe on delete).
+    const orderNumber = await nextSequenceNumber(supabase, { table: "orders", field: "order_number", prefix: "TF-ORD" });
     const orderId = `order-lead-${lead.id}`;
     const orderName = `${lead.company} — ${orderNumber}`;
 
@@ -787,6 +784,34 @@ function CRMContent() {
   };
 
   const handleDeleteLead = async (lead: Lead) => {
+    // Guard: never hard-delete real money. "Deposit Paid" stage / "Won" status are set
+    // together by the Stripe webhook; also catch a paid deposit or a deposit_paid finance
+    // recorded manually without a stage move. Refuse the delete and offer Archive instead.
+    let paidOrWon = lead.stage === "Deposit Paid" || lead.status === "Won";
+    if (!paidOrWon) {
+      const [fin, dep] = await Promise.all([
+        supabase.from("finances").select("id").eq("data->>lead_id", lead.id).eq("data->>deposit_paid", "true").limit(1),
+        supabase.from("deposit_requests").select("id").eq("data->>lead_id", lead.id).eq("data->>status", "paid").limit(1),
+      ]);
+      paidOrWon = (fin.data?.length ?? 0) > 0 || (dep.data?.length ?? 0) > 0;
+    }
+    if (paidOrWon) {
+      if (window.confirm(`${lead.company} has a paid deposit — its order and finances are real and cannot be deleted. Archive it instead?`)) {
+        await handleArchiveLead(lead);
+      }
+      return;
+    }
+
+    // Cascade: remove every child row linked to this lead so nothing is orphaned.
+    // finances is included ON PURPOSE — an orphaned finances row keeps inflating the
+    // Sales Tax total. Clients are intentionally NOT cascaded (they are shared/deduped
+    // across leads); the order's portal token lives on the order row and dies with it.
+    await Promise.all([
+      supabase.from("quotes").delete().eq("data->>lead_id", lead.id),
+      supabase.from("deposit_requests").delete().eq("data->>lead_id", lead.id),
+      supabase.from("orders").delete().eq("data->>lead_id", lead.id),
+      supabase.from("finances").delete().eq("data->>lead_id", lead.id),
+    ]);
     await deleteItem(lead.id);
     deleteTask(autoFollowUpTaskId(lead.id));
     if (viewLeadId === lead.id) setViewLeadId(null);
