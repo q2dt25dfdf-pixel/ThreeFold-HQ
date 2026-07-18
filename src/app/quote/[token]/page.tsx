@@ -32,6 +32,8 @@ interface QuoteData {
   expiration_date: string;
   status: string;
   created_at: string;
+  superseded_by?: string | null;
+  superseded_at?: string | null;
 }
 
 function fmt(amount: number) {
@@ -137,6 +139,34 @@ export default function QuotePage() {
         <div style={s.bodyText}>
           This link may be invalid or expired. Contact your Threefold representative.
         </div>
+      </PortalShell>
+    );
+  }
+
+  // Superseded by a newer quote — the client must not review or approve a price we
+  // no longer offer. Point them to their email for the current version. Server-side
+  // PATCH also refuses approval, so this is defense-in-depth, not the only guard.
+  if (data.superseded_by) {
+    return (
+      <PortalShell>
+        <style>{QUOTE_CSS}</style>
+        <div style={s.headerBlock}>
+          <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+          <div style={s.tagline}>Made by three, worn by all.</div>
+        </div>
+        <div style={s.rule} />
+        <div style={s.eyebrow}>CUSTOM QUOTE</div>
+        <div className="q-headline">UPDATED QUOTE SENT</div>
+        <div style={{ ...s.bodyText, marginTop: "16px" }}>
+          An updated quote has been sent to you. Please check your email for the
+          current version.
+        </div>
+        <a href={`mailto:${BUSINESS_EMAIL}?subject=Re: Quote ${data.quote_number}`} style={s.btnGold}>
+          CONTACT THREEFOLD →
+        </a>
+        <div style={s.rule} />
+        <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
+        <div style={s.footerTagline}>Made by three, worn by all.</div>
       </PortalShell>
     );
   }

@@ -10,6 +10,7 @@ import {
   normalizeDiscount,
 } from "@/lib/salesTax";
 import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
+import { voidDepositOnRevision } from "@/lib/supersede";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 
 export const dynamic = "force-dynamic";
@@ -333,6 +334,15 @@ export async function POST(request: Request): Promise<Response> {
 
     const depositEstimate = Math.round(grandTotal * 0.5 * 100) / 100;
 
+    // Revision handling (STEP 2): the previous quote is a descriptor for the send
+    // step to supersede; the existing deposit is voided now, hard-guarded against
+    // paid/pending. Mirrors /api/quote/generate.
+    const leadDataForVoid = (lead?.data ?? {}) as Record<string, unknown>;
+    const supersededQuoteId = (leadDataForVoid.quote_id as string) || null;
+    const voidResult = await voidDepositOnRevision(db, leadDataForVoid.deposit_request_id as string | undefined);
+    const voidedDeposit = voidResult.outcome === "voided" ? { number: voidResult.depositNumber } : null;
+    const blockedDeposit = voidResult.outcome === "blocked" ? { number: voidResult.depositNumber, status: voidResult.status } : null;
+
     return okResponse({
       quoteId,
       quoteNumber,
@@ -340,6 +350,9 @@ export async function POST(request: Request): Promise<Response> {
       company:            companyName,
       stage,
       isRevised,
+      supersededQuoteId,
+      voidedDeposit,
+      blockedDeposit,
       resolvedBy,
       existingQuoteCount: existingQuotes.length,
       lineItems:          computedLineItems,

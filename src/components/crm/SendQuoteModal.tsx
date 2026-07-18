@@ -6,6 +6,7 @@ import ModalShell from "@/components/ModalShell";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
+import { supabase } from "@/lib/supabase";
 import {
   calcGrandTotal,
   calcSalesTax,
@@ -164,8 +165,38 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   const discountZeroesTotal = discount != null && discountedSubtotal < 1;
   const canPreview = hasValidItems && !discountLabelMissing && !discountZeroesTotal;
 
-  const handlePreviewEmail = () => {
+  const handlePreviewEmail = async () => {
     if (!lead || !canPreview) return;
+
+    // STEP 5 — revision guard. Generating a new quote voids the lead's existing
+    // (unpaid) deposit request server-side, which kills the client's current payment
+    // link. Warn the founder BEFORE that happens; block outright if the deposit is
+    // already paid/in-flight (a manual credit situation, not a stale-deposit one).
+    if (lead.stage === "Quote Sent" && lead.deposit_request_id) {
+      const { data: depRows } = await supabase
+        .from("deposit_requests")
+        .select("data")
+        .eq("id", lead.deposit_request_id)
+        .limit(1);
+      const dep = depRows?.[0]?.data as { status?: string; deposit_request_number?: string; voided_at?: string } | undefined;
+      const depStatus = dep?.status ?? "";
+      const depNumber = dep?.deposit_request_number ?? lead.deposit_request_number ?? "the existing deposit request";
+      if (dep && !dep.voided_at) {
+        if (depStatus === "paid" || depStatus === "pending") {
+          window.alert(
+            `The client has already ${depStatus === "paid" ? "paid" : "started paying"} against deposit request ${depNumber}. ` +
+            `Revising the quote here won't change that — this needs a manual credit or refund. ` +
+            `Handle the payment first, then revise.`,
+          );
+          return;
+        }
+        const ok = window.confirm(
+          `This will void deposit request ${depNumber}. The client's existing payment link will stop working. ` +
+          `You'll need to send a new one. Continue?`,
+        );
+        if (!ok) return;
+      }
+    }
 
     const validItems = lineItems.filter((i) => i.name.trim());
     const computedSubtotal = validItems.reduce((sum, i) => sum + i.lineTotal, 0);
@@ -297,7 +328,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         </button>
         <button
           type="button"
-          onClick={handlePreviewEmail}
+          onClick={() => void handlePreviewEmail()}
           disabled={!canPreview}
           title={
             discountLabelMissing

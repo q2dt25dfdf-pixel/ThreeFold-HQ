@@ -37,6 +37,8 @@ export async function GET(
       notes: raw.notes,
       status: raw.status,
       created_at: raw.created_at,
+      voided_at: (raw.voided_at ?? null) as string | null,
+      voided_reason: (raw.voided_reason ?? null) as string | null,
     };
     return NextResponse.json(clientSafe);
   } catch (err) {

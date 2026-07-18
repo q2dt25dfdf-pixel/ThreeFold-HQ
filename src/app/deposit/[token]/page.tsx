@@ -36,6 +36,8 @@ interface DepositData {
   notes: string;
   status: string;
   created_at: string;
+  voided_at?: string | null;
+  voided_reason?: string | null;
 }
 
 function fmt(amount: number) {
@@ -144,6 +146,36 @@ export default function DepositPage() {
         <div style={s.bodyText}>
           This link may be invalid or expired. Contact your Threefold representative.
         </div>
+      </PortalShell>
+    );
+  }
+
+  // Voided by a quote revision — show a polite "no longer current" state with no
+  // amounts and no pay buttons. The Stripe checkout route is the hard block.
+  if (data.voided_at) {
+    return (
+      <PortalShell>
+        <style>{DEP_CSS}</style>
+        <div style={s.headerBlock}>
+          <div style={s.logo}>THREEFOLD SUPPLY CO.</div>
+          <div style={s.tagline}>Made by three, worn by all.</div>
+        </div>
+        <div style={s.rule} />
+        <div style={s.eyebrow}>DEPOSIT REQUEST</div>
+        <div className="dep-headline">NO LONGER CURRENT</div>
+        <div style={{ ...s.bodyText, marginTop: "16px" }}>
+          This request is no longer current. Please contact Threefold Supply Co. and
+          we&apos;ll send you an updated payment link.
+        </div>
+        <a
+          href={`mailto:${BUSINESS_EMAIL}?subject=Re: Deposit Request ${data.deposit_request_number}`}
+          style={s.btnOutline}
+        >
+          CONTACT THREEFOLD →
+        </a>
+        <div style={s.rule} />
+        <div style={s.footerLogo}>THREEFOLD SUPPLY CO.</div>
+        <div style={s.footerTagline}>Made by three, worn by all.</div>
       </PortalShell>
     );
   }

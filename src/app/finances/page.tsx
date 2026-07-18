@@ -447,8 +447,30 @@ function FinancesContent() {
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
   const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
-  // Read-only: used to resolve a lead email fallback for receipts (same source /api/invoice/generate uses).
-  const { data: leads } = useSupabaseTable<{ id: string; email?: string }>("crm_leads", []);
+  // Read-only: used to resolve a lead email fallback for receipts (same source /api/invoice/generate uses)
+  // and to detect stale (superseded-quote) deposit requests below.
+  const { data: leads } = useSupabaseTable<{ id: string; email?: string; quote_id?: string }>("crm_leads", []);
+  // Read-only retro-scan: flags deposit requests left stale by a quote revision that
+  // predates the supersede/void feature. Detect only — never auto-voids.
+  const { data: depositRequests } = useSupabaseTable<{ id: string; lead_id?: string; quote_id?: string; status?: string; voided_at?: string; grand_total?: number | string; deposit_request_number?: string }>("deposit_requests", []);
+  const { data: quotesForScan } = useSupabaseTable<{ id: string; grand_total?: number | string }>("quotes", []);
+  // The audit's stale-deposit query, computed read-only: an unpaid, un-voided deposit
+  // whose lead has repointed to a newer quote, or whose stored total no longer matches
+  // the lead's current quote total.
+  const staleDeposits = useMemo(() => {
+    const toNum = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "")); return Number.isFinite(n) ? n : 0; };
+    const leadById = new Map(leads.map((l) => [l.id, l]));
+    const quoteById = new Map(quotesForScan.map((q) => [q.id, q]));
+    return depositRequests.filter((d) => {
+      const status = d.status ?? "";
+      if (status === "paid" || status === "pending" || d.voided_at) return false;
+      const lead = d.lead_id ? leadById.get(d.lead_id) : undefined;
+      if (!lead || !lead.quote_id) return false;
+      if (d.quote_id && d.quote_id !== lead.quote_id) return true;
+      const quote = quoteById.get(lead.quote_id);
+      return quote != null && toNum(d.grand_total) !== toNum(quote.grand_total);
+    });
+  }, [depositRequests, leads, quotesForScan]);
   const [filter, setFilter] = useState<InvoiceStatus | "All" | "Unpaid">(() => {
     const p = searchParams.get("filter") ?? "";
     if (p.toLowerCase() === "unpaid") return "Unpaid";
@@ -1368,6 +1390,23 @@ function FinancesContent() {
       {/* ── Overview tab ─────────────────────────────────────────────────────── */}
       {activeTab === "overview" && (
       <>
+      {/* Retro-scan: unpaid deposit requests whose lead has since moved to a newer
+          quote (or whose stored total no longer matches the current quote). Flag
+          only — the founder decides what to do; nothing is auto-voided. */}
+      {staleDeposits.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 md:px-5 md:py-4">
+          <p className="text-xs font-semibold text-amber-800 md:text-sm">
+            ⚠ {staleDeposits.length} deposit request{staleDeposits.length === 1 ? "" : "s"} may be out of date
+          </p>
+          <p className="mt-1 text-xs text-amber-700">
+            The quote was revised after {staleDeposits.length === 1 ? "this request was" : "these requests were"} sent, so
+            the old payment link could still bill the pre-revision amount. Review and re-send:{" "}
+            <span className="font-semibold">
+              {staleDeposits.map((d) => d.deposit_request_number || d.id).join(", ")}
+            </span>.
+          </p>
+        </div>
+      )}
       {/* ── Command center hero ───────────────────────────────────────────────── */}
       <section className="overflow-hidden rounded-[2rem] bg-slate-900">
         {/* Two hero metrics */}
