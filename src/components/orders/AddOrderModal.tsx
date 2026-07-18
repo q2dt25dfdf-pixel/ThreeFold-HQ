@@ -32,6 +32,8 @@ type Order = {
   status: OrderStatus;
   estimatedDeliveryDate: string;
   notes: string;
+  created_at?: string;
+  status_changed_at?: string;
 };
 
 type AddOrderModalProps = {
@@ -113,6 +115,8 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
         status,
         estimatedDeliveryDate,
         notes: notes.trim(),
+        created_at: new Date().toISOString(),
+        status_changed_at: new Date().toISOString(),
       };
 
       const response = await upsertItem(order);

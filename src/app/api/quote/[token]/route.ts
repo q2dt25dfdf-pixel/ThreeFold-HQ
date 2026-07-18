@@ -102,10 +102,13 @@ export async function PATCH(
 
       if (leadRows && leadRows.length > 0) {
         const leadData = leadRows[0].data as Record<string, unknown>;
+        const nowIso = new Date().toISOString();
         const updatedLeadData = {
           ...leadData,
           stage: "Quote Approved",
           approved_quote_id: quoteId,
+          stage_changed_at: nowIso,
+          last_activity_at: nowIso,
         };
         await db
           .from("crm_leads")

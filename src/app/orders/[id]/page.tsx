@@ -79,6 +79,10 @@ type Order = {
   delivery_state?: string;
   delivery_zip?: string;
   delivery_country?: string;
+  created_at?: string;
+  status_changed_at?: string;
+  // Per-action dismiss/snooze — shape only (nothing writes it this phase). See Lead.
+  dismissed_actions?: Record<string, { until: string | null; at: string; by: string; reason?: string }>;
 };
 
 type ClientUpdate = { id: string; date: string; text: string };
@@ -114,8 +118,11 @@ type Invoice = {
   balance_remaining: string | number;
   final_paid: boolean;
   final_due_date?: string;
+  final_invoice_sent_at?: string;
   status: string;
   notes: string;
+  // Per-action dismiss/snooze — shape only (nothing writes it this phase). See Lead.
+  dismissed_actions?: Record<string, { until: string | null; at: string; by: string; reason?: string }>;
 };
 
 type CommButton = {
@@ -563,7 +570,11 @@ export default function OrderDetailPage() {
   const handleStageClick = async (stage: string) => {
     if (!order || stageSaving) return;
     setStageSaving(true);
-    await upsertItem({ ...order, status: stage });
+    await upsertItem({
+      ...order,
+      status: stage,
+      ...(order.status !== stage ? { status_changed_at: new Date().toISOString() } : {}),
+    });
     setStageSaving(false);
   };
 
@@ -718,6 +729,12 @@ export default function OrderDetailPage() {
       text: `Final invoice sent by ${sender}.\nPortal: ${invoiceLink}`,
     };
     upsertItem({ ...order, client_updates: [entry, ...(order.client_updates ?? [])] });
+    // Persist the final-invoice-sent timestamp on the finances record. This callback
+    // fires only after the email actually sends (SendFinalInvoiceModal success), not on
+    // preview or token generation.
+    if (invoice) {
+      void upsertInvoice({ ...invoice, final_invoice_sent_at: new Date().toISOString() });
+    }
   };
 
   const addClientUpdate = () => {

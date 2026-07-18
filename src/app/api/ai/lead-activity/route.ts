@@ -107,7 +107,7 @@ export async function POST(request: Request): Promise<Response> {
     const updatedHistory = [entry, ...existing];
 
     // ── Upsert full lead data — preserves all other lead fields ──────────────
-    const updatedData = { ...existingData, communicationHistory: updatedHistory };
+    const updatedData = { ...existingData, last_activity_at: new Date().toISOString(), communicationHistory: updatedHistory };
     const { error: upsertErr } = await db
       .from("crm_leads")
       .upsert({ id: leadId.trim(), data: updatedData });

@@ -99,6 +99,8 @@ type Order = {
   quote_id?: string;
   deposit_request_id?: string;
   intake_snapshot?: IntakeSnapshot;
+  created_at?: string;
+  status_changed_at?: string;
 };
 
 type InvoiceRecord = {
@@ -312,8 +314,27 @@ function CRMContent() {
   const { data: leads, upsertItem, deleteItem, loading, error } = useSupabaseTable<Lead>("crm_leads", initialLeads);
   const { data: clients, upsertItem: upsertClient, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: tasks, upsertItem: upsertTask, deleteItem: deleteTask } = useSupabaseTable<FollowUpTask>("tasks", []);
-  const { upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { upsertItem: upsertFinance } = useSupabaseTable<InvoiceRecord>("finances", []);
+
+  // Central choke point for EVERY crm_leads write. Stamps lifecycle timestamps so no path
+  // is missed (structural, not vigilant): created_at + stage_changed_at at creation
+  // (initial stage counts as a stage-set), stage_changed_at on any stage change,
+  // last_activity_at on every write. Legacy leads without created_at stay null — never
+  // backfilled. Every lead write in this file goes through saveLead(), not upsertItem().
+  const saveLead = (next: Lead) => {
+    const now = new Date().toISOString();
+    const prev = leads.find((l) => l.id === next.id) ?? null;
+    const isNew = !prev;
+    const stageChanged = isNew || prev!.stage !== next.stage;
+    const stamped: Lead = {
+      ...next,
+      ...(isNew && !next.created_at ? { created_at: now } : {}),
+      ...(stageChanged ? { stage_changed_at: now } : {}),
+      last_activity_at: now,
+    };
+    return upsertItem(stamped);
+  };
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLeadStage, setAddLeadStage] = useState<PipelineStage>("New Lead");
   const [viewLeadId, setViewLeadId] = useState<string | null>(null);
@@ -459,7 +480,7 @@ function CRMContent() {
       ...lead,
       communicationHistory: [entry, ...lead.communicationHistory],
     };
-    await upsertItem(updated);
+    await saveLead(updated);
     await completeFollowUp(lead);
     setCompletingLead(null);
   };
@@ -606,6 +627,8 @@ function CRMContent() {
     const today = businessTodayISO();
 
     // Create the order
+    const nowIso = new Date().toISOString();
+    const existingOrder = orders.find((o) => o.id === orderId);
     await upsertOrder({
       id: orderId,
       orderName,
@@ -619,6 +642,8 @@ function CRMContent() {
       quantity: 0,
       amount: totalAmount,
       status: "Production",
+      created_at: existingOrder?.created_at ?? nowIso,
+      status_changed_at: existingOrder?.status === "Production" ? (existingOrder?.status_changed_at ?? nowIso) : nowIso,
       estimatedDeliveryDate: "",
       notes: "",
       source: lead.source === "Website" ? "Website Lead" : "CRM Lead",
@@ -729,7 +754,7 @@ function CRMContent() {
     if (!values.company.trim()) return false;
     const lead = { id: createId(), ...values };
 
-    const leadResponse = await upsertItem(lead);
+    const leadResponse = await saveLead(lead);
     if (leadResponse.error) return leadResponse;
 
     syncFollowUpTask(lead);
@@ -745,7 +770,7 @@ function CRMContent() {
   };
 
   const handleSaveDetailLead = async (updated: Lead) => {
-    await upsertItem(updated);
+    await saveLead(updated);
     syncFollowUpTask(updated);
     if (isDepositPaid(updated.stage as string) && !isDepositPaid(viewLead?.stage as string ?? "")) {
       await handleApproveLead(updated);
@@ -754,7 +779,7 @@ function CRMContent() {
 
   const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
     const updated = { ...lead, stage: targetStage };
-    await upsertItem(updated);
+    await saveLead(updated);
     if (targetStage === "Deposit Paid") {
       await handleApproveLead(updated);
     }
@@ -767,13 +792,13 @@ function CRMContent() {
   };
 
   const handleArchiveLead = async (lead: Lead) => {
-    await upsertItem({ ...lead, archived: true, archivedAt: new Date().toISOString() });
+    await saveLead({ ...lead, archived: true, archivedAt: new Date().toISOString() });
     if (viewLeadId === lead.id) setViewLeadId(null);
     setToastMessage(`Archived ${lead.company}.`);
   };
 
   const handleUnarchiveLead = async (lead: Lead) => {
-    await upsertItem({ ...lead, archived: false, archivedAt: undefined });
+    await saveLead({ ...lead, archived: false, archivedAt: undefined });
     setToastMessage(`Restored ${lead.company} to ${lead.stage}.`);
   };
 
@@ -797,7 +822,7 @@ function CRMContent() {
         ...lead.communicationHistory,
       ],
     };
-    await upsertItem(updated);
+    await saveLead(updated);
     syncFollowUpTask(updated);
     postNotification({
       type: 'design_sent',
@@ -833,7 +858,7 @@ function CRMContent() {
         ...lead.communicationHistory,
       ],
     };
-    await upsertItem(updated);
+    await saveLead(updated);
     syncFollowUpTask(updated);
     postNotification({
       type: 'quote_sent',
@@ -866,7 +891,7 @@ function CRMContent() {
         ...lead.communicationHistory,
       ],
     };
-    await upsertItem(updated);
+    await saveLead(updated);
     postNotification({
       type: 'deposit_request_sent',
       title: 'Deposit Request Sent',

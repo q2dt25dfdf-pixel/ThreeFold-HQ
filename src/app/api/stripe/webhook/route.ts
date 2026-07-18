@@ -135,7 +135,7 @@ async function fulfillDepositPaid(
       // Treat "Approved" as the legacy equivalent of "Deposit Paid"
       if (currentStage !== "Deposit Paid" && currentStage !== "Approved") {
         await db.from("crm_leads").update({
-          data: { ...ld, stage: "Deposit Paid", status: "Won" },
+          data: { ...ld, stage: "Deposit Paid", status: "Won", stage_changed_at: paidAt, last_activity_at: paidAt },
         }).eq("id", effectiveLeadId);
         console.log(`[webhook] crm_lead ${effectiveLeadId} → Deposit Paid`);
       } else {
@@ -425,6 +425,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
           files: (leadData.questionnaire_files as unknown[]) ?? [],
         },
         created_at: paidAt,
+        status_changed_at: paidAt,
       },
     });
     console.log(`[webhook] created order ${orderId} (${orderNumber}) for lead ${leadId}`);

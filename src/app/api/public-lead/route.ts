@@ -101,6 +101,7 @@ export async function POST(request: Request) {
         questionnaire_id: '',
         intake_snapshot: intakeSnapshot,
         created_at: now,
+        status_changed_at: now,
         updated_at: now,
       }
 
@@ -155,6 +156,10 @@ export async function POST(request: Request) {
       colors: body.colors?.trim() || '',
       questionnaire_files: incomingFiles,
       created_at: now,
+      // Initial stage ('New Lead') counts as a stage-set, so stamp stage_changed_at at
+      // creation too — a website lead has real lifecycle timestamps from day one.
+      stage_changed_at: now,
+      last_activity_at: now,
       updated_at: now,
     }
 
