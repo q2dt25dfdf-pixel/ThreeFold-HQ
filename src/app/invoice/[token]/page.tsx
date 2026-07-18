@@ -24,6 +24,7 @@ interface InvoiceData {
   client_name: string;
   contact_name?: string | null;
   deposit_request_number?: string | null;
+  portal_url?: string | null;
   subtotal?: number | null;
   discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
@@ -71,6 +72,12 @@ const INV_CSS = `
   }
   @media (min-width: 1024px) {
     .inv-headline { font-size: 64px; }
+  }
+  /* Deposit-received face on mobile: the reassurance (thank-you) sits ABOVE the summary. */
+  @media (max-width: 1023px) {
+    .dr-stack { display: flex; flex-direction: column; }
+    .dr-stack .portal-col-side { order: -1; margin-top: 0; }
+    .dr-stack .portal-col-main { margin-top: 48px; }
   }
 `;
 
@@ -172,6 +179,10 @@ export default function InvoicePage() {
   // no pay buttons; the balance is shown as a fact, "not yet owed".
   const isDepositReceipt = isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true;
   const depositMethodLabel = paymentMethodLabel(data.deposit_payment_method);
+  // Deposit-received thank-you copy (no dashes; contact first name, else no name).
+  const contactFirst = (data.contact_name ?? "").trim().split(/\s+/)[0] || "";
+  const thanksHeading = contactFirst ? `Thanks, ${contactFirst}. You're all set.` : `Thanks. You're all set.`;
+  const thanksSub = "Your deposit is in and we're already getting to work. We'll handle the balance before delivery, nothing needed from you until then.";
   const hasTax = (data.sales_tax_amount ?? 0) > 0;
   const grandTotalDisplay = data.grand_total ?? data.total_amount;
 
@@ -212,7 +223,7 @@ export default function InvoicePage() {
 
       <div style={{ ...s.eyebrow, ...(isDepositReceipt ? { color: C.green } : {}) }}>{(isReceipt || isDepositReceipt) ? "RECEIPT" : "FINAL INVOICE"}</div>
       <div className="inv-headline">{(data.contact_name || data.client_name).toUpperCase()}</div>
-      {isDepositReceipt && <div style={s.depositStamp}>DEPOSIT RECEIVED ✓</div>}
+      {isDepositReceipt && <div style={s.depositStamp}>DEPOSIT RECEIVED</div>}
 
       <div style={s.summaryStrip}>
         {data.order_name && (
@@ -240,16 +251,18 @@ export default function InvoicePage() {
       <div style={s.rule} />
 
       {/* Two-column body */}
-      <div className="portal-columns">
+      <div className={"portal-columns" + (isDepositReceipt ? " dr-stack" : "")}>
 
         {/* Left: itemization + payment summary */}
         <div className="portal-col-main">
           {data.line_items && data.line_items.length > 0 && (
             <div className="dk-card">
               <div style={s.cardEyebrow}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                </svg>
+                {!isDepositReceipt && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                  </svg>
+                )}
                 WHAT&apos;S INCLUDED
               </div>
               <div style={s.detailList}>
@@ -290,9 +303,11 @@ export default function InvoicePage() {
 
           <div className="dk-card">
             <div style={s.cardEyebrow}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
-              </svg>
+              {!isDepositReceipt && (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                </svg>
+              )}
               PAYMENT SUMMARY
             </div>
             <div style={s.detailList}>
@@ -300,7 +315,7 @@ export default function InvoicePage() {
                 <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
                 <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
               </div>
-              <div style={s.detailRow}>
+              <div style={isDepositReceipt ? { ...s.detailRow, ...s.depositPaidTint } : s.detailRow}>
                 <div style={{ flex: 1 }}>
                   <span style={s.detailKey}>DEPOSIT</span>
                   {isDepositPaid && data.deposit_paid_date && (
@@ -313,7 +328,7 @@ export default function InvoicePage() {
                   <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
                   {isDepositPaid && (
                     <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", color: C.green, marginTop: "2px" }}>
-                      PAID ✓
+                      {isDepositReceipt ? "PAID" : "PAID ✓"}
                     </div>
                   )}
                 </div>
@@ -352,7 +367,7 @@ export default function InvoicePage() {
                     onClick={() => setShowBreakdown((v) => !v)}
                     style={s.breakdownToggle}
                   >
-                    {showBreakdown ? "▾" : "▸"} VIEW FULL PRICING BREAKDOWN
+                    {isDepositReceipt ? "" : showBreakdown ? "▾ " : "▸ "}VIEW FULL PRICING BREAKDOWN
                   </button>
                   {showBreakdown && (
                     <div style={s.breakdownExpanded}>
@@ -386,19 +401,7 @@ export default function InvoicePage() {
               )}
             </div>
 
-            {isDepositReceipt ? (
-              <div style={{ ...s.calloutPaid, flexDirection: "column", alignItems: "stretch", gap: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ ...s.calloutLabel, color: C.green }}>DEPOSIT RECEIVED</span>
-                  <span style={s.calloutAmountPaid}>{fmt(data.deposit_amount)} ✓</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                  {receiptPaidLine && <div style={s.receiptMetaSub}>{receiptPaidLine}</div>}
-                  <div style={s.receiptMetaSub}>Balance remaining {fmt(data.balance_remaining)} · due before delivery</div>
-                </div>
-                {hasDiscount && <SavingsNote amount={fmt(discountAmount)} label={discount?.label ?? ""} />}
-              </div>
-            ) : !isPaidInFull ? (
+            {isDepositReceipt ? null : !isPaidInFull ? (
               hasDiscount ? (
                 <div style={{ ...s.calloutPending, flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -442,13 +445,28 @@ export default function InvoicePage() {
               </div>
             </div>
           ) : isDepositReceipt ? (
-            <div className="dk-card">
-              <div style={s.cardEyebrow}>DEPOSIT RECEIVED</div>
-              <div style={s.bodyText}>
-                Thank you — your deposit has been received and your order is moving into
-                production. We&apos;ll reach out about the remaining balance when it&apos;s
-                due before delivery. Nothing is needed from you right now.
+            <div style={s.handoffCard}>
+              <div style={s.handoffCheck}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 13l4 4L19 7" stroke="#7fc9a3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
+              <div style={s.handoffHeading}>{thanksHeading}</div>
+              <div style={s.handoffSub}>{thanksSub}</div>
+              {data.portal_url && (
+                <div style={s.portalRow}>
+                  <div style={s.portalRowText}>
+                    <div style={s.portalLabel}>YOUR CLIENT PORTAL</div>
+                    <div style={s.portalDesc}>Track your order, designs, and payments anytime.</div>
+                  </div>
+                  <a href={data.portal_url} style={s.portalBtn}>
+                    OPEN PORTAL
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </a>
+                </div>
+              )}
             </div>
           ) : paymentParam === "success" ? (
             <div className="dk-card">
@@ -484,11 +502,13 @@ export default function InvoicePage() {
       <div style={s.rule} />
       <div className="dk-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          <div style={s.questionsIcon}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </div>
+          {!isDepositReceipt && (
+            <div style={s.questionsIcon}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+              </svg>
+            </div>
+          )}
           <div>
             <div style={s.questionsHeading}>QUESTIONS?</div>
             <div style={s.questionsText}>Reach out to your Threefold representative directly.</div>
@@ -498,7 +518,7 @@ export default function InvoicePage() {
           href={`mailto:${BUSINESS_EMAIL}?subject=Re: Invoice for ${data.order_name || data.client_name}`}
           style={s.btnOutline}
         >
-          CONTACT THREEFOLD →
+          CONTACT THREEFOLD{isDepositReceipt ? "" : " →"}
         </a>
       </div>
 
@@ -580,6 +600,89 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "11px",
     fontWeight: 800,
     letterSpacing: "0.18em",
+  },
+  depositPaidTint: {
+    backgroundColor: C.greenSoft,
+    borderBottom: "none",
+    borderRadius: "8px",
+    paddingLeft: "12px",
+    paddingRight: "12px",
+    marginLeft: "-12px",
+    marginRight: "-12px",
+  },
+  handoffCard: {
+    background: "linear-gradient(155deg, #1c3a2e 0%, #16181c 100%)",
+    borderRadius: "16px",
+    padding: "30px",
+    color: "#ffffff",
+  },
+  handoffCheck: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "50%",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: "18px",
+  },
+  handoffHeading: {
+    fontSize: "20px",
+    fontWeight: 800,
+    letterSpacing: "-0.01em",
+    lineHeight: 1.25,
+    color: "#ffffff",
+    marginBottom: "10px",
+  },
+  handoffSub: {
+    fontSize: "14px",
+    lineHeight: 1.6,
+    color: "#b9c6bf",
+  },
+  portalRow: {
+    marginTop: "22px",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "12px",
+    padding: "18px 20px",
+    display: "flex",
+    flexWrap: "wrap" as const,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+  },
+  portalRowText: {
+    flex: "1 1 200px",
+    minWidth: 0,
+  },
+  portalLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.18em",
+    color: "#8fb3a2",
+    textTransform: "uppercase" as const,
+    marginBottom: "6px",
+  },
+  portalDesc: {
+    fontSize: "14px",
+    lineHeight: 1.5,
+    color: "#dbe6e0",
+  },
+  portalBtn: {
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    minHeight: "44px",
+    backgroundColor: "#ffffff",
+    color: "#16181c",
+    fontSize: "12px",
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    padding: "13px 20px",
+    borderRadius: "999px",
+    textDecoration: "none",
   },
   receiptMetaStrong: {
     fontSize: "11px",
