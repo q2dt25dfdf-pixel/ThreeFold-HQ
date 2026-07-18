@@ -181,10 +181,11 @@ function Row({
   );
 }
 
-// One cell of the header strip.
-function StripCell({ label, children }: { label: string; children: ReactNode }) {
+// One cell of the header strip. `className` carries the responsive flex sizing:
+// stacked (Stage full-width, others two-up) below sm; proportional single row at sm+.
+function StripCell({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
   return (
-    <div className="border-b border-r border-slate-200 px-3 py-2.5">
+    <div className={`min-w-0 border-b border-r border-slate-200 px-3 py-2.5 ${className ?? ""}`}>
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
@@ -202,6 +203,12 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const [logNote, setLogNote] = useState("");
   const [logError, setLogError] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
+  const composerNoteRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Left column tab — Contact fields vs Notes (Notes is usually empty).
+  const [leftTab, setLeftTab] = useState<"contact" | "notes">("contact");
 
   // Closed-Lost reason picker
   const [lostPickerOpen, setLostPickerOpen] = useState(false);
@@ -211,9 +218,17 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     setData(null);
     setLogDate(businessTodayISO());
     setEditingIndex(null);
+    setComposerOpen(false);
+    setShowAllActivity(false);
+    setLeftTab("contact");
     setLostPickerOpen(false);
     if (open) resetSaveState();
   }, [lead?.id, open, resetSaveState]);
+
+  // Focus the note field whenever the composer opens (new entry or edit).
+  useEffect(() => {
+    if (composerOpen) composerNoteRef.current?.focus();
+  }, [composerOpen]);
 
   if (!open || !lead) return null;
 
@@ -282,6 +297,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     }
     setLogNote("");
     setLogDate(businessTodayISO());
+    setComposerOpen(false);
   };
 
   const startEdit = (index: number) => {
@@ -292,6 +308,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     setLogDate(entry.date);
     setLogNote(entry.summary);
     setLogError("");
+    setComposerOpen(true);
   };
 
   const cancelEdit = () => {
@@ -301,6 +318,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
     setLogType("Call");
     setLogOwner("Alliyah");
     setLogError("");
+    setComposerOpen(false);
   };
 
   const deleteEntry = (index: number) => {
@@ -451,19 +469,20 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
           </div>
         )}
 
-        {/* ── Header strip — six cells, bordered & divided, wraps on mobile ── */}
+        {/* ── Header strip — cells sized to content. Below sm: Stage takes its own
+             full-width row, the rest wrap two-up. sm+: one proportional row. ── */}
         <div className="overflow-hidden rounded-2xl border-l border-t border-slate-200">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-            <StripCell label="Stage">
+          <div className="flex flex-wrap">
+            <StripCell label="Stage" className="basis-full sm:basis-0 sm:grow-[1.7]">
               <select
                 value={current.stage}
                 onChange={(e) => changeStage(e.target.value as PipelineStage)}
-                className="-ml-0.5 max-w-full rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-900 outline-none focus:border-slate-500"
+                className="-ml-0.5 w-full max-w-full rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-900 outline-none focus:border-slate-500"
               >
                 {pipelineStages.map((o) => <option key={o}>{o}</option>)}
               </select>
             </StripCell>
-            <StripCell label="Est. Value">
+            <StripCell label="Est. Value" className="basis-1/2 sm:basis-0 sm:grow-[1.0]">
               <StripEdit
                 display={String(formatLeadValue(current.value))}
                 rawValue={String(formatLeadValue(current.value))}
@@ -471,10 +490,10 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 onSave={(v) => patch({ value: parseLeadValue(v) })}
               />
             </StripCell>
-            <StripCell label="Owner">
+            <StripCell label="Owner" className="basis-1/2 sm:basis-0 sm:grow-[0.9]">
               <StripEdit display={current.owner} rawValue={current.owner} placeholder="Assign" onSave={(v) => patch({ owner: v })} />
             </StripCell>
-            <StripCell label="Follow-Up">
+            <StripCell label="Follow-Up" className="basis-1/2 sm:basis-0 sm:grow-[1.0]">
               <StripEdit
                 type="date"
                 display={current.followUpDate ? fmtDate(current.followUpDate) : undefined}
@@ -483,20 +502,20 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 onSave={(v) => patch({ followUpDate: v })}
               />
             </StripCell>
-            <StripCell label="In Stage">
+            <StripCell label="In Stage" className="basis-1/2 sm:basis-0 sm:grow-[0.8]">
               <span className={`text-sm font-semibold ${inStage === "Unknown" ? "text-slate-400" : "text-slate-950"}`}>{inStage}</span>
             </StripCell>
-            <StripCell label="Client">
+            <StripCell label="Client" className="basis-1/2 sm:basis-0 sm:grow-[1.1]">
               {hasClient ? (
                 <button
                   type="button"
                   onClick={onViewClient}
-                  className="text-left text-sm font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-900"
+                  className="max-w-full truncate text-left text-sm font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-900"
                 >
                   {current.company}
                 </button>
               ) : (
-                <span className="text-sm font-medium text-slate-400">Pending first order</span>
+                <span className="text-sm font-medium text-slate-400">Pending</span>
               )}
             </StripCell>
           </div>
@@ -505,19 +524,46 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
         {/* Main layout — stacked on mobile, 2-column on desktop */}
         <div className="grid gap-5 md:grid-cols-[2fr_3fr] md:items-start">
 
-          {/* Left column — dense editable rows */}
-          <div className="flex min-w-0 flex-col gap-5">
-            <div className="min-w-0 rounded-2xl border border-slate-200 px-2 py-1">
-              <Row label="Contact name" value={current.contact} onSave={(v) => patch({ contact: v })} />
-              <Row label="Email" value={current.email} onSave={(v) => patch({ email: v })} />
-              <Row label="Phone" value={current.phone} onSave={(v) => patch({ phone: v })} />
-              <Row label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
-              <Row label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
-              <Row label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
-              {current.stage === "Closed Lost" && (
-                <Row label="Lost reason" value={current.lostReason ?? ""} onSave={(v) => patch({ lostReason: v })} type="select" options={[...LOST_REASONS]} />
-              )}
+          {/* Left column — Contact fields / Notes behind a tab */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="flex gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+              {(["contact", "notes"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setLeftTab(tab)}
+                  className={`flex-1 rounded-xl px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${
+                    leftTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
             </div>
+
+            {leftTab === "contact" ? (
+              <div className="min-w-0 rounded-2xl border border-slate-200 px-2 py-1">
+                <Row label="Contact name" value={current.contact} onSave={(v) => patch({ contact: v })} />
+                <Row label="Email" value={current.email} onSave={(v) => patch({ email: v })} />
+                <Row label="Phone" value={current.phone} onSave={(v) => patch({ phone: v })} />
+                <Row label="Industry" value={current.companyProfile.industry} onSave={(v) => patchProfile({ industry: v })} type="select" options={INDUSTRY_OPTIONS} />
+                <Row label="Address" value={current.companyProfile.address} onSave={(v) => patchProfile({ address: v })} type="address" />
+                <Row label="Website" value={current.companyProfile.website} onSave={(v) => patchProfile({ website: v })} />
+                {current.stage === "Closed Lost" && (
+                  <Row label="Lost reason" value={current.lostReason ?? ""} onSave={(v) => patch({ lostReason: v })} type="select" options={[...LOST_REASONS]} />
+                )}
+              </div>
+            ) : (
+              <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <textarea
+                  rows={10}
+                  className="w-full resize-none rounded-2xl border border-slate-300 bg-white p-4 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                  value={current.notes}
+                  placeholder="Add notes about this lead..."
+                  onChange={(e) => patch({ notes: e.target.value })}
+                />
+              </div>
+            )}
           </div>
 
           {/* Right column — next step, warnings, activity, notes */}
@@ -550,111 +596,140 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
 
             {/* Activity Log */}
             <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="mb-4 font-semibold text-slate-950">Activity log</h3>
+              {/* Header: label left, total count right */}
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Activity</h3>
+                <span className="text-xs font-semibold text-slate-400">{current.communicationHistory.length}</span>
+              </div>
 
-              <div className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex gap-2">
-                  <select
-                    className="min-h-11 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none md:text-sm"
-                    value={logType}
-                    onChange={(e) => setLogType(e.target.value as CommunicationEntry["type"])}
-                  >
-                    {CONTACT_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                  <select
-                    className="min-h-11 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none md:text-sm"
-                    value={logOwner}
-                    onChange={(e) => setLogOwner(e.target.value)}
-                  >
-                    {OWNERS.map((o) => <option key={o}>{o}</option>)}
-                  </select>
+              {/* Composer — collapsed to a single row by default, expands on click */}
+              {composerOpen || editingIndex !== null ? (
+                <div className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex gap-2">
+                    <select
+                      className="min-h-11 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none md:text-sm"
+                      value={logType}
+                      onChange={(e) => setLogType(e.target.value as CommunicationEntry["type"])}
+                    >
+                      {CONTACT_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                    <select
+                      className="min-h-11 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none md:text-sm"
+                      value={logOwner}
+                      onChange={(e) => setLogOwner(e.target.value)}
+                    >
+                      {OWNERS.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <input
+                    type="date"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-slate-400 md:text-sm"
+                    value={logDate}
+                    max={businessTodayISO()}
+                    onChange={(e) => setLogDate(e.target.value)}
+                  />
+                  <textarea
+                    ref={composerNoteRef}
+                    rows={2}
+                    className="w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+                    placeholder="What happened? Add notes..."
+                    value={logNote}
+                    onChange={(e) => {
+                      setLogNote(e.target.value);
+                      if (logError) setLogError("");
+                    }}
+                  />
+                  <FieldError message={logError} />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addActivityEntry}
+                      disabled={!logNote.trim()}
+                      className="min-h-11 flex-1 rounded-3xl bg-slate-900 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
+                    >
+                      {editingIndex !== null
+                        ? `Update · ${new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                        : `Log · ${new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="date"
-                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-slate-400 md:text-sm"
-                  value={logDate}
-                  max={businessTodayISO()}
-                  onChange={(e) => setLogDate(e.target.value)}
-                />
-                <textarea
-                  rows={2}
-                  className="w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
-                  placeholder="What happened? Add notes..."
-                  value={logNote}
-                  onChange={(e) => {
-                    setLogNote(e.target.value);
-                    if (logError) setLogError("");
-                  }}
-                />
-                <FieldError message={logError} />
-                {editingIndex !== null && (
-                  <button
-                    type="button"
-                    onClick={cancelEdit}
-                    className="min-h-11 w-full rounded-3xl border border-slate-300 bg-white py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
-                  >
-                    Cancel edit
-                  </button>
-                )}
+              ) : (
                 <button
                   type="button"
-                  onClick={addActivityEntry}
-                  disabled={!logNote.trim()}
-                  className="min-h-11 w-full rounded-3xl bg-slate-900 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 md:text-sm"
+                  onClick={() => setComposerOpen(true)}
+                  className="mb-4 flex min-h-11 w-full items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50"
                 >
-                  {editingIndex !== null
-                    ? `Update activity · ${new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                    : `Log activity · ${new Date(logDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">+</span>
+                  Log a call, email, or note
                 </button>
-              </div>
+              )}
 
-              <div className="max-h-60 space-y-3 overflow-y-auto pr-0.5">
-                {current.communicationHistory.length === 0 && (
-                  <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No activity logged yet.</p>
-                )}
-                {current.communicationHistory.map((entry, i) => (
-                  <div
-                    key={entry.id || i}
-                    className={`rounded-2xl border bg-white p-4 ${editingIndex === i ? "border-slate-400 ring-1 ring-slate-300" : "border-slate-200"}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${typeColors[entry.type]}`}>
-                        {entry.type}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <span className="text-xs text-slate-600">{entry.date} · {entry.owner}</span>
-                        <button
-                          type="button"
-                          onClick={() => startEdit(i)}
-                          className="text-[11px] text-slate-400 underline hover:text-slate-700"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteEntry(i)}
-                          className="text-[11px] text-rose-400 underline hover:text-rose-600"
-                        >
-                          Delete
-                        </button>
+              {/* History — recent 3 by default, expand in place (no scroll container) */}
+              {current.communicationHistory.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500 md:text-sm">No activity logged yet.</p>
+              ) : (
+                (() => {
+                  const n = current.communicationHistory.length;
+                  const visible = showAllActivity ? current.communicationHistory : current.communicationHistory.slice(0, 3);
+                  return (
+                    <>
+                      <div className="space-y-3">
+                        {visible.map((entry, i) => {
+                          const fade = !showAllActivity && n > 3 && i === visible.length - 1;
+                          return (
+                            <div key={entry.id || i} className="relative">
+                              <div className={`rounded-2xl border bg-white p-4 ${editingIndex === i ? "border-slate-400 ring-1 ring-slate-300" : "border-slate-200"}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${typeColors[entry.type]}`}>
+                                    {entry.type}
+                                  </span>
+                                  <div className="flex shrink-0 items-center gap-3">
+                                    <span className="text-xs text-slate-600">{entry.date} · {entry.owner}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => startEdit(i)}
+                                      className="text-[11px] text-slate-400 underline hover:text-slate-700"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteEntry(i)}
+                                      className="text-[11px] text-rose-400 underline hover:text-rose-600"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="mt-2 break-words text-sm text-slate-700">{entry.summary}</p>
+                              </div>
+                              {fade && (
+                                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 rounded-b-2xl bg-gradient-to-t from-slate-50 to-transparent" aria-hidden="true" />
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                    <p className="mt-2 break-words text-sm text-slate-700">{entry.summary}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Notes</label>
-              <textarea
-                rows={6}
-                className="w-full resize-none rounded-2xl border border-slate-300 bg-white p-4 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
-                value={current.notes}
-                placeholder="Add notes about this lead..."
-                onChange={(e) => patch({ notes: e.target.value })}
-              />
+                      {n > 3 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllActivity((v) => !v)}
+                          className="mt-3 min-h-11 w-full text-center text-xs font-semibold text-slate-500 hover:text-slate-900"
+                        >
+                          {showAllActivity ? "Show fewer ↑" : `Show all ${n} ↓`}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()
+              )}
             </div>
 
           </div>
