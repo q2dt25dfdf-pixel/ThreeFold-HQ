@@ -32,13 +32,15 @@ interface Props {
   fallbackEmail?: string;
   // Contact person for the greeting; the email greets the person, company as fallback.
   fallbackContact?: string;
+  // Deposit request number (e.g. TF-D-2026-0004) for the receipt reference line.
+  depositNumber?: string;
   onClose: () => void;
   onSent: (updated: ReceiptInvoice) => void;
 }
 
 type Step = "generating" | "preview" | "sending" | "sent" | "error";
 
-export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbackContact, onClose, onSent }: Props) {
+export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbackContact, depositNumber, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("generating");
   const [publicToken, setPublicToken] = useState("");
   const [publicLink, setPublicLink] = useState("");
@@ -101,6 +103,7 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
           salesTaxRate: invoice.sales_tax_rate ?? null,
           salesTaxAmount: invoice.sales_tax_amount ?? null,
           grandTotal: invoice.grand_total ?? null,
+          depositNumber: (depositNumber || "").trim() || null,
         });
         setEmailSubject(subject);
         setEmailBody(body);

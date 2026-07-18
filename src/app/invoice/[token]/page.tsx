@@ -23,6 +23,7 @@ interface InvoiceData {
   order_name: string;
   client_name: string;
   contact_name?: string | null;
+  deposit_request_number?: string | null;
   subtotal?: number | null;
   discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
@@ -218,6 +219,12 @@ export default function InvoicePage() {
           <div style={s.chip}>
             <div style={s.chipLabel}>PROJECT</div>
             <div style={s.chipValue}>{data.order_name}</div>
+          </div>
+        )}
+        {data.deposit_request_number && (
+          <div style={s.chip}>
+            <div style={s.chipLabel}>DEPOSIT NO.</div>
+            <div style={s.chipValue}>{data.deposit_request_number}</div>
           </div>
         )}
         <div style={s.chip}>

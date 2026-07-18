@@ -152,6 +152,7 @@ export interface ReceiptEmailInput {
   salesTaxRate?: number | null;
   salesTaxAmount?: number | null;
   grandTotal?: number | null;
+  depositNumber?: string | null;
 }
 
 export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; body: string } {
@@ -174,6 +175,7 @@ export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; 
   const methodLabel = paymentMethodLabel(receipt.method);
   if (methodLabel) lines.push(`Payment Method: ${methodLabel}`);
   if (input.orderName) lines.push(`Order: ${input.orderName}`);
+  if (input.depositNumber) lines.push(`Deposit Number: ${input.depositNumber}`);
 
   // Breakdown block, same format as the deposit/quote emails.
   const subtotal = input.subtotal ?? null;

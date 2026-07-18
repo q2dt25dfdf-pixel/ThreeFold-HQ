@@ -1034,6 +1034,19 @@ function FinancesContent() {
   const leadContactFor = (inv: Invoice | null): string =>
     inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.contact ?? "").trim() : "";
 
+  // Deposit request number for the receipt reference line — matched from the loaded
+  // deposit_requests by deposit_request_id, else lead_id, else quote_id.
+  const depositNumberFor = (inv: Invoice | null): string => {
+    if (!inv) return "";
+    const rec = inv as Invoice & { deposit_request_id?: string; quote_id?: string };
+    const d = depositRequests.find((x) =>
+      (rec.deposit_request_id && x.id === rec.deposit_request_id) ||
+      (rec.lead_id && x.lead_id === rec.lead_id) ||
+      (rec.quote_id && x.quote_id === rec.quote_id),
+    );
+    return (d?.deposit_request_number ?? "").trim();
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this item?")) return;
     setDeletingId(id);
@@ -2262,6 +2275,7 @@ function FinancesContent() {
         invoice={receiptInvoice}
         fallbackEmail={leadEmailFor(receiptInvoice)}
         fallbackContact={leadContactFor(receiptInvoice)}
+        depositNumber={depositNumberFor(receiptInvoice)}
         onClose={() => setReceiptInvoice(null)}
         onSent={(updated) => void handleReceiptSent(updated as Invoice)}
       />
