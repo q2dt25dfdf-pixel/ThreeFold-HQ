@@ -24,6 +24,7 @@ interface InvoiceData {
   client_name: string;
   contact_name?: string | null;
   deposit_request_number?: string | null;
+  portal_url?: string | null;
   subtotal?: number | null;
   discount?: QuoteDiscount | null;
   sales_tax_rate?: number | null;
@@ -181,12 +182,7 @@ export default function InvoicePage() {
   // Deposit-received thank-you copy (no dashes; contact first name, else no name).
   const contactFirst = (data.contact_name ?? "").trim().split(/\s+/)[0] || "";
   const thanksHeading = contactFirst ? `Thanks, ${contactFirst}. You're all set.` : `Thanks. You're all set.`;
-  const thanksIntro = "Your deposit is in and we're getting to work. Here's what happens next:";
-  const nextSteps = [
-    { t: "Into production.", d: "We start making your order now." },
-    { t: "We keep you posted.", d: "Updates as your pieces come together." },
-    { t: "Balance before delivery.", d: "We'll send the final invoice when your order's ready. Nothing needed until then." },
-  ];
+  const thanksSub = "Your deposit is in and we're already getting to work. We'll handle the balance before delivery, nothing needed from you until then.";
   const hasTax = (data.sales_tax_amount ?? 0) > 0;
   const grandTotalDisplay = data.grand_total ?? data.total_amount;
 
@@ -449,17 +445,28 @@ export default function InvoicePage() {
               </div>
             </div>
           ) : isDepositReceipt ? (
-            <div className="dk-card">
-              <div style={s.thanksHeading}>{thanksHeading}</div>
-              <div style={s.thanksIntro}>{thanksIntro}</div>
-              {nextSteps.map((step, i) => (
-                <div key={i} style={s.stepRow}>
-                  <div style={s.stepBadge}>{i + 1}</div>
-                  <div style={s.stepText}>
-                    <span style={s.stepTitle}>{step.t}</span> {step.d}
+            <div style={s.handoffCard}>
+              <div style={s.handoffCheck}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 13l4 4L19 7" stroke="#7fc9a3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div style={s.handoffHeading}>{thanksHeading}</div>
+              <div style={s.handoffSub}>{thanksSub}</div>
+              {data.portal_url && (
+                <div style={s.portalRow}>
+                  <div style={s.portalRowText}>
+                    <div style={s.portalLabel}>YOUR CLIENT PORTAL</div>
+                    <div style={s.portalDesc}>Track your order, designs, and payments anytime.</div>
                   </div>
+                  <a href={data.portal_url} style={s.portalBtn}>
+                    OPEN PORTAL
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </a>
                 </div>
-              ))}
+              )}
             </div>
           ) : paymentParam === "success" ? (
             <div className="dk-card">
@@ -603,48 +610,79 @@ const s: Record<string, React.CSSProperties> = {
     marginLeft: "-12px",
     marginRight: "-12px",
   },
-  thanksHeading: {
-    fontSize: "17px",
-    fontWeight: 800,
-    letterSpacing: "-0.01em",
-    lineHeight: 1.3,
-    color: C.textPrimary,
-    marginBottom: "10px",
-  },
-  thanksIntro: {
-    fontSize: "14px",
-    lineHeight: 1.6,
-    color: C.textSecondary,
-    marginBottom: "6px",
-  },
-  stepRow: {
-    display: "flex",
-    gap: "12px",
-    alignItems: "flex-start",
-    marginTop: "14px",
-  },
-  stepBadge: {
-    flexShrink: 0,
-    width: "24px",
-    height: "24px",
-    borderRadius: "50%",
-    backgroundColor: C.greenText,
+  handoffCard: {
+    background: "linear-gradient(155deg, #1c3a2e 0%, #16181c 100%)",
+    borderRadius: "16px",
+    padding: "30px",
     color: "#ffffff",
-    fontSize: "12px",
-    fontWeight: 800,
+  },
+  handoffCheck: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "50%",
+    backgroundColor: "rgba(255,255,255,0.12)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    lineHeight: 1,
+    marginBottom: "18px",
   },
-  stepText: {
+  handoffHeading: {
+    fontSize: "20px",
+    fontWeight: 800,
+    letterSpacing: "-0.01em",
+    lineHeight: 1.25,
+    color: "#ffffff",
+    marginBottom: "10px",
+  },
+  handoffSub: {
+    fontSize: "14px",
+    lineHeight: 1.6,
+    color: "#b9c6bf",
+  },
+  portalRow: {
+    marginTop: "22px",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "12px",
+    padding: "18px 20px",
+    display: "flex",
+    flexWrap: "wrap" as const,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+  },
+  portalRowText: {
+    flex: "1 1 200px",
+    minWidth: 0,
+  },
+  portalLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.18em",
+    color: "#8fb3a2",
+    textTransform: "uppercase" as const,
+    marginBottom: "6px",
+  },
+  portalDesc: {
     fontSize: "14px",
     lineHeight: 1.5,
-    color: C.textSecondary,
+    color: "#dbe6e0",
   },
-  stepTitle: {
-    fontWeight: 700,
-    color: C.textPrimary,
+  portalBtn: {
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    minHeight: "44px",
+    backgroundColor: "#ffffff",
+    color: "#16181c",
+    fontSize: "12px",
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    padding: "13px 20px",
+    borderRadius: "999px",
+    textDecoration: "none",
   },
   receiptMetaStrong: {
     fontSize: "11px",

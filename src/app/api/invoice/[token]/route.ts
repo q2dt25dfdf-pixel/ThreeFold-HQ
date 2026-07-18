@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
+import { getPortalBaseUrl } from "@/lib/publicUrl";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
   try {
@@ -102,11 +103,30 @@ export async function GET(
       if (c) contactName = c;
     }
 
+    // Reuse the order's EXISTING portal token — never generate one here. URL mirrors
+    // /api/portal/generate: <portal base>/portal/<token>. Null when no active token,
+    // so the page can hide the portal row rather than render a dead button.
+    let portalUrl: string | null = null;
+    const orderIdForPortal = (raw.order_id ?? "") as string;
+    if (orderIdForPortal) {
+      const { data: orderRows } = await getSupabaseAdmin()
+        .from("orders")
+        .select("data")
+        .eq("id", orderIdForPortal)
+        .limit(1);
+      const od = orderRows?.[0]?.data as Record<string, unknown> | undefined;
+      const ptoken = ((od?.portal_token ?? "") as string).trim();
+      if (ptoken && od?.portal_enabled !== false) {
+        portalUrl = `${getPortalBaseUrl(request.nextUrl.origin)}/portal/${ptoken}`;
+      }
+    }
+
     const clientSafe = {
       id: raw.id,
       order_name: (raw.order_name ?? raw.orderName ?? "") as string,
       client_name: (raw.client_name ?? raw.client ?? "") as string,
       contact_name: contactName,
+      portal_url: portalUrl,
       deposit_request_number: depositNumberVal,
       subtotal: subtotalVal,
       discount: discountVal,
