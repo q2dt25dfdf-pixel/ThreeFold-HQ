@@ -14,6 +14,7 @@ import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile, type CommunicationEntry } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
+import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
@@ -633,12 +634,8 @@ function CRMContent() {
     // the existing items/quantity fields stay populated. moneySource already prefers the
     // deposit request's copy, then the quote. Older leads with no line items fall back to
     // items:[]/quantity:0 exactly as before.
-    const sourceLineItems = moneySource.line_items;
-    const orderLineItems = Array.isArray(sourceLineItems) ? sourceLineItems : [];
-    const derivedItems = orderLineItems
-      .map((li) => String((li as { name?: unknown }).name ?? "").trim())
-      .filter(Boolean);
-    const derivedQuantity = orderLineItems.reduce((s: number, li) => s + (Number((li as { quantity?: unknown }).quantity) || 0), 0);
+    const orderLineItems = Array.isArray(moneySource.line_items) ? moneySource.line_items : [];
+    const { items: derivedItems, quantity: derivedQuantity } = deriveItemsAndQuantity(orderLineItems);
     const nowIso = new Date().toISOString();
     const existingOrder = orders.find((o) => o.id === orderId);
     await upsertOrder({

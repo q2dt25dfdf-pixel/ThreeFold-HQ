@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, RotateCcw, Send, Trash2, User } from "lucide-react";
+import { Archive, ArrowLeft, Check, ChevronRight, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, Plus, RotateCcw, Send, Trash2, User, X } from "lucide-react";
+import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
+import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -444,7 +446,19 @@ export default function OrderDetailPage() {
   const [newUpdateText, setNewUpdateText] = useState('');
   const clientUpdatesSave = useSaveState();
 
-  // Vendor Cost
+  // Manual line-item editor (order.line_items)
+  const [lineItemsDraft, setLineItemsDraft] = useState<OrderLineItem[]>([]);
+  const lineItemsSave = useSaveState();
+
+  // Read-first: each editable section defaults to a read view; these gate edit mode.
+  const [editingItems, setEditingItems] = useState(false);
+  const [editingVendor, setEditingVendor] = useState(false);
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [editingUpdatesForm, setEditingUpdatesForm] = useState(false);
+  const [editingReminder, setEditingReminder] = useState(false);
+
+  // Production costs (data keys keep the vendor_* names for the 5 downstream consumers)
   const [vendorCostCents, setVendorCostCents] = useState("");
   const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
   const [vendorPaymentStatus, setVendorPaymentStatus] = useState("unpaid");
@@ -503,6 +517,7 @@ export default function OrderDetailPage() {
       setNextAction(order.nextAction ?? "");
       setInternalNotes(order.internalNotes ?? "");
       setVendorCostCents(order.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
+      setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []);
       setVendorInvoiceStatus(order.vendor_invoice_status ?? "not_received");
       setVendorPaymentStatus(order.vendor_payment_status ?? "unpaid");
       setVendorPaidBy(order.vendor_paid_by ?? "");
@@ -600,6 +615,74 @@ export default function OrderDetailPage() {
   const saveInternalNotes = () => {
     if (!order) return;
     notesSave.runSave(() => upsertItem({ ...order, internalNotes }));
+  };
+
+  // ── Manual line-item editor (order.line_items) ─────────────────────────────
+  const updateLineItem = (idx: number, patch: Partial<OrderLineItem>) => {
+    setLineItemsDraft((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const n = { ...it, ...patch };
+        n.lineTotal = (Number(n.quantity) || 0) * (Number(n.unitPrice) || 0);
+        // One color row mirrors the line quantity (quantity is the source of truth).
+        if (patch.quantity != null && (n.colors?.length ?? 0) === 1) {
+          n.colors = [{ ...n.colors![0], qty: Number(patch.quantity) || 0 }];
+        }
+        return n;
+      }),
+    );
+  };
+  const selectLineProduct = (idx: number, name: string) => {
+    const preset = findProduct(name);
+    setLineItemsDraft((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const n: OrderLineItem = {
+          ...it,
+          name,
+          ...(preset
+            ? { description: preset.description, unitPrice: preset.unitPrice, originalUnitPrice: preset.unitPrice, blank: it.blank || preset.blank }
+            : {}),
+        };
+        n.lineTotal = (Number(n.quantity) || 0) * (Number(n.unitPrice) || 0);
+        return n;
+      }),
+    );
+  };
+  const addLineItem = () =>
+    setLineItemsDraft((prev) => [...prev, { name: "", description: "", quantity: 1, unitPrice: 0, lineTotal: 0, blank: "", colors: [{ color: "", qty: 1 }], print_detail: "" }]);
+  const removeLineItem = (idx: number) => setLineItemsDraft((prev) => prev.filter((_, i) => i !== idx));
+  const updateLineColor = (idx: number, ci: number, field: "color" | "qty", value: string | number) => {
+    setLineItemsDraft((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, colors: (it.colors ?? []).map((c, j) => (j === ci ? { ...c, [field]: value } : c)) } : it)),
+    );
+  };
+  const addLineColor = (idx: number) =>
+    setLineItemsDraft((prev) => prev.map((it, i) => (i === idx ? { ...it, colors: [...(it.colors ?? []), { color: "", qty: 0 }] } : it)));
+  const removeLineColor = (idx: number, ci: number) =>
+    setLineItemsDraft((prev) => prev.map((it, i) => (i === idx ? { ...it, colors: (it.colors ?? []).filter((_, j) => j !== ci) } : it)));
+
+  const saveLineItems = () => {
+    if (!order) return;
+    // Re-derive items[] + quantity from the edited lines (shared helper), keep them in sync.
+    const { items, quantity } = deriveItemsAndQuantity(lineItemsDraft);
+    lineItemsSave.runSave(() => upsertItem({ ...order, line_items: lineItemsDraft, items, quantity }));
+  };
+
+  // Re-hydrate a section's draft state from the saved order (used by Cancel).
+  const hydrateVendorFromOrder = () => {
+    setVendorCostCents(order?.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
+    setVendorInvoiceStatus(order?.vendor_invoice_status ?? "not_received");
+    setVendorPaymentStatus(order?.vendor_payment_status ?? "unpaid");
+    setVendorPaidBy(order?.vendor_paid_by ?? "");
+    setVendorNotes(order?.vendor_notes ?? "");
+  };
+  const hydrateDeliveryFromOrder = () => {
+    setDeliveryAddress(order?.delivery_address ?? "");
+    setDeliveryCity(order?.delivery_city ?? "");
+    setDeliveryState(order?.delivery_state ?? "");
+    setDeliveryZip(order?.delivery_zip ?? "");
+    setDeliveryCountry(order?.delivery_country ?? "");
   };
 
   const saveVendorCost = () => {
@@ -1331,18 +1414,69 @@ export default function OrderDetailPage() {
     </div>
   );
 
+  const nextStage = currentStageIndex >= 0 && currentStageIndex < TIMELINE_STAGES.length - 1 ? TIMELINE_STAGES[currentStageIndex + 1] : null;
+  const currentStageLabel = currentStageIndex >= 0 && currentStageIndex < TIMELINE_STAGES.length ? TIMELINE_STAGES[currentStageIndex] : "current stage";
+  const canSendFinalInvoice = Boolean(invoice && invoice.deposit_paid && !invoice.final_invoice_sent_at && !invoice.final_paid);
+
   const NextActionSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-blue-100 bg-blue-50 p-4 shadow-sm md:p-5">
       <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-600">Next Action</h2>
-      <textarea
-        rows={3}
-        className="w-full resize-none rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-400 focus:outline-none md:text-sm"
-        placeholder="What needs to happen next?"
-        value={nextAction}
-        onChange={(e) => setNextAction(e.target.value)}
-      />
-      <div className="mt-3 flex justify-end">
-        <SaveButton state={nextActionSave.saveState} onClick={saveNextAction} mode="edit" className="w-full lg:w-auto" />
+      <div className="flex flex-col gap-2">
+        {canSendFinalInvoice && (
+          <button
+            type="button"
+            onClick={() => setSendInvoiceOpen(true)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-blue-200 bg-blue-100 px-4 py-3 text-left text-slate-700 transition hover:bg-blue-200"
+          >
+            <Send className="h-4 w-4 shrink-0 text-blue-600" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-semibold">Send final invoice</span>
+              <span className="block text-[10px] text-slate-500">Deposit is paid — collect the balance</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-blue-400" />
+          </button>
+        )}
+        {nextStage && (
+          <button
+            type="button"
+            onClick={() => handleStageClick(nextStage)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-blue-200 bg-white px-4 py-3 text-left text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+          >
+            <Check className="h-4 w-4 shrink-0 text-blue-600" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-semibold">Mark {nextStage}</span>
+              <span className="block text-[10px] text-slate-400">Advance from {currentStageLabel}</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setEditingReminder((v) => !v)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-blue-200 bg-white px-4 py-3 text-left text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+        >
+          <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold">Set a custom reminder</span>
+            <span className="block truncate text-[10px] text-slate-400">{nextAction?.trim() ? nextAction : "Write a free-text note for what's next"}</span>
+          </span>
+          <ChevronRight className={`h-4 w-4 shrink-0 text-slate-300 transition ${editingReminder ? "rotate-90" : ""}`} />
+        </button>
+        {editingReminder && (
+          <div className="rounded-2xl border border-blue-200 bg-white p-3">
+            <textarea
+              rows={3}
+              className="w-full resize-none rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-400 focus:outline-none md:text-sm"
+              placeholder="What needs to happen next?"
+              value={nextAction}
+              onChange={(e) => setNextAction(e.target.value)}
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={() => { setNextAction(order.nextAction ?? ""); setEditingReminder(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <SaveButton state={nextActionSave.saveState} onClick={() => { saveNextAction(); setEditingReminder(false); }} mode="edit" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1419,47 +1553,141 @@ export default function OrderDetailPage() {
 
   const OrderDetailsSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Order Details</h2>
-        <button
-          type="button"
-          onClick={openOrderEditor}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-        >
-          <Edit2 className="h-3 w-3" />
-          Edit
-        </button>
       </div>
       <div className="space-y-2">
-        {order.line_items && order.line_items.length > 0 && (
-          <div className="mb-1 space-y-2">
+        {/* Editable line-item list (order.line_items). Internal only — blank/colors/
+            print_detail never reach the client (portal whitelists to 6 keys). Save
+            re-derives order.items + order.quantity via the shared helper. */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">What we&apos;re making</p>
-            {order.line_items.map((li, i) => {
-              const colorText = (li.colors ?? [])
-                .filter((c) => (c.color || "").trim() || Number(c.qty) > 0)
-                .map((c) => `${Number(c.qty) || 0} ${(c.color || "").trim()}`.trim())
-                .join(" · ");
-              return (
-                <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="min-w-0 break-words text-xs font-semibold text-slate-950">{li.name || "Item"}</span>
-                    <span className="shrink-0 text-xs font-medium text-slate-700">{Number(li.quantity) || 0} pcs</span>
-                  </div>
-                  {li.blank && <p className="mt-1 text-[11px] text-slate-500">Blank: {li.blank}</p>}
-                  {colorText && <p className="mt-0.5 text-[11px] text-slate-600">Colors: {colorText}</p>}
-                  {li.print_detail && <p className="mt-0.5 text-[11px] text-slate-500">Print: {li.print_detail}</p>}
-                </div>
-              );
-            })}
+            {!editingItems && (
+              <button type="button" onClick={() => { setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []); setEditingItems(true); }} className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                <Edit2 className="h-3 w-3" /> Edit
+              </button>
+            )}
           </div>
-        )}
+
+          {!editingItems ? (
+            (order.line_items && order.line_items.length > 0) ? (
+              order.line_items.map((li, i) => {
+                const chips = (li.colors ?? []).filter((c) => (c.color || "").trim() || Number(c.qty) > 0);
+                return (
+                  <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 break-words text-xs font-semibold text-slate-950">{li.name || "Item"}</span>
+                      <span className="shrink-0 text-xs font-medium text-slate-700">{Number(li.quantity) || 0} pcs · {formatCurrency(Number(li.unitPrice) || 0)} ea</span>
+                    </div>
+                    {li.blank && <p className="mt-1 text-[11px] text-slate-500">Blank: {li.blank}</p>}
+                    {li.print_detail && <p className="mt-0.5 text-[11px] text-slate-500">Print: {li.print_detail}</p>}
+                    {chips.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {chips.map((c, ci) => (
+                          <span key={ci} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600">{Number(c.qty) || 0} {(c.color || "").trim()}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No items yet.</p>
+            )
+          ) : (
+          <>
+          {order.items.length > 0 && lineItemsDraft.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+              Previously recorded: {order.items.join(", ")}
+            </p>
+          )}
+          {lineItemsDraft.map((li, idx) => {
+            const product = findProduct(li.name ?? "");
+            const catalogColors = product?.colors ?? [];
+            const colorSum = (li.colors ?? []).reduce((s, c) => s + (Number(c.qty) || 0), 0);
+            const mismatch = (li.colors?.length ?? 0) > 0 && colorSum !== (Number(li.quantity) || 0);
+            return (
+              <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={li.name ?? ""}
+                    onChange={(e) => selectLineProduct(idx, e.target.value)}
+                    className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  >
+                    <option value="">Select product…</option>
+                    {PRODUCT_CATALOG.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => removeLineItem(idx)} aria-label="Remove item" className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={li.description ?? ""}
+                  onChange={(e) => updateLineItem(idx, { description: e.target.value })}
+                  placeholder="Description"
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                />
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Qty</label>
+                    <input type="number" min={0} value={li.quantity === 0 ? "" : (li.quantity ?? "")} onChange={(e) => updateLineItem(idx, { quantity: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Unit price</label>
+                    <input type="number" min={0} step="0.01" value={li.unitPrice ? li.unitPrice : ""} onChange={(e) => updateLineItem(idx, { unitPrice: Math.max(0, Number(e.target.value) || 0) })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Blank</label>
+                  <input type="text" list={`ord-blanks-${idx}`} value={li.blank ?? ""} onChange={(e) => updateLineItem(idx, { blank: e.target.value })} placeholder="e.g. DSG Movement Tee" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                  {product?.blank && <datalist id={`ord-blanks-${idx}`}><option value={product.blank} /></datalist>}
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Color breakdown</label>
+                  <div className="space-y-2">
+                    {(li.colors ?? []).map((c, ci) => (
+                      <div key={ci} className="flex items-center gap-2">
+                        <input type="text" list={`ord-colors-${idx}`} value={c.color} onChange={(e) => updateLineColor(idx, ci, "color", e.target.value)} placeholder="Color" className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                        <input type="number" min={0} value={c.qty === 0 ? "" : c.qty} onChange={(e) => updateLineColor(idx, ci, "qty", Number(e.target.value) || 0)} placeholder="Qty" className="w-16 shrink-0 rounded-xl border border-slate-300 bg-white px-2 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                        {(li.colors?.length ?? 0) > 1 && (
+                          <button type="button" onClick={() => removeLineColor(idx, ci)} aria-label="Remove color" className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {catalogColors.length > 0 && <datalist id={`ord-colors-${idx}`}>{catalogColors.map((col) => <option key={col} value={col} />)}</datalist>}
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => addLineColor(idx)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700">+ Add color</button>
+                    <span className={`text-[11px] font-semibold ${mismatch ? "text-amber-600" : "text-slate-400"}`}>Colors {colorSum} / qty {Number(li.quantity) || 0}{mismatch ? " (should match)" : ""}</span>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Print / detail</label>
+                  <input type="text" value={li.print_detail ?? ""} onChange={(e) => updateLineItem(idx, { print_detail: e.target.value })} placeholder="e.g. Front left chest + full back" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button type="button" onClick={addLineItem} className="flex items-center gap-1.5 rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50">
+              <Plus className="h-3.5 w-3.5" /> Add item
+            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => { setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []); setEditingItems(false); }} className="rounded-2xl border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <SaveButton state={lineItemsSave.saveState} onClick={() => { saveLineItems(); setEditingItems(false); }} mode="edit" />
+            </div>
+          </div>
+          </>
+          )}
+        </div>
+
         {([
-          ...(order.line_items && order.line_items.length > 0
-            ? []
-            : [{ label: "Items", value: order.items.length ? order.items.join(", ") : "None selected" }]),
           { label: "Quantity", value: String(order.quantity || 0) },
           { label: "Amount", value: formatCurrency(order.amount) },
-          { label: "Vendor", value: order.vendor || "Not assigned" },
           { label: "Est. delivery", value: order.estimatedDeliveryDate || "TBD" },
         ] as { label: string; value: string }[]).map(({ label, value }) => (
           <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -1492,7 +1720,7 @@ export default function OrderDetailPage() {
   const VendorCostSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Vendor Cost</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Production Costs</h2>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorInvoiceBadge}`}>
             {vendorInvoiceStatus === "received" ? "Invoice received" : "Invoice pending"}
@@ -1500,6 +1728,11 @@ export default function OrderDetailPage() {
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorPaymentBadge}`}>
             {vendorPaymentStatus === "paid" ? "Paid" : "Unpaid"}
           </span>
+          {!editingVendor && (
+            <button type="button" onClick={() => { hydrateVendorFromOrder(); setEditingVendor(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+              <Edit2 className="h-3 w-3" /> Edit
+            </button>
+          )}
         </div>
       </div>
       <div className="mb-3 flex items-baseline gap-2">
@@ -1508,6 +1741,9 @@ export default function OrderDetailPage() {
           <span className="text-xs text-slate-400">paid by {vendorPaidBy}</span>
         )}
       </div>
+      {!editingVendor ? (
+        order.vendor_notes ? <p className="whitespace-pre-wrap text-xs text-slate-600">{order.vendor_notes}</p> : null
+      ) : (
       <div className="space-y-3">
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cost (USD)</label>
@@ -1527,7 +1763,7 @@ export default function OrderDetailPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Vendor Invoice</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Supplier Invoice</label>
             <select
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
               value={vendorInvoiceStatus}
@@ -1570,7 +1806,7 @@ export default function OrderDetailPage() {
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Vendor Notes</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Notes</label>
           <textarea
             rows={3}
             className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
@@ -1579,19 +1815,39 @@ export default function OrderDetailPage() {
             onChange={(e) => setVendorNotes(e.target.value)}
           />
         </div>
-        <div className="flex justify-end">
-          <SaveButton state={vendorCostSave.saveState} onClick={saveVendorCost} mode="edit" className="w-full lg:w-auto" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => { hydrateVendorFromOrder(); setEditingVendor(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <SaveButton state={vendorCostSave.saveState} onClick={() => { saveVendorCost(); setEditingVendor(false); }} mode="edit" />
         </div>
       </div>
+      )}
     </div>
   );
 
   const DeliveryAddressSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Delivery Address</h2>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Delivery Address</h2>
+        {!editingDelivery && (
+          <button type="button" onClick={() => { hydrateDeliveryFromOrder(); setEditingDelivery(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+            <Edit2 className="h-3 w-3" /> Edit
+          </button>
+        )}
+      </div>
       <p className="mb-4 text-[10px] text-slate-400">
         Optional. If blank, client's business address is used for future tax lookup.
       </p>
+      {!editingDelivery ? (
+        (order.delivery_address || order.delivery_city || order.delivery_state || order.delivery_zip || order.delivery_country) ? (
+          <div className="text-xs leading-relaxed text-slate-900">
+            {order.delivery_address && <div>{order.delivery_address}</div>}
+            {(order.delivery_city || order.delivery_state || order.delivery_zip) && (
+              <div>{[order.delivery_city, order.delivery_state].filter(Boolean).join(", ")} {order.delivery_zip}</div>
+            )}
+            {order.delivery_country && <div>{order.delivery_country}</div>}
+          </div>
+        ) : <p className="text-xs text-slate-400">Not set</p>
+      ) : (
       <div className="space-y-3">
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-600">Street Address</label>
@@ -1646,10 +1902,12 @@ export default function OrderDetailPage() {
             onChange={(e) => setDeliveryCountry(e.target.value)}
           />
         </div>
-        <div className="flex justify-end">
-          <SaveButton state={deliveryAddressSave.saveState} onClick={saveDeliveryAddress} mode="edit" className="w-full lg:w-auto" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => { hydrateDeliveryFromOrder(); setEditingDelivery(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <SaveButton state={deliveryAddressSave.saveState} onClick={() => { saveDeliveryAddress(); setEditingDelivery(false); }} mode="edit" />
         </div>
       </div>
+      )}
     </div>
   );
 
@@ -1690,7 +1948,6 @@ export default function OrderDetailPage() {
   ].map((group) => ({ ...group, fields: group.fields.filter((f) => f.value?.trim()) })).filter((group) => group.fields.length > 0);
 
   const intakeFiles: QuestionnaireFile[] = order.intake_snapshot?.files ?? [];
-  const hasIntake = intakeGroups.length > 0 || intakeFiles.length > 0;
   const longIntakeLabels = new Set(["Company description", "Meaning / brand story", "Style preferences", "Original notes"]);
 
   const IntakeSection = (intakeGroups.length > 0 || intakeFiles.length > 0) ? (
@@ -1751,7 +2008,20 @@ export default function OrderDetailPage() {
 
   const InternalNotesSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Internal Notes</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Internal Notes</h2>
+        {!editingNotes && (
+          <button type="button" onClick={() => { setInternalNotes(order.internalNotes ?? ""); setEditingNotes(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+            <Edit2 className="h-3 w-3" /> Edit
+          </button>
+        )}
+      </div>
+      {!editingNotes ? (
+        order.internalNotes?.trim() ? (
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{order.internalNotes}</p>
+        ) : <p className="text-xs text-slate-400">No notes</p>
+      ) : (
+      <>
       <textarea
         rows={4}
         className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
@@ -1759,9 +2029,12 @@ export default function OrderDetailPage() {
         value={internalNotes}
         onChange={(e) => setInternalNotes(e.target.value)}
       />
-      <div className="mt-3 flex justify-end">
-        <SaveButton state={notesSave.saveState} onClick={saveInternalNotes} mode="edit" className="w-full lg:w-auto" />
+      <div className="mt-3 flex justify-end gap-2">
+        <button type="button" onClick={() => { setInternalNotes(order.internalNotes ?? ""); setEditingNotes(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+        <SaveButton state={notesSave.saveState} onClick={() => { saveInternalNotes(); setEditingNotes(false); }} mode="edit" />
       </div>
+      </>
+      )}
     </div>
   );
 
@@ -1802,6 +2075,11 @@ export default function OrderDetailPage() {
           ))}
         </div>
       )}
+      {!editingUpdatesForm ? (
+        <button type="button" onClick={() => setEditingUpdatesForm(true)} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+          <Plus className="h-3.5 w-3.5" /> Add update
+        </button>
+      ) : (
       <div className="space-y-2">
         <input
           type="date"
@@ -1817,44 +2095,43 @@ export default function OrderDetailPage() {
           value={newUpdateText}
           onChange={(e) => setNewUpdateText(e.target.value)}
         />
-        <div className="flex justify-end">
-          <SaveButton state={clientUpdatesSave.saveState} onClick={addClientUpdate} mode="add" className="w-full lg:w-auto" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => { setNewUpdateText(""); setEditingUpdatesForm(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <SaveButton state={clientUpdatesSave.saveState} onClick={() => { addClientUpdate(); setEditingUpdatesForm(false); }} mode="add" />
         </div>
       </div>
+      )}
     </div>
   );
 
   const CommunicationSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Quick Communications</h2>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col divide-y divide-slate-100">
         {commButtons.map((btn) => {
           const copied = copiedKey === btn.key;
           return (
-            <div key={btn.key}>
+            <div key={btn.key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p className={`break-words text-xs font-medium ${btn.disabled ? "text-slate-400" : "text-slate-700"}`}>{btn.label}</p>
+                {btn.disabled && <p className="mt-0.5 text-[10px] text-slate-400">Missing order data</p>}
+              </div>
               <button
                 type="button"
                 disabled={btn.disabled}
                 title={btn.disabled ? btn.disabledReason : undefined}
                 onClick={() => handleCopy(btn)}
-                className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-xs font-semibold transition ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
                   btn.disabled
-                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
                     : copied
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                <span className="min-w-0 break-words">{btn.label}</span>
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                ) : (
-                  <ClipboardCopy className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                )}
+                {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                {copied ? "Copied" : "Copy"}
               </button>
-              {btn.disabled && (
-                <p className="mt-0.5 px-1 text-[10px] text-slate-400">Missing order data</p>
-              )}
             </div>
           );
         })}
@@ -1892,6 +2169,11 @@ export default function OrderDetailPage() {
                 <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClass(order.status)}`}>
                   {order.status}
                 </span>
+                {order.quantity ? (
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
+                    {order.quantity} units
+                  </span>
+                ) : null}
                 {order.owner && (
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
                     {order.owner}
@@ -1921,61 +2203,32 @@ export default function OrderDetailPage() {
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {/* Order timeline stepper — pulled up directly under the command header */}
+      {TimelineSection}
+
+      {/* Quick action bar */}
       {QuickActionsSection}
 
-      {/* Mobile layout — single column (InternalNotes appears full-width below PortalSection) */}
-      <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }} className="flex min-w-0 flex-col gap-4 lg:hidden">
-        {TimelineSection}
-        {NextActionSection}
-        {DesignVersionsSection}
-        {PaymentStatusSection}
-        {OrderDetailsSection}
-        {VendorCostSection}
-        {DeliveryAddressSection}
-        {IntakeSection}
-        {CommunicationSection}
-        {ClientUpdatesSection}
+      {/* Command center — one responsive grid (replaces the prior 3 layout variants).
+          LEFT (col-span-2) = the work + money; RIGHT = status detail + client-facing.
+          Stacks to a single column on mobile: left group first, then right group. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:gap-6">
+          {OrderDetailsSection}
+          {DesignVersionsSection}
+          {PaymentStatusSection}
+          {VendorCostSection}
+        </div>
+        <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
+          {NextActionSection}
+          {DeliveryAddressSection}
+          {order && <PortalSection orderId={params.id} />}
+          {CommunicationSection}
+          {ClientUpdatesSection}
+          {InternalNotesSection}
+          {IntakeSection}
+        </div>
       </div>
-
-      {/* Desktop layout — 3 columns with intake data, 2 columns without */}
-      {/* InternalNotes is rendered full-width below PortalSection for all layouts */}
-      {hasIntake ? (
-        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
-          <div className="flex flex-col gap-6">
-            {PaymentStatusSection}
-            {OrderDetailsSection}
-            {VendorCostSection}
-            {DeliveryAddressSection}
-            {IntakeSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {TimelineSection}
-            {DesignVersionsSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {CommunicationSection}
-            {NextActionSection}
-            {ClientUpdatesSection}
-          </div>
-        </div>
-      ) : (
-        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-6">
-          <div className="flex flex-col gap-6">
-            {PaymentStatusSection}
-            {OrderDetailsSection}
-            {VendorCostSection}
-            {DeliveryAddressSection}
-            {CommunicationSection}
-            {ClientUpdatesSection}
-          </div>
-          <div className="flex flex-col gap-6">
-            {TimelineSection}
-            {DesignVersionsSection}
-            {NextActionSection}
-          </div>
-        </div>
-      )}
 
       {/* Add design version modal */}
       {isAddVersionOpen && (
@@ -2041,11 +2294,6 @@ export default function OrderDetailPage() {
         </ModalShell>
       )}
 
-      {order && <PortalSection orderId={params.id} />}
-
-      {/* Internal Notes — full-width below Client Portal for all order types */}
-      {InternalNotesSection}
-
       {/* Send final invoice modal */}
       <SendFinalInvoiceModal
         open={sendInvoiceOpen}
@@ -2097,12 +2345,12 @@ export default function OrderDetailPage() {
                 placeholder="Type to search clients..."
               />
               <SmartSearchInput
-                label="Vendor"
+                label="Supplier"
                 value={orderDraft.vendor}
                 onChange={(v) => setOrderDraft({ ...orderDraft, vendor: v })}
                 onSelect={(r) => setOrderDraft({ ...orderDraft, vendor: recordName(r), vendor_name: recordName(r), vendor_id: r.id })}
                 records={vendors}
-                placeholder="Type to search vendors..."
+                placeholder="Type to search suppliers..."
               />
             </div>
             <div>
