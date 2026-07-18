@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Check, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, Plus, RotateCcw, Send, Trash2, User, X } from "lucide-react";
+import { Archive, ArrowLeft, Check, ChevronRight, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, Plus, RotateCcw, Send, Trash2, User, X } from "lucide-react";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
@@ -450,6 +450,14 @@ export default function OrderDetailPage() {
   const [lineItemsDraft, setLineItemsDraft] = useState<OrderLineItem[]>([]);
   const lineItemsSave = useSaveState();
 
+  // Read-first: each editable section defaults to a read view; these gate edit mode.
+  const [editingItems, setEditingItems] = useState(false);
+  const [editingVendor, setEditingVendor] = useState(false);
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [editingUpdatesForm, setEditingUpdatesForm] = useState(false);
+  const [editingReminder, setEditingReminder] = useState(false);
+
   // Vendor Cost
   const [vendorCostCents, setVendorCostCents] = useState("");
   const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
@@ -659,6 +667,22 @@ export default function OrderDetailPage() {
     // Re-derive items[] + quantity from the edited lines (shared helper), keep them in sync.
     const { items, quantity } = deriveItemsAndQuantity(lineItemsDraft);
     lineItemsSave.runSave(() => upsertItem({ ...order, line_items: lineItemsDraft, items, quantity }));
+  };
+
+  // Re-hydrate a section's draft state from the saved order (used by Cancel).
+  const hydrateVendorFromOrder = () => {
+    setVendorCostCents(order?.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
+    setVendorInvoiceStatus(order?.vendor_invoice_status ?? "not_received");
+    setVendorPaymentStatus(order?.vendor_payment_status ?? "unpaid");
+    setVendorPaidBy(order?.vendor_paid_by ?? "");
+    setVendorNotes(order?.vendor_notes ?? "");
+  };
+  const hydrateDeliveryFromOrder = () => {
+    setDeliveryAddress(order?.delivery_address ?? "");
+    setDeliveryCity(order?.delivery_city ?? "");
+    setDeliveryState(order?.delivery_state ?? "");
+    setDeliveryZip(order?.delivery_zip ?? "");
+    setDeliveryCountry(order?.delivery_country ?? "");
   };
 
   const saveVendorCost = () => {
@@ -1390,18 +1414,69 @@ export default function OrderDetailPage() {
     </div>
   );
 
+  const nextStage = currentStageIndex >= 0 && currentStageIndex < TIMELINE_STAGES.length - 1 ? TIMELINE_STAGES[currentStageIndex + 1] : null;
+  const currentStageLabel = currentStageIndex >= 0 && currentStageIndex < TIMELINE_STAGES.length ? TIMELINE_STAGES[currentStageIndex] : "current stage";
+  const canSendFinalInvoice = Boolean(invoice && invoice.deposit_paid && !invoice.final_invoice_sent_at && !invoice.final_paid);
+
   const NextActionSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-blue-100 bg-blue-50 p-4 shadow-sm md:p-5">
       <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-600">Next Action</h2>
-      <textarea
-        rows={3}
-        className="w-full resize-none rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-400 focus:outline-none md:text-sm"
-        placeholder="What needs to happen next?"
-        value={nextAction}
-        onChange={(e) => setNextAction(e.target.value)}
-      />
-      <div className="mt-3 flex justify-end">
-        <SaveButton state={nextActionSave.saveState} onClick={saveNextAction} mode="edit" className="w-full lg:w-auto" />
+      <div className="flex flex-col gap-2">
+        {canSendFinalInvoice && (
+          <button
+            type="button"
+            onClick={() => setSendInvoiceOpen(true)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-blue-600 bg-blue-600 px-4 py-3 text-left text-white shadow-sm transition hover:bg-blue-700"
+          >
+            <Send className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-semibold">Send final invoice</span>
+              <span className="block text-[10px] text-blue-100">Deposit is paid — collect the balance</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-blue-200" />
+          </button>
+        )}
+        {nextStage && (
+          <button
+            type="button"
+            onClick={() => handleStageClick(nextStage)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-blue-200 bg-white px-4 py-3 text-left text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+          >
+            <Check className="h-4 w-4 shrink-0 text-blue-600" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-semibold">Mark {nextStage}</span>
+              <span className="block text-[10px] text-slate-400">Advance from {currentStageLabel}</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setEditingReminder((v) => !v)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-blue-200 bg-white px-4 py-3 text-left text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+        >
+          <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold">Set a custom reminder</span>
+            <span className="block truncate text-[10px] text-slate-400">{nextAction?.trim() ? nextAction : "Write a free-text note for what's next"}</span>
+          </span>
+          <ChevronRight className={`h-4 w-4 shrink-0 text-slate-300 transition ${editingReminder ? "rotate-90" : ""}`} />
+        </button>
+        {editingReminder && (
+          <div className="rounded-2xl border border-blue-200 bg-white p-3">
+            <textarea
+              rows={3}
+              className="w-full resize-none rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-400 focus:outline-none md:text-sm"
+              placeholder="What needs to happen next?"
+              value={nextAction}
+              onChange={(e) => setNextAction(e.target.value)}
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={() => { setNextAction(order.nextAction ?? ""); setEditingReminder(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <SaveButton state={nextActionSave.saveState} onClick={() => { saveNextAction(); setEditingReminder(false); }} mode="edit" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1494,7 +1569,42 @@ export default function OrderDetailPage() {
             print_detail never reach the client (portal whitelists to 6 keys). Save
             re-derives order.items + order.quantity via the shared helper. */}
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">What we&apos;re making</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">What we&apos;re making</p>
+            {!editingItems && (
+              <button type="button" onClick={() => { setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []); setEditingItems(true); }} className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                <Edit2 className="h-3 w-3" /> Edit
+              </button>
+            )}
+          </div>
+
+          {!editingItems ? (
+            (order.line_items && order.line_items.length > 0) ? (
+              order.line_items.map((li, i) => {
+                const chips = (li.colors ?? []).filter((c) => (c.color || "").trim() || Number(c.qty) > 0);
+                return (
+                  <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 break-words text-xs font-semibold text-slate-950">{li.name || "Item"}</span>
+                      <span className="shrink-0 text-xs font-medium text-slate-700">{Number(li.quantity) || 0} pcs · {formatCurrency(Number(li.unitPrice) || 0)} ea</span>
+                    </div>
+                    {li.blank && <p className="mt-1 text-[11px] text-slate-500">Blank: {li.blank}</p>}
+                    {li.print_detail && <p className="mt-0.5 text-[11px] text-slate-500">Print: {li.print_detail}</p>}
+                    {chips.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {chips.map((c, ci) => (
+                          <span key={ci} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600">{Number(c.qty) || 0} {(c.color || "").trim()}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No items yet.</p>
+            )
+          ) : (
+          <>
           {order.items.length > 0 && lineItemsDraft.length === 0 && (
             <p className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
               Previously recorded: {order.items.join(", ")}
@@ -1570,12 +1680,17 @@ export default function OrderDetailPage() {
               </div>
             );
           })}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <button type="button" onClick={addLineItem} className="flex items-center gap-1.5 rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50">
               <Plus className="h-3.5 w-3.5" /> Add item
             </button>
-            <SaveButton state={lineItemsSave.saveState} onClick={saveLineItems} mode="edit" />
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => { setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []); setEditingItems(false); }} className="rounded-2xl border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <SaveButton state={lineItemsSave.saveState} onClick={() => { saveLineItems(); setEditingItems(false); }} mode="edit" />
+            </div>
           </div>
+          </>
+          )}
         </div>
 
         {([
@@ -1622,6 +1737,11 @@ export default function OrderDetailPage() {
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorPaymentBadge}`}>
             {vendorPaymentStatus === "paid" ? "Paid" : "Unpaid"}
           </span>
+          {!editingVendor && (
+            <button type="button" onClick={() => { hydrateVendorFromOrder(); setEditingVendor(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+              <Edit2 className="h-3 w-3" /> Edit
+            </button>
+          )}
         </div>
       </div>
       <div className="mb-3 flex items-baseline gap-2">
@@ -1630,6 +1750,9 @@ export default function OrderDetailPage() {
           <span className="text-xs text-slate-400">paid by {vendorPaidBy}</span>
         )}
       </div>
+      {!editingVendor ? (
+        order.vendor_notes ? <p className="whitespace-pre-wrap text-xs text-slate-600">{order.vendor_notes}</p> : null
+      ) : (
       <div className="space-y-3">
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cost (USD)</label>
@@ -1701,19 +1824,39 @@ export default function OrderDetailPage() {
             onChange={(e) => setVendorNotes(e.target.value)}
           />
         </div>
-        <div className="flex justify-end">
-          <SaveButton state={vendorCostSave.saveState} onClick={saveVendorCost} mode="edit" className="w-full lg:w-auto" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => { hydrateVendorFromOrder(); setEditingVendor(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <SaveButton state={vendorCostSave.saveState} onClick={() => { saveVendorCost(); setEditingVendor(false); }} mode="edit" />
         </div>
       </div>
+      )}
     </div>
   );
 
   const DeliveryAddressSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Delivery Address</h2>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Delivery Address</h2>
+        {!editingDelivery && (
+          <button type="button" onClick={() => { hydrateDeliveryFromOrder(); setEditingDelivery(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+            <Edit2 className="h-3 w-3" /> Edit
+          </button>
+        )}
+      </div>
       <p className="mb-4 text-[10px] text-slate-400">
         Optional. If blank, client's business address is used for future tax lookup.
       </p>
+      {!editingDelivery ? (
+        (order.delivery_address || order.delivery_city || order.delivery_state || order.delivery_zip || order.delivery_country) ? (
+          <div className="text-xs leading-relaxed text-slate-900">
+            {order.delivery_address && <div>{order.delivery_address}</div>}
+            {(order.delivery_city || order.delivery_state || order.delivery_zip) && (
+              <div>{[order.delivery_city, order.delivery_state].filter(Boolean).join(", ")} {order.delivery_zip}</div>
+            )}
+            {order.delivery_country && <div>{order.delivery_country}</div>}
+          </div>
+        ) : <p className="text-xs text-slate-400">Not set</p>
+      ) : (
       <div className="space-y-3">
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-600">Street Address</label>
@@ -1768,10 +1911,12 @@ export default function OrderDetailPage() {
             onChange={(e) => setDeliveryCountry(e.target.value)}
           />
         </div>
-        <div className="flex justify-end">
-          <SaveButton state={deliveryAddressSave.saveState} onClick={saveDeliveryAddress} mode="edit" className="w-full lg:w-auto" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => { hydrateDeliveryFromOrder(); setEditingDelivery(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <SaveButton state={deliveryAddressSave.saveState} onClick={() => { saveDeliveryAddress(); setEditingDelivery(false); }} mode="edit" />
         </div>
       </div>
+      )}
     </div>
   );
 
@@ -1872,7 +2017,20 @@ export default function OrderDetailPage() {
 
   const InternalNotesSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Internal Notes</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Internal Notes</h2>
+        {!editingNotes && (
+          <button type="button" onClick={() => { setInternalNotes(order.internalNotes ?? ""); setEditingNotes(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+            <Edit2 className="h-3 w-3" /> Edit
+          </button>
+        )}
+      </div>
+      {!editingNotes ? (
+        order.internalNotes?.trim() ? (
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{order.internalNotes}</p>
+        ) : <p className="text-xs text-slate-400">No notes</p>
+      ) : (
+      <>
       <textarea
         rows={4}
         className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
@@ -1880,9 +2038,12 @@ export default function OrderDetailPage() {
         value={internalNotes}
         onChange={(e) => setInternalNotes(e.target.value)}
       />
-      <div className="mt-3 flex justify-end">
-        <SaveButton state={notesSave.saveState} onClick={saveInternalNotes} mode="edit" className="w-full lg:w-auto" />
+      <div className="mt-3 flex justify-end gap-2">
+        <button type="button" onClick={() => { setInternalNotes(order.internalNotes ?? ""); setEditingNotes(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+        <SaveButton state={notesSave.saveState} onClick={() => { saveInternalNotes(); setEditingNotes(false); }} mode="edit" />
       </div>
+      </>
+      )}
     </div>
   );
 
@@ -1923,6 +2084,11 @@ export default function OrderDetailPage() {
           ))}
         </div>
       )}
+      {!editingUpdatesForm ? (
+        <button type="button" onClick={() => setEditingUpdatesForm(true)} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+          <Plus className="h-3.5 w-3.5" /> Add update
+        </button>
+      ) : (
       <div className="space-y-2">
         <input
           type="date"
@@ -1938,44 +2104,43 @@ export default function OrderDetailPage() {
           value={newUpdateText}
           onChange={(e) => setNewUpdateText(e.target.value)}
         />
-        <div className="flex justify-end">
-          <SaveButton state={clientUpdatesSave.saveState} onClick={addClientUpdate} mode="add" className="w-full lg:w-auto" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => { setNewUpdateText(""); setEditingUpdatesForm(false); }} className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <SaveButton state={clientUpdatesSave.saveState} onClick={() => { addClientUpdate(); setEditingUpdatesForm(false); }} mode="add" />
         </div>
       </div>
+      )}
     </div>
   );
 
   const CommunicationSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Quick Communications</h2>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col divide-y divide-slate-100">
         {commButtons.map((btn) => {
           const copied = copiedKey === btn.key;
           return (
-            <div key={btn.key}>
+            <div key={btn.key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p className={`break-words text-xs font-medium ${btn.disabled ? "text-slate-400" : "text-slate-700"}`}>{btn.label}</p>
+                {btn.disabled && <p className="mt-0.5 text-[10px] text-slate-400">Missing order data</p>}
+              </div>
               <button
                 type="button"
                 disabled={btn.disabled}
                 title={btn.disabled ? btn.disabledReason : undefined}
                 onClick={() => handleCopy(btn)}
-                className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-xs font-semibold transition ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
                   btn.disabled
-                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
                     : copied
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                <span className="min-w-0 break-words">{btn.label}</span>
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                ) : (
-                  <ClipboardCopy className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                )}
+                {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                {copied ? "Copied" : "Copy"}
               </button>
-              {btn.disabled && (
-                <p className="mt-0.5 px-1 text-[10px] text-slate-400">Missing order data</p>
-              )}
             </div>
           );
         })}
