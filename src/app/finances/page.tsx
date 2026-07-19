@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Check, Pencil, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Link2, Pencil, Receipt, Search, Send, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -496,6 +496,7 @@ function FinancesContent() {
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
   const [receiptInvoice, setReceiptInvoice] = useState<Invoice | null>(null);
+  const [receiptPhase, setReceiptPhase] = useState<"deposit" | "final" | null>(null);
   const [sendInvoiceTarget, setSendInvoiceTarget] = useState<Invoice | null>(null);
   const addSave = useSaveState();
   const editSave = useSaveState();
@@ -1018,9 +1019,15 @@ function FinancesContent() {
 
   // Explicit "Send Receipt" flow. Persists the current edits (method/date) first so
   // the receipt reflects saved data, then opens the receipt modal.
-  const handleOpenReceipt = async () => {
+  // phase forces which receipt to send WITHOUT changing what resolveReceipt computes:
+  // "deposit" resolves against a final_paid:false COPY (deposit phase + deposit_receipt_sent_at);
+  // "final"/undefined resolve against the real invoice. The stamp always lands on the real row.
+  const resolvePhaseReceipt = (invoice: Invoice, phase?: "deposit" | "final") =>
+    phase === "deposit" ? resolveReceipt({ ...invoice, final_paid: false }) : resolveReceipt(invoice);
+
+  const handleOpenReceipt = async (phase?: "deposit" | "final") => {
     if (!editInvoice) return;
-    const info = resolveReceipt(editInvoice);
+    const info = resolvePhaseReceipt(editInvoice, phase);
     if (!info) return;
     const alreadyAt = editInvoice[info.sentField] as string | undefined;
     if (alreadyAt && !window.confirm(`A receipt was already sent on ${fmtReceiptDate(alreadyAt)}. Send another receipt to the client?`)) return;
@@ -1028,6 +1035,7 @@ function FinancesContent() {
     await upsertItem(linked);
     await syncInvoiceToOrder(linked);
     setReceiptInvoice(linked);
+    setReceiptPhase(phase ?? null);
     setEditInvoice(null);
     setFormError("");
   };
@@ -1091,6 +1099,7 @@ function FinancesContent() {
   const renderFields = (
     data: InvoiceFields,
     onChange: (next: InvoiceFields) => void,
+    variant: "add" | "edit" = "add",
   ) => {
     const clientQuery = invoiceClientName(data).trim().toLowerCase();
     const clientSuggestions = clients
@@ -1119,6 +1128,244 @@ function FinancesContent() {
       onChange(applyOrderToInvoice(data, order));
       setOrderDropdownOpen(false);
     };
+
+    // ── EDIT VARIANT: wide two-column phase layout (desktop). Every input below keeps
+    // its exact current write target; only the arrangement differs from the add layout. ──
+    if (variant === "edit") {
+      const inv = data as Invoice;
+      const effectiveEmail = (data.client_email || "").trim() || leadEmailFor(inv);
+      const finalSent = Boolean(inv.final_invoice_sent_at);
+      const clientBlock = (
+        <div className="relative">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Client</label>
+          <input
+            type="text"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+            placeholder="Search clients..."
+            value={invoiceClientName(data)}
+            onFocus={() => { setClientDropdownOpen(true); void reloadClients(); }}
+            onBlur={() => window.setTimeout(() => setClientDropdownOpen(false), 140)}
+            onChange={(event) => {
+              const value = event.target.value;
+              onChange({ ...data, client: value, client_id: "", client_name: value, client_email: "", client_company: "", orderName: "", order_id: "", order_name: "" });
+              setClientDropdownOpen(true);
+            }}
+          />
+          {data.client_id && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Check className="h-3 w-3" aria-hidden="true" /> Connected to client record</p>
+          )}
+          {clientDropdownOpen && clientSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
+              {clientSuggestions.map((client) => (
+                <button key={client.id} type="button" className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" onMouseDown={(event) => { event.preventDefault(); selectClient(client); }}>
+                  <span className="block text-slate-950">{clientDisplayName(client)}</span>
+                  {(client.email || client.contact) && <span className="mt-0.5 block text-xs font-normal text-slate-500">{client.email || client.contact}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+      const orderBlock = (
+        <div className="relative">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Order</label>
+          <input
+            type="text"
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm"
+            placeholder={orderDisabled ? "Select a client first" : "Search orders for this client..."}
+            value={invoiceOrderName(data)}
+            disabled={orderDisabled}
+            onFocus={() => setOrderDropdownOpen(true)}
+            onBlur={() => window.setTimeout(() => setOrderDropdownOpen(false), 140)}
+            onChange={(event) => { const value = event.target.value; onChange({ ...data, orderName: value, order_id: "", order_name: value }); setOrderDropdownOpen(true); }}
+          />
+          {orderDropdownOpen && !orderDisabled && (
+            <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
+              {orderSuggestions.length > 0 ? (
+                orderSuggestions.map((order) => (
+                  <button key={order.id} type="button" className="block w-full px-4 py-3 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" onMouseDown={(event) => { event.preventDefault(); selectOrder(order); }}>
+                    <span className="block text-slate-950">{orderDisplayName(order)}</span>
+                    <span className="mt-0.5 block text-xs font-normal text-slate-500">{currencyInputValue(order.amount)} · {order.status}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-xs text-slate-500 md:text-sm">No orders found for this client.</div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+      const orderTotalBlock = (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Order total</label>
+          <input type="text" inputMode="numeric" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={currencyInputValue(data.total_amount)} onChange={(event) => onChange(updateInvoiceTotal(data, currencyInputNumber(event.target.value)))} />
+        </div>
+      );
+      const depositAmountBlock = (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Deposit</label>
+          <input type="text" inputMode="numeric" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={currencyInputValue(data.deposit_amount)} onChange={(event) => onChange(updateInvoiceDeposit(data, currencyInputNumber(event.target.value)))} />
+        </div>
+      );
+      const depositReceivedBlock = (
+        <div className="grid gap-3">
+          <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-700 md:text-sm">
+            <input type="checkbox" checked={Boolean(data.deposit_paid)} onChange={(event) => { const checked = event.target.checked; onChange(normalizeInvoiceFinancials({ ...data, deposit_paid: checked, deposit_paid_date: checked ? (data.deposit_paid_date || todayDate()) : "" })); }} />
+            Deposit received
+          </label>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date received</label>
+            <input type="date" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm" value={data.deposit_paid_date || ""} disabled={!data.deposit_paid} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, deposit_paid_date: event.target.value }))} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Deposit payment method</label>
+            <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm" value={data.deposit_payment_method || ""} disabled={!data.deposit_paid} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, deposit_payment_method: event.target.value }))}>
+              <option value="">Not specified</option>
+              {PAYMENT_METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        </div>
+      );
+      const finalDueBlock = (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Final payment due</label>
+          <input type="date" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={data.final_due_date || ""} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, final_due_date: event.target.value, dueDate: event.target.value }))} />
+        </div>
+      );
+      const paidInFullBlock = (
+        <div className="grid gap-3">
+          <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-700 md:text-sm">
+            <input type="checkbox" checked={Boolean(data.final_paid)} onChange={(event) => { const checked = event.target.checked; onChange(normalizeInvoiceFinancials({ ...data, final_paid: checked, final_paid_date: checked ? (data.final_paid_date || todayDate()) : "" })); }} />
+            Paid in full
+          </label>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date paid</label>
+            <input type="date" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm" value={data.final_paid_date || ""} disabled={!data.final_paid} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, final_paid_date: event.target.value }))} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Final payment method</label>
+            <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm" value={data.final_payment_method || ""} disabled={!data.final_paid} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, final_payment_method: event.target.value }))}>
+              <option value="">Not specified</option>
+              {PAYMENT_METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        </div>
+      );
+      const statusBlock = (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Invoice status</label>
+          <select className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 md:text-sm" value={normalizeInvoiceStatus(data.status)} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, status: event.target.value as InvoiceStatus }))}>
+            {invoiceStatusOptions.map((option) => <option key={option}>{option}</option>)}
+          </select>
+        </div>
+      );
+      const linkBlock = (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Invoice / Payment Link <span className="font-normal text-slate-400">(optional)</span></label>
+          <input type="url" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="https://..." value={data.stripe_invoice_url ?? ""} onChange={(e) => onChange({ ...data, stripe_invoice_url: e.target.value })} />
+        </div>
+      );
+      const notesBlock = (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Notes</label>
+          <textarea rows={3} className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" placeholder="Payment details, notes, reminders..." value={data.notes} onChange={(e) => onChange({ ...data, notes: e.target.value })} />
+        </div>
+      );
+
+      return (
+        <div className="space-y-5">
+          {/* Eyebrow + linked-to-order confirmation */}
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+            <span>Invoice</span>
+            {data.order_id && (
+              <span className="inline-flex items-center gap-1 normal-case tracking-normal text-emerald-600">
+                <Link2 className="h-3 w-3" aria-hidden="true" /> Linked to order · syncs to client portal
+              </span>
+            )}
+          </div>
+
+          {/* Money summary strip */}
+          <div className="grid grid-cols-3 gap-2 md:gap-3">
+            <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 md:p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Order total</p>
+              <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currency.format(calcTotal(data))}</p>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-3 ring-1 ring-emerald-100 md:p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Collected</p>
+              <p className="mt-1 text-sm font-bold text-emerald-700 md:text-lg">{currency.format(invoiceCollected(data))}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 md:p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Balance</p>
+              <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currency.format(invoiceBalance(data))}</p>
+            </div>
+          </div>
+
+          {/* Two-column: deposit | final (stacks on mobile) */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Deposit phase */}
+            <div className={`rounded-2xl p-4 ring-1 md:p-5 ${data.deposit_paid ? "bg-emerald-50 ring-emerald-100" : "bg-white ring-slate-200"}`}>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Deposit</h3>
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${data.deposit_paid ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                  {data.deposit_paid ? `Paid${data.deposit_paid_date ? ` · ${data.deposit_paid_date}` : ""}` : "Not received"}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {depositAmountBlock}
+                {depositReceivedBlock}
+              </div>
+              <button type="button" disabled={!data.deposit_paid || !effectiveEmail} onClick={() => void handleOpenReceipt("deposit")} className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40 disabled:hover:bg-emerald-50 md:text-sm">
+                <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
+                {inv.deposit_receipt_sent_at ? "Resend deposit receipt" : "Send deposit receipt"}
+              </button>
+            </div>
+
+            {/* Final phase */}
+            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Final payment</h3>
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${data.final_paid ? "bg-emerald-100 text-emerald-700" : finalSent ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
+                  {data.final_paid ? "Paid" : finalSent ? "Sent · awaiting payment" : "Not sent yet"}
+                </span>
+              </div>
+              {!data.final_paid && (
+                <p className="mb-3 text-[11px] text-slate-500">
+                  {finalSent ? `${currency.format(invoiceBalance(data))} owed` : `${currency.format(invoiceBalance(data))} · not owed until sent`}
+                </p>
+              )}
+              <div className="space-y-3">
+                {finalDueBlock}
+                {paidInFullBlock}
+              </div>
+              {!data.final_paid ? (
+                <button type="button" onClick={() => { openSendFinalInvoice(inv); setEditInvoice(null); }} className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-2xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 md:text-sm">
+                  <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                  Send final invoice
+                </button>
+              ) : (
+                <button type="button" disabled={!effectiveEmail} onClick={() => void handleOpenReceipt("final")} className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40 disabled:hover:bg-emerald-50 md:text-sm">
+                  <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
+                  {inv.final_receipt_sent_at ? "Resend final receipt" : "Send final receipt"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Collapsed edit details — rarely-touched fields */}
+          <details className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+            <summary className="cursor-pointer list-none text-xs font-semibold text-slate-600 md:text-sm">Edit details</summary>
+            <div className="mt-4 space-y-4">
+              {clientBlock}
+              {orderBlock}
+              {orderTotalBlock}
+              {statusBlock}
+              {linkBlock}
+              {notesBlock}
+            </div>
+          </details>
+        </div>
+      );
+    }
 
     return (
     <div className="space-y-4">
@@ -2411,45 +2658,26 @@ function FinancesContent() {
 
       {editInvoice && (
         <ModalShell
-          title="Edit invoice"
+          title={invoiceOrderName(editInvoice) || "Invoice"}
+          subtitle={invoiceClientName(editInvoice) || undefined}
           onClose={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}
-          maxWidth="max-w-md"
+          maxWidth="max-w-3xl"
           footer={
             <div className="space-y-3">
               <FieldError message={formError} />
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <SaveButton state={editSave.saveState} onClick={handleSaveEdit} className="flex-1 py-3" />
                 <button type="button" className="min-h-11 flex-1 rounded-3xl border border-slate-300 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => { setEditInvoice(null); setFormError(""); editSave.resetSaveState(); setClientDropdownOpen(false); setOrderDropdownOpen(false); }}>
                   Cancel
                 </button>
+                <button type="button" aria-label="Delete invoice" title="Delete invoice" disabled={deletingId === editInvoice.id} onClick={() => handleDelete(editInvoice.id)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100 disabled:opacity-40">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
-              {(() => {
-                const r = resolveReceipt(editInvoice);
-                const effectiveEmail = (editInvoice.client_email || "").trim() || leadEmailFor(editInvoice);
-                const sentAt = r ? (editInvoice[r.sentField] as string | undefined) : undefined;
-                const disabled = !r || !effectiveEmail;
-                const reason = !r ? "Mark a payment as received to send a receipt." : !effectiveEmail ? "No client email on the invoice or lead. Add one to send a receipt." : "";
-                return (
-                  <div className="space-y-1.5">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => void handleOpenReceipt()}
-                      className="min-h-11 w-full rounded-3xl border border-emerald-200 bg-emerald-50 py-3 text-xs md:text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:hover:bg-emerald-50"
-                    >
-                      {sentAt ? `Resend receipt (sent ${fmtReceiptDate(sentAt)})` : "Send receipt"}
-                    </button>
-                    {reason && <p className="text-center text-[11px] text-slate-500">{reason}</p>}
-                  </div>
-                );
-              })()}
-              <button type="button" className="min-h-11 w-full rounded-3xl border border-rose-200 bg-rose-50 py-3 text-xs md:text-sm font-semibold text-rose-700 hover:bg-rose-100" disabled={deletingId === editInvoice.id} onClick={() => handleDelete(editInvoice.id)}>
-                Delete invoice
-              </button>
             </div>
           }
         >
-            {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice))}
+            {renderFields(editInvoice, (next) => setEditInvoice(next as Invoice), "edit")}
         </ModalShell>
       )}
 
@@ -2459,7 +2687,8 @@ function FinancesContent() {
         fallbackEmail={leadEmailFor(receiptInvoice)}
         fallbackContact={leadContactFor(receiptInvoice)}
         depositNumber={depositNumberFor(receiptInvoice)}
-        onClose={() => setReceiptInvoice(null)}
+        forcePhase={receiptPhase ?? undefined}
+        onClose={() => { setReceiptInvoice(null); setReceiptPhase(null); }}
         onSent={(updated) => void handleReceiptSent(updated as Invoice)}
       />
 
