@@ -22,6 +22,7 @@ import {
 } from "@/components/orders/OrderFormShared";
 import PortalSection from "@/components/PortalSection";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
+import { resolveInvoiceContact } from "@/lib/greeting";
 import type { QuestionnaireFile } from "@/components/crm/types";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { businessTodayISO } from "@/lib/businessDate";
@@ -398,6 +399,9 @@ export default function OrderDetailPage() {
   const { data: clients } = useSupabaseTable<LookupRecord>("clients", []);
   const { data: vendors } = useSupabaseTable<LookupRecord>("vendors", []);
   const { data: invoices, upsertItem: upsertInvoice } = useSupabaseTable<Invoice>("finances", []);
+  // Loaded so the final-invoice greeting resolves from the SAME source as the Finances page
+  // (shared resolveInvoiceContact: client contact, then lead contact).
+  const { data: leads } = useSupabaseTable<{ id: string; contact?: string }>("crm_leads", []);
 
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
   const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
@@ -2592,7 +2596,7 @@ export default function OrderDetailPage() {
       <SendFinalInvoiceModal
         open={sendInvoiceOpen}
         invoice={invoice ?? null}
-        contact={(linkedClient as (LookupRecord & { contact?: string }) | undefined)?.contact ?? ""}
+        contact={resolveInvoiceContact({ invoice: invoice ?? null, clients, leads })}
         onClose={() => setSendInvoiceOpen(false)}
         onSent={handleInvoiceSent}
       />

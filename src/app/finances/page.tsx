@@ -8,6 +8,7 @@ import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
+import { resolveInvoiceContact } from "@/lib/greeting";
 import { PAYMENT_METHOD_OPTIONS, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
@@ -1062,9 +1063,6 @@ function FinancesContent() {
   const leadEmailFor = (inv: Invoice | null): string =>
     inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.email ?? "").trim() : "";
 
-  // Contact person for the greeting (receipt email greets the person, not the company).
-  const leadContactFor = (inv: Invoice | null): string =>
-    inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.contact ?? "").trim() : "";
 
   // Deposit request number for the receipt reference line — matched from the loaded
   // deposit_requests by deposit_request_id, else lead_id, else quote_id.
@@ -2687,7 +2685,7 @@ function FinancesContent() {
         open={!!receiptInvoice}
         invoice={receiptInvoice}
         fallbackEmail={leadEmailFor(receiptInvoice)}
-        fallbackContact={leadContactFor(receiptInvoice)}
+        fallbackContact={resolveInvoiceContact({ invoice: receiptInvoice, clients, leads })}
         depositNumber={depositNumberFor(receiptInvoice)}
         forcePhase={receiptPhase ?? undefined}
         onClose={() => { setReceiptInvoice(null); setReceiptPhase(null); }}
@@ -2706,7 +2704,7 @@ function FinancesContent() {
             order_name: sendInvoiceTarget.order_name,
             balance_remaining: sendInvoiceTarget.balance_remaining,
           }}
-          contact={leadContactFor(sendInvoiceTarget)}
+          contact={resolveInvoiceContact({ invoice: sendInvoiceTarget, clients, leads })}
           onClose={() => setSendInvoiceTarget(null)}
           onSent={() => void handleFinalInvoiceSent()}
         />
