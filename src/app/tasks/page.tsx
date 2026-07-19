@@ -265,14 +265,15 @@ export default function TasksPage() {
 
   const dueLabel = (task: Task) => (isDated(task.dueDate) ? task.dueDate : "TBD");
 
-  // Display-only: the row dot means DUE STATUS (overdue red / due-today amber / else grey).
-  // Priority stays visible as the "· {priority}" meta text. No count or logic depends on this.
+  // Display-only: the row dot means DUE STATUS — a red dot when overdue, amber when due
+  // today, and NO dot otherwise (future/no-date/TBD). The dot span keeps a fixed width even
+  // when empty so titles stay aligned across rows. Priority stays in the "· {priority}" meta.
   const dueDotClass = (task: Task) =>
     isDated(task.dueDate) && task.dueDate < todayISO
       ? "bg-red-500"
       : isDated(task.dueDate) && task.dueDate === todayISO
       ? "bg-amber-500"
-      : "bg-slate-300";
+      : "";
 
   const assigneeLabel = (task: Task) => {
     const a = taskAssignee(task);
@@ -296,7 +297,7 @@ export default function TasksPage() {
       className="group flex items-start justify-between gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
     >
       <div className="flex min-w-0 items-start gap-2.5">
-        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-label="due status" />
+        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-hidden="true" />
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-slate-900 md:text-sm">{task.title}</p>
           <p className="mt-1 text-[11px] text-slate-400">{dueLabel(task)} · {task.priority}</p>
@@ -331,7 +332,7 @@ export default function TasksPage() {
     const isOverdue = isDated(task.dueDate) && task.dueDate < todayISO;
     return (
       <div className="group flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-slate-50">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-label="due status" />
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-hidden="true" />
         <button
           type="button"
           onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
