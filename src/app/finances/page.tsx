@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, Search, Trash2 } from "lucide-react";
+import { Check, Pencil, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -1386,6 +1386,18 @@ function FinancesContent() {
   );
   // Reimbursements owed (dollars) — inline sum over the same records, existing cents unit.
   const reimbursementsOwed = reimbursementExpenses.reduce((s, e) => s + (e.amount_cents ?? 0) / 100, 0);
+  // "Who's owed what" — display-only grouping of needs_reimbursement expenses by paid_by.
+  // Existing fields only (paid_by / amount_cents); no new field, nothing persisted or read
+  // downstream. firstOwed just seeds the existing edit modal for a "Mark reimbursed" shortcut.
+  const owedByPerson = EXPENSE_PAID_BY_OPTIONS.map((person) => {
+    const owed = reimbursementExpenses.filter((e) => e.paid_by === person);
+    return {
+      person,
+      amount: owed.reduce((s, e) => s + (e.amount_cents ?? 0) / 100, 0),
+      count: owed.length,
+      firstOwed: owed[0],
+    };
+  });
   const nothingNeedsAttention =
     attentionInvoices.length === 0 && reimbursementExpenses.length === 0 && taxDue <= 0;
 
@@ -1667,126 +1679,182 @@ function FinancesContent() {
 
       {/* ── Expenses tab ─────────────────────────────────────────────────────── */}
       {activeTab === "expenses" && (
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Expenses</h2>
-            <p className="mt-1 text-[10px] text-slate-400">
-              General business costs not tied to a specific client order (materials, packaging, software, tools, etc.).
-            </p>
+      <div className="space-y-5">
+        {/* ── Hero row: Reimbursements owed (amber on >0) + Total spent + Unpaid ────── */}
+        <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
+          <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${reimbursementsOwed > 0 ? "bg-amber-50 ring-1 ring-amber-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Reimbursements Owed</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${reimbursementsOwed > 0 ? "text-amber-700" : "text-slate-900"}`}>{currency.format(reimbursementsOwed)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">owed back to whoever fronted the money</p>
+            {reimbursementExpenses.length > 0 && (
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">{reimbursementExpenses.length} to reimburse</span>
+            )}
           </div>
-          <button
-            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 sm:w-auto md:text-sm"
-            onClick={openAddExpenseModal}
-          >
-            Add Expense
-          </button>
-        </div>
+          <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total Spent</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(paidExpenses + unpaidExpenses)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">across all expenses</p>
+          </div>
+          <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Unpaid</p>
+            <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${unpaidExpenses > 0 ? "text-rose-600" : "text-slate-400"}`}>{currency.format(unpaidExpenses)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">{unpaidExpenses > 0 ? "still to pay" : "all paid"}</p>
+          </div>
+        </section>
 
-        {/* Filters */}
-        <div className="mb-4 flex flex-wrap gap-2">
-          <select
-            className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-            value={expenseFilter.status}
-            onChange={(e) => setExpenseFilter((f) => ({ ...f, status: e.target.value }))}
-          >
-            <option value="all">All statuses</option>
-            <option value="paid">Paid</option>
-            <option value="unpaid">Unpaid</option>
-          </select>
-          <select
-            className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-            value={expenseFilter.paidBy}
-            onChange={(e) => setExpenseFilter((f) => ({ ...f, paidBy: e.target.value }))}
-          >
-            <option value="">All paid by</option>
-            {EXPENSE_PAID_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select
-            className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-            value={expenseFilter.category}
-            onChange={(e) => setExpenseFilter((f) => ({ ...f, category: e.target.value }))}
-          >
-            <option value="">All categories</option>
-            {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {(expenseFilter.status !== "all" || expenseFilter.paidBy || expenseFilter.category) && (
-            <button
-              className="min-h-10 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
-              onClick={() => setExpenseFilter({ status: "all", paidBy: "", category: "" })}
-            >
-              Clear
-            </button>
+        {/* ── Who's owed what — per-person reimbursement (display-only groupBy paid_by) ── */}
+        <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+          <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Who&apos;s Owed What</h2>
+          {reimbursementsOwed === 0 ? (
+            <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
+              <p className="text-xs font-semibold text-emerald-800">No reimbursements owed — all settled.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {owedByPerson.map(({ person, amount, count, firstOwed }) => (
+                <div key={person} className={`rounded-2xl p-3 ring-1 ${amount > 0 ? "bg-amber-50/70 ring-amber-100" : "bg-slate-50 ring-slate-100"}`}>
+                  <p className={`text-xs font-semibold ${amount > 0 ? "text-slate-800" : "text-slate-400"}`}>{person}</p>
+                  <p className={`mt-1 text-lg font-bold ${amount > 0 ? "text-amber-700" : "text-slate-300"}`}>{currency.format(amount)}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">{count} expense{count !== 1 ? "s" : ""}</p>
+                  {amount > 0 && firstOwed && (
+                    <button
+                      type="button"
+                      onClick={() => openEditExpenseModal(firstOwed)}
+                      className="mt-2 inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50"
+                    >
+                      Mark reimbursed
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
-        </div>
+        </section>
 
-        {expensesError && (
-          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-            {expensesError}
+        {/* ── Calm detail: filter row + expense list ──────────────────────────────── */}
+        <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950 md:text-lg">All Expenses</h2>
+              <p className="mt-1 text-[10px] text-slate-400">
+                General business costs not tied to a specific client order (materials, packaging, software, tools, etc.).
+              </p>
+            </div>
+            <button
+              className="min-h-11 w-full rounded-full bg-blue-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 sm:w-auto md:text-sm"
+              onClick={openAddExpenseModal}
+            >
+              Add Expense
+            </button>
           </div>
-        )}
 
-        {visibleExpenses.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-400">
-            {expenses.length === 0 ? "No expenses recorded yet. Add your first expense above." : "No expenses match the current filters."}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {visibleExpenses.map((expense) => (
-              <div
-                key={expense.id}
-                className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-start sm:justify-between"
+          {/* Filters */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <select
+              className="min-h-10 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-300 focus:outline-none"
+              value={expenseFilter.status}
+              onChange={(e) => setExpenseFilter((f) => ({ ...f, status: e.target.value }))}
+            >
+              <option value="all">All statuses</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+            <select
+              className="min-h-10 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-300 focus:outline-none"
+              value={expenseFilter.paidBy}
+              onChange={(e) => setExpenseFilter((f) => ({ ...f, paidBy: e.target.value }))}
+            >
+              <option value="">All paid by</option>
+              {EXPENSE_PAID_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select
+              className="min-h-10 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-300 focus:outline-none"
+              value={expenseFilter.category}
+              onChange={(e) => setExpenseFilter((f) => ({ ...f, category: e.target.value }))}
+            >
+              <option value="">All categories</option>
+              {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {(expenseFilter.status !== "all" || expenseFilter.paidBy || expenseFilter.category) && (
+              <button
+                className="min-h-10 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+                onClick={() => setExpenseFilter({ status: "all", paidBy: "", category: "" })}
               >
-                {/* Left: info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-slate-400">{formatExpenseDate(expense.expense_date)}</span>
-                    {expense.category && (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expenseCategoryBadgeClass(expense.category)}`}>
-                        {expense.category}
+                Clear
+              </button>
+            )}
+          </div>
+
+          {expensesError && (
+            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+              {expensesError}
+            </div>
+          )}
+
+          {visibleExpenses.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-400">
+              {expenses.length === 0 ? "No expenses recorded yet. Add your first expense above." : "No expenses match the current filters."}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visibleExpenses.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  {/* Left: info */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-semibold text-slate-400">{formatExpenseDate(expense.expense_date)}</span>
+                      {expense.category && (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expenseCategoryBadgeClass(expense.category)}`}>
+                          {expense.category}
+                        </span>
+                      )}
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expense.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {expense.payment_status === "paid" ? "Paid" : "Unpaid"}
                       </span>
+                      {expense.reimbursement_status !== "not_needed" && (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expense.reimbursement_status === "reimbursed" ? "bg-slate-100 text-slate-500" : "bg-purple-100 text-purple-700"}`}>
+                          {EXPENSE_REIMBURSEMENT_LABELS[expense.reimbursement_status] ?? expense.reimbursement_status}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{expense.vendor_name || "—"}</p>
+                    <p className="mt-0.5 text-base font-bold text-slate-950">{currency.format((expense.amount_cents ?? 0) / 100)}</p>
+                    {expense.paid_by && (
+                      <p className="mt-0.5 text-[10px] text-slate-400">Paid by {expense.paid_by}</p>
                     )}
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expense.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                      {expense.payment_status === "paid" ? "Paid" : "Unpaid"}
-                    </span>
-                    {expense.reimbursement_status !== "not_needed" && (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expense.reimbursement_status === "reimbursed" ? "bg-slate-100 text-slate-500" : "bg-purple-100 text-purple-700"}`}>
-                        {EXPENSE_REIMBURSEMENT_LABELS[expense.reimbursement_status] ?? expense.reimbursement_status}
-                      </span>
+                    {expense.notes && (
+                      <p className="mt-1 text-xs text-slate-500 line-clamp-2">{expense.notes}</p>
                     )}
                   </div>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{expense.vendor_name || "—"}</p>
-                  <p className="mt-0.5 text-base font-bold text-slate-950">{currency.format((expense.amount_cents ?? 0) / 100)}</p>
-                  {expense.paid_by && (
-                    <p className="mt-0.5 text-[10px] text-slate-400">Paid by {expense.paid_by}</p>
-                  )}
-                  {expense.notes && (
-                    <p className="mt-1 text-xs text-slate-500 line-clamp-2">{expense.notes}</p>
-                  )}
+                  {/* Right: actions */}
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEditExpenseModal(expense)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingExpenseId === expense.id}
+                      onClick={() => void handleDeleteExpense(expense.id)}
+                      className="inline-flex min-h-9 items-center justify-center rounded-2xl border border-rose-100 bg-white px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                      aria-label={"Delete " + (expense.vendor_name || "expense")}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
-                {/* Right: actions */}
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openEditExpenseModal(expense)}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deletingExpenseId === expense.id}
-                    onClick={() => void handleDeleteExpense(expense.id)}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl border border-rose-100 bg-white px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
       )}
 
       {/* ── Invoices tab ─────────────────────────────────────────────────────── */}
