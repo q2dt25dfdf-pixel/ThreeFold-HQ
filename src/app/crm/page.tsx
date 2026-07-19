@@ -1164,6 +1164,9 @@ function CRMContent() {
         onSubmit={handleAddLead}
       />
 
+      {/* Standalone deposit-send hidden — the quote flow is the single deposit path
+          (clients pay the deposit inline on the approved quote). To re-enable, pass
+          onSendDepositRequest={handleOpenSendDeposit} to LeadDetailModal below. */}
       <LeadDetailModal
         open={Boolean(viewLead)}
         lead={viewLead}
@@ -1183,7 +1186,6 @@ function CRMContent() {
         }}
         onSendDesign={handleOpenSendDesign}
         onSendQuote={handleOpenSendQuote}
-        onSendDepositRequest={handleOpenSendDeposit}
         onArchive={handleArchiveLead}
         onUnarchive={handleUnarchiveLead}
       />

@@ -72,6 +72,8 @@ export default function DepositPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [checkDeclared, setCheckDeclared] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
 
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
@@ -120,6 +122,29 @@ export default function DepositPage() {
       setCheckoutError("Something went wrong. Please try again.");
     } finally {
       setCheckoutLoading(null);
+    }
+  };
+
+  // Declare "I'll mail a check" — a declaration, not a payment. Mirrors the quote page:
+  // POSTs to the deposit-token route, which writes client_payment_method_intent="check"
+  // + payment_method_intent_declared_at onto this deposit_requests row.
+  const handleDeclareCheck = async () => {
+    if (!depositToken || checkLoading) return;
+    setCheckLoading(true);
+    setCheckoutError("");
+    try {
+      const res = await fetch(`/api/deposit/${depositToken}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "check" }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (d.success) setCheckDeclared(true);
+      else setCheckoutError(d.error ?? "Something went wrong. Please try again.");
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+    } finally {
+      setCheckLoading(false);
     }
   };
 
@@ -437,6 +462,11 @@ export default function DepositPage() {
                   onPayBank={() => void handlePay("bank")}
                   checkoutLoading={checkoutLoading}
                   checkoutError={checkoutError || undefined}
+                  onDeclareCheck={() => void handleDeclareCheck()}
+                  checkDeclared={checkDeclared}
+                  checkLoading={checkLoading}
+                  checkMemo={`Deposit ${data.deposit_request_number}`}
+                  onResetMethod={() => setCheckDeclared(false)}
                 />
               </div>
             </div>
@@ -452,6 +482,11 @@ export default function DepositPage() {
                 onPayBank={() => void handlePay("bank")}
                 checkoutLoading={checkoutLoading}
                 checkoutError={checkoutError || undefined}
+                onDeclareCheck={() => void handleDeclareCheck()}
+                checkDeclared={checkDeclared}
+                checkLoading={checkLoading}
+                checkMemo={`Deposit ${data.deposit_request_number}`}
+                onResetMethod={() => setCheckDeclared(false)}
               />
             </div>
           )}
