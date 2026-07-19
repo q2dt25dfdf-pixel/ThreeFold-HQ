@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, Pencil, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Pencil, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -1398,6 +1398,11 @@ function FinancesContent() {
       firstOwed: owed[0],
     };
   });
+  // Current calendar quarter (1–4) within the selected tax year — DISPLAY-ONLY highlight.
+  // Reuses the existing dateToQuarter helper; null when viewing a different year.
+  const currentTaxQuarter = dateToQuarter(businessTodayISO(), selectedTaxYear);
+  // Owed quarters (display-only) — derived from the existing quarterlyTax, same due rule.
+  const owedTaxQuarters = quarterlyTax.filter((qt) => Math.max(qt.collected - qt.paid, 0) > 0);
   const nothingNeedsAttention =
     attentionInvoices.length === 0 && reimbursementExpenses.length === 0 && taxDue <= 0;
 
@@ -2063,23 +2068,23 @@ function FinancesContent() {
 
       {/* ── Sales Tax tab ────────────────────────────────────────────────────── */}
       {activeTab === "sales-tax" && (
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        {/* Header */}
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-5">
+        {/* ── Header: rate + year selector + Record Payment ───────────────────────── */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Sales Tax Dashboard</h2>
-            <p className="mt-1 text-xs text-slate-500">Rate: {fmtTaxRate(configuredTaxRate)} · CA / Bay Area</p>
+            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Sales Tax</h2>
+            <p className="mt-1 text-xs text-slate-500">Rate {fmtTaxRate(configuredTaxRate)} · CA / Bay Area</p>
           </div>
           <div className="flex items-center gap-2">
             <select
-              className="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+              className="min-h-10 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-700 focus:border-slate-300 focus:outline-none"
               value={selectedTaxYear}
               onChange={(e) => setSelectedTaxYear(e.target.value)}
             >
               {taxYearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button
-              className="min-h-10 rounded-3xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+              className="min-h-10 rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
               onClick={openAddTaxModal}
             >
               Record Payment
@@ -2087,44 +2092,77 @@ function FinancesContent() {
           </div>
         </div>
 
-        {/* 4 summary cards */}
-        <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <div className="rounded-2xl bg-emerald-50 px-4 py-4">
-            <p className="text-xl font-bold tracking-tight text-emerald-700 md:text-2xl">{currency.format(taxCollectedForYear)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Collected</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">{selectedTaxYear}</p>
+        {/* ── Hero row: Tax Owed (red on >0) + Collected + Remitted ────────────────── */}
+        <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
+          <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${taxDueForYear > 0 ? "bg-rose-50 ring-1 ring-rose-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Tax Owed</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${taxDueForYear > 0 ? "text-rose-600" : "text-slate-900"}`}>{currency.format(taxDueForYear)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear} · collected − remitted</p>
+            <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${owedTaxQuarters.length > 0 ? "bg-rose-100 text-rose-700" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+              {owedTaxQuarters.length > 0 ? `${owedTaxQuarters.map((qt) => qt.label).join(", ")} owed` : "all settled"}
+            </span>
           </div>
-          <div className="rounded-2xl bg-blue-50 px-4 py-4">
-            <p className="text-xl font-bold tracking-tight text-blue-700 md:text-2xl">{currency.format(taxPaidForYear)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Remitted</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">{selectedTaxYear}</p>
+          <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Collected</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 md:text-3xl">{currency.format(taxCollectedForYear)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear}</p>
           </div>
-          <div className={`rounded-2xl px-4 py-4 ${taxDueForYear > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-            <p className={`text-xl font-bold tracking-tight md:text-2xl ${taxDueForYear > 0 ? "text-rose-700" : "text-slate-500"}`}>{currency.format(taxDueForYear)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Owed</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">{selectedTaxYear} outstanding</p>
+          <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Remitted</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-blue-700 md:text-3xl">{currency.format(taxPaidForYear)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear}</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">{fmtTaxRate(configuredTaxRate)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">Tax Rate</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">CA / Bay Area</p>
-          </div>
-        </div>
+        </section>
 
-        {/* Quarterly breakdown */}
-        <div className="mb-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Quarterly Breakdown — {selectedTaxYear}</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {/* ── Needs Attention: owed quarters + tax-gap note ───────────────────────── */}
+        <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+          <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs Attention</h2>
+          {(taxDueForYear <= 0 && !hasTaxGap) ? (
+            <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
+              <p className="text-xs font-semibold text-emerald-800">All caught up — no sales tax owed for {selectedTaxYear}.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {owedTaxQuarters.map((qt) => (
+                <div key={qt.q} className="flex items-center justify-between gap-3 rounded-2xl bg-rose-50 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-slate-900">{qt.label} {selectedTaxYear} · {qt.months}</p>
+                    <p className="truncate text-[10px] text-slate-400">owed {currency.format(Math.max(qt.collected - qt.paid, 0))} · collected {currency.format(qt.collected)}, remitted {currency.format(qt.paid)}</p>
+                  </div>
+                  <button type="button" onClick={openAddTaxModal} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700">
+                    Record payment
+                  </button>
+                </div>
+              ))}
+              {hasTaxGap && (
+                <div className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                  <p className="text-[11px] font-medium text-amber-700">Sales tax estimate may be incomplete — some paid invoices are missing tax data.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Calm detail: quarterly breakdown ────────────────────────────────────── */}
+        <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Quarterly Breakdown — {selectedTaxYear}</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {quarterlyTax.map((qt) => {
               const due = Math.max(qt.collected - qt.paid, 0);
               const isPaid = qt.paid >= qt.collected && qt.collected > 0;
+              const isCurrent = qt.q === currentTaxQuarter;
               return (
-                <div key={qt.q} className={`rounded-2xl border px-3 py-3 ${isPaid ? "border-emerald-200 bg-emerald-50" : due > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
-                  <div className="flex items-center justify-between gap-1">
+                <div key={qt.q} className={`rounded-2xl px-3 py-3 ring-1 ${isCurrent ? "bg-blue-50/60 ring-2 ring-blue-300" : isPaid ? "bg-emerald-50 ring-emerald-200" : due > 0 ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-100"}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-1">
                     <span className="text-xs font-bold text-slate-700">{qt.label}</span>
-                    {isPaid && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">Paid</span>}
-                    {!isPaid && due > 0 && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">Due</span>}
-                    {!isPaid && due === 0 && qt.collected === 0 && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">—</span>}
+                    <div className="flex items-center gap-1">
+                      {isCurrent && <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">Current</span>}
+                      {isPaid && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">Paid</span>}
+                      {!isPaid && due > 0 && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">Due</span>}
+                      {!isPaid && due === 0 && qt.collected === 0 && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">—</span>}
+                    </div>
                   </div>
                   <p className="mt-1.5 text-[10px] text-slate-400">{qt.months}</p>
                   <p className="mt-2 text-sm font-bold text-slate-950">{currency.format(qt.collected)}</p>
@@ -2145,19 +2183,19 @@ function FinancesContent() {
               );
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Payment history */}
-        <div className="border-t border-slate-100 pt-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Payment History</p>
+        {/* ── Calm detail: payment history ────────────────────────────────────────── */}
+        <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Payment History</p>
           {taxPayments.length === 0 ? (
-            <p className="text-center text-xs text-slate-400">No tax payments recorded yet.</p>
+            <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-xs text-slate-400">No tax payments recorded yet.</p>
           ) : (
             <div className="space-y-2">
               {[...taxPayments]
                 .sort((a, b) => taxPaymentDateStr(b).localeCompare(taxPaymentDateStr(a)))
                 .map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-xs font-semibold text-slate-700">
@@ -2178,30 +2216,25 @@ function FinancesContent() {
                       <button
                         type="button"
                         onClick={() => openEditTaxModal(p)}
-                        className="inline-flex min-h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
+                        className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
                       >
-                        Edit
+                        <Pencil className="h-3 w-3" aria-hidden="true" /> Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleDeleteTaxPayment(p.id)}
-                        className="inline-flex min-h-8 items-center rounded-xl border border-rose-100 bg-white px-2 py-1.5 text-rose-600 hover:bg-rose-50"
+                        className="inline-flex min-h-8 items-center justify-center rounded-xl border border-rose-100 bg-white px-2 py-1.5 text-rose-600 hover:bg-rose-50"
+                        aria-label="Delete tax payment"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
                 ))}
             </div>
           )}
-        </div>
-
-        {hasTaxGap && (
-          <p className="mt-3 text-[10px] text-amber-700">
-            ⚠ Sales tax estimate may be incomplete — some paid invoices are missing tax data.
-          </p>
-        )}
-      </section>
+        </section>
+      </div>
       )}
 
       {/* ── Modals — always rendered, visibility controlled by show* state ──── */}
