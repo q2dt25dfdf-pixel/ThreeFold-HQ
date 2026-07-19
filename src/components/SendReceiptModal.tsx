@@ -34,13 +34,19 @@ interface Props {
   fallbackContact?: string;
   // Deposit request number (e.g. TF-D-2026-0004) for the receipt reference line.
   depositNumber?: string;
+  // Force which receipt phase to send. "deposit" resolves against a final_paid:false copy
+  // (deposit phase + deposit_receipt_sent_at); undefined/"final" resolve the real invoice.
+  // Steers phase only — the sent-stamp still lands on the real invoice's fields.
+  forcePhase?: "deposit" | "final";
   onClose: () => void;
   onSent: (updated: ReceiptInvoice) => void;
 }
 
 type Step = "generating" | "preview" | "sending" | "sent" | "error";
 
-export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbackContact, depositNumber, onClose, onSent }: Props) {
+export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbackContact, depositNumber, forcePhase, onClose, onSent }: Props) {
+  const resolvePhase = (inv: ReceiptInvoice) =>
+    forcePhase === "deposit" ? resolveReceipt({ ...inv, final_paid: false }) : resolveReceipt(inv);
   const [step, setStep] = useState<Step>("generating");
   const [publicToken, setPublicToken] = useState("");
   const [publicLink, setPublicLink] = useState("");
@@ -50,7 +56,7 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
   const [errorMsg, setErrorMsg] = useState("");
   const [sentVia, setSentVia] = useState<"gmail" | "resend" | "">("");
 
-  const receipt = invoice ? resolveReceipt(invoice) : null;
+  const receipt = invoice ? resolvePhase(invoice) : null;
   const alreadySentAt = receipt ? (invoice?.[receipt.sentField] as string | undefined) : undefined;
 
   useEffect(() => {
@@ -61,7 +67,7 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
     // Prefill the visible recipient up front: invoice email, else lead fallback.
     setEmailTo((invoice.client_email || fallbackEmail || "").trim());
 
-    const info = resolveReceipt(invoice);
+    const info = resolvePhase(invoice);
     if (!info) {
       setErrorMsg("Nothing is marked paid on this invoice yet.");
       setStep("error");
