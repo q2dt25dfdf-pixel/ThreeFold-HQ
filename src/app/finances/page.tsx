@@ -1128,7 +1128,7 @@ function FinancesContent() {
           }}
         />
         {data.client_id && (
-          <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">✓ Connected to client record</p>
+          <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Check className="h-3 w-3" aria-hidden="true" /> Connected to client record</p>
         )}
         {clientDropdownOpen && clientSuggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
@@ -1168,7 +1168,7 @@ function FinancesContent() {
           }}
         />
         {data.order_id && (
-          <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">✓ Linked to order — payment data syncs to client portal</p>
+          <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Check className="h-3 w-3" aria-hidden="true" /> Linked to order — payment data syncs to client portal</p>
         )}
         {orderDropdownOpen && !orderDisabled && (
           <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-xl">
@@ -1482,8 +1482,8 @@ function FinancesContent() {
           only — the founder decides what to do; nothing is auto-voided. */}
       {staleDeposits.length > 0 && (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 md:px-5 md:py-4">
-          <p className="text-xs font-semibold text-amber-800 md:text-sm">
-            ⚠ {staleDeposits.length} deposit request{staleDeposits.length === 1 ? "" : "s"} may be out of date
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 md:text-sm">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" /> {staleDeposits.length} deposit request{staleDeposits.length === 1 ? "" : "s"} may be out of date
           </p>
           <p className="mt-1 text-xs text-amber-700">
             The quote was revised after {staleDeposits.length === 1 ? "this request was" : "these requests were"} sent, so
@@ -1532,7 +1532,7 @@ function FinancesContent() {
         <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs Attention</h2>
         {nothingNeedsAttention ? (
           <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">✓</span>
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
             <p className="text-xs font-semibold text-emerald-800">All caught up — nothing needs attention.</p>
           </div>
         ) : (
