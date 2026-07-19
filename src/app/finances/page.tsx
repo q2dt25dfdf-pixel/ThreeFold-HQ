@@ -7,6 +7,7 @@ import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
+import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
 import { PAYMENT_METHOD_OPTIONS, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
@@ -49,6 +50,7 @@ type Invoice = {
   final_paid_date?: string;
   final_payment_method?: string | null;
   final_receipt_sent_at?: string;
+  final_invoice_sent_at?: string;
   dueDate?: string;
   status: InvoiceStatus;
   notes: string;
@@ -346,6 +348,12 @@ function invoiceCollected(invoice: InvoiceFields) {
   return calcCollected({ ...invoice, deposit_paid: Boolean(invoice.deposit_paid), final_paid: Boolean(invoice.final_paid) });
 }
 
+// A balance counts as "owed now" only once the final invoice has been SENT and not yet
+// paid. A deposit-paid invoice whose final invoice hasn't gone out is upcoming, not owed.
+function invoiceOwedNow(invoice: Invoice) {
+  return Boolean(invoice.final_invoice_sent_at) && !invoice.final_paid;
+}
+
 function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
   const total = invoiceTotal(invoice);
   const deposit = parseAmount(invoice.deposit_amount) > 0 ? parseAmount(invoice.deposit_amount) : total * 0.5;
@@ -488,6 +496,7 @@ function FinancesContent() {
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
   const [receiptInvoice, setReceiptInvoice] = useState<Invoice | null>(null);
+  const [sendInvoiceTarget, setSendInvoiceTarget] = useState<Invoice | null>(null);
   const addSave = useSaveState();
   const editSave = useSaveState();
   const [form, setForm] = useState(emptyForm);
@@ -550,8 +559,10 @@ function FinancesContent() {
     .filter((invoice) => Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()));
 
   const revenueCollected = normalizedInvoices.reduce((sum, invoice) => sum + invoiceCollected(invoice), 0);
+  // Owed-now = final invoice SENT and not yet paid. A deposit-paid invoice whose final
+  // invoice hasn't gone out is upcoming, so its balance is NOT summed into Outstanding.
   const outstandingBalance = normalizedInvoices
-    .filter((invoice) => !invoice.final_paid)
+    .filter((invoice) => invoiceOwedNow(invoice))
     .reduce((sum, invoice) => sum + invoiceBalance(invoice), 0);
   const totalInvoiceValue = normalizedInvoices
     .filter((invoice) => invoice.status !== "Cancelled")
@@ -1024,6 +1035,19 @@ function FinancesContent() {
   const handleReceiptSent = async (updated: Invoice) => {
     await upsertItem(updated);
     setReceiptInvoice(null);
+  };
+
+  const openSendFinalInvoice = (invoice: Invoice) => {
+    setSendInvoiceTarget(invoice);
+  };
+
+  // Fires only after the final-invoice email actually sends (SendFinalInvoiceModal
+  // success). Stamps final_invoice_sent_at on the finances row — this is what flips the
+  // balance from "upcoming" to "owed now". Mirrors orders/[id]/page.tsx:1007. No money
+  // math is touched and final_paid is NOT set.
+  const handleFinalInvoiceSent = async () => {
+    if (!sendInvoiceTarget) return;
+    await upsertItem({ ...sendInvoiceTarget, final_invoice_sent_at: new Date().toISOString() });
   };
 
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
@@ -1537,19 +1561,32 @@ function FinancesContent() {
           </div>
         ) : (
           <div className="space-y-2">
-            {attentionInvoices.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-slate-900">{invoiceOrderName(inv) || invoiceClientName(inv) || "Invoice"}</p>
-                  <p className="truncate text-[10px] text-slate-400">
-                    {invoiceClientName(inv) ? `${invoiceClientName(inv)} · ` : ""}balance {currency.format(invoiceBalance(inv))}{inv.status === "Overdue" ? " · overdue" : ""}
-                  </p>
+            {attentionInvoices.map((inv) => {
+              const owedNow = invoiceOwedNow(inv);
+              const overdue = owedNow && inv.status === "Overdue";
+              return (
+                <div key={inv.id} className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${overdue ? "bg-rose-50" : "bg-slate-50"}`}>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-slate-900">{invoiceOrderName(inv) || invoiceClientName(inv) || "Invoice"}</p>
+                    <p className="truncate text-[10px] text-slate-400">
+                      {invoiceClientName(inv) ? `${invoiceClientName(inv)} · ` : ""}
+                      {owedNow
+                        ? `balance ${currency.format(invoiceBalance(inv))}${overdue ? " · overdue" : ""}`
+                        : `${currency.format(invoiceBalance(inv))} · Upcoming · not owed yet`}
+                    </p>
+                  </div>
+                  {owedNow ? (
+                    <button type="button" onClick={() => openEditInvoice(inv)} className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50">
+                      Send receipt
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => openSendFinalInvoice(inv)} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700">
+                      Send final invoice
+                    </button>
+                  )}
                 </div>
-                <button type="button" onClick={() => openEditInvoice(inv)} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700">
-                  Send final invoice
-                </button>
-              </div>
-            ))}
+              );
+            })}
             {taxDue > 0 && (
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-rose-50 px-4 py-3">
                 <div className="min-w-0">
@@ -1898,18 +1935,28 @@ function FinancesContent() {
           ) : (
             <div className="space-y-2">
               {attentionInvoices.map((inv) => {
-                const overdue = isInvoiceOverdue(inv);
+                const owedNow = invoiceOwedNow(inv);
+                const overdue = owedNow && isInvoiceOverdue(inv);
                 return (
                   <div key={inv.id} className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${overdue ? "bg-rose-50" : "bg-slate-50"}`}>
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold text-slate-900">{invoiceOrderName(inv) || invoiceClientName(inv) || "Invoice"}</p>
                       <p className="truncate text-[10px] text-slate-400">
-                        {invoiceClientName(inv) ? `${invoiceClientName(inv)} · ` : ""}balance {currencyInputValue(inv.balance_remaining)}{overdue ? " · overdue" : ""}
+                        {invoiceClientName(inv) ? `${invoiceClientName(inv)} · ` : ""}
+                        {owedNow
+                          ? `balance ${currencyInputValue(inv.balance_remaining)}${overdue ? " · overdue" : ""}`
+                          : `${currencyInputValue(inv.balance_remaining)} · Upcoming · not owed yet`}
                       </p>
                     </div>
-                    <button type="button" onClick={() => openEditInvoice(inv)} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700">
-                      Send final invoice
-                    </button>
+                    {owedNow ? (
+                      <button type="button" onClick={() => openEditInvoice(inv)} className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50">
+                        Send receipt
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => openSendFinalInvoice(inv)} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700">
+                        Send final invoice
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -2415,6 +2462,23 @@ function FinancesContent() {
         onClose={() => setReceiptInvoice(null)}
         onSent={(updated) => void handleReceiptSent(updated as Invoice)}
       />
+
+      {sendInvoiceTarget && (
+        <SendFinalInvoiceModal
+          open={Boolean(sendInvoiceTarget)}
+          invoice={{
+            id: sendInvoiceTarget.id,
+            client: invoiceClientName(sendInvoiceTarget) || "",
+            client_name: sendInvoiceTarget.client_name,
+            client_email: sendInvoiceTarget.client_email,
+            orderName: invoiceOrderName(sendInvoiceTarget) || "",
+            order_name: sendInvoiceTarget.order_name,
+            balance_remaining: sendInvoiceTarget.balance_remaining,
+          }}
+          onClose={() => setSendInvoiceTarget(null)}
+          onSent={() => void handleFinalInvoiceSent()}
+        />
+      )}
       {/* Expense add / edit modal */}
       {showExpenseModal && (
         <ModalShell
