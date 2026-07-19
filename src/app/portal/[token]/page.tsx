@@ -109,6 +109,7 @@ interface PortalData {
   balanceDue: number
   paymentStatus: string
   stripeInvoiceUrl: string
+  invoicePayUrl: string
   designVersions: DesignVersion[]
   clientNotes: string
   intakeSummary: IntakeSummary | null
@@ -254,7 +255,6 @@ export default function PortalPage() {
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showBreakdown, setShowBreakdown] = useState(false)
 
   useEffect(() => {
     const t = window.location.pathname.split('/').pop() || ''
@@ -264,9 +264,6 @@ export default function PortalPage() {
       .then((d: PortalData & { error?: string }) => {
         if (d.error) { setError(d.error); return }
         setData(d)
-        // Default the pricing breakdown open when a discount exists (Step 4).
-        const disc = d.discount ?? null
-        if (disc && calcDiscountAmount(d.subtotal ?? 0, disc) > 0) setShowBreakdown(true)
       })
       .catch(() => setError('Failed to load portal'))
       .finally(() => setLoading(false))
@@ -316,7 +313,6 @@ export default function PortalPage() {
   const discount = data.discount ?? null
   const discountAmount = discount ? calcDiscountAmount(data.subtotal ?? 0, discount) : 0
   const hasDiscount = discount != null && discountAmount > 0
-  const hasSubtotal = (data.subtotal ?? 0) > 0
   const discountLabel = discount
     ? discount.type === 'percent'
       ? `${discount.label} (-${discount.value}%)`
@@ -614,7 +610,7 @@ export default function PortalPage() {
                       {depositIsPaid && <span style={{ fontSize: '13px', marginLeft: '6px' }}>✓</span>}
                     </span>
                   </div>
-                  <div style={{ ...s.cardRow, borderBottom: hasTax ? undefined : 'none', paddingBottom: hasTax ? undefined : '4px' }}>
+                  <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={s.cardRowLabel}>REMAINING BALANCE</div>
                       {!isPaidInFull && (
@@ -627,45 +623,12 @@ export default function PortalPage() {
                       {isPaidInFull ? 'PAID IN FULL ✓' : fmtCurrency(balanceVal)}
                     </span>
                   </div>
-                  {(hasTax || hasDiscount) && (
-                    <>
-                      <button
-                        onClick={() => setShowBreakdown((v) => !v)}
-                        style={s.breakdownToggle}
-                      >
-                        {showBreakdown ? '▾' : '▸'} VIEW FULL PRICING BREAKDOWN
-                      </button>
-                      {showBreakdown && (
-                        <div style={s.breakdownExpanded}>
-                          {hasSubtotal && (
-                            <div style={s.cardRow}>
-                              <span style={s.cardRowLabel}>SUBTOTAL</span>
-                              <span style={{ ...s.cardRowValue, fontSize: '16px' }}>{fmtCurrency(data.subtotal ?? 0)}</span>
-                            </div>
-                          )}
-                          {hasDiscount && (
-                            <DiscountBand
-                              label={discountLabel}
-                              amount={fmtCurrency(discountAmount)}
-                              labelStyle={s.cardRowLabel}
-                              valueStyle={{ ...s.cardRowValue, fontSize: '16px' }}
-                            />
-                          )}
-                          {hasTax && (
-                            <div style={s.cardRow}>
-                              <span style={s.cardRowLabel}>SALES TAX ({data.salesTaxRate != null ? `${Math.round(data.salesTaxRate * 10000) / 100}%` : '9.375%'})</span>
-                              <span style={{ ...s.cardRowValue, fontSize: '16px', color: C.textSecondary }}>{fmtCurrency(data.salesTaxAmount ?? 0)}</span>
-                            </div>
-                          )}
-                          <div style={{ ...s.cardRow, borderBottom: 'none', paddingBottom: '4px' }}>
-                            <span style={{ ...s.cardRowLabel, fontWeight: 700 }}>TOTAL</span>
-                            <span style={s.cardRowValue}>{fmtCurrency(totalVal)}</span>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
                 </div>
+                {!isPaidInFull && balanceVal > 0 && data.invoicePayUrl && (
+                  <a href={data.invoicePayUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
+                    PAY FINAL BALANCE →
+                  </a>
+                )}
                 {data.stripeInvoiceUrl && (
                   <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
                     VIEW INVOICE →
@@ -934,26 +897,5 @@ const s: Record<string, React.CSSProperties> = {
   intakeFileRow: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
     border: `1px solid ${C.border}`, padding: '12px 16px', backgroundColor: C.bgCard, borderRadius: '6px',
-  },
-  breakdownToggle: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '11px',
-    fontWeight: 700,
-    letterSpacing: '0.14em',
-    color: C.textMuted,
-    textTransform: 'uppercase' as const,
-    padding: '14px 0 4px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    width: '100%',
-    textAlign: 'left' as const,
-  },
-  breakdownExpanded: {
-    borderTop: `1px solid ${C.border}`,
-    marginTop: '4px',
-    paddingTop: '4px',
   },
 }
