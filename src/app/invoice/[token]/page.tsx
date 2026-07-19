@@ -37,6 +37,7 @@ interface InvoiceData {
   balance_remaining: number;
   final_paid: boolean;
   final_paid_date: string | null;
+  final_invoice_sent_at?: string | null;
   final_due_date: string | null;
   deposit_payment_method?: string | null;
   final_payment_method?: string | null;
@@ -175,9 +176,14 @@ export default function InvoicePage() {
   const isReceipt = receipt?.paidInFull === true;
   const receiptPaidLine = receipt ? receiptPaidPhrase(receipt.method, receipt.datePaid) : "";
   const isDepositPaid = data.deposit_paid;
-  // Third face: a paid deposit with an outstanding balance. A receipt, not a bill —
-  // no pay buttons; the balance is shown as a fact, "not yet owed".
-  const isDepositReceipt = isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true;
+  // Has HQ SENT the final invoice? This is the ONLY thing that moves a deposit-paid order
+  // from "receipt / not owed yet" to "final invoice / now due".
+  const finalInvoiceSent = Boolean((data.final_invoice_sent_at ?? "").toString().trim());
+  // STATE A — a paid deposit with an outstanding balance, final invoice NOT yet sent.
+  // A receipt, not a bill — no pay buttons; the balance is a fact, "not yet owed".
+  // Once the final invoice is sent (finalInvoiceSent), this flips false and the page
+  // renders STATE B (a real final invoice with the pay panel) instead.
+  const isDepositReceipt = isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true && !finalInvoiceSent;
   const depositMethodLabel = paymentMethodLabel(data.deposit_payment_method);
   // Deposit-received thank-you copy (no dashes; contact first name, else no name).
   const contactFirst = (data.contact_name ?? "").trim().split(/\s+/)[0] || "";
@@ -201,9 +207,11 @@ export default function InvoicePage() {
     ? !isPaidInFull && new Date(data.final_due_date + "T23:59:59") < new Date()
     : false;
 
+  // State A (deposit receipt) reads "DEPOSIT PAID"; once the final invoice is sent it becomes
+  // State B and reads "BALANCE DUE" (a real bill), so key off isDepositReceipt not isDepositPaid.
   const statusLabel = isPaidInFull
     ? "PAID IN FULL ✓"
-    : isDepositPaid
+    : isDepositReceipt
     ? "DEPOSIT PAID"
     : "BALANCE DUE";
 
@@ -481,7 +489,7 @@ export default function InvoicePage() {
             <div className="dk-card">
               <PaymentOptionsPanel
                 amount={data.balance_remaining}
-                label="REMAINING BALANCE"
+                label="BALANCE NOW DUE"
                 eyebrow="HOW TO PAY"
                 onPayCard={() => void handlePay("card")}
                 onPayBank={() => void handlePay("bank")}

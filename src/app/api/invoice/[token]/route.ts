@@ -140,6 +140,9 @@ export async function GET(
       balance_remaining: balanceRemaining,
       final_paid: raw.final_paid === true,
       final_paid_date: (raw.final_paid_date ?? null) as string | null,
+      // Whether HQ has SENT the final invoice — the page uses this to switch a deposit-paid
+      // order from a calm receipt ("not owed yet") to a payable final invoice ("now due").
+      final_invoice_sent_at: (raw.final_invoice_sent_at ?? null) as string | null,
       final_due_date: (raw.final_due_date ?? null) as string | null,
       deposit_payment_method: (raw.deposit_payment_method ?? null) as string | null,
       final_payment_method: (raw.final_payment_method ?? null) as string | null,
