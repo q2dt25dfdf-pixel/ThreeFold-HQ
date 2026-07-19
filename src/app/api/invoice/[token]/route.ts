@@ -10,13 +10,23 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
-    // Match EITHER the invoice token (tfi-, public_token) OR the receipt token
-    // (r-, receipt_public_token). doc_kind below tells the page which document this link is.
-    const { data: rows, error } = await getSupabaseAdmin()
+    // Match EITHER the invoice token (tfi-, public_token) OR the receipt token (r-,
+    // receipt_public_token) using the proven .eq("data->>col", val) form (mirrors the POST
+    // handler + create-invoice-checkout). Try the invoice token first, then the receipt
+    // token. doc_kind below tells the page which document this link is.
+    const admin = getSupabaseAdmin();
+    let { data: rows, error } = await admin
       .from("finances")
       .select("id,data")
-      .or(`data->>public_token.eq.${token},data->>receipt_public_token.eq.${token}`)
+      .eq("data->>public_token", token)
       .limit(1);
+    if (!error && (!rows || rows.length === 0)) {
+      ({ data: rows, error } = await admin
+        .from("finances")
+        .select("id,data")
+        .eq("data->>receipt_public_token", token)
+        .limit(1));
+    }
 
     if (error || !rows || rows.length === 0) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
