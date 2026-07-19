@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Search, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
@@ -239,9 +239,34 @@ export default function TasksPage() {
     [completedTasks],
   );
 
+  // ── Workspace derivations — all pure, reuse the existing date rule + accessors ──
+  const todayISO = businessTodayISO();
+  const isDated = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+  // Base open set: not completed, NOT a CRM follow-up (phantom-task fix), matches search.
+  const openTasks = tasks.filter((t) => !t.completed && !isCrmTask(t) && taskMatchesSearch(t, search));
+  const overdueTasks = openTasks.filter((t) => isDated(t.dueDate) && t.dueDate < todayISO);
+  const dueTodayTasks = openTasks.filter((t) => isDated(t.dueDate) && t.dueDate === todayISO);
+  const urgentTasks = [...overdueTasks, ...dueTodayTasks]; // overdue first, disjoint by definition
+  const urgentIds = new Set(urgentTasks.map((t) => t.id));
+
+  // Team & anyone: assignee "All" or "" — excluding anything already in the urgent band.
+  const teamTasks = openTasks.filter((t) => {
+    const a = taskAssignee(t);
+    return (a === "All" || a === "") && !urgentIds.has(t.id);
+  });
+
+  const OwnerChip = ({ owner, small = false }: { owner: TaskAssignee; small?: boolean }) => {
+    const pad = small ? "px-2 py-0.5" : "px-3 py-1";
+    if (owner === "All" || owner === "") {
+      return <span className={`rounded-full bg-slate-100 ${pad} text-xs font-semibold text-slate-700`}>Anyone</span>;
+    }
+    return <span className={`rounded-full ${pad} text-xs font-semibold ${ownerColors[owner as TaskOwner]}`}>{owner}</span>;
+  };
+
   const TaskCard = ({ task }: { task: Task }) => {
     const owner = taskAssignee(task);
-    const isOverdue = !task.completed && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate) && task.dueDate < businessTodayISO();
+    const isOverdue = !task.completed && isDated(task.dueDate) && task.dueDate < todayISO;
     return (
       <article
         role="button"
@@ -254,7 +279,7 @@ export default function TasksPage() {
             setEditTask({ ...task });
           }
         }}
-        className="w-full rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
+        className="w-full rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-2">
@@ -270,8 +295,9 @@ export default function TasksPage() {
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
-              className="min-h-11 rounded-3xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 md:min-h-0"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-3xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 md:min-h-0"
             >
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
               Done
             </button>
             <button
@@ -289,8 +315,7 @@ export default function TasksPage() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {owner !== "All" && owner !== "" && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${ownerColors[owner as TaskOwner]}`}>{owner}</span>}
-          {owner === "All" && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">All</span>}
+          <OwnerChip owner={owner} />
           <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${priorityColors[task.priority]}`}>{task.priority}</span>
         </div>
         <p className={`mt-2 text-xs ${isOverdue ? "font-semibold text-rose-600" : "text-slate-600"}`}>
@@ -306,32 +331,40 @@ export default function TasksPage() {
   if (loading) return <LoadingState label="Loading tasks..." />;
 
   return (
-    <div className="space-y-6 text-xs md:text-sm">
+    <div className="space-y-5 text-xs md:text-sm">
       <ErrorBanner message={error} />
 
+      {/* ── Compact header: title + inline urgency line + search + add ─────────── */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Team tasks</p>
-          <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Task board</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Team tasks</p>
+          <h1 className="mt-1.5 text-base font-semibold text-slate-950 md:text-3xl">Tasks</h1>
+          <p className="mt-2 text-xs md:text-sm">
+            <span className={overdueTasks.length > 0 ? "font-semibold text-rose-600" : "text-slate-400"}>{overdueTasks.length} overdue</span>
+            <span className="text-slate-300"> · </span>
+            <span className={dueTodayTasks.length > 0 ? "font-semibold text-amber-600" : "text-slate-400"}>{dueTodayTasks.length} due today</span>
+            <span className="text-slate-300"> · </span>
+            <span className="text-slate-500">{openTasks.length} open</span>
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs text-slate-900 outline-none focus:border-slate-400 sm:w-64 md:text-sm"
               placeholder="Search tasks..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
           <button
-            className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800"
+            className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
             onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}
           >
             Add task
           </button>
           <select
-            className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
+            className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 md:text-sm"
             value={filterOwner}
             onChange={(e) => setFilterOwner(e.target.value as TaskOwner | "All")}
           >
@@ -340,23 +373,68 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Team Board — shared workspace for All-assigned tasks */}
-      {(filterOwner === "All") && (
-        <section className="rounded-[2rem] border-t-2 border-slate-800 bg-slate-50 p-4 shadow-sm md:p-5">
+      {/* ── Urgent band: overdue + due-today, actionable now ──────────────────── */}
+      <section className={`rounded-[2rem] p-4 shadow-sm ring-1 md:p-5 ${
+        urgentTasks.length === 0 ? "bg-white ring-slate-100" :
+        overdueTasks.length > 0 ? "bg-rose-50/70 ring-rose-100" : "bg-amber-50/70 ring-amber-100"
+      }`}>
+        <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs action now</h2>
+        {urgentTasks.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
+            <p className="text-xs font-semibold text-emerald-800">All caught up — nothing urgent.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {urgentTasks.map((task) => {
+              const overdue = isDated(task.dueDate) && task.dueDate < todayISO;
+              return (
+                <div key={task.id} className="flex flex-col gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${priorityDotColors[task.priority]}`} aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
+                      className="truncate text-left text-xs font-semibold text-slate-900 hover:underline md:text-sm"
+                    >
+                      {task.title}
+                    </button>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <OwnerChip owner={taskAssignee(task)} small />
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${overdue ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
+                      {overdue ? `Overdue ${task.dueDate}` : "Due today"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggle(task.id)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-2xl bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                    >
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      Done
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ── Team & Anyone — shared tasks anyone can grab (only in the All view) ── */}
+      {filterOwner === "All" && (
+        <section className="rounded-[2rem] bg-violet-50/60 p-4 shadow-sm ring-1 ring-violet-100 md:p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Shared workspace</p>
-              <h2 className="mt-0.5 text-base font-bold text-slate-950 md:text-lg">Team Board</h2>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-400">Shared workspace</p>
+              <h2 className="mt-0.5 text-base font-bold text-slate-950 md:text-lg">Team &amp; Anyone</h2>
+              <p className="mt-0.5 text-[11px] text-slate-500">Shared tasks anyone can grab &amp; complete.</p>
             </div>
-            <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
-              {tasks.filter((t) => !t.completed && !isCrmTask(t) && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length} open
-            </span>
+            <span className="w-fit shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">{teamTasks.length} open</span>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            {tasks
-              .filter((t) => !t.completed && !isCrmTask(t) && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search))
-              .map((task) => <TaskCard key={task.id} task={task} />)}
-            {tasks.filter((t) => !t.completed && !isCrmTask(t) && (taskAssignee(t) === "All" || taskAssignee(t) === "") && taskMatchesSearch(t, search)).length === 0 && (
+            {teamTasks.map((task) => <TaskCard key={task.id} task={task} />)}
+            {teamTasks.length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-center text-xs text-slate-500 md:text-sm lg:col-span-2 xl:col-span-3">
                 {isSearching ? "No team tasks match your search." : "No shared team tasks yet."}
               </div>
@@ -376,37 +454,33 @@ export default function TasksPage() {
         </section>
       )}
 
-      {/* Active Kanban board — completed tasks never appear here */}
+      {/* ── Person columns — the main workspace (urgent-band tasks excluded) ───── */}
       <div className="grid gap-5 xl:grid-cols-3">
         {founderColumns
           .filter((founder) => filterOwner === "All" || founder.name === filterOwner)
           .map((founder) => {
-            const visibleTasks = tasks.filter(
-              (task) =>
-                !task.completed &&
-                !isCrmTask(task) &&
-                taskAssignee(task) === founder.name &&
-                taskMatchesSearch(task, search),
+            const columnTasks = openTasks.filter(
+              (task) => taskAssignee(task) === founder.name && !urgentIds.has(task.id),
             );
 
             return (
-              <section key={founder.name} className="flex min-h-[28rem] flex-col rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+              <section key={founder.name} className="flex min-h-[26rem] flex-col rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-100">
                 <div className={`rounded-t-[2rem] border-t-2 p-4 md:p-5 ${founder.headerClass}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <span className={`h-3 w-3 rounded-full ${founder.accentClass}`} aria-hidden="true" />
-                      <h2 className="text-base md:text-lg font-bold text-slate-950">{founder.name}</h2>
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white ${founder.accentClass}`} aria-hidden="true">{founder.name[0]}</span>
+                      <h2 className="text-base font-bold text-slate-950 md:text-lg">{founder.name}</h2>
                     </div>
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
-                      {visibleTasks.length} open
+                      {columnTasks.length} open
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-1 flex-col gap-3 p-3 md:p-4">
-                  {visibleTasks.map((task) => <TaskCard key={task.id} task={task} />)}
-                  {visibleTasks.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-xs text-slate-500 md:text-sm">
-                      {isSearching ? "No tasks match your search." : "No tasks assigned yet."}
+                  {columnTasks.map((task) => <TaskCard key={task.id} task={task} />)}
+                  {columnTasks.length === 0 && (
+                    <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-xs text-slate-500 md:text-sm">
+                      {isSearching ? "No tasks match your search." : "Nothing open — all clear."}
                     </div>
                   )}
                 </div>
@@ -426,15 +500,15 @@ export default function TasksPage() {
           })}
       </div>
 
-      {/* Completed tasks section — always present, collapsed by default */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      {/* ── Completed (collapsed, unchanged behavior) ─────────────────────────── */}
+      <section className="rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-100">
         <button
           type="button"
           className="flex w-full items-center justify-between gap-3 rounded-[2rem] p-4 text-left md:p-5"
           onClick={() => { if (!isSearching) setCompletedCollapsed((prev) => !prev); }}
         >
           <div className="flex items-center gap-3">
-            <h2 className="text-base md:text-lg font-semibold text-slate-950">Completed</h2>
+            <h2 className="text-base font-semibold text-slate-950 md:text-lg">Completed</h2>
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
               {completedTasks.length}
             </span>
@@ -488,7 +562,7 @@ export default function TasksPage() {
                                   </span>
                                 )}
                                 {owner === "All" && (
-                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">All</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Anyone</span>
                                 )}
                                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${priorityColors[task.priority]}`}>
                                   {task.priority}
