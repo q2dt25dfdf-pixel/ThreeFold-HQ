@@ -960,8 +960,12 @@ export default function OrderDetailPage() {
   const openReceipt = async (path: string) => {
     if (!path || openingReceiptPath) return;
     setOpeningReceiptPath(path);
-    // Open a tab synchronously to keep the user-gesture (avoids popup blocking after await).
-    const win = typeof window !== "undefined" ? window.open('', '_blank', 'noopener,noreferrer') : null;
+    // Open a placeholder tab synchronously to keep the user-gesture (avoids popup blocking
+    // after the await). NOTE: passing 'noopener' makes window.open return null, so we open
+    // WITHOUT it and null the opener ourselves — otherwise we lose the handle and can't
+    // navigate the tab to the signed URL (it stays blank).
+    const win = typeof window !== "undefined" ? window.open('about:blank', '_blank') : null;
+    if (win) win.opener = null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/internal/receipt-signed-urls', {
@@ -973,9 +977,10 @@ export default function OrderDetailPage() {
         body: JSON.stringify({ paths: [path] }),
       });
       const urls: Record<string, string> = res.ok ? await res.json() : {};
-      if (urls[path]) {
-        if (win) win.location.href = urls[path];
-        else window.open(urls[path], '_blank', 'noopener,noreferrer');
+      const url = urls[path];
+      if (url) {
+        if (win) win.location.href = url;
+        else window.open(url, '_blank', 'noopener,noreferrer');
       } else if (win) {
         win.close();
       }
