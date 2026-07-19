@@ -89,28 +89,15 @@ export default function PaymentOptionsPanel({
         <div style={s.eyebrow}>{eyebrow}</div>
       )}
 
-      {/* Fee breakdown */}
-      <div style={s.breakdownBlock}>
-        <div style={s.breakdownRow}>
-          <span style={s.breakdownKey}>{label}</span>
-          <span style={s.breakdownVal}>{fmt(amount)}</span>
-        </div>
-        <div style={s.breakdownRow}>
-          <span style={s.breakdownKey}>CARD FEE (3%)</span>
-          <span style={{ ...s.breakdownVal, color: C.textSecondary }}>{fmt(cardFee)}</span>
-        </div>
-        <div style={{ ...s.breakdownRow, borderBottom: "none", paddingBottom: 0 }}>
-          <span style={{ ...s.breakdownKey, color: C.textPrimary }}>TOTAL IF PAYING BY CARD</span>
-          <span style={{ ...s.breakdownVal, color: C.textPrimary }}>{fmt(cardTotal)}</span>
-        </div>
-        <div style={s.bankRow}>
-          <span style={s.breakdownKey}>BANK ACCOUNT PAYMENT</span>
-          <span style={{ ...s.breakdownVal, color: C.green }}>{fmt(amount)}</span>
-        </div>
+      {/* Balance + one transparency line. Stripe shows the exact fee breakdown at checkout,
+          so the on-page dueling totals are gone; the card total still lives on the card button. */}
+      <div style={s.balanceBlock}>
+        <div style={s.balanceAmount}>{fmt(amount)}</div>
+        <div style={s.balanceLabel}>{label}</div>
       </div>
 
       <div style={s.feeNotice}>
-        * Card payments include a 3% processing fee. Bank account payments and checks do not.
+        Card adds a 3% processing fee. Bank transfer and check are fee-free.
       </div>
 
       {checkoutError && <div style={s.errorText}>{checkoutError}</div>}
@@ -169,19 +156,23 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: "20px",
     textTransform: "uppercase" as const,
   },
-  breakdownBlock: {
-    border: `1px solid ${C.border}`,
-    backgroundColor: C.bgSubtle,
-    padding: "20px 24px",
+  balanceBlock: {
     marginBottom: "16px",
-    borderRadius: "8px",
   },
-  breakdownRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    borderBottom: `1px solid ${C.border}`,
-    padding: "12px 0",
+  balanceAmount: {
+    fontSize: "32px",
+    fontWeight: 800,
+    letterSpacing: "-0.01em",
+    color: C.textPrimary,
+    lineHeight: 1.1,
+  },
+  balanceLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.16em",
+    color: C.textMuted,
+    textTransform: "uppercase" as const,
+    marginTop: "6px",
   },
   breakdownKey: {
     fontSize: "11px",
@@ -195,17 +186,8 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: C.textPrimary,
   },
-  bankRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    marginTop: "14px",
-    paddingTop: "14px",
-    borderTop: `1px dashed ${C.greenBorder}`,
-  },
   feeNotice: {
     fontSize: "11px",
-    fontStyle: "italic",
     color: C.textMuted,
     lineHeight: 1.6,
     marginBottom: "20px",
