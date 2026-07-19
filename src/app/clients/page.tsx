@@ -2,7 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Trash2 } from "lucide-react";
+import { Check, Clock, Search, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
@@ -31,10 +31,53 @@ type Client = {
 };
 type ClientForm = Omit<Client, "id">;
 
+// Widened from { id, client } to read revenue/status/date off the SAME already-loaded
+// orders table (no new query, no new field names). Powers per-client revenue + overdue
+// via the detail page's hybrid linkage (client_id || name).
 type Order = {
   id: string;
   client: string;
+  client_id?: string;
+  amount: number;
+  status: string;
+  estimatedDeliveryDate: string;
 };
+
+const today = new Date();
+
+// Same shape the detail page uses to coerce a stored amount to a number.
+function orderAmount(amount: number | string) {
+  if (typeof amount === "number") return amount;
+  const numeric = Number(String(amount).replace(/[^0-9.]/g, ""));
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function formatCurrency(amount: number) {
+  return amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
+// Same overdue rule as the Orders redesign — pure date compare, display-only.
+function isOverdue(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const due = new Date(`${date}T00:00:00`);
+  return due.getTime() < today.getTime();
+}
+
+function statusPillClass(status: Client["status"]) {
+  return status === "Active"
+    ? "bg-emerald-100 text-emerald-800"
+    : status === "At Risk" || status === "Dormant"
+    ? "bg-amber-100 text-amber-800"
+    : status === "Lead"
+    ? "bg-blue-100 text-blue-800"
+    : "bg-slate-100 text-slate-700";
+}
+
+const FILTERS: { label: string; value: "all" | "active" | "orders" }[] = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "By orders", value: "orders" },
+];
 
 const defaultClients: Client[] = [
   {
@@ -274,6 +317,17 @@ export default function ClientsPage() {
   const orderCountForClient = (clientName: string) =>
     orders.filter((order) => order.client.trim().toLowerCase() === clientName.trim().toLowerCase()).length;
 
+  // Hybrid client↔order linkage, copied verbatim from clients/[id] (lines 167-171):
+  // prefer client_id, fall back to case-insensitive name match. Powers revenue + overdue.
+  const ordersForClient = (client: Client) =>
+    orders.filter((order) =>
+      order.client_id ? order.client_id === client.id : order.client.trim().toLowerCase() === client.name.trim().toLowerCase(),
+    );
+  const revenueForClient = (client: Client) =>
+    ordersForClient(client).reduce((sum, order) => sum + orderAmount(order.amount), 0);
+  const hasOverdueOrder = (client: Client) =>
+    ordersForClient(client).some((order) => order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(order.estimatedDeliveryDate));
+
   const visible = clients
     .filter((client) =>
       Object.values(client).join(" ").toLowerCase().includes(query.toLowerCase()),
@@ -282,6 +336,16 @@ export default function ClientsPage() {
     .sort((a, b) => activeFilter === "orders" ? orderCountForClient(b.name) - orderCountForClient(a.name) : 0);
   const totalOrders = orders.length;
   const activeClients = clients.filter((client) => client.status === "Active").length;
+
+  // Hero + needs-attention derivations — all pure, from already-loaded tables.
+  const lifetimeRevenue = orders.reduce((sum, order) => sum + orderAmount(order.amount), 0);
+  const atRiskClients = clients.filter((client) => client.status === "At Risk" || client.status === "Dormant");
+  const overdueClients = clients.filter((client) => hasOverdueOrder(client));
+  const attentionItems = [
+    ...atRiskClients.map((client) => ({ client, kind: "status" as const })),
+    ...overdueClients.map((client) => ({ client, kind: "overdue" as const })),
+  ];
+  const attentionCount = attentionItems.length;
 
   const handleAdd = async () => {
     if (!form.name.trim()) {
@@ -308,107 +372,185 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
+
+      {/* ── Header + search + add ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-widest text-slate-600">Client accounts</p>
-          <h1 className="mt-3 text-base md:text-xl font-bold text-slate-950 md:text-4xl">Client accounts</h1>
-          <p className="mt-3 text-xs md:text-sm text-slate-600 md:text-base">Manage your client relationships and order history</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Client accounts</p>
+          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Client accounts</h1>
+          <p className="mt-2 text-xs text-slate-600 md:text-sm">Manage your client relationships and order history</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-          <label className="relative w-full md:w-auto">
+          <label className="relative w-full sm:w-64 md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
-            <input className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64" placeholder="Search clients..." value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs text-slate-900 outline-none focus:border-slate-400 sm:w-64 md:text-sm" placeholder="Search clients..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-800 md:w-auto" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add client</button>
+          <button className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 active:bg-slate-800 md:w-auto md:text-sm" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add client</button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {[
-          { label: "Total clients", value: clients.length, filter: "all" as const },
-          { label: "Active clients", value: activeClients, filter: "active" as const },
-          { label: "Total orders", value: totalOrders, filter: "orders" as const },
-        ].map((stat) => (
-          <button
-            key={stat.label}
-            type="button"
-            onClick={() => setActiveFilter(stat.filter)}
-            className={`rounded-[2rem] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
-              activeFilter === stat.filter ? "border-2 border-slate-950" : "border border-slate-200"
-            }`}
-          >
-            <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-4xl">{stat.value}</p>
-            <p className="mt-2 text-xs md:text-sm text-slate-600">{stat.label}</p>
-          </button>
-        ))}
-      </div>
-
-      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-        <div className="hidden bg-zinc-100 px-6 py-3 text-xs uppercase tracking-widest text-slate-400 md:grid md:grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem]">
-          <div>Company</div>
-          <div>Industry</div>
-          <div>Contact</div>
-          <div>Orders</div>
-          <div>Status</div>
-          <div aria-hidden="true" />
+      {/* ── Hero row: Active clients (count-led) + Total clients + Need Attention ── */}
+      <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
+        {/* HERO — Active clients. Count is the headline; lifetime revenue is the pill. */}
+        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Active Clients</p>
+          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{activeClients}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">of {clients.length} total account{clients.length !== 1 ? "s" : ""}</p>
+          <span className="mt-3 inline-block rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-slate-200">
+            {formatCurrency(lifetimeRevenue)} lifetime revenue booked
+          </span>
         </div>
-        <div className="divide-y divide-slate-200">
-          {visible.map((client, index) => (
-            <div
-              key={client.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => router.push(`/clients/${client.id}`)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  router.push(`/clients/${client.id}`);
-                }
-              }}
-              className={`grid w-full grid-cols-1 gap-2 px-3 py-3 text-left transition hover:bg-blue-50 md:grid-cols-[1.4fr_1fr_1fr_0.6fr_0.9fr_2rem] md:items-center md:gap-0 md:px-6 md:py-4 ${
-                index % 2 === 0 ? "bg-zinc-50" : "bg-white"
-              } cursor-pointer`}
-            >
-              <div className="text-xs font-semibold text-slate-950 md:text-sm">{client.name}</div>
-              <div className="flex items-center gap-2 text-xs text-slate-600 md:text-sm">
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Industry</span>
-                <span>{client.industry}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600 md:text-sm">
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Contact</span>
-                <span>{client.contact}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600 md:text-sm">
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Orders</span>
-                <span>{orderCountForClient(client.name)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 md:hidden">Status</span>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${client.status === "Active" ? "bg-emerald-100 text-emerald-800" : client.status === "At Risk" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
-                  {client.status}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="flex min-h-11 min-w-11 items-center justify-center justify-self-start rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10 md:justify-self-end"
-                disabled={deletingId === client.id}
-                aria-label={`Delete ${client.name}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleDelete(client.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          ))}
-          {visible.length === 0 && (
-            <div className="bg-white px-3 py-10 text-center text-xs text-slate-500 md:px-6 md:text-sm">
-              No clients match your search.
-            </div>
+        {/* Total clients */}
+        <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total Clients</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{clients.length}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">across {totalOrders} order{totalOrders !== 1 ? "s" : ""}</p>
+        </div>
+        {/* Need Attention */}
+        <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${attentionCount > 0 ? "bg-amber-50 ring-1 ring-amber-100" : "bg-white ring-1 ring-slate-100"}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Need Attention</p>
+          <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${attentionCount > 0 ? "text-amber-600" : "text-slate-400"}`}>{attentionCount}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">at-risk or with an overdue order</p>
+          {overdueClients.length > 0 && (
+            <span className="mt-3 inline-block rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold text-rose-700">{overdueClients.length} overdue</span>
           )}
         </div>
-      </div>
+      </section>
+
+      {/* ── Needs Attention band — each row opens the client ──────────────────── */}
+      <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+        <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs Attention</h2>
+        {attentionItems.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
+            <p className="text-xs font-semibold text-emerald-800">All caught up — no clients need attention.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {attentionItems.map(({ client, kind }) => (
+              <div
+                key={`${kind}-${client.id}`}
+                className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${kind === "overdue" ? "bg-rose-50" : "bg-amber-50"}`}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-slate-900">{client.name}</p>
+                  <p className="truncate text-[10px] text-slate-500">{client.industry ? `${client.industry} · ` : ""}{client.contact || "No contact"}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${kind === "overdue" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
+                    {kind === "overdue" ? <Clock className="h-3 w-3" aria-hidden="true" /> : null}
+                    {kind === "overdue" ? "Overdue order" : client.status}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/clients/${client.id}`)}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    View client
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Calm detail — filter chips + client cards ─────────────────────────── */}
+      <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-base font-semibold text-slate-950 md:text-lg">All clients</h2>
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setActiveFilter(f.value)}
+                className={`min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition md:text-xs ${
+                  activeFilter === f.value ? "bg-slate-900 text-white" : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {visible.length === 0 ? (
+          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-xs font-semibold text-slate-500 md:text-sm">
+            No clients match your search.
+          </div>
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {visible.map((client) => {
+              const orderCount = orderCountForClient(client.name);
+              const revenue = revenueForClient(client);
+              return (
+                <article
+                  key={client.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/clients/${client.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/clients/${client.id}`);
+                    }
+                  }}
+                  className="cursor-pointer overflow-hidden rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="p-4 md:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-semibold text-slate-950 md:text-lg">{client.name}</h3>
+                        <p className="mt-1 truncate text-[11px] text-slate-500 md:text-xs">
+                          {client.industry || "No industry"}{client.contact ? ` · ${client.contact}` : ""}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusPillClass(client.status)}`}>
+                        {client.status}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Orders</p>
+                        <p className="mt-1 text-base font-bold text-slate-900 md:text-lg">{orderCount}</p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Revenue</p>
+                        <p className="mt-1 text-base font-bold text-emerald-700 md:text-lg">{formatCurrency(revenue)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 border-t border-slate-100 px-3 pb-5 pt-4 md:px-6">
+                    <button
+                      type="button"
+                      className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        router.push(`/clients/${client.id}`);
+                      }}
+                    >
+                      View client →
+                    </button>
+                    <button
+                      type="button"
+                      className="flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:h-10 md:w-10"
+                      disabled={deletingId === client.id}
+                      aria-label={`Delete ${client.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(client.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} mode="add"><FormFields form={form} setForm={(next) => { setForm(next); if (formError) setFormError(""); }} /><div className="px-6"><FieldError message={formError} /></div></Modal>}
     </div>
