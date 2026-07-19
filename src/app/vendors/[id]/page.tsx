@@ -39,6 +39,10 @@ type Vendor = {
   jobs: number;
 };
 
+// Widened to read cost_lines off the SAME already-loaded orders table (no new query).
+// Powers the best-effort per-supplier "owed" stat (unpaid lines whose free-text supplier
+// matches this supplier's name). Free text, no vendor_id — so it's best-effort by design.
+type CostLine = { amount_cents: number; status: string; supplier?: string };
 type Order = {
   id: string;
   orderName: string;
@@ -50,6 +54,7 @@ type Order = {
   status: "Draft" | "In Production" | "Quality Control" | "Fulfilled";
   estimatedDeliveryDate: string;
   notes: string;
+  cost_lines?: CostLine[];
 };
 
 const defaultVendors: Vendor[] = [
@@ -111,6 +116,10 @@ function formatCurrency(amount: number | string) {
   return (Number.isFinite(numeric) ? numeric : 0).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 }
 
+function centsToUsd(cents: number) {
+  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
 export default function VendorDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -141,7 +150,7 @@ export default function VendorDetailPage() {
   const saveVendorDraft = async () => {
     if (!vendorDraft) return;
     if (!vendorDraft.name.trim()) {
-      setVendorFormError("Vendor name is required.");
+      setVendorFormError("Supplier name is required.");
       return;
     }
     setVendorFormError("");
@@ -168,7 +177,7 @@ export default function VendorDetailPage() {
   };
 
   const handleDeleteVendor = () => {
-    if (!vendor || !window.confirm("Delete this vendor?")) return;
+    if (!vendor || !window.confirm("Delete this supplier?")) return;
     deleteItem(vendor.id);
     router.push("/vendors");
   };
@@ -193,60 +202,87 @@ export default function VendorDetailPage() {
     });
   };
 
-  if (vendorsLoading || ordersLoading) return <LoadingState label="Loading vendor..." />;
+  if (vendorsLoading || ordersLoading) return <LoadingState label="Loading supplier..." />;
 
   if (!vendor) {
     return (
       <main className="min-h-screen p-2 md:p-8">
-        <button type="button" onClick={() => router.push("/vendors")} className="text-xs md:text-sm font-semibold text-slate-600 hover:text-slate-950">
-          ← Vendors
+        <button type="button" onClick={() => router.push("/vendors")} className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-950 md:text-sm">
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Suppliers
         </button>
-        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-2 md:p-8">
-          <h1 className="text-base md:text-2xl font-semibold text-slate-950">Vendor not found</h1>
-          <p className="mt-2 text-xs md:text-sm text-slate-500">This vendor may have been deleted or is not available in Supabase.</p>
+        <div className="mt-8 rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-8">
+          <h1 className="text-base font-semibold text-slate-950 md:text-2xl">Supplier not found</h1>
+          <p className="mt-2 text-xs text-slate-500 md:text-sm">This supplier may have been deleted or is not available in Supabase.</p>
         </div>
       </main>
     );
   }
 
+  // Best-effort per-supplier owed: unpaid cost lines whose FREE-TEXT supplier matches this
+  // supplier's name. Shown ONLY when there are matching unpaid lines (owed > 0).
+  const owedToSupplierCents = orders.reduce(
+    (sum, order) =>
+      sum + (Array.isArray(order.cost_lines) ? order.cost_lines : []).reduce(
+        (s, l) =>
+          s + (l.status !== "paid" && (l.supplier ?? "").trim().toLowerCase() === vendor.name.trim().toLowerCase()
+            ? Number(l.amount_cents) || 0
+            : 0),
+        0,
+      ),
+    0,
+  );
+
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden text-xs text-slate-950 md:text-sm">
       <ErrorBanner message={vendorsError || ordersError} />
-      <header className="px-1 pt-1 text-white sm:px-6 sm:pt-4 lg:px-8">
-        <div className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 shadow-sm md:p-7">
-          <button type="button" onClick={() => router.push("/vendors")} className="mb-5 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white md:text-sm">
+
+      <div className="space-y-6 px-1 pb-4 pt-2 sm:p-6 lg:p-8">
+        {/* ── Light hero (replaces the old dark header) ─────────────────────────── */}
+        <header className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <button type="button" onClick={() => router.push("/vendors")} className="mb-5 flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900 md:text-sm">
             <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Vendors
+            Suppliers
           </button>
-          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,340px)] lg:items-start">
             <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Supplier</p>
               <InlineEditTitle
                 value={vendor.name}
                 onSave={name => upsertItem({ ...vendor, name })}
-                className="break-words text-2xl font-bold leading-tight tracking-tight text-white md:text-4xl"
+                className="mt-2 break-words text-2xl font-semibold leading-tight tracking-tight text-slate-950 md:text-4xl"
               />
-              <div className="mt-6 flex min-w-0 flex-wrap gap-3 text-xs text-slate-300 md:gap-4 md:text-sm">
-                <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.contact || "No contact"}</span>
-                <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.email || "No email"}</span>
-                <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{vendor.phone || "No phone"}</span>
+              <div className="mt-4 flex min-w-0 flex-wrap gap-3 text-xs text-slate-600 md:gap-4 md:text-sm">
+                <span className="flex min-w-0 items-center gap-2 break-words"><Building2 className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />{vendor.contact || "No contact"}</span>
+                <span className="flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />{vendor.email || "No email"}</span>
+                <span className="flex min-w-0 items-center gap-2 break-words"><Phone className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />{vendor.phone || "No phone"}</span>
               </div>
-            </div>
-            <div className="flex min-w-0 flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/5 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-slate-200">{vendor.type || "No type"}</span>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[vendor.status]}`}>{vendor.status}</span>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-600 ring-1 ring-slate-200">{vendor.type || "No type"}</span>
+                <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusStyles[vendor.status]}`}>{vendor.status}</span>
                 {vendor.preferredVendor && (
-                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Preferred Vendor</span>
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-blue-800">Preferred Supplier</span>
                 )}
                 {vendor.approvedVendor && (
-                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Approved Vendor</span>
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-800">Approved Supplier</span>
+                )}
+              </div>
+            </div>
+            {/* Stat headline + actions */}
+            <div className="flex min-w-0 flex-col gap-3">
+              <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Orders they&apos;re on</p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">{vendorOrders.length}</p>
+                <p className="mt-1.5 text-[11px] text-slate-500">Turnaround {vendor.turnaround || "not set"}</p>
+                {owedToSupplierCents > 0 && (
+                  <span className="mt-3 inline-block rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">{centsToUsd(owedToSupplierCents)} owed</span>
                 )}
               </div>
               <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
                   onClick={openVendorHeaderEditor}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-3xl border border-white/20 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10 md:text-sm"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-3xl border border-slate-300 bg-white px-5 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
                 >
                   <Edit2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                   Edit contact
@@ -254,7 +290,7 @@ export default function VendorDetailPage() {
                 <button
                   type="button"
                   onClick={handleDeleteVendor}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-3xl border border-rose-300/40 bg-rose-400/10 px-5 py-3 text-xs font-semibold text-rose-100 hover:bg-rose-400/15 md:text-sm"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-3xl border border-rose-200 bg-rose-50 px-5 py-3 text-xs font-semibold text-rose-600 hover:bg-rose-100 md:text-sm"
                 >
                   <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                   Delete
@@ -264,16 +300,16 @@ export default function VendorDetailPage() {
           </div>
 
           {editingHeaderContact && (
-            <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-4 md:grid-cols-3">
+            <div className="mt-6 grid gap-3 rounded-[2rem] bg-white p-4 ring-1 ring-slate-100 md:grid-cols-3">
               {[
                 { label: "Contact", key: "contact", value: vendorHeaderDraft.contact },
                 { label: "Email", key: "email", value: vendorHeaderDraft.email },
                 { label: "Phone", key: "phone", value: vendorHeaderDraft.phone },
               ].map((field) => (
-                <label key={field.key} className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                <label key={field.key} className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
                   {field.label}
                   <input
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-xs normal-case tracking-normal text-white outline-none focus:border-white/30 md:text-sm"
+                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs normal-case tracking-normal text-slate-900 outline-none focus:border-slate-500 md:text-sm"
                     value={field.value}
                     onChange={(event) => setVendorHeaderDraft((current) => ({ ...current, [field.key]: field.key === 'phone' ? formatPhoneNumber(event.target.value) : event.target.value }))}
                   />
@@ -284,7 +320,7 @@ export default function VendorDetailPage() {
                   type="button"
                   onClick={saveVendorHeaderContact}
                   disabled={headerContactSave.saveState === "saving"}
-                  className="min-h-11 w-full rounded-3xl border border-white/25 bg-white/15 px-5 py-3 text-xs font-semibold text-white hover:bg-white/25 disabled:opacity-60 md:text-sm"
+                  className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60 md:text-sm"
                 >
                   {headerContactSave.saveState === "saving" ? "Saving..." :
                    headerContactSave.saveState === "success" ? "Saved" :
@@ -294,31 +330,29 @@ export default function VendorDetailPage() {
               </div>
             </div>
           )}
-        </div>
-      </header>
+        </header>
 
-      <div className="space-y-6 px-1 pb-4 pt-2 sm:p-6 lg:p-8">
         <section className="grid gap-4 md:grid-cols-3">
           {[
-            { label: "Total orders assigned", value: String(vendorOrders.length) },
+            { label: "Orders using", value: String(vendorOrders.length) },
             { label: "Turnaround time", value: vendor.turnaround || "Not set" },
             { label: "Sample status", value: vendor.sampleStatus || "Not Requested" },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-              <p className="text-xs text-slate-500 md:text-sm">{stat.label}</p>
+            <div key={stat.label} className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">{stat.label}</p>
               <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{stat.value}</p>
             </div>
           ))}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="w-full min-w-0 rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-semibold text-slate-950 md:text-lg">Vendor details</h2>
+                <h2 className="text-base font-semibold text-slate-950 md:text-lg">Supplier details</h2>
                 <p className="mt-1 text-xs text-slate-500 md:text-sm">Profile and contact information.</p>
               </div>
-              <button type="button" onClick={openVendorEditor} className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 md:px-4">
+              <button type="button" onClick={openVendorEditor} className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 md:px-4">
                 <Edit2 className="h-3 w-3" aria-hidden="true" />
                 Edit
               </button>
@@ -333,8 +367,8 @@ export default function VendorDetailPage() {
                 { label: "Website", value: vendor.website ?? "" },
                 { label: "MOQ", value: vendor.moq ?? "" },
                 { label: "Sample Status", value: vendor.sampleStatus ?? "Not Requested" },
-                { label: "Preferred Vendor", value: vendor.preferredVendor ? "Yes" : "No" },
-                { label: "Approved Vendor", value: vendor.approvedVendor ? "Yes" : "No" },
+                { label: "Preferred Supplier", value: vendor.preferredVendor ? "Yes" : "No" },
+                { label: "Approved Supplier", value: vendor.approvedVendor ? "Yes" : "No" },
                 { label: "Status", value: vendor.status },
               ].map((field) => (
                 <div key={field.label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -361,38 +395,38 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="w-full min-w-0 rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
             <div className="mb-5">
-              <h2 className="text-base font-semibold text-slate-950 md:text-lg">Assigned orders</h2>
-              <p className="mt-1 text-xs text-slate-500 md:text-sm">Orders assigned to this vendor.</p>
+              <h2 className="text-base font-semibold text-slate-950 md:text-lg">Orders using this supplier</h2>
+              <p className="mt-1 text-xs text-slate-500 md:text-sm">Orders assigned to this supplier.</p>
             </div>
             <div className="space-y-3">
               {vendorOrders.length === 0 && (
                 <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-xs text-slate-500 md:p-5 md:text-sm">No orders assigned yet.</p>
               )}
               {vendorOrders.map((order) => (
-                <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div key={order.id} className="flex flex-col gap-3 rounded-2xl bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
                     <p className="break-words font-semibold text-slate-950">{order.orderName}</p>
                     <p className="mt-1 text-xs text-slate-500 md:text-sm">
                       {order.client || "No client"} · {order.estimatedDeliveryDate || "TBD"} · {formatCurrency(order.amount)}
                     </p>
                   </div>
-                  <span className="w-fit shrink-0 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-800">{order.status}</span>
+                  <span className="w-fit shrink-0 rounded-full bg-blue-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-blue-800">{order.status}</span>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Notes</h2>
+        <section className="w-full min-w-0 rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+          <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Notes</h2>
           <textarea
             rows={6}
             value={notesDraft ?? vendor.notes}
             onChange={(event) => setNotesDraft(event.target.value)}
             className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
-            placeholder="Add vendor notes..."
+            placeholder="Add supplier notes..."
           />
           <div className="mt-3 flex justify-end">
             <SaveButton state={notesSave.saveState} onClick={handleSaveVendorNotes} className="w-full lg:w-auto" />
@@ -402,8 +436,8 @@ export default function VendorDetailPage() {
 
       {editingVendor && vendorDraft && (
         <ModalShell
-          title="Edit vendor"
-          subtitle="Update the vendor profile and save changes."
+          title="Edit supplier"
+          subtitle="Update the supplier profile and save changes."
           onClose={() => { setEditingVendor(false); setVendorDraft(null); vendorSave.resetSaveState(); setVendorFormError(""); }}
           maxWidth="max-w-3xl"
           footer={
@@ -493,7 +527,7 @@ export default function VendorDetailPage() {
                       checked={Boolean(vendorDraft.preferredVendor)}
                       onChange={(event) => setVendorDraft({ ...vendorDraft, preferredVendor: event.target.checked })}
                     />
-                    Preferred Vendor
+                    Preferred Supplier
                   </label>
                   <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:text-sm">
                     <input
@@ -502,7 +536,7 @@ export default function VendorDetailPage() {
                       checked={Boolean(vendorDraft.approvedVendor)}
                       onChange={(event) => setVendorDraft({ ...vendorDraft, approvedVendor: event.target.checked })}
                     />
-                    Approved Vendor
+                    Approved Supplier
                   </label>
                 </div>
               </div>

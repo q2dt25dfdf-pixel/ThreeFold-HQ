@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ModalShell from "@/components/ModalShell";
-import { Edit2, Search, Trash2 } from "lucide-react";
+import { Check, Edit2, Search, Trash2 } from "lucide-react";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
@@ -37,10 +37,18 @@ type Vendor = {
   jobs: number;
 };
 
+// Widened to read cost_lines off the SAME already-loaded orders table (no new query).
+// Powers the aggregate "$ owed to suppliers" pill (sum of unpaid cost lines).
+type CostLine = { amount_cents: number; status: string; supplier?: string };
 type Order = {
   id: string;
   vendor: string;
+  cost_lines?: CostLine[];
 };
+
+function centsToUsd(cents: number) {
+  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
 
 const defaultVendors: Vendor[] = [
   {
@@ -142,6 +150,20 @@ export default function VendorsPage() {
   const tabVendors = activeVendorTab === "all"
     ? visible
     : visible.filter((v) => vendorTabFor(v.type) === activeVendorTab);
+
+  // Hero + needs-attention derivations — all pure, from already-loaded tables.
+  const activeSuppliers = vendors.filter((v) => v.status === "Active").length;
+  // Aggregate owed = sum of ALL unpaid production cost lines across every order. This is
+  // reliable at the aggregate level — no fragile per-supplier free-text matching needed.
+  const owedCents = orders.reduce(
+    (sum, order) =>
+      sum + (Array.isArray(order.cost_lines) ? order.cost_lines : []).reduce(
+        (s, l) => s + (l.status !== "paid" ? Number(l.amount_cents) || 0 : 0),
+        0,
+      ),
+    0,
+  );
+  const needReviewVendors = vendors.filter((v) => v.status === "Review" || !v.approvedVendor);
 
   const handleAdd = async () => {
     if (!form.name.trim()) {
@@ -250,7 +272,7 @@ export default function VendorsPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <label className="space-y-2 text-xs font-semibold text-slate-700 md:text-sm">
-          Vendor Type
+          Supplier Type
           <select
             className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-normal text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
             value={form.type}
@@ -366,7 +388,7 @@ export default function VendorsPage() {
               checked={Boolean(form.preferredVendor)}
               onChange={(event) => setForm({ ...form, preferredVendor: event.target.checked })}
             />
-            Preferred Vendor
+            Preferred Supplier
           </label>
           <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:text-sm">
             <input
@@ -375,7 +397,7 @@ export default function VendorsPage() {
               checked={Boolean(form.approvedVendor)}
               onChange={(event) => setForm({ ...form, approvedVendor: event.target.checked })}
             />
-            Approved Vendor
+            Approved Supplier
           </label>
         </div>
       </div>
@@ -404,39 +426,93 @@ export default function VendorsPage() {
     </div>
   );
 
-  if (loading) return <LoadingState label="Loading vendors..." />;
+  if (loading) return <LoadingState label="Loading suppliers..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Vendors</p>
-          <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Vendor network</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Suppliers</p>
+          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Suppliers</h1>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-          <label className="relative w-full md:w-auto">
+          <label className="relative w-full sm:w-64 md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
-              placeholder="Search vendors..."
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs text-slate-900 outline-none focus:border-slate-400 sm:w-64 md:text-sm"
+              placeholder="Search suppliers..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
           <button
-            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
+            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:w-auto md:text-sm"
             onClick={() => { setFormError(""); addSave.resetSaveState(); setShowModal(true); }}
           >
-            Add vendor
+            Add supplier
           </button>
         </div>
       </div>
 
+      {/* ── Hero row: Active suppliers (count-led) + Total suppliers + Need Review ── */}
+      <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
+        {/* HERO — Active suppliers. Count is the headline; aggregate owed is the pill. */}
+        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Active Suppliers</p>
+          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{activeSuppliers}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">of {vendors.length} total supplier{vendors.length !== 1 ? "s" : ""}</p>
+          <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${owedCents > 0 ? "bg-amber-100 text-amber-700" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+            {centsToUsd(owedCents)} owed to suppliers
+          </span>
+        </div>
+        {/* Total suppliers */}
+        <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total Suppliers</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{vendors.length}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">in your network</p>
+        </div>
+        {/* Need Review */}
+        <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${needReviewVendors.length > 0 ? "bg-amber-50 ring-1 ring-amber-100" : "bg-white ring-1 ring-slate-100"}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Need Review</p>
+          <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${needReviewVendors.length > 0 ? "text-amber-600" : "text-slate-400"}`}>{needReviewVendors.length}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">in review or not yet approved</p>
+        </div>
+      </section>
+
+      {/* ── Needs Attention — suppliers awaiting review/approval ──────────────────── */}
+      <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+        <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs Attention</h2>
+        {needReviewVendors.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
+            <p className="text-xs font-semibold text-emerald-800">All caught up — every supplier is reviewed and approved.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {needReviewVendors.map((vendor) => (
+              <div key={vendor.id} className="flex flex-col gap-3 rounded-2xl bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-slate-900">{vendor.name}</p>
+                  <p className="truncate text-[10px] text-slate-500">{vendor.type || "No type"} · {vendor.status}{!vendor.approvedVendor ? " · not approved" : ""}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/vendors/${vendor.id}`)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  View supplier
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <>
       {/* Vendor tab bar */}
       <div className="overflow-x-auto pb-1">
-        <nav className="inline-flex w-fit min-w-max items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1" aria-label="Vendor categories">
+        <nav className="inline-flex w-fit min-w-max items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1" aria-label="Supplier categories">
           {VENDOR_TABS.map((tab) => (
             <button
               key={tab.value}
@@ -467,7 +543,7 @@ export default function VendorsPage() {
                         router.push(`/vendors/${vendor.id}`);
                       }
                     }}
-                    className={`rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
+                    className={`rounded-[2rem] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
                       vendor.status === "Active" ? "border-t-2 border-t-emerald-400" :
                       vendor.status === "Review" ? "border-t-2 border-t-amber-400" : "border-t-2 border-t-slate-300"
                     }`}
@@ -480,10 +556,10 @@ export default function VendorsPage() {
                             {vendor.type || "No type"}
                           </span>
                           {vendor.preferredVendor && (
-                            <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Preferred Vendor</span>
+                            <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Preferred Supplier</span>
                           )}
                           {vendor.approvedVendor && (
-                            <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Approved Vendor</span>
+                            <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Approved Supplier</span>
                           )}
                         </div>
                       </div>
@@ -529,7 +605,7 @@ export default function VendorsPage() {
                         <p className="mt-1 truncate text-xs md:text-sm font-semibold text-slate-950">{vendor.contact}</p>
                       </div>
                       <div className="px-3 py-3">
-                        <p className="text-xs text-slate-400">Jobs assigned</p>
+                        <p className="text-xs text-slate-400">Orders using</p>
                         <p className="mt-1 text-xs md:text-sm font-semibold text-slate-950">{orderCountForVendor(vendor.name)}</p>
                       </div>
                     </div>
@@ -556,15 +632,15 @@ export default function VendorsPage() {
       </div>
       {tabVendors.length === 0 && (
         <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center text-xs text-slate-500 md:text-sm">
-          {visible.length === 0 ? "No vendors match your search." : "No vendors in this category yet."}
+          {visible.length === 0 ? "No suppliers match your search." : "No suppliers in this category yet."}
         </div>
       )}
       </>
 
       {showModal && (
         <ModalShell
-          title="Add vendor"
-          subtitle="Keep vendor details ready for sourcing, production, and fulfillment."
+          title="Add supplier"
+          subtitle="Keep supplier details ready for sourcing, production, and fulfillment."
           onClose={() => { setShowModal(false); setForm(emptyForm); setFormError(""); }}
           maxWidth="max-w-3xl"
           footer={
@@ -583,8 +659,8 @@ export default function VendorsPage() {
 
       {editingVendorId && (
         <ModalShell
-          title="Edit vendor"
-          subtitle="Update vendor details for sourcing, production, and fulfillment."
+          title="Edit supplier"
+          subtitle="Update supplier details for sourcing, production, and fulfillment."
           onClose={() => { setEditingVendorId(""); setForm(emptyForm); setFormError(""); editSave.resetSaveState(); }}
           maxWidth="max-w-3xl"
           footer={
