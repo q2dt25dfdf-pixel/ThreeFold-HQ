@@ -355,6 +355,21 @@ function invoiceOwedNow(invoice: Invoice) {
   return Boolean(invoice.final_invoice_sent_at) && !invoice.final_paid;
 }
 
+// Belt-and-suspenders for stamp writes: a finances upsert replaces the whole data jsonb, so
+// a stamp built from a stale client copy can drop server-minted link tokens. Preserve the
+// public/receipt tokens generically — keep `next`'s value when set, else fall back to the
+// current row's — so no stamp write ever wipes public_token/receipt_public_token.
+function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): T {
+  const current = currentRaw as Record<string, unknown> | undefined;
+  if (!current) return next;
+  const merged = { ...next } as Record<string, unknown>;
+  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link"]) {
+    const v = merged[key];
+    if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
+  }
+  return merged as T;
+}
+
 function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
   const total = invoiceTotal(invoice);
   const deposit = parseAmount(invoice.deposit_amount) > 0 ? parseAmount(invoice.deposit_amount) : total * 0.5;
@@ -1042,7 +1057,7 @@ function FinancesContent() {
   };
 
   const handleReceiptSent = async (updated: Invoice) => {
-    await upsertItem(updated);
+    await upsertItem(preserveInvoiceTokens(updated, invoices.find((i) => i.id === updated.id)));
     setReceiptInvoice(null);
   };
 
@@ -1056,7 +1071,8 @@ function FinancesContent() {
   // math is touched and final_paid is NOT set.
   const handleFinalInvoiceSent = async () => {
     if (!sendInvoiceTarget) return;
-    await upsertItem({ ...sendInvoiceTarget, final_invoice_sent_at: new Date().toISOString() });
+    const stamped = { ...sendInvoiceTarget, final_invoice_sent_at: new Date().toISOString() };
+    await upsertItem(preserveInvoiceTokens(stamped, invoices.find((i) => i.id === sendInvoiceTarget.id)));
   };
 
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
