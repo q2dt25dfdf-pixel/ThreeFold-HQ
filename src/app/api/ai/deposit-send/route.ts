@@ -104,9 +104,22 @@ function buildEmailBody(
 
 // ── Route handler ──────────────────────────────────────────────────────────────
 
+// Standalone deposit links are disabled — the quote flow is the single deposit path
+// (clients pay the deposit inline on the approved quote). Flip to false (or remove the
+// guard in POST) to re-enable; the rest of the handler is intact. Typed boolean so the
+// body below stays reachable (no unreachable-code lint).
+const DEPOSIT_SEND_DISABLED: boolean = true;
+
 export async function POST(request: Request): Promise<Response> {
   const auth = validateAIRequest(request);
   if (!auth.ok) return errResponse("Unauthorized", auth.status);
+
+  if (DEPOSIT_SEND_DISABLED) {
+    return errResponse(
+      "Standalone deposit links are disabled. Send a quote instead — the client pays the deposit inline on the approved quote.",
+      403,
+    );
+  }
 
   let rawBody: unknown;
   try {
