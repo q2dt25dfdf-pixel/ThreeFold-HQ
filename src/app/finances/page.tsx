@@ -1688,16 +1688,18 @@ function FinancesContent() {
   // "Paid by check" — reads the existing method fields (deposit_payment_method / final_payment_method).
   const invoicePaidByCheck = (inv: Invoice) =>
     inv.deposit_payment_method === "check" || inv.final_payment_method === "check";
-  // "Client will pay by check" — the matched deposit request's declared intent. Mirrors the
-  // hydrateInvoiceLinks match predicate exactly (deposit_request_id | lead_id | quote_id).
+  // "Client will pay by check" — declared intent from EITHER the matched deposit request
+  // (deposit page declare-check) OR the finances row itself (final-invoice declare-check
+  // writes client_payment_method_intent here). Deposit-record read is unchanged; the
+  // finances-row field is OR'd in. Display-only.
   const invoiceWillPayByCheck = (inv: Invoice) => {
-    const links = inv as Invoice & { deposit_request_id?: string; quote_id?: string };
+    const links = inv as Invoice & { deposit_request_id?: string; quote_id?: string; client_payment_method_intent?: string };
     const dep = depositRequests.find((d) =>
       (links.deposit_request_id && d.id === links.deposit_request_id) ||
       (links.lead_id && d.lead_id === links.lead_id) ||
       (links.quote_id && d.quote_id === links.quote_id),
     );
-    return dep?.client_payment_method_intent === "check";
+    return dep?.client_payment_method_intent === "check" || links.client_payment_method_intent === "check";
   };
 
   return (
