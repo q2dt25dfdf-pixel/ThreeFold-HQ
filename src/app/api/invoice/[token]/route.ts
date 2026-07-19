@@ -155,3 +155,53 @@ export async function GET(
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
+
+// ── POST: record the client's intended payment method on the FINANCES row. Mirrors the
+// deposit declare-check (/api/deposit/[token] POST) but the target IS the finances row by
+// design (the final invoice lives here). A DECLARATION, not a payment — writes only the
+// same two fields the deposit endpoint uses. Never sets final_paid, never touches Stripe,
+// never changes status.
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ token: string }> },
+) {
+  try {
+    const { token } = await params;
+    const body = (await request.json()) as { method?: unknown };
+    const method = body.method;
+    if (method !== "card" && method !== "bank" && method !== "check") {
+      return NextResponse.json({ error: "Invalid method" }, { status: 400 });
+    }
+
+    const db = getSupabaseAdmin();
+    const { data: rows, error } = await db
+      .from("finances")
+      .select("id,data")
+      .eq("data->>public_token", token)
+      .limit(1);
+    if (error || !rows || rows.length === 0) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    const row = rows[0];
+    const fin = row.data as Record<string, unknown>;
+    if (fin.final_paid === true) {
+      return NextResponse.json({ error: "This invoice is already paid." }, { status: 409 });
+    }
+
+    const updated = {
+      ...fin,
+      client_payment_method_intent: method,
+      payment_method_intent_declared_at: new Date().toISOString(),
+    };
+    const { error: upErr } = await db
+      .from("finances")
+      .update({ data: updated })
+      .eq("id", row.id);
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+
+    return NextResponse.json({ success: true, intent: method });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}

@@ -91,6 +91,8 @@ export default function InvoicePage() {
   const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [checkDeclared, setCheckDeclared] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
 
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
@@ -139,6 +141,30 @@ export default function InvoicePage() {
     } catch {
       setCheckoutError("Could not connect to payment. Please try again.");
       setCheckoutLoading(null);
+    }
+  };
+
+  // Declare "I'll mail a check" — a declaration, not a payment. Mirrors the deposit page's
+  // handleDeclareCheck, but POSTs to the invoice-token route which writes
+  // client_payment_method_intent="check" + payment_method_intent_declared_at onto the
+  // FINANCES row. Never marks paid, never touches Stripe.
+  const handleDeclareCheck = async () => {
+    if (!invoiceToken || checkLoading) return;
+    setCheckLoading(true);
+    setCheckoutError("");
+    try {
+      const res = await fetch(`/api/invoice/${invoiceToken}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "check" }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (d.success) setCheckDeclared(true);
+      else setCheckoutError(d.error ?? "Something went wrong. Please try again.");
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+    } finally {
+      setCheckLoading(false);
     }
   };
 
@@ -500,6 +526,11 @@ export default function InvoicePage() {
                     ? "Payment was not completed. You can try again below."
                     : undefined)
                 }
+                onDeclareCheck={() => void handleDeclareCheck()}
+                checkDeclared={checkDeclared}
+                checkLoading={checkLoading}
+                checkMemo={`Final balance${data.order_name ? ` — ${data.order_name}` : ""}`}
+                onResetMethod={() => setCheckDeclared(false)}
               />
             </div>
           )}
