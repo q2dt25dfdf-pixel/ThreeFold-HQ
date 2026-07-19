@@ -13,6 +13,7 @@ import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import {
   centsToCurrency,
+  CurrencyInput,
   handleCurrencyKeyDown,
   itemOptions,
   type LookupRecord,
@@ -1902,6 +1903,42 @@ export default function OrderDetailPage() {
     ? "bg-emerald-100 text-emerald-700"
     : "bg-amber-100 text-amber-700";
 
+  // Internal profit/margin — DISPLAY ONLY, never persisted, never client-facing.
+  // Revenue reuses the page's authoritative order total (totalAmount, same value the
+  // Payment Status section shows), falling back to order.amount. Cost = the Step-1 roll-up.
+  const marginRevenue = (Number.isFinite(totalAmount) && totalAmount > 0) ? totalAmount : (Number(order.amount) || 0);
+  const marginCost = readCostTotalCents / 100;
+  const marginProfit = marginRevenue - marginCost;
+  const marginPct = marginRevenue > 0 ? Math.round((marginProfit / marginRevenue) * 100) : null;
+  const hasCostLinesForMargin = readCostLines.length > 0;
+
+  const MarginBox = (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3">
+      <div className="grid grid-cols-3 gap-2">
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-800/70">Revenue</p>
+          <p className="mt-0.5 truncate text-sm font-bold text-slate-900">{formatCurrency(marginRevenue)}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-800/70">Cost</p>
+          <p className="mt-0.5 truncate text-sm font-bold text-slate-900">{formatCurrency(marginCost)}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-800/70">Margin</p>
+          {hasCostLinesForMargin && marginPct !== null ? (
+            <p className="mt-0.5 text-sm font-bold text-emerald-700">{marginPct}%</p>
+          ) : (
+            <p className="mt-0.5 text-[11px] font-medium text-slate-400">{hasCostLinesForMargin ? "Set order total" : "Add costs to see margin"}</p>
+          )}
+        </div>
+      </div>
+      {hasCostLinesForMargin && marginPct !== null && (
+        <p className="mt-2 text-[11px] font-semibold text-emerald-700">Profit {formatCurrency(marginProfit)}</p>
+      )}
+      <p className="mt-2 border-t border-emerald-200/70 pt-1.5 text-[10px] text-slate-400">Internal only — never shown to the client.</p>
+    </div>
+  );
+
   const VendorCostSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -1953,9 +1990,13 @@ export default function OrderDetailPage() {
               <span className="text-lg font-bold text-slate-950">{formatCurrency(readCostTotalCents / 100)}</span>
             </div>
             {order.vendor_notes ? <p className="whitespace-pre-wrap text-xs text-slate-600">{order.vendor_notes}</p> : null}
+            {MarginBox}
           </div>
         ) : (
-          <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No costs added</p>
+          <div className="space-y-3">
+            <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No costs added</p>
+            {MarginBox}
+          </div>
         )
       ) : (
       <div className="space-y-3">
@@ -1979,13 +2020,10 @@ export default function OrderDetailPage() {
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amount (USD)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={l.amount_cents ? l.amount_cents / 100 : ""}
-                  onChange={(e) => updateCostLine(l.id, { amount_cents: Math.max(0, Math.round((Number(e.target.value) || 0) * 100)) })}
-                  placeholder="0.00"
+                <CurrencyInput
+                  valueCents={Number(l.amount_cents) || 0}
+                  onChangeCents={(c) => updateCostLine(l.id, { amount_cents: c })}
+                  ariaLabel="Cost line amount"
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>
