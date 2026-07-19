@@ -70,6 +70,47 @@ export function handleCurrencyKeyDown(
   event.preventDefault();
 }
 
+// Reusable currency field: right-to-left cents entry (typing 1,2,3,4 -> $12.34), no
+// leading zero, blank when empty (no stubborn "0"). Stores integer cents via onChangeCents.
+// Model-agnostic — reuse on any dollar input later. Wraps the canonical centsToCurrency /
+// handleCurrencyKeyDown helpers so all currency fields behave identically.
+export function CurrencyInput({
+  valueCents,
+  onChangeCents,
+  className,
+  placeholder = "$0.00",
+  ariaLabel,
+}: {
+  valueCents: number;
+  onChangeCents: (cents: number) => void;
+  className?: string;
+  placeholder?: string;
+  ariaLabel?: string;
+}) {
+  const digits = valueCents ? String(Math.max(0, Math.round(valueCents))) : "";
+  const setDigits: React.Dispatch<React.SetStateAction<string>> = (action) => {
+    const next = typeof action === "function" ? (action as (c: string) => string)(digits) : action;
+    onChangeCents(Number(next || "0"));
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      aria-label={ariaLabel}
+      className={className}
+      placeholder={placeholder}
+      value={digits ? centsToCurrency(digits) : ""}
+      onKeyDown={(e) => handleCurrencyKeyDown(e, setDigits)}
+      onPaste={(e) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+        setDigits((c) => (c + pasted).replace(/^0+(?=\d)/, ""));
+      }}
+      onChange={() => {}}
+    />
+  );
+}
+
 export function SmartSearchInput({
   label,
   value,

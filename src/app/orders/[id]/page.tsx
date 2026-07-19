@@ -13,6 +13,7 @@ import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import {
   centsToCurrency,
+  CurrencyInput,
   handleCurrencyKeyDown,
   itemOptions,
   type LookupRecord,
@@ -58,6 +59,20 @@ type OrderLineItem = {
   print_detail?: string;
 };
 
+// Model-A production cost line. HQ-only — never sent to any client route. The
+// order-level vendor_cost_cents / vendor_payment_status / vendor_invoice_status keys
+// are DERIVED from these lines on save so downstream money math keeps working.
+type CostLine = {
+  id: string;                 // stable crypto id (used as the receipt key in Step 2)
+  label: string;              // "Blanks", "Transfers", "Shipping"
+  amount_cents: number;       // integer cents, never floats
+  status: "not_ordered" | "ordered" | "paid";
+  paid_by: "" | "Alliyah" | "Hannah" | "Jordan" | "Company Account";
+  supplier?: string;          // free text; vendors list is autocomplete-only, no vendor_id
+  receipt_url?: string;       // pasted link (Drive, etc.) — HQ-only, never client-facing
+  receipt_path?: string;      // uploaded file in the private order-receipts bucket
+};
+
 type Order = {
   id: string;
   orderName: string;
@@ -90,6 +105,7 @@ type Order = {
   vendor_payment_status?: string;
   vendor_paid_by?: string;
   vendor_notes?: string;
+  cost_lines?: CostLine[];
   delivery_address?: string;
   delivery_city?: string;
   delivery_state?: string;
@@ -165,9 +181,38 @@ const DESIGN_VERSION_STATUSES: DesignVersionStatus[] = [
   "Production Ready",
 ];
 
-const VENDOR_INVOICE_STATUSES = ["not_received", "received"] as const;
-const VENDOR_PAYMENT_STATUSES = ["unpaid", "paid"] as const;
+// vendor_invoice_status / vendor_payment_status are now DERIVED from cost_lines (see
+// deriveCostRollup) rather than picked directly, so their option lists are gone.
 const VENDOR_PAID_BY_OPTIONS = ["", "Alliyah", "Hannah", "Jordan", "Company Account"] as const;
+
+const COST_LINE_STATUSES = ["not_ordered", "ordered", "paid"] as const;
+
+function costStatusLabel(s: string): string {
+  return s === "paid" ? "Paid" : s === "ordered" ? "Ordered" : "Not ordered";
+}
+function costStatusPill(s: string): string {
+  return s === "paid"
+    ? "bg-emerald-100 text-emerald-700"
+    : s === "ordered"
+    ? "bg-amber-100 text-amber-700"
+    : "bg-slate-100 text-slate-500";
+}
+
+// Derive the order-level roll-up keys from the cost lines. These existing keys are what
+// the 5 downstream consumers (finances/page, ai/finances, ai/order, ai/openapi) read —
+// we only change how the order page WRITES them, never how they're read.
+function deriveCostRollup(lines: CostLine[]): {
+  vendor_cost_cents: number;
+  vendor_payment_status: string;
+  vendor_invoice_status: string;
+} {
+  const vendor_cost_cents = lines.reduce((s, l) => s + (Number(l.amount_cents) || 0), 0);
+  const vendor_payment_status =
+    lines.length > 0 && lines.every((l) => l.status === "paid") ? "paid" : "unpaid";
+  const vendor_invoice_status =
+    lines.some((l) => l.status === "ordered" || l.status === "paid") ? "received" : "not_received";
+  return { vendor_cost_cents, vendor_payment_status, vendor_invoice_status };
+}
 
 function statusToStageIndex(status: string): number {
   const s = status?.trim().toLowerCase();
@@ -459,10 +504,7 @@ export default function OrderDetailPage() {
   const [editingReminder, setEditingReminder] = useState(false);
 
   // Production costs (data keys keep the vendor_* names for the 5 downstream consumers)
-  const [vendorCostCents, setVendorCostCents] = useState("");
-  const [vendorInvoiceStatus, setVendorInvoiceStatus] = useState("not_received");
-  const [vendorPaymentStatus, setVendorPaymentStatus] = useState("unpaid");
-  const [vendorPaidBy, setVendorPaidBy] = useState("");
+  const [costLinesDraft, setCostLinesDraft] = useState<CostLine[]>([]);
   const [vendorNotes, setVendorNotes] = useState("");
   const vendorCostSave = useSaveState();
 
@@ -478,6 +520,9 @@ export default function OrderDetailPage() {
   const [designImageUrls, setDesignImageUrls] = useState<Record<string, string>>({});
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  const [uploadingReceiptLineId, setUploadingReceiptLineId] = useState<string | null>(null);
+  const [receiptErrors, setReceiptErrors] = useState<Record<string, string>>({});
+  const [openingReceiptPath, setOpeningReceiptPath] = useState<string | null>(null);
 
   // Signed URLs for intake file attachments — generated server-side to avoid browser auth/RLS mismatch
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
@@ -516,11 +561,8 @@ export default function OrderDetailPage() {
     if (order && !initialized) {
       setNextAction(order.nextAction ?? "");
       setInternalNotes(order.internalNotes ?? "");
-      setVendorCostCents(order.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
       setLineItemsDraft(Array.isArray(order.line_items) ? order.line_items : []);
-      setVendorInvoiceStatus(order.vendor_invoice_status ?? "not_received");
-      setVendorPaymentStatus(order.vendor_payment_status ?? "unpaid");
-      setVendorPaidBy(order.vendor_paid_by ?? "");
+      setCostLinesDraft(Array.isArray(order.cost_lines) ? order.cost_lines : []);
       setVendorNotes(order.vendor_notes ?? "");
       setDeliveryAddress(order.delivery_address ?? "");
       setDeliveryCity(order.delivery_city ?? "");
@@ -670,13 +712,43 @@ export default function OrderDetailPage() {
   };
 
   // Re-hydrate a section's draft state from the saved order (used by Cancel).
+  // Build the editable cost lines from the order. If the order already has cost_lines,
+  // copy them; otherwise MIGRATE a pre-existing single vendor_cost_cents into one seeded
+  // line so nothing is lost on first edit of an old order.
+  const seedCostLinesFromOrder = (): CostLine[] => {
+    if (Array.isArray(order?.cost_lines) && order.cost_lines.length > 0) {
+      return order.cost_lines.map((l) => ({ ...l }));
+    }
+    if (order?.vendor_cost_cents && order.vendor_cost_cents > 0) {
+      return [{
+        id: crypto.randomUUID(),
+        label: "Production cost",
+        amount_cents: order.vendor_cost_cents,
+        status: order.vendor_payment_status === "paid"
+          ? "paid"
+          : order.vendor_invoice_status === "received"
+          ? "ordered"
+          : "not_ordered",
+        paid_by: (order.vendor_paid_by as CostLine["paid_by"]) ?? "",
+        supplier: "",
+      }];
+    }
+    return [];
+  };
+
   const hydrateVendorFromOrder = () => {
-    setVendorCostCents(order?.vendor_cost_cents ? String(order.vendor_cost_cents) : "");
-    setVendorInvoiceStatus(order?.vendor_invoice_status ?? "not_received");
-    setVendorPaymentStatus(order?.vendor_payment_status ?? "unpaid");
-    setVendorPaidBy(order?.vendor_paid_by ?? "");
+    setCostLinesDraft(seedCostLinesFromOrder());
     setVendorNotes(order?.vendor_notes ?? "");
   };
+
+  const addCostLine = () =>
+    setCostLinesDraft((prev) => [...prev, {
+      id: crypto.randomUUID(), label: "", amount_cents: 0, status: "not_ordered", paid_by: "", supplier: "",
+    }]);
+  const removeCostLine = (id: string) =>
+    setCostLinesDraft((prev) => prev.filter((l) => l.id !== id));
+  const updateCostLine = (id: string, patch: Partial<CostLine>) =>
+    setCostLinesDraft((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const hydrateDeliveryFromOrder = () => {
     setDeliveryAddress(order?.delivery_address ?? "");
     setDeliveryCity(order?.delivery_city ?? "");
@@ -687,15 +759,26 @@ export default function OrderDetailPage() {
 
   const saveVendorCost = () => {
     if (!order) return;
-    const cents = parseInt(vendorCostCents || "0", 10);
-    if (isNaN(cents) || cents < 0) return;
+    // Normalize: trim labels/suppliers, coerce amounts to integer cents, drop blank lines.
+    const lines: CostLine[] = costLinesDraft
+      .map((l) => ({
+        ...l,
+        label: l.label.trim(),
+        amount_cents: Math.max(0, Math.round(Number(l.amount_cents) || 0)),
+        supplier: (l.supplier ?? "").trim(),
+        receipt_url: (l.receipt_url ?? "").trim() || undefined,
+      }))
+      .filter((l) => l.label || l.amount_cents > 0);
+    // Derived roll-up keeps finances + AI routes working unchanged.
+    const rollup = deriveCostRollup(lines);
     vendorCostSave.runSave(() =>
       upsertItem({
         ...order,
-        vendor_cost_cents: cents,
-        vendor_invoice_status: vendorInvoiceStatus,
-        vendor_payment_status: vendorPaymentStatus,
-        vendor_paid_by: vendorPaidBy,
+        cost_lines: lines,
+        vendor_cost_cents: rollup.vendor_cost_cents,
+        vendor_invoice_status: rollup.vendor_invoice_status,
+        vendor_payment_status: rollup.vendor_payment_status,
+        vendor_paid_by: lines.find((l) => l.paid_by)?.paid_by ?? "",
         vendor_notes: vendorNotes,
       }),
     );
@@ -816,6 +899,97 @@ export default function OrderDetailPage() {
     setDesignVersionDrafts(updatedVersions);
     saveDesignVersions(updatedVersions);
     setUploadingVersionId(null);
+  };
+
+  // Upload a cost-line receipt to the private order-receipts bucket. The file is stored
+  // immediately (fixed path per line, upsert overwrites on replace); the receipt_path is
+  // set on the draft line and persists with the normal Production Costs Save. Mirrors the
+  // design-version upload but points at order-receipts (never client-reachable).
+  // Upload goes through the auth-gated, service-role /api/internal/receipt-upload endpoint
+  // (the private order-receipts bucket rejects direct browser uploads via RLS). The file
+  // is stored immediately; the returned receipt_path persists with the normal Save.
+  const handleReceiptUpload = async (lineId: string, file: File) => {
+    if (!order) return;
+    setUploadingReceiptLineId(lineId);
+    setReceiptErrors((prev) => { const n = { ...prev }; delete n[lineId]; return n; });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('orderId', order.id);
+      fd.append('lineId', lineId);
+      const res = await fetch('/api/internal/receipt-upload', {
+        method: 'POST',
+        headers: { ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.path) {
+        setReceiptErrors((prev) => ({
+          ...prev,
+          [lineId]: /bucket|not found|does not exist/i.test(json?.error ?? "")
+            ? "Upload failed — the 'order-receipts' storage bucket doesn't exist yet."
+            : json?.error || "Upload failed.",
+        }));
+        return;
+      }
+      updateCostLine(lineId, { receipt_path: json.path });
+    } catch {
+      setReceiptErrors((prev) => ({ ...prev, [lineId]: "Upload failed." }));
+    } finally {
+      setUploadingReceiptLineId(null);
+    }
+  };
+
+  const removeReceiptFromLine = (lineId: string) => {
+    // Clears both references only; an uploaded file is intentionally left in the bucket
+    // (no hard storage delete in this pass).
+    updateCostLine(lineId, { receipt_path: undefined, receipt_url: undefined });
+    setReceiptErrors((prev) => { const n = { ...prev }; delete n[lineId]; return n; });
+  };
+
+  // Open a line's receipt: a pasted URL opens directly; an uploaded file mints a signed
+  // URL first. Uploaded file wins if both are present.
+  const openLineReceipt = (l: CostLine) => {
+    if (l.receipt_path) { void openReceipt(l.receipt_path); return; }
+    if (l.receipt_url) {
+      const href = /^https?:\/\//i.test(l.receipt_url) ? l.receipt_url : `https://${l.receipt_url}`;
+      window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const openReceipt = async (path: string) => {
+    if (!path || openingReceiptPath) return;
+    setOpeningReceiptPath(path);
+    // Fetch the signed URL FIRST, then open exactly one tab via a programmatic anchor
+    // click. No pre-opened placeholder tab (that caused a leftover about:blank), and no
+    // window.open fallback that could fire a second tab.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/internal/receipt-signed-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ paths: [path] }),
+      });
+      const urls: Record<string, string> = res.ok ? await res.json() : {};
+      const url = urls[path];
+      if (url && typeof document !== "undefined") {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch {
+      // could not open — leave silently; the "Receipt" indicator remains
+    } finally {
+      setOpeningReceiptPath(null);
+    }
   };
 
   const handleInvoiceSent = (sender: string, invoiceLink: string) => {
@@ -1705,28 +1879,76 @@ export default function OrderDetailPage() {
     </div>
   );
 
-  const vendorCostDisplay = vendorCostCents
-    ? formatCurrency(parseInt(vendorCostCents, 10) / 100)
-    : "$0.00";
-  const vendorInvoiceBadge =
-    vendorInvoiceStatus === "received"
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-slate-100 text-slate-500";
-  const vendorPaymentBadge =
-    vendorPaymentStatus === "paid"
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-amber-100 text-amber-700";
+  // Read-view lines: prefer stored cost_lines; else surface a pre-migration order's single
+  // vendor_cost_cents as one implicit row so nothing looks lost before first edit.
+  const readCostLines: CostLine[] =
+    Array.isArray(order.cost_lines) && order.cost_lines.length > 0
+      ? order.cost_lines
+      : order.vendor_cost_cents
+      ? [{
+          id: "legacy",
+          label: "Production cost",
+          amount_cents: order.vendor_cost_cents,
+          status: order.vendor_payment_status === "paid" ? "paid" : "not_ordered",
+          paid_by: (order.vendor_paid_by as CostLine["paid_by"]) ?? "",
+          supplier: "",
+        }]
+      : [];
+  const readCostTotalCents = readCostLines.reduce((s, l) => s + (Number(l.amount_cents) || 0), 0);
+  const draftCostTotalCents = costLinesDraft.reduce((s, l) => s + (Number(l.amount_cents) || 0), 0);
+  const invoicePill = order.vendor_invoice_status === "received"
+    ? "bg-emerald-100 text-emerald-700"
+    : "bg-slate-100 text-slate-500";
+  const paymentPill = order.vendor_payment_status === "paid"
+    ? "bg-emerald-100 text-emerald-700"
+    : "bg-amber-100 text-amber-700";
+
+  // Internal profit/margin — DISPLAY ONLY, never persisted, never client-facing.
+  // Revenue reuses the page's authoritative order total (totalAmount, same value the
+  // Payment Status section shows), falling back to order.amount. Cost = the Step-1 roll-up.
+  const marginRevenue = (Number.isFinite(totalAmount) && totalAmount > 0) ? totalAmount : (Number(order.amount) || 0);
+  const marginCost = readCostTotalCents / 100;
+  const marginProfit = marginRevenue - marginCost;
+  const marginPct = marginRevenue > 0 ? Math.round((marginProfit / marginRevenue) * 100) : null;
+  const hasCostLinesForMargin = readCostLines.length > 0;
+
+  const MarginBox = (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3">
+      <div className="grid grid-cols-3 gap-2">
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-800/70">Revenue</p>
+          <p className="mt-0.5 truncate text-sm font-bold text-slate-900">{formatCurrency(marginRevenue)}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-800/70">Cost</p>
+          <p className="mt-0.5 truncate text-sm font-bold text-slate-900">{formatCurrency(marginCost)}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-800/70">Margin</p>
+          {hasCostLinesForMargin && marginPct !== null ? (
+            <p className="mt-0.5 text-sm font-bold text-emerald-700">{marginPct}%</p>
+          ) : (
+            <p className="mt-0.5 text-[11px] font-medium text-slate-400">{hasCostLinesForMargin ? "Set order total" : "Add costs to see margin"}</p>
+          )}
+        </div>
+      </div>
+      {hasCostLinesForMargin && marginPct !== null && (
+        <p className="mt-2 text-[11px] font-semibold text-emerald-700">Profit {formatCurrency(marginProfit)}</p>
+      )}
+      <p className="mt-2 border-t border-emerald-200/70 pt-1.5 text-[10px] text-slate-400">Internal only — never shown to the client.</p>
+    </div>
+  );
 
   const VendorCostSection = (
     <div className="w-full min-w-0 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Production Costs</h2>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorInvoiceBadge}`}>
-            {vendorInvoiceStatus === "received" ? "Invoice received" : "Invoice pending"}
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${invoicePill}`}>
+            {order.vendor_invoice_status === "received" ? "Invoice received" : "Invoice pending"}
           </span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vendorPaymentBadge}`}>
-            {vendorPaymentStatus === "paid" ? "Paid" : "Unpaid"}
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${paymentPill}`}>
+            {order.vendor_payment_status === "paid" ? "Paid" : "Unpaid"}
           </span>
           {!editingVendor && (
             <button type="button" onClick={() => { hydrateVendorFromOrder(); setEditingVendor(true); }} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
@@ -1735,80 +1957,152 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
-      <div className="mb-3 flex items-baseline gap-2">
-        <span className="text-xl font-bold text-slate-950">{vendorCostDisplay}</span>
-        {vendorPaidBy && (
-          <span className="text-xs text-slate-400">paid by {vendorPaidBy}</span>
-        )}
-      </div>
       {!editingVendor ? (
-        order.vendor_notes ? <p className="whitespace-pre-wrap text-xs text-slate-600">{order.vendor_notes}</p> : null
+        readCostLines.length > 0 ? (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              {readCostLines.map((l) => (
+                <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-slate-900">{l.label || "Cost"}</p>
+                    {(l.supplier || l.paid_by) && (
+                      <p className="truncate text-[10px] text-slate-400">
+                        {l.supplier}{l.supplier && l.paid_by ? " · " : ""}{l.paid_by ? `paid by ${l.paid_by}` : ""}
+                      </p>
+                    )}
+                    {(l.receipt_path || l.receipt_url) ? (
+                      <button type="button" onClick={() => openLineReceipt(l)} disabled={openingReceiptPath === l.receipt_path} className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">
+                        <Check className="h-3 w-3" /> {openingReceiptPath === l.receipt_path ? "Opening…" : "Receipt"}
+                      </button>
+                    ) : (
+                      <span className="mt-0.5 block text-[10px] text-slate-300">No receipt</span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-950">{formatCurrency((Number(l.amount_cents) || 0) / 100)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${costStatusPill(l.status)}`}>{costStatusLabel(l.status)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-200 pt-2.5">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Total</span>
+              <span className="text-lg font-bold text-slate-950">{formatCurrency(readCostTotalCents / 100)}</span>
+            </div>
+            {order.vendor_notes ? <p className="whitespace-pre-wrap text-xs text-slate-600">{order.vendor_notes}</p> : null}
+            {MarginBox}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No costs added</p>
+            {MarginBox}
+          </div>
+        )
       ) : (
       <div className="space-y-3">
-        <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cost (USD)</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
-            placeholder="$0.00"
-            value={centsToCurrency(vendorCostCents)}
-            onKeyDown={(e) => handleCurrencyKeyDown(e, setVendorCostCents)}
-            onPaste={(e) => {
-              e.preventDefault();
-              setVendorCostCents((c) => (c + e.clipboardData.getData("text").replace(/\D/g, "")).replace(/^0+(?=\d)/, ""));
-            }}
-            onChange={() => {}}
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Supplier Invoice</label>
-            <select
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
-              value={vendorInvoiceStatus}
-              onChange={(e) => setVendorInvoiceStatus(e.target.value)}
-            >
-              {VENDOR_INVOICE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === "not_received" ? "Not received" : "Received"}
-                </option>
-              ))}
-            </select>
+        {costLinesDraft.length === 0 && (
+          <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-[11px] text-slate-500">No cost lines yet — add the first below.</p>
+        )}
+        {costLinesDraft.map((l) => (
+          <div key={l.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={l.label}
+                onChange={(e) => updateCostLine(l.id, { label: e.target.value })}
+                placeholder="Label (e.g. Blanks, Transfers, Shipping)"
+                className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+              />
+              <button type="button" onClick={() => removeCostLine(l.id)} aria-label="Remove cost line" className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amount (USD)</label>
+                <CurrencyInput
+                  valueCents={Number(l.amount_cents) || 0}
+                  onChangeCents={(c) => updateCostLine(l.id, { amount_cents: c })}
+                  ariaLabel="Cost line amount"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Status</label>
+                <select
+                  value={l.status}
+                  onChange={(e) => updateCostLine(l.id, { status: e.target.value as CostLine["status"] })}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                >
+                  {COST_LINE_STATUSES.map((s) => <option key={s} value={s}>{costStatusLabel(s)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Paid by</label>
+                <select
+                  value={l.paid_by}
+                  onChange={(e) => updateCostLine(l.id, { paid_by: e.target.value as CostLine["paid_by"] })}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                >
+                  {VENDOR_PAID_BY_OPTIONS.map((o) => <option key={o} value={o}>{o === "" ? "—" : o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Supplier</label>
+                <input
+                  type="text"
+                  list={`cost-suppliers-${l.id}`}
+                  value={l.supplier ?? ""}
+                  onChange={(e) => updateCostLine(l.id, { supplier: e.target.value })}
+                  placeholder="e.g. NinjaTransfer"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                />
+                <datalist id={`cost-suppliers-${l.id}`}>
+                  {vendors.map((v) => <option key={v.id} value={recordName(v)} />)}
+                </datalist>
+              </div>
+            </div>
+            <div className="mt-2">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Receipt (link or file)</label>
+              <input
+                type="url"
+                inputMode="url"
+                value={l.receipt_url ?? ""}
+                onChange={(e) => updateCostLine(l.id, { receipt_url: e.target.value })}
+                placeholder="Paste a link (Drive, etc.)"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+              />
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 ${uploadingReceiptLineId === l.id ? "cursor-not-allowed opacity-50" : ""}`}>
+                  <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={uploadingReceiptLineId === l.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReceiptUpload(l.id, f); e.target.value = ''; }} />
+                  {uploadingReceiptLineId === l.id ? "Uploading…" : l.receipt_path ? "Replace file" : "Upload file"}
+                </label>
+                {l.receipt_path && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><Check className="h-3.5 w-3.5" /> File uploaded</span>
+                )}
+                {(l.receipt_path || l.receipt_url) && (
+                  <button type="button" onClick={() => openLineReceipt(l)} disabled={openingReceiptPath === l.receipt_path} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-slate-50 disabled:opacity-50">
+                    {openingReceiptPath === l.receipt_path ? "Opening…" : "View"}
+                  </button>
+                )}
+                {(l.receipt_path || l.receipt_url) && (
+                  <button type="button" onClick={() => removeReceiptFromLine(l.id)} className="rounded-xl border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50">Remove</button>
+                )}
+              </div>
+              {receiptErrors[l.id] && <p className="mt-1 text-[11px] text-rose-600">{receiptErrors[l.id]}</p>}
+            </div>
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Payment Status</label>
-            <select
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
-              value={vendorPaymentStatus}
-              onChange={(e) => setVendorPaymentStatus(e.target.value)}
-            >
-              {VENDOR_PAYMENT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === "unpaid" ? "Unpaid" : "Paid"}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-600">Paid By</label>
-          <select
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 focus:border-slate-400 focus:outline-none md:text-sm"
-            value={vendorPaidBy}
-            onChange={(e) => setVendorPaidBy(e.target.value)}
-          >
-            {VENDOR_PAID_BY_OPTIONS.map((o) => (
-              <option key={o} value={o}>
-                {o === "" ? "—" : o}
-              </option>
-            ))}
-          </select>
+        ))}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onClick={addCostLine} className="flex items-center gap-1.5 rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50">
+            <Plus className="h-3.5 w-3.5" /> Add cost line
+          </button>
+          <span className="text-[11px] font-semibold text-slate-500">Total {formatCurrency(draftCostTotalCents / 100)}</span>
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-600">Notes</label>
           <textarea
-            rows={3}
+            rows={2}
             className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none md:text-sm"
             placeholder="Invoice number, PO reference, payment details..."
             value={vendorNotes}
