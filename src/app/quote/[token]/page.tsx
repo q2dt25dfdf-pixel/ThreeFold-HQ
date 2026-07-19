@@ -83,7 +83,6 @@ export default function QuotePage() {
 
   // Deposit handoff from the approve PATCH (or, on a reload, from the GET).
   const [depositToken, setDepositToken] = useState<string | null>(null);
-  const [depositLink, setDepositLink] = useState<string | null>(null);
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
 
   // Amount picker + pay state.
@@ -108,7 +107,6 @@ export default function QuotePage() {
             setApproved(true);
             // Fresh load of an already-approved quote: the deposit comes from GET.
             if (d.deposit_public_token) setDepositToken(d.deposit_public_token);
-            if (d.deposit_public_link) setDepositLink(d.deposit_public_link);
             if (d.deposit_status) setDepositStatus(d.deposit_status);
           }
         }
@@ -136,7 +134,6 @@ export default function QuotePage() {
         // Just-approved: the deposit token/link/status come from the PATCH response
         // (the page does not refetch). Piece 3 renders the pay card from these.
         if (json.depositToken) setDepositToken(json.depositToken);
-        if (json.depositLink) setDepositLink(json.depositLink);
         if (json.depositStatus) setDepositStatus(json.depositStatus);
       } else {
         setApproveError(json.error ?? "Something went wrong. Please try again.");
@@ -606,12 +603,6 @@ export default function QuotePage() {
                     onResetMethod={() => setCheckDeclared(false)}
                   />
                 </div>
-
-                {depositLink && !checkDeclared && (
-                  <a href={depositLink} style={s.depositLink}>
-                    View your deposit page →
-                  </a>
-                )}
               </div>
             ) : (
               // No deposit token — a quote with no lead cannot mint one. Keep the
