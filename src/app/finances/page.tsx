@@ -1384,6 +1384,8 @@ function FinancesContent() {
   const reimbursementExpenses = expenses.filter(
     (e) => e.reimbursement_status === "needs_reimbursement",
   );
+  // Reimbursements owed (dollars) — inline sum over the same records, existing cents unit.
+  const reimbursementsOwed = reimbursementExpenses.reduce((s, e) => s + (e.amount_cents ?? 0) / 100, 0);
   const nothingNeedsAttention =
     attentionInvoices.length === 0 && reimbursementExpenses.length === 0 && taxDue <= 0;
 
@@ -1534,209 +1536,107 @@ function FinancesContent() {
         )}
       </section>
 
-      {/* ── Where it stands (calm summary) ────────────────────────────────────────── */}
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Est. Gross Profit</p>
-          <p className={`mt-1 text-lg font-bold ${estimatedGrossProfit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{currency.format(estimatedGrossProfit)}</p>
-          <p className="mt-0.5 text-[9px] text-slate-400">Revenue − paid vendor costs</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Total Invoiced</p>
-          <p className="mt-1 text-lg font-bold text-slate-900">{currency.format(totalInvoiceValue)}</p>
-          <p className="mt-0.5 text-[9px] text-slate-400">{normalizedInvoices.length} invoice{normalizedInvoices.length !== 1 ? "s" : ""}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Total Costs</p>
-          <p className="mt-1 text-lg font-bold text-slate-900">{currency.format(paidVendorCosts + paidExpenses)}</p>
-          <p className="mt-0.5 text-[9px] text-slate-400">Paid vendor + expenses</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Sales Tax Owed</p>
-          <p className={`mt-1 text-lg font-bold ${taxDue > 0 ? "text-rose-600" : "text-slate-900"}`}>{currency.format(taxDue)}</p>
-          <p className="mt-0.5 text-[9px] text-slate-400">Collected − remitted</p>
+      {/* ── One clean money summary: Money In & Out / What's Owed ──────────────── */}
+      <section className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+        <div className="grid gap-6 sm:grid-cols-2 sm:divide-x sm:divide-slate-100">
+          {/* MONEY IN & OUT */}
+          <div className="sm:pr-6">
+            <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Money In &amp; Out</h3>
+            <dl className="space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Revenue collected</dt>
+                <dd className="text-sm font-semibold text-emerald-600">{currency.format(revenueCollected)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Production costs paid</dt>
+                <dd className="text-sm font-semibold text-rose-500">−{currency.format(paidVendorCosts)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Business expenses paid</dt>
+                <dd className="text-sm font-semibold text-rose-500">−{currency.format(paidExpenses)}</dd>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+                <dt className="text-xs font-semibold text-slate-800">Net position</dt>
+                <dd className={`text-base font-bold ${netPosition < 0 ? "text-rose-600" : "text-slate-900"}`}>{currency.format(netPosition)}</dd>
+              </div>
+            </dl>
+          </div>
+          {/* WHAT'S OWED */}
+          <div className="sm:pl-6">
+            <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">What&apos;s Owed</h3>
+            <dl className="space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Outstanding invoices</dt>
+                <dd className={`text-sm font-semibold ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Sales tax to remit</dt>
+                <dd className={`text-sm font-semibold ${taxDue > 0 ? "text-rose-600" : "text-slate-400"}`}>{currency.format(taxDue)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Reimbursements owed</dt>
+                <dd className={`text-sm font-semibold ${reimbursementsOwed > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(reimbursementsOwed)}</dd>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+                <dt className="text-xs font-semibold text-slate-800">Est. gross profit</dt>
+                <dd className={`text-base font-bold ${estimatedGrossProfit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{currency.format(estimatedGrossProfit)}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </section>
 
-      {/* ── Money flow ───────────────────────────────────────────────────────── */}
+      {/* ── Calm detail: revenue over time (pie removed) ───────────────────────── */}
       <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <h2 className="mb-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Money Flow</h2>
-        <div className="space-y-4">
+        <div className="mb-6 flex items-center justify-between gap-4">
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-700">Revenue Collected</span>
-              <span className="text-xs font-bold text-emerald-600">{currency.format(revenueCollected)}</span>
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: revenueCollected > 0 ? "100%" : "0%" }} />
-            </div>
-          </div>
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs text-slate-400">− Paid Vendor Costs</span>
-              <span className="text-xs font-semibold text-slate-500">{currency.format(paidVendorCosts)}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-rose-400 transition-all" style={{ width: `${revenueCollected > 0 ? Math.min(100, Math.round((paidVendorCosts / revenueCollected) * 100)) : 0}%` }} />
-            </div>
-          </div>
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs text-slate-400">− Paid Expenses</span>
-              <span className="text-xs font-semibold text-slate-500">{currency.format(paidExpenses)}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${revenueCollected > 0 ? Math.min(100, Math.round((paidExpenses / revenueCollected) * 100)) : 0}%` }} />
-            </div>
-          </div>
-          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${netPosition >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
-            <span className="text-xs font-semibold text-slate-700">= Net Position</span>
-            <span className={`text-base font-bold ${netPosition >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{currency.format(netPosition)}</span>
+            <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue over time</h2>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">Monthly collected revenue and projected outstanding balance.</p>
           </div>
         </div>
-        {revenueCollected === 0 && (
-          <p className="mt-4 text-[10px] text-slate-400">Bars will fill once invoices are marked paid.</p>
-        )}
-      </section>
-
-      {/* (Business-health cards removed — Revenue Collected / Outstanding / Revenue
-          Goal now live in the hero row and the revenue-goal section below; Total Invoice
-          Value moved to the "Where it stands" strip.) */}
-
-      {/* ── Supporting financial details ("where it stands" detail) ────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Financial Details</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {/* Vendor Costs */}
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Vendor Costs</p>
-            <p className="mt-2 text-xl font-bold text-slate-950">{currency.format(totalVendorCosts)}</p>
-            <div className="mt-3 space-y-1.5">
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-slate-500">Paid</span>
-                <span className="font-semibold text-slate-700">{currency.format(paidVendorCosts)}</span>
-              </div>
-              <div className={`flex items-center justify-between text-[10px] ${unpaidVendorCosts > 0 ? "text-rose-600" : "text-slate-400"}`}>
-                <span>Unpaid</span>
-                <span className="font-semibold">{currency.format(unpaidVendorCosts)}</span>
-              </div>
-            </div>
-            {ordersWithoutVendorCost > 0 && (
-              <p className="mt-2 text-[9px] text-slate-400">{ordersWithoutVendorCost} order{ordersWithoutVendorCost !== 1 ? "s" : ""} missing cost</p>
-            )}
-          </div>
-          {/* Expenses */}
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Expenses</p>
-            <p className="mt-2 text-xl font-bold text-slate-950">{currency.format(paidExpenses + unpaidExpenses)}</p>
-            <div className="mt-3 space-y-1.5">
-              <div className={`flex items-center justify-between text-[10px] ${paidExpenses > 0 ? "text-rose-600" : "text-slate-500"}`}>
-                <span>Paid</span>
-                <span className="font-semibold">{currency.format(paidExpenses)}</span>
-              </div>
-              <div className={`flex items-center justify-between text-[10px] ${unpaidExpenses > 0 ? "text-amber-600" : "text-slate-400"}`}>
-                <span>Unpaid</span>
-                <span className="font-semibold">{currency.format(unpaidExpenses)}</span>
-              </div>
-            </div>
-          </div>
-          {/* Sales Tax */}
-          <div className={`rounded-2xl p-4 ${taxDue > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-            <p className={`text-[10px] font-semibold uppercase tracking-[0.15em] ${taxDue > 0 ? "text-rose-400" : "text-slate-400"}`}>Sales Tax Owed</p>
-            <p className={`mt-2 text-xl font-bold ${taxDue > 0 ? "text-rose-700" : "text-slate-950"}`}>{currency.format(taxDue)}</p>
-            <div className="mt-3 space-y-1.5">
-              <div className="flex items-center justify-between text-[10px] text-slate-500">
-                <span>Collected YTD</span>
-                <span className="font-semibold text-slate-700">{currency.format(taxCollectedYTD)}</span>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-slate-500">
-                <span>Remitted YTD</span>
-                <span className="font-semibold text-slate-700">{currency.format(taxPaidYTD)}</span>
-              </div>
-            </div>
-            {hasTaxGap && (
-              <p className="mt-2 text-[9px] font-medium text-amber-600">⚠ Some invoices missing tax data</p>
-            )}
-          </div>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={monthlyRevenue} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
+              <defs>
+                <linearGradient id="collectedFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="outstandingFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.24} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(value) => `$${Number(value) / 1000}k`} width={44} />
+              <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} contentStyle={{ borderRadius: 16, borderColor: "#e2e8f0" }} />
+              <Area type="monotone" dataKey="collected" name="Collected" stroke="#10b981" strokeWidth={3} fill="url(#collectedFill)" dot={false} activeDot={false} />
+              <Area type="monotone" dataKey="outstanding" name="Outstanding" stroke="#f59e0b" strokeWidth={3} fill="url(#outstandingFill)" dot={false} activeDot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </section>
 
-      {/* ── Calm detail: revenue over time + invoice status breakdown ──────────── */}
-      <section className="grid gap-5 xl:grid-cols-[1.55fr_0.95fr]">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue over time</h2>
-              <p className="mt-1 text-xs md:text-sm text-slate-600">Monthly collected revenue and projected outstanding balance.</p>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyRevenue} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="collectedFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="outstandingFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.24} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(value) => `$${Number(value) / 1000}k`} width={44} />
-                <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} contentStyle={{ borderRadius: 16, borderColor: "#e2e8f0" }} />
-                <Area type="monotone" dataKey="collected" name="Collected" stroke="#10b981" strokeWidth={3} fill="url(#collectedFill)" dot={false} activeDot={false} />
-                <Area type="monotone" dataKey="outstanding" name="Outstanding" stroke="#f59e0b" strokeWidth={3} fill="url(#outstandingFill)" dot={false} activeDot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <h2 className="text-base md:text-lg font-semibold text-slate-950">Invoice status breakdown</h2>
-          <div className="relative mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={74} outerRadius={104} paddingAngle={4} strokeWidth={0}>
-                  {statusData.map((entry) => (
-                    <Cell key={entry.name} fill={statusPalette[entry.name as InvoiceStatus]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <p className="text-base md:text-3xl font-bold text-slate-950">{normalizedInvoices.length}</p>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Invoices</p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {statusData.map((item) => (
-              <div key={item.name} className="flex items-center gap-2 text-xs md:text-sm text-slate-600">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusPalette[item.name as InvoiceStatus] }} aria-hidden="true" />
-                <span>{item.name}</span>
-                <span className="ml-auto font-semibold text-slate-950">{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Calm detail: revenue goal ─────────────────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      {/* ── Calm detail: revenue-goal milestone bar ────────────────────────────── */}
+      <section className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue goal</h2>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">{currency.format(revenueCollected)} of {currency.format(goal)} goal</p>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Revenue Goal</h2>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(revenueCollected)}</p>
           </div>
-          <div className="text-left sm:text-right">
-            <p className="text-base md:text-2xl font-bold text-slate-950">{goalPercent}%</p>
-            <p className="text-xs md:text-sm text-slate-600">Projected completion: {projectedCompletion}</p>
-          </div>
+          <p className="text-xs text-slate-500">{goalPercent}% of {currency.format(goal)}</p>
         </div>
-        <div className="mt-5 h-4 overflow-hidden rounded-full bg-slate-100">
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${goalPercent}%` }} />
+        </div>
+        <div className="mt-2 flex justify-between">
+          {[0, 0.25, 0.5, 0.75, 1].map((f) => {
+            const checkpoint = goal * f;
+            const label = checkpoint === 0 ? "$0" : `$${checkpoint / 1000}k`;
+            return (
+              <span key={f} className={`text-[9px] font-semibold ${f === 0 ? "text-emerald-600" : "text-slate-400"}`}>{label}</span>
+            );
+          })}
         </div>
       </section>
       </>
