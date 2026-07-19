@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { getInvoiceBaseUrl } from "@/lib/publicUrl";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,6 +86,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Final-invoice number (TF-I-) — a distinct reference from the deposit's TF-D-, so
+    // identical 50/50 amounts are never confused. Minted/stored idempotently, the same way
+    // TF-D-/TF-ORD- are minted, and independently of the tokens; reused if already present.
+    let invoiceNumber = typeof rawWithReceipt.invoice_number === "string" && rawWithReceipt.invoice_number ? rawWithReceipt.invoice_number : "";
+    if (!invoiceNumber) {
+      invoiceNumber = await nextSequenceNumber(db, { table: "finances", field: "invoice_number", prefix: "TF-I" });
+      rawWithReceipt = { ...rawWithReceipt, invoice_number: invoiceNumber };
+      const { error: invNumErr } = await db
+        .from("finances")
+        .upsert({ id: invoiceId, data: rawWithReceipt });
+      if (invNumErr) {
+        return NextResponse.json({ error: invNumErr.message }, { status: 500 });
+      }
+    }
+
     // Return existing link if already generated
     if (typeof rawWithReceipt.public_token === "string" && rawWithReceipt.public_token) {
       return NextResponse.json({
@@ -92,6 +108,7 @@ export async function POST(request: NextRequest) {
         publicLink: rawWithReceipt.public_link,
         receiptToken,
         receiptLink,
+        invoiceNumber,
         clientEmail,
         balanceRemaining,
       });
@@ -109,7 +126,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ publicToken: token, publicLink, receiptToken, receiptLink, clientEmail, balanceRemaining });
+    return NextResponse.json({ publicToken: token, publicLink, receiptToken, receiptLink, invoiceNumber, clientEmail, balanceRemaining });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

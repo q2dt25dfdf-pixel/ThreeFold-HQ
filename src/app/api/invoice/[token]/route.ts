@@ -142,6 +142,7 @@ export async function GET(
       contact_name: contactName,
       portal_url: portalUrl,
       deposit_request_number: depositNumberVal,
+      invoice_number: (raw.invoice_number ?? null) as string | null,
       subtotal: subtotalVal,
       discount: discountVal,
       sales_tax_rate: salesTaxRateVal,

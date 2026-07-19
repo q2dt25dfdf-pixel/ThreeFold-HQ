@@ -363,7 +363,7 @@ function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): 
   const current = currentRaw as Record<string, unknown> | undefined;
   if (!current) return next;
   const merged = { ...next } as Record<string, unknown>;
-  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link"]) {
+  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number"]) {
     const v = merged[key];
     if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
   }
@@ -1069,9 +1069,15 @@ function FinancesContent() {
   // success). Stamps final_invoice_sent_at on the finances row — this is what flips the
   // balance from "upcoming" to "owed now". Mirrors orders/[id]/page.tsx:1007. No money
   // math is touched and final_paid is NOT set.
-  const handleFinalInvoiceSent = async () => {
+  const handleFinalInvoiceSent = async (invoiceNumber?: string) => {
     if (!sendInvoiceTarget) return;
-    const stamped = { ...sendInvoiceTarget, final_invoice_sent_at: new Date().toISOString() };
+    const stamped = {
+      ...sendInvoiceTarget,
+      final_invoice_sent_at: new Date().toISOString(),
+      // Keep the freshly-minted TF-I- number the modal just generated so this whole-blob
+      // write doesn't drop it (the in-memory row may not have it yet).
+      ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+    };
     await upsertItem(preserveInvoiceTokens(stamped, invoices.find((i) => i.id === sendInvoiceTarget.id)));
   };
 
@@ -2722,7 +2728,7 @@ function FinancesContent() {
           }}
           contact={resolveInvoiceContact({ invoice: sendInvoiceTarget, clients, leads })}
           onClose={() => setSendInvoiceTarget(null)}
-          onSent={() => void handleFinalInvoiceSent()}
+          onSent={(_sender, _link, invoiceNumber) => void handleFinalInvoiceSent(invoiceNumber)}
         />
       )}
       {/* Expense add / edit modal */}

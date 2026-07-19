@@ -24,6 +24,7 @@ interface InvoiceData {
   client_name: string;
   contact_name?: string | null;
   deposit_request_number?: string | null;
+  invoice_number?: string | null;
   portal_url?: string | null;
   subtotal?: number | null;
   discount?: QuoteDiscount | null;
@@ -203,17 +204,13 @@ export default function InvoicePage() {
   const isReceipt = receipt?.paidInFull === true;
   const receiptPaidLine = receipt ? receiptPaidPhrase(receipt.method, receipt.datePaid) : "";
   const isDepositPaid = data.deposit_paid;
-  // Has HQ SENT the final invoice? This is the ONLY thing that moves a deposit-paid order
-  // from "receipt / not owed yet" to "final invoice / now due" — for the INVOICE link.
-  const finalInvoiceSent = Boolean((data.final_invoice_sent_at ?? "").toString().trim());
-  // The receipt link (r- token) is a STABLE, read-only deposit receipt — never a bill,
-  // regardless of any flag. The invoice link (tfi-) uses the flag-based State A/B/C logic.
+  // The deposit-receipt handoff view belongs ONLY to the receipt link (r- token) — a stable,
+  // read-only deposit receipt, never a bill. The invoice link (tfi-) is ALWAYS the bill: it
+  // shows PaymentOptionsPanel while a balance is owed and the paid-in-full confirmation once
+  // paid. final_invoice_sent_at no longer gates the client invoice view (HQ still uses it for
+  // owed-now logic); it is intentionally not read here anymore.
   const isReceiptLink = data.doc_kind === "receipt";
-  // STATE A — deposit receipt. Forced for the receipt link; for the invoice link it's a
-  // paid deposit with an outstanding balance whose final invoice has NOT been sent yet.
-  // A receipt, not a bill — no pay buttons; the balance is a fact, "not yet owed". Once the
-  // final invoice is sent (finalInvoiceSent), the INVOICE link flips to STATE B.
-  const isDepositReceipt = isReceiptLink || (isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true && !finalInvoiceSent);
+  const isDepositReceipt = isReceiptLink;
   const depositMethodLabel = paymentMethodLabel(data.deposit_payment_method);
   // Deposit-received thank-you copy (no dashes; contact first name, else no name).
   const contactFirst = (data.contact_name ?? "").trim().split(/\s+/)[0] || "";
@@ -268,6 +265,12 @@ export default function InvoicePage() {
           <div style={s.chip}>
             <div style={s.chipLabel}>PROJECT</div>
             <div style={s.chipValue}>{data.order_name}</div>
+          </div>
+        )}
+        {!isDepositReceipt && data.invoice_number && (
+          <div style={s.chip}>
+            <div style={s.chipLabel}>INVOICE NO.</div>
+            <div style={s.chipValue}>{data.invoice_number}</div>
           </div>
         )}
         {data.deposit_request_number && (

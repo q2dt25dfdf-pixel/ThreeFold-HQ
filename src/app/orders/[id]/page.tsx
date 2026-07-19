@@ -996,7 +996,7 @@ export default function OrderDetailPage() {
     }
   };
 
-  const handleInvoiceSent = (sender: string, invoiceLink: string) => {
+  const handleInvoiceSent = (sender: string, invoiceLink: string, invoiceNumber?: string) => {
     if (!order) return;
     const entry: ClientUpdate = {
       id: `invoice-sent-${Date.now()}`,
@@ -1006,9 +1006,14 @@ export default function OrderDetailPage() {
     upsertItem({ ...order, client_updates: [entry, ...(order.client_updates ?? [])] });
     // Persist the final-invoice-sent timestamp on the finances record. This callback
     // fires only after the email actually sends (SendFinalInvoiceModal success), not on
-    // preview or token generation.
+    // preview or token generation. Carry the freshly-minted TF-I- number so this whole-blob
+    // write keeps it (the in-memory invoice may not have it yet).
     if (invoice) {
-      void upsertInvoice({ ...invoice, final_invoice_sent_at: new Date().toISOString() });
+      void upsertInvoice({
+        ...invoice,
+        final_invoice_sent_at: new Date().toISOString(),
+        ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+      });
     }
   };
 
