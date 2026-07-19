@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Clock, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -75,9 +75,33 @@ function isDueSoon(date: string) {
   return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
 }
 
+// Pure date compare — active orders whose delivery date is already in the past.
+// Display-only helper; changes no data.
+function isOverdue(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const due = new Date(`${date}T00:00:00`);
+  return due.getTime() < today.getTime();
+}
+
+function daysUntil(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 0;
+  const due = new Date(`${date}T00:00:00`);
+  return Math.max(0, Math.ceil((due.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
 function formatCurrency(amount: number) {
   return amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 }
+
+const FILTERS: { label: string; value: OrderStatus | "All" | "Active" }[] = [
+  { label: "All", value: "All" },
+  { label: "Active", value: "Active" },
+  { label: "Production", value: "Production" },
+  { label: "Quality Check", value: "Quality Check" },
+  { label: "Ready", value: "Ready" },
+  { label: "Delivered", value: "Delivered" },
+  { label: "Cancelled", value: "Cancelled" },
+];
 
 function OrdersContent() {
   const router = useRouter();
@@ -118,144 +142,245 @@ function OrdersContent() {
   };
 
   const allNormalized = orders.map(normalizeOrder);
-  const statsTotal      = allNormalized.length;
-  const statsProduction = allNormalized.filter((o) => o.status === "Production").length;
-  const statsInReview   = allNormalized.filter((o) => o.status === "Quality Check" || o.status === "Ready").length;
-  const statsDelivered  = allNormalized.filter((o) => o.status === "Delivered").length;
+
+  // Hero + needs-attention derivations — all pure, from existing fields. No new data/query.
+  const activeOrders   = allNormalized.filter((o) => o.status !== "Delivered" && o.status !== "Cancelled");
+  const activeCount    = activeOrders.length;
+  const activeValue    = activeOrders.reduce((sum, o) => sum + o.amount, 0); // NEW reduce over `amount`
+  const deliveredCount = allNormalized.filter((o) => o.status === "Delivered").length;
+
+  const overdueOrders = activeOrders.filter((o) => isOverdue(o.estimatedDeliveryDate));
+  const dueSoonOrders = activeOrders.filter((o) => !isOverdue(o.estimatedDeliveryDate) && isDueSoon(o.estimatedDeliveryDate));
+  const attentionOrders = [
+    ...overdueOrders.map((order) => ({ order, kind: "overdue" as const })),
+    ...dueSoonOrders.map((order) => ({ order, kind: "duesoon" as const })),
+  ];
+  const attentionCount = attentionOrders.length;
+
+  // Calm detail respects the filter/search/sort pipeline, then splits done work to the bottom.
+  const visibleActive = visible.filter((o) => o.status !== "Delivered" && o.status !== "Cancelled");
+  const visibleDone   = visible.filter((o) => o.status === "Delivered" || o.status === "Cancelled");
+
+  const renderOrderCard = (order: Order, muted = false) => {
+    const overdue = isOverdue(order.estimatedDeliveryDate);
+    const dueSoon = isDueSoon(order.estimatedDeliveryDate);
+    const dateAlert = overdue || dueSoon;
+
+    return (
+      <article
+        key={order.id}
+        className={`overflow-hidden rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md ${muted ? "opacity-70" : ""}`}
+      >
+        <div className="w-full p-4 text-left md:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-slate-950 md:text-lg">{order.orderName}</h3>
+              <p className="mt-1 text-[11px] text-slate-500 md:text-xs">{order.client || "No client selected"}</p>
+            </div>
+            <span className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusColors[order.status]}`}>
+              {order.status}
+            </span>
+          </div>
+          <div className="mt-4 space-y-1.5 text-[11px] text-slate-500 md:text-xs">
+            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
+              <span>Vendor</span>
+              <span className="max-w-[150px] truncate text-right font-medium text-slate-800">{order.vendor || "Not assigned"}</span>
+            </div>
+            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
+              <span>Items</span>
+              <span className="max-w-[180px] truncate text-right font-medium text-slate-800">{order.items.length ? order.items.join(", ") : "None selected"}</span>
+            </div>
+            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
+              <span>Quantity</span>
+              <span className="font-medium text-slate-800">{order.quantity || 0}</span>
+            </div>
+            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
+              <span>Amount</span>
+              <span className="font-medium text-slate-800">{formatCurrency(order.amount)}</span>
+            </div>
+            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
+              <span>Est. delivery</span>
+              <span className={`inline-flex items-center gap-1 ${dateAlert ? "font-bold text-rose-600" : "font-medium text-slate-800"}`}>
+                {dateAlert && <Clock className="h-3.5 w-3.5" aria-hidden="true" />}
+                {order.estimatedDeliveryDate || "TBD"}
+              </span>
+            </div>
+            {order.notes && <div className="rounded-2xl bg-slate-50 px-4 py-2 text-[11px] text-slate-500">{order.notes}</div>}
+          </div>
+        </div>
+        <div className="flex gap-3 border-t border-slate-100 px-3 pb-5 pt-4 md:px-6">
+          <button
+            type="button"
+            className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
+            onClick={() => router.push(`/orders/${order.id}`)}
+          >
+            View order →
+          </button>
+          <button
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:h-10 md:w-10"
+            disabled={deletingId === order.id}
+            aria-label={`Delete ${order.orderName}`}
+            onClick={() => handleDelete(order.id)}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </article>
+    );
+  };
 
   if (loading) return <LoadingState label="Loading orders..." />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
+
+      {/* ── Header + search + add ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Orders system</p>
-          <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Orders queue</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Orders system</p>
+          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Orders queue</h1>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-          <label className="relative w-full md:w-auto">
+          <label className="relative w-full sm:w-64 md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
-              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs md:text-sm text-slate-900 outline-none focus:border-slate-400 sm:w-64"
+              className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs text-slate-900 outline-none focus:border-slate-400 sm:w-64 md:text-sm"
               placeholder="Search orders..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
           <button
-            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs md:text-sm font-semibold text-white hover:bg-slate-800 md:w-auto"
+            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:w-auto md:text-sm"
             onClick={() => setShowAddOrder(true)}
           >
             Add order
           </button>
-          <select
-            className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs md:text-sm text-slate-900"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value as OrderStatus | "All" | "Active")}
-          >
-            <option value="All">All</option>
-            <option value="Active">Active</option>
-            <option>Production</option>
-            <option>Quality Check</option>
-            <option>Ready</option>
-            <option>Delivered</option>
-            <option>Cancelled</option>
-          </select>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          { label: "Total Orders",  count: statsTotal,      filterValue: "All"        as const },
-          { label: "In Production", count: statsProduction,  filterValue: "Production" as const },
-          { label: "In Review",     count: statsInReview,    filterValue: "Active"     as const },
-          { label: "Delivered",     count: statsDelivered,   filterValue: "Delivered"  as const },
-        ].map((stat) => (
-          <button
-            key={stat.label}
-            type="button"
-            onClick={() => setFilter(stat.filterValue)}
-            className={`rounded-[2rem] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
-              filter === stat.filterValue ? "border-2 border-slate-950" : "border border-slate-200"
-            }`}
-          >
-            <p className="text-2xl font-bold tracking-tight text-slate-950 md:text-4xl">{stat.count}</p>
-            <p className="mt-2 text-xs text-slate-600 md:text-sm">{stat.label}</p>
-          </button>
-        ))}
-      </div>
+      {/* ── Hero row: In Production (count-led) + Need Attention + Delivered ────── */}
+      <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
+        {/* HERO — In Production. Count is the headline; value in flight is the pill. */}
+        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">In Production</p>
+          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{activeCount}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">active order{activeCount !== 1 ? "s" : ""} in the queue</p>
+          <span className="mt-3 inline-block rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+            {formatCurrency(activeValue)} in flight
+          </span>
+        </div>
+        {/* Need Attention — amber when > 0 */}
+        <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${attentionCount > 0 ? "bg-amber-50 ring-1 ring-amber-100" : "bg-white ring-1 ring-slate-100"}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Need Attention</p>
+          <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${attentionCount > 0 ? "text-amber-600" : "text-slate-400"}`}>{attentionCount}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">overdue or due within 7 days</p>
+          {overdueOrders.length > 0 && (
+            <span className="mt-3 inline-block rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold text-rose-700">{overdueOrders.length} overdue</span>
+          )}
+        </div>
+        {/* Delivered */}
+        <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Delivered</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{deliveredCount}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">completed all-time</p>
+        </div>
+      </section>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        {visible.map((order) => {
-          const dueSoon = isDueSoon(order.estimatedDeliveryDate);
-
-          return (
-            <article key={order.id} className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <div className="w-full p-4 text-left md:p-5">
-                <div className="flex items-start justify-between gap-3">
+      {/* ── Needs Attention band — each row opens the order ───────────────────── */}
+      <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+        <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs Attention</h2>
+        {attentionOrders.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
+            <p className="text-xs font-semibold text-emerald-800">All caught up — no orders need attention.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {attentionOrders.map(({ order, kind }) => {
+              const days = daysUntil(order.estimatedDeliveryDate);
+              return (
+                <div
+                  key={order.id}
+                  className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${kind === "overdue" ? "bg-rose-50" : "bg-amber-50"}`}
+                >
                   <div className="min-w-0">
-                    <h2 className="truncate text-base font-semibold text-slate-950 md:text-xl">{order.orderName}</h2>
-                    <p className="mt-1 text-xs text-slate-600 md:text-sm">{order.client || "No client selected"}</p>
+                    <p className="truncate text-xs font-semibold text-slate-900">{order.orderName}</p>
+                    <p className="truncate text-[10px] text-slate-500">{order.client ? `${order.client} · ` : ""}{order.status}</p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${statusColors[order.status]}`}>
-                    {order.status}
-                  </span>
-                </div>
-                <div className="mt-4 space-y-2 text-xs text-slate-600 md:text-sm">
-                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                    <span>Vendor</span>
-                    <span className="max-w-[150px] truncate text-right font-medium text-slate-900">{order.vendor || "Not assigned"}</span>
-                  </div>
-                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                    <span>Items</span>
-                    <span className="max-w-[180px] truncate text-right font-medium text-slate-900">{order.items.length ? order.items.join(", ") : "None selected"}</span>
-                  </div>
-                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                    <span>Quantity</span>
-                    <span className="font-medium text-slate-900">{order.quantity || 0}</span>
-                  </div>
-                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                    <span>Amount</span>
-                    <span className="font-medium text-slate-900">{formatCurrency(order.amount)}</span>
-                  </div>
-                  <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
-                    <span>Est. delivery</span>
-                    <span className={`inline-flex items-center gap-1 ${dueSoon ? "font-bold text-rose-600" : "font-medium text-slate-900"}`}>
-                      {dueSoon && <Clock className="h-3.5 w-3.5" aria-hidden="true" />}
-                      {order.estimatedDeliveryDate || "TBD"}
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${kind === "overdue" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
+                      <Clock className="h-3 w-3" aria-hidden="true" />
+                      {kind === "overdue" ? `Overdue ${order.estimatedDeliveryDate}` : `Due in ${days} day${days !== 1 ? "s" : ""}`}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/orders/${order.id}`)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      View order
+                    </button>
                   </div>
-                  {order.notes && <div className="rounded-2xl bg-slate-50 px-4 py-2 text-xs text-slate-600">{order.notes}</div>}
                 </div>
-              </div>
-              <div className="flex gap-3 border-t border-slate-100 px-3 pb-5 pt-4 md:px-6">
-                <button
-                  type="button"
-                  className="min-h-11 flex-1 rounded-3xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
-                  onClick={() => router.push(`/orders/${order.id}`)}
-                >
-                  View order
-                </button>
-                <button
-                  type="button"
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:h-10 md:w-10"
-                  disabled={deletingId === order.id}
-                  aria-label={`Delete ${order.orderName}`}
-                  onClick={() => handleDelete(order.id)}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </article>
-          );
-        })}
-        {visible.length === 0 && (
-          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-xs font-semibold text-slate-500 md:text-sm xl:col-span-3">
-            No orders match your filters.
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
+
+      {/* ── Calm detail — filter chips + order cards, done work collapsed below ── */}
+      <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-base font-semibold text-slate-950 md:text-lg">All orders</h2>
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFilter(f.value)}
+                className={`min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition md:text-xs ${
+                  filter === f.value ? "bg-slate-900 text-white" : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {visibleActive.length === 0 && visibleDone.length === 0 ? (
+          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center text-xs font-semibold text-slate-500 md:text-sm">
+            No orders match your filters.
+          </div>
+        ) : (
+          <>
+            {visibleActive.length > 0 && (
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {visibleActive.map((order) => renderOrderCard(order, false))}
+              </div>
+            )}
+
+            {visibleDone.length > 0 &&
+              (filter === "Delivered" || filter === "Cancelled" ? (
+                <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {visibleDone.map((order) => renderOrderCard(order, true))}
+                </div>
+              ) : (
+                <details className="group mt-6">
+                  <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500 md:text-sm">
+                    <span>Delivered &amp; cancelled ({visibleDone.length})</span>
+                    <ChevronDown className="h-4 w-4 text-slate-400 transition group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <div className="mt-4 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    {visibleDone.map((order) => renderOrderCard(order, true))}
+                  </div>
+                </details>
+              ))}
+          </>
+        )}
+      </section>
 
       <AddOrderModal
         open={showAddOrder}
