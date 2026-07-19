@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { getInvoiceBaseUrl } from "@/lib/publicUrl";
+import { nextSequenceNumber } from "@/lib/sequenceNumber";
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,11 +68,47 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Receipt token — a SECOND, stable link that always renders the deposit receipt
+    // (read-only, never a bill). Minted/stored idempotently and independently of the
+    // tfi- invoice token; reused if already present.
+    let receiptToken = typeof raw.receipt_public_token === "string" && raw.receipt_public_token ? raw.receipt_public_token : "";
+    let receiptLink = typeof raw.receipt_public_link === "string" && raw.receipt_public_link ? raw.receipt_public_link : "";
+    let rawWithReceipt = raw;
+    if (!receiptToken) {
+      receiptToken = "r-" + randomBytes(12).toString("hex");
+      receiptLink = `${getInvoiceBaseUrl(request.nextUrl.origin)}/invoice/${receiptToken}`;
+      rawWithReceipt = { ...raw, receipt_public_token: receiptToken, receipt_public_link: receiptLink };
+      const { error: receiptErr } = await db
+        .from("finances")
+        .upsert({ id: invoiceId, data: rawWithReceipt });
+      if (receiptErr) {
+        return NextResponse.json({ error: receiptErr.message }, { status: 500 });
+      }
+    }
+
+    // Final-invoice number (TF-I-) — a distinct reference from the deposit's TF-D-, so
+    // identical 50/50 amounts are never confused. Minted/stored idempotently, the same way
+    // TF-D-/TF-ORD- are minted, and independently of the tokens; reused if already present.
+    let invoiceNumber = typeof rawWithReceipt.invoice_number === "string" && rawWithReceipt.invoice_number ? rawWithReceipt.invoice_number : "";
+    if (!invoiceNumber) {
+      invoiceNumber = await nextSequenceNumber(db, { table: "finances", field: "invoice_number", prefix: "TF-I" });
+      rawWithReceipt = { ...rawWithReceipt, invoice_number: invoiceNumber };
+      const { error: invNumErr } = await db
+        .from("finances")
+        .upsert({ id: invoiceId, data: rawWithReceipt });
+      if (invNumErr) {
+        return NextResponse.json({ error: invNumErr.message }, { status: 500 });
+      }
+    }
+
     // Return existing link if already generated
-    if (typeof raw.public_token === "string" && raw.public_token) {
+    if (typeof rawWithReceipt.public_token === "string" && rawWithReceipt.public_token) {
       return NextResponse.json({
-        publicToken: raw.public_token,
-        publicLink: raw.public_link,
+        publicToken: rawWithReceipt.public_token,
+        publicLink: rawWithReceipt.public_link,
+        receiptToken,
+        receiptLink,
+        invoiceNumber,
         clientEmail,
         balanceRemaining,
       });
@@ -80,7 +117,7 @@ export async function POST(request: NextRequest) {
     const token = "tfi-" + randomBytes(12).toString("hex");
     const publicLink = `${getInvoiceBaseUrl(request.nextUrl.origin)}/invoice/${token}`;
 
-    const updatedData = { ...raw, public_token: token, public_link: publicLink, ...taxFields };
+    const updatedData = { ...rawWithReceipt, public_token: token, public_link: publicLink, ...taxFields };
     const { error: updateError } = await db
       .from("finances")
       .upsert({ id: invoiceId, data: updatedData });
@@ -89,7 +126,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ publicToken: token, publicLink, clientEmail, balanceRemaining });
+    return NextResponse.json({ publicToken: token, publicLink, receiptToken, receiptLink, invoiceNumber, clientEmail, balanceRemaining });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

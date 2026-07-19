@@ -24,6 +24,7 @@ interface InvoiceData {
   client_name: string;
   contact_name?: string | null;
   deposit_request_number?: string | null;
+  invoice_number?: string | null;
   portal_url?: string | null;
   subtotal?: number | null;
   discount?: QuoteDiscount | null;
@@ -37,10 +38,12 @@ interface InvoiceData {
   balance_remaining: number;
   final_paid: boolean;
   final_paid_date: string | null;
+  final_invoice_sent_at?: string | null;
   final_due_date: string | null;
   deposit_payment_method?: string | null;
   final_payment_method?: string | null;
   status: string;
+  doc_kind?: "receipt" | "invoice";
   line_items: LineItem[];
 }
 
@@ -90,6 +93,8 @@ export default function InvoicePage() {
   const [checkoutLoading, setCheckoutLoading] = useState<"card" | "bank" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [checkDeclared, setCheckDeclared] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
 
   useEffect(() => {
     const token = window.location.pathname.split("/").pop() ?? "";
@@ -141,6 +146,30 @@ export default function InvoicePage() {
     }
   };
 
+  // Declare "I'll mail a check" — a declaration, not a payment. Mirrors the deposit page's
+  // handleDeclareCheck, but POSTs to the invoice-token route which writes
+  // client_payment_method_intent="check" + payment_method_intent_declared_at onto the
+  // FINANCES row. Never marks paid, never touches Stripe.
+  const handleDeclareCheck = async () => {
+    if (!invoiceToken || checkLoading) return;
+    setCheckLoading(true);
+    setCheckoutError("");
+    try {
+      const res = await fetch(`/api/invoice/${invoiceToken}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "check" }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (d.success) setCheckDeclared(true);
+      else setCheckoutError(d.error ?? "Something went wrong. Please try again.");
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <PortalShell>
@@ -175,9 +204,13 @@ export default function InvoicePage() {
   const isReceipt = receipt?.paidInFull === true;
   const receiptPaidLine = receipt ? receiptPaidPhrase(receipt.method, receipt.datePaid) : "";
   const isDepositPaid = data.deposit_paid;
-  // Third face: a paid deposit with an outstanding balance. A receipt, not a bill —
-  // no pay buttons; the balance is shown as a fact, "not yet owed".
-  const isDepositReceipt = isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true;
+  // The deposit-receipt handoff view belongs ONLY to the receipt link (r- token) — a stable,
+  // read-only deposit receipt, never a bill. The invoice link (tfi-) is ALWAYS the bill: it
+  // shows PaymentOptionsPanel while a balance is owed and the paid-in-full confirmation once
+  // paid. final_invoice_sent_at no longer gates the client invoice view (HQ still uses it for
+  // owed-now logic); it is intentionally not read here anymore.
+  const isReceiptLink = data.doc_kind === "receipt";
+  const isDepositReceipt = isReceiptLink;
   const depositMethodLabel = paymentMethodLabel(data.deposit_payment_method);
   // Deposit-received thank-you copy (no dashes; contact first name, else no name).
   const contactFirst = (data.contact_name ?? "").trim().split(/\s+/)[0] || "";
@@ -201,9 +234,11 @@ export default function InvoicePage() {
     ? !isPaidInFull && new Date(data.final_due_date + "T23:59:59") < new Date()
     : false;
 
+  // State A (deposit receipt) reads "DEPOSIT PAID"; once the final invoice is sent it becomes
+  // State B and reads "BALANCE DUE" (a real bill), so key off isDepositReceipt not isDepositPaid.
   const statusLabel = isPaidInFull
     ? "PAID IN FULL ✓"
-    : isDepositPaid
+    : isDepositReceipt
     ? "DEPOSIT PAID"
     : "BALANCE DUE";
 
@@ -230,6 +265,12 @@ export default function InvoicePage() {
           <div style={s.chip}>
             <div style={s.chipLabel}>PROJECT</div>
             <div style={s.chipValue}>{data.order_name}</div>
+          </div>
+        )}
+        {!isDepositReceipt && data.invoice_number && (
+          <div style={s.chip}>
+            <div style={s.chipLabel}>INVOICE NO.</div>
+            <div style={s.chipValue}>{data.invoice_number}</div>
           </div>
         )}
         {data.deposit_request_number && (
@@ -481,7 +522,7 @@ export default function InvoicePage() {
             <div className="dk-card">
               <PaymentOptionsPanel
                 amount={data.balance_remaining}
-                label="REMAINING BALANCE"
+                label="BALANCE NOW DUE"
                 eyebrow="HOW TO PAY"
                 onPayCard={() => void handlePay("card")}
                 onPayBank={() => void handlePay("bank")}
@@ -492,6 +533,11 @@ export default function InvoicePage() {
                     ? "Payment was not completed. You can try again below."
                     : undefined)
                 }
+                onDeclareCheck={() => void handleDeclareCheck()}
+                checkDeclared={checkDeclared}
+                checkLoading={checkLoading}
+                checkMemo={`Final balance${data.order_name ? ` — ${data.order_name}` : ""}`}
+                onResetMethod={() => setCheckDeclared(false)}
               />
             </div>
           )}

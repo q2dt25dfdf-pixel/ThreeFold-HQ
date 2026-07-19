@@ -8,6 +8,7 @@ import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
+import { resolveInvoiceContact } from "@/lib/greeting";
 import { PAYMENT_METHOD_OPTIONS, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
@@ -352,6 +353,21 @@ function invoiceCollected(invoice: InvoiceFields) {
 // paid. A deposit-paid invoice whose final invoice hasn't gone out is upcoming, not owed.
 function invoiceOwedNow(invoice: Invoice) {
   return Boolean(invoice.final_invoice_sent_at) && !invoice.final_paid;
+}
+
+// Belt-and-suspenders for stamp writes: a finances upsert replaces the whole data jsonb, so
+// a stamp built from a stale client copy can drop server-minted link tokens. Preserve the
+// public/receipt tokens generically — keep `next`'s value when set, else fall back to the
+// current row's — so no stamp write ever wipes public_token/receipt_public_token.
+function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): T {
+  const current = currentRaw as Record<string, unknown> | undefined;
+  if (!current) return next;
+  const merged = { ...next } as Record<string, unknown>;
+  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number"]) {
+    const v = merged[key];
+    if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
+  }
+  return merged as T;
 }
 
 function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
@@ -1041,7 +1057,7 @@ function FinancesContent() {
   };
 
   const handleReceiptSent = async (updated: Invoice) => {
-    await upsertItem(updated);
+    await upsertItem(preserveInvoiceTokens(updated, invoices.find((i) => i.id === updated.id)));
     setReceiptInvoice(null);
   };
 
@@ -1053,18 +1069,22 @@ function FinancesContent() {
   // success). Stamps final_invoice_sent_at on the finances row — this is what flips the
   // balance from "upcoming" to "owed now". Mirrors orders/[id]/page.tsx:1007. No money
   // math is touched and final_paid is NOT set.
-  const handleFinalInvoiceSent = async () => {
+  const handleFinalInvoiceSent = async (invoiceNumber?: string) => {
     if (!sendInvoiceTarget) return;
-    await upsertItem({ ...sendInvoiceTarget, final_invoice_sent_at: new Date().toISOString() });
+    const stamped = {
+      ...sendInvoiceTarget,
+      final_invoice_sent_at: new Date().toISOString(),
+      // Keep the freshly-minted TF-I- number the modal just generated so this whole-blob
+      // write doesn't drop it (the in-memory row may not have it yet).
+      ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+    };
+    await upsertItem(preserveInvoiceTokens(stamped, invoices.find((i) => i.id === sendInvoiceTarget.id)));
   };
 
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
   const leadEmailFor = (inv: Invoice | null): string =>
     inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.email ?? "").trim() : "";
 
-  // Contact person for the greeting (receipt email greets the person, not the company).
-  const leadContactFor = (inv: Invoice | null): string =>
-    inv?.lead_id ? (leads.find((l) => l.id === inv.lead_id)?.contact ?? "").trim() : "";
 
   // Deposit request number for the receipt reference line — matched from the loaded
   // deposit_requests by deposit_request_id, else lead_id, else quote_id.
@@ -1688,16 +1708,18 @@ function FinancesContent() {
   // "Paid by check" — reads the existing method fields (deposit_payment_method / final_payment_method).
   const invoicePaidByCheck = (inv: Invoice) =>
     inv.deposit_payment_method === "check" || inv.final_payment_method === "check";
-  // "Client will pay by check" — the matched deposit request's declared intent. Mirrors the
-  // hydrateInvoiceLinks match predicate exactly (deposit_request_id | lead_id | quote_id).
+  // "Client will pay by check" — declared intent from EITHER the matched deposit request
+  // (deposit page declare-check) OR the finances row itself (final-invoice declare-check
+  // writes client_payment_method_intent here). Deposit-record read is unchanged; the
+  // finances-row field is OR'd in. Display-only.
   const invoiceWillPayByCheck = (inv: Invoice) => {
-    const links = inv as Invoice & { deposit_request_id?: string; quote_id?: string };
+    const links = inv as Invoice & { deposit_request_id?: string; quote_id?: string; client_payment_method_intent?: string };
     const dep = depositRequests.find((d) =>
       (links.deposit_request_id && d.id === links.deposit_request_id) ||
       (links.lead_id && d.lead_id === links.lead_id) ||
       (links.quote_id && d.quote_id === links.quote_id),
     );
-    return dep?.client_payment_method_intent === "check";
+    return dep?.client_payment_method_intent === "check" || links.client_payment_method_intent === "check";
   };
 
   return (
@@ -2685,7 +2707,7 @@ function FinancesContent() {
         open={!!receiptInvoice}
         invoice={receiptInvoice}
         fallbackEmail={leadEmailFor(receiptInvoice)}
-        fallbackContact={leadContactFor(receiptInvoice)}
+        fallbackContact={resolveInvoiceContact({ invoice: receiptInvoice, clients, leads })}
         depositNumber={depositNumberFor(receiptInvoice)}
         forcePhase={receiptPhase ?? undefined}
         onClose={() => { setReceiptInvoice(null); setReceiptPhase(null); }}
@@ -2704,8 +2726,9 @@ function FinancesContent() {
             order_name: sendInvoiceTarget.order_name,
             balance_remaining: sendInvoiceTarget.balance_remaining,
           }}
+          contact={resolveInvoiceContact({ invoice: sendInvoiceTarget, clients, leads })}
           onClose={() => setSendInvoiceTarget(null)}
-          onSent={() => void handleFinalInvoiceSent()}
+          onSent={(_sender, _link, invoiceNumber) => void handleFinalInvoiceSent(invoiceNumber)}
         />
       )}
       {/* Expense add / edit modal */}

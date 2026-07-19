@@ -22,11 +22,17 @@ create unique index if not exists deposit_requests_deposit_request_number_key
 create unique index if not exists orders_order_number_key
   on orders ((data->>'order_number'));
 
--- Verify the three indexes exist after running:
+-- Final-invoice number (TF-I-) minted on the finances row by /api/invoice/generate. Same
+-- backstop as the three above so max(tail)+1 can never silently duplicate under a race.
+create unique index if not exists finances_invoice_number_key
+  on finances ((data->>'invoice_number'));
+
+-- Verify the four indexes exist after running:
 --   select indexname, indexdef
 --   from pg_indexes
 --   where indexname in (
 --     'quotes_quote_number_key',
 --     'deposit_requests_deposit_request_number_key',
---     'orders_order_number_key'
+--     'orders_order_number_key',
+--     'finances_invoice_number_key'
 --   );

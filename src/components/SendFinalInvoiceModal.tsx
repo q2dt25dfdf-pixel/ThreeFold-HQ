@@ -22,8 +22,13 @@ interface Invoice {
 interface Props {
   open: boolean;
   invoice: Invoice | null;
+  // Contact person for the greeting (same source the receipt email uses). The email greets
+  // the person, falling back to the company. When omitted, falls back to client_name.
+  contact?: string;
   onClose: () => void;
-  onSent?: (sender: string, publicLink: string) => void;
+  // invoiceNumber is the server-minted TF-I- number, passed back so the caller's stamp
+  // write preserves it (a whole-blob upsert from stale state would otherwise drop it).
+  onSent?: (sender: string, publicLink: string, invoiceNumber: string) => void;
 }
 
 type Step = "generating" | "preview" | "sending" | "sent" | "error";
@@ -37,9 +42,10 @@ function fmtCurrency(n: number) {
   }).format(n);
 }
 
-export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }: Props) {
+export default function SendFinalInvoiceModal({ open, invoice, contact, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("generating");
   const [publicLink, setPublicLink] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -52,12 +58,14 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
     if (!open || !invoice) return;
     setStep("generating");
     setPublicLink("");
+    setInvoiceNumber("");
     setErrorMsg("");
     setCopied("");
     setSender("");
     setSentVia("");
 
-    const clientName = invoice.client_name || invoice.client || "there";
+    // Greet the contact person when known (same as the receipt email), else the company.
+    const clientName = (contact || "").trim() || invoice.client_name || invoice.client || "there";
     const projectName = invoice.order_name || invoice.orderName || "your order";
 
     fetch("/api/invoice/generate", {
@@ -66,7 +74,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
       body: JSON.stringify({ invoiceId: invoice.id }),
     })
       .then((r) => r.json())
-      .then((d: { publicLink?: string; clientEmail?: string; balanceRemaining?: number; error?: string }) => {
+      .then((d: { publicLink?: string; clientEmail?: string; balanceRemaining?: number; invoiceNumber?: string; error?: string }) => {
         if (d.error || !d.publicLink) {
           setErrorMsg(d.error ?? "Failed to generate invoice link.");
           setStep("error");
@@ -76,6 +84,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
         const bestEmail = d.clientEmail || invoice.client_email || "";
         setEmailTo(bestEmail);
         setPublicLink(d.publicLink);
+        setInvoiceNumber(d.invoiceNumber ?? "");
         // Use API-returned balance (cross-referenced with deposit request) for accuracy
         const balance = d.balanceRemaining ?? parseAmount(invoice.balance_remaining);
         setEmailSubject(`Final Invoice for ${projectName}`);
@@ -135,7 +144,7 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
             }),
           }).catch(err => console.error('[notify]', err))
         );
-        onSent?.(sender, publicLink);
+        onSent?.(sender, publicLink, invoiceNumber);
       }
       window.setTimeout(onClose, 2000);
     } catch (err: unknown) {

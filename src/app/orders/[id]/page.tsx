@@ -22,6 +22,7 @@ import {
 } from "@/components/orders/OrderFormShared";
 import PortalSection from "@/components/PortalSection";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
+import { resolveInvoiceContact } from "@/lib/greeting";
 import type { QuestionnaireFile } from "@/components/crm/types";
 import { parseAmount } from "@/lib/invoiceCalc";
 import { businessTodayISO } from "@/lib/businessDate";
@@ -398,6 +399,9 @@ export default function OrderDetailPage() {
   const { data: clients } = useSupabaseTable<LookupRecord>("clients", []);
   const { data: vendors } = useSupabaseTable<LookupRecord>("vendors", []);
   const { data: invoices, upsertItem: upsertInvoice } = useSupabaseTable<Invoice>("finances", []);
+  // Loaded so the final-invoice greeting resolves from the SAME source as the Finances page
+  // (shared resolveInvoiceContact: client contact, then lead contact).
+  const { data: leads } = useSupabaseTable<{ id: string; contact?: string }>("crm_leads", []);
 
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
   const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
@@ -992,7 +996,7 @@ export default function OrderDetailPage() {
     }
   };
 
-  const handleInvoiceSent = (sender: string, invoiceLink: string) => {
+  const handleInvoiceSent = (sender: string, invoiceLink: string, invoiceNumber?: string) => {
     if (!order) return;
     const entry: ClientUpdate = {
       id: `invoice-sent-${Date.now()}`,
@@ -1002,9 +1006,14 @@ export default function OrderDetailPage() {
     upsertItem({ ...order, client_updates: [entry, ...(order.client_updates ?? [])] });
     // Persist the final-invoice-sent timestamp on the finances record. This callback
     // fires only after the email actually sends (SendFinalInvoiceModal success), not on
-    // preview or token generation.
+    // preview or token generation. Carry the freshly-minted TF-I- number so this whole-blob
+    // write keeps it (the in-memory invoice may not have it yet).
     if (invoice) {
-      void upsertInvoice({ ...invoice, final_invoice_sent_at: new Date().toISOString() });
+      void upsertInvoice({
+        ...invoice,
+        final_invoice_sent_at: new Date().toISOString(),
+        ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+      });
     }
   };
 
@@ -2592,6 +2601,7 @@ export default function OrderDetailPage() {
       <SendFinalInvoiceModal
         open={sendInvoiceOpen}
         invoice={invoice ?? null}
+        contact={resolveInvoiceContact({ invoice: invoice ?? null, clients, leads })}
         onClose={() => setSendInvoiceOpen(false)}
         onSent={handleInvoiceSent}
       />

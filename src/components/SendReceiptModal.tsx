@@ -50,6 +50,9 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
   const [step, setStep] = useState<Step>("generating");
   const [publicToken, setPublicToken] = useState("");
   const [publicLink, setPublicLink] = useState("");
+  const [receiptToken, setReceiptToken] = useState("");
+  const [receiptLink, setReceiptLink] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -87,7 +90,7 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
       body: JSON.stringify({ invoiceId: invoice.id }),
     })
       .then((r) => r.json())
-      .then((d: { publicToken?: string; publicLink?: string; clientEmail?: string; error?: string }) => {
+      .then((d: { publicToken?: string; publicLink?: string; receiptToken?: string; receiptLink?: string; invoiceNumber?: string; clientEmail?: string; error?: string }) => {
         if (d.error || !d.publicLink) {
           setErrorMsg(d.error ?? "Failed to generate the receipt link.");
           setStep("error");
@@ -95,6 +98,9 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
         }
         setPublicToken(d.publicToken ?? "");
         setPublicLink(d.publicLink);
+        setReceiptToken(d.receiptToken ?? "");
+        setReceiptLink(d.receiptLink ?? "");
+        setInvoiceNumber(d.invoiceNumber ?? "");
         // Only fill from the server if the founder has not already got an address shown.
         setEmailTo((cur) => (cur.trim() ? cur : (d.clientEmail || "")));
 
@@ -102,7 +108,8 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
           clientName,
           receipt: info,
           orderName,
-          publicLink: d.publicLink,
+          // Receipt email links to the STABLE receipt link (r- token), never the tfi- bill.
+          publicLink: d.receiptLink ?? d.publicLink,
           subtotal,
           discountLabel: discount?.label ?? null,
           discountAmount,
@@ -148,6 +155,12 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
       const updated: ReceiptInvoice = {
         ...invoice,
         ...(publicToken ? { public_token: publicToken, public_link: publicLink } : {}),
+        // Carry through the receipt token too, so this stamp write never wipes the r- token
+        // that /api/invoice/generate just minted (mirrors the public_token preservation).
+        ...(receiptToken ? { receipt_public_token: receiptToken, receipt_public_link: receiptLink } : {}),
+        // Carry the server-minted final-invoice number through too, so the stamp write never
+        // wipes it (mirrors the token preservation above).
+        ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
         ...(!hadInvoiceEmail && emailTo.trim() ? { client_email: emailTo.trim() } : {}),
         [receipt.sentField]: stampedAt,
       };
