@@ -47,7 +47,6 @@ const defaultTasks: Task[] = [
 const emptyForm = { title: "", dueDate: "", assignedTo: "Alliyah" as Task["assignedTo"], priority: "Medium" as Task["priority"], notes: "", completed: false };
 
 const priorityColors: Record<Task["priority"], string> = { High: "bg-red-100 text-red-800", Medium: "bg-amber-100 text-amber-800", Low: "bg-slate-100 text-slate-700" };
-const priorityDotColors: Record<Task["priority"], string> = { High: "bg-red-500", Medium: "bg-amber-500", Low: "bg-slate-400" };
 const ownerColors: Record<TaskOwner, string> = { Alliyah: "bg-violet-100 text-violet-800", Hannah: "bg-blue-100 text-blue-800", Jordan: "bg-emerald-100 text-emerald-800" };
 const founderColumns: { name: TaskColumn; headerClass: string; accentClass: string; avatarClass: string }[] = [
   { name: "Alliyah", headerClass: "bg-violet-50 border-violet-400", accentClass: "bg-violet-400", avatarClass: "bg-violet-500" },
@@ -266,6 +265,15 @@ export default function TasksPage() {
 
   const dueLabel = (task: Task) => (isDated(task.dueDate) ? task.dueDate : "TBD");
 
+  // Display-only: the row dot means DUE STATUS (overdue red / due-today amber / else grey).
+  // Priority stays visible as the "· {priority}" meta text. No count or logic depends on this.
+  const dueDotClass = (task: Task) =>
+    isDated(task.dueDate) && task.dueDate < todayISO
+      ? "bg-red-500"
+      : isDated(task.dueDate) && task.dueDate === todayISO
+      ? "bg-amber-500"
+      : "bg-slate-300";
+
   const assigneeLabel = (task: Task) => {
     const a = taskAssignee(task);
     return a === "All" || a === "" ? "Anyone" : a;
@@ -285,13 +293,13 @@ export default function TasksPage() {
           setEditTask({ ...task });
         }
       }}
-      className="group flex items-start justify-between gap-3 rounded-2xl bg-white p-3.5 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group flex items-start justify-between gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
     >
       <div className="flex min-w-0 items-start gap-2.5">
-        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${priorityDotColors[task.priority]}`} aria-label={`${task.priority} priority`} />
+        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-label="due status" />
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-slate-950 md:text-sm">{task.title}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">{dueLabel(task)} · {task.priority}</p>
+          <p className="truncate text-xs font-medium text-slate-900 md:text-sm">{task.title}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{dueLabel(task)} · {task.priority}</p>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
@@ -322,15 +330,23 @@ export default function TasksPage() {
   const PersonRow = ({ task }: { task: Task }) => {
     const isOverdue = isDated(task.dueDate) && task.dueDate < todayISO;
     return (
-      <div className="group flex items-center gap-2.5 rounded-xl px-2 py-2 transition hover:bg-slate-50">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${priorityDotColors[task.priority]}`} aria-label={`${task.priority} priority`} />
+      <div className="group flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-slate-50">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-label="due status" />
         <button
           type="button"
           onClick={() => { editSave.resetSaveState(); setEditTask({ ...task }); }}
           className="min-w-0 flex-1 text-left"
         >
-          <p className="truncate text-xs font-semibold text-slate-900 md:text-sm">{task.title}</p>
-          <p className={`mt-0.5 text-[11px] ${isOverdue ? "font-semibold text-rose-600" : "text-slate-500"}`}>{dueLabel(task)} · {task.priority}</p>
+          <p className={`truncate text-xs font-medium md:text-sm ${isOverdue ? "text-rose-700" : "text-slate-900"}`}>{task.title}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{dueLabel(task)} · {task.priority}</p>
+        </button>
+        <button
+          type="button"
+          aria-label={`Complete ${task.title}`}
+          onClick={() => toggle(task.id)}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-slate-300 text-transparent transition hover:border-emerald-500 hover:text-emerald-500"
+        >
+          <Check className="h-3 w-3" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -341,14 +357,6 @@ export default function TasksPage() {
         >
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          aria-label={`Complete ${task.title}`}
-          onClick={() => toggle(task.id)}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-slate-300 text-transparent transition hover:border-emerald-500 hover:text-emerald-500"
-        >
-          <Check className="h-3 w-3" aria-hidden="true" />
-        </button>
       </div>
     );
   };
@@ -356,7 +364,7 @@ export default function TasksPage() {
   if (loading) return <LoadingState label="Loading tasks..." />;
 
   return (
-    <div className="space-y-5 text-xs md:text-sm">
+    <div className="space-y-6 text-xs md:text-sm">
       <ErrorBanner message={error} />
 
       {/* ── Compact header: title + inline urgency line + search + add ─────────── */}
@@ -402,7 +410,7 @@ export default function TasksPage() {
       </div>
 
       {/* ── Needs action now — light red-tinted band (overdue + due-today) ──────── */}
-      <section className={`rounded-[2rem] p-4 shadow-sm ring-1 md:p-5 ${urgentTasks.length === 0 ? "bg-white ring-slate-200" : "bg-rose-50 ring-rose-200"}`}>
+      <section className={`rounded-[2rem] p-5 shadow-sm ring-1 md:p-6 ${urgentTasks.length === 0 ? "bg-white ring-slate-200" : "bg-rose-50 ring-rose-200"}`}>
         <h2 className="mb-3 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-600">
           <Zap className="h-3.5 w-3.5" aria-hidden="true" />
           Needs action now
@@ -449,7 +457,7 @@ export default function TasksPage() {
 
       {/* ── Team & Anyone — shared tasks anyone can grab (only in the All view) ── */}
       {filterOwner === "All" && (
-        <section className="rounded-[2rem] bg-violet-50 p-4 shadow-sm ring-1 ring-violet-200 md:p-5">
+        <section className="rounded-[2rem] bg-violet-50 p-5 shadow-sm ring-1 ring-violet-200 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-600">
               <Users className="h-4 w-4" aria-hidden="true" />
@@ -460,15 +468,16 @@ export default function TasksPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {teamTasks.map((task) => <TeamCard key={task.id} task={task} />)}
             {teamTasks.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-violet-200 bg-white/70 px-4 py-6 text-center text-xs text-slate-500 md:text-sm sm:col-span-2">
-                {isSearching ? "No team tasks match your search." : "No shared team tasks yet."}
+              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-violet-200 bg-white/60 px-4 py-8 text-center sm:col-span-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-500"><Check className="h-4 w-4" aria-hidden="true" /></span>
+                <p className="text-xs text-slate-400 md:text-sm">{isSearching ? "No team tasks match your search." : "No shared team tasks yet."}</p>
               </div>
             )}
           </div>
           {!isSearching && (
             <button
               type="button"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold text-violet-500 transition hover:text-violet-800"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-700"
               onClick={openAddForTeam}
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
@@ -481,7 +490,7 @@ export default function TasksPage() {
       {/* ── By person — the main workspace (urgent-band tasks excluded) ────────── */}
       <div>
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">By person</p>
-        <div className="grid gap-5 xl:grid-cols-3">
+        <div className="grid items-stretch gap-5 xl:grid-cols-3">
           {founderColumns
             .filter((founder) => filterOwner === "All" || founder.name === filterOwner)
             .map((founder) => {
@@ -490,28 +499,25 @@ export default function TasksPage() {
               );
 
               return (
-                <section key={founder.name} className="flex min-h-[16rem] flex-col rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm ${founderAvatar[founder.name]}`} aria-hidden="true">{founder.name[0]}</span>
-                      <h2 className="text-base font-bold text-slate-950 md:text-lg">{founder.name}</h2>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-                      {columnTasks.length}
-                    </span>
+                <section key={founder.name} className="flex min-h-[18rem] flex-col rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 md:p-6">
+                  <div className="inline-flex items-center gap-2 self-start rounded-full bg-slate-50 py-1 pl-1 pr-3 ring-1 ring-slate-100">
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white ${founderAvatar[founder.name]}`} aria-hidden="true">{founder.name[0]}</span>
+                    <span className="text-sm font-bold text-slate-950">{founder.name}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">{columnTasks.length}</span>
                   </div>
                   <div className="mt-3 flex flex-1 flex-col gap-0.5">
                     {columnTasks.map((task) => <PersonRow key={task.id} task={task} />)}
                     {columnTasks.length === 0 && (
-                      <div className="flex flex-1 items-center justify-center px-4 py-8 text-center text-xs text-slate-400 md:text-sm">
-                        {isSearching ? "No tasks match your search." : "Nothing open — all clear."}
+                      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-500"><Check className="h-4 w-4" aria-hidden="true" /></span>
+                        <p className="text-xs text-slate-400 md:text-sm">{isSearching ? "No tasks match your search." : "Nothing open — all clear."}</p>
                       </div>
                     )}
                   </div>
                   {!isSearching && (
                     <button
                       type="button"
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-700"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-700"
                       onClick={() => openAddForFounder(founder.name)}
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
@@ -528,7 +534,7 @@ export default function TasksPage() {
       <section className="rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-200">
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-[2rem] p-4 text-center text-xs font-semibold text-slate-500 hover:text-slate-700 md:p-5 md:text-sm"
+          className="flex w-full items-center justify-center gap-2 rounded-[2rem] p-5 text-center text-xs font-semibold text-slate-500 hover:text-slate-700 md:p-6 md:text-sm"
           onClick={() => { if (!isSearching) setCompletedCollapsed((prev) => !prev); }}
         >
           <span>Completed ({completedTasks.length}){!isSearching ? (completedCollapsed ? " — click to expand" : " — click to collapse") : ""}</span>
