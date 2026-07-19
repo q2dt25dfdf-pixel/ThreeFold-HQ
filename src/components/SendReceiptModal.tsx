@@ -87,7 +87,7 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
       body: JSON.stringify({ invoiceId: invoice.id }),
     })
       .then((r) => r.json())
-      .then((d: { publicToken?: string; publicLink?: string; clientEmail?: string; error?: string }) => {
+      .then((d: { publicToken?: string; publicLink?: string; receiptLink?: string; clientEmail?: string; error?: string }) => {
         if (d.error || !d.publicLink) {
           setErrorMsg(d.error ?? "Failed to generate the receipt link.");
           setStep("error");
@@ -102,7 +102,8 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
           clientName,
           receipt: info,
           orderName,
-          publicLink: d.publicLink,
+          // Receipt email links to the STABLE receipt link (r- token), never the tfi- bill.
+          publicLink: d.receiptLink ?? d.publicLink,
           subtotal,
           discountLabel: discount?.label ?? null,
           discountAmount,

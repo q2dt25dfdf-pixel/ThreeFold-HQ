@@ -2592,6 +2592,7 @@ export default function OrderDetailPage() {
       <SendFinalInvoiceModal
         open={sendInvoiceOpen}
         invoice={invoice ?? null}
+        contact={(linkedClient as (LookupRecord & { contact?: string }) | undefined)?.contact ?? ""}
         onClose={() => setSendInvoiceOpen(false)}
         onSent={handleInvoiceSent}
       />

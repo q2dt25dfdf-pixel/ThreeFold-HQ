@@ -2706,6 +2706,7 @@ function FinancesContent() {
             order_name: sendInvoiceTarget.order_name,
             balance_remaining: sendInvoiceTarget.balance_remaining,
           }}
+          contact={leadContactFor(sendInvoiceTarget)}
           onClose={() => setSendInvoiceTarget(null)}
           onSent={() => void handleFinalInvoiceSent()}
         />

@@ -10,10 +10,12 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
+    // Match EITHER the invoice token (tfi-, public_token) OR the receipt token
+    // (r-, receipt_public_token). doc_kind below tells the page which document this link is.
     const { data: rows, error } = await getSupabaseAdmin()
       .from("finances")
       .select("id,data")
-      .eq("data->>public_token", token)
+      .or(`data->>public_token.eq.${token},data->>receipt_public_token.eq.${token}`)
       .limit(1);
 
     if (error || !rows || rows.length === 0) {
@@ -21,6 +23,8 @@ export async function GET(
     }
 
     const raw = rows[0].data as Record<string, unknown>;
+    // "receipt" only when the incoming token is the receipt token; otherwise "invoice".
+    const docKind = raw.receipt_public_token === token ? "receipt" : "invoice";
 
     // Use deposit request as authoritative source for amounts and line items when available
     let totalAmount = calcTotal(raw);
@@ -147,6 +151,7 @@ export async function GET(
       deposit_payment_method: (raw.deposit_payment_method ?? null) as string | null,
       final_payment_method: (raw.final_payment_method ?? null) as string | null,
       status: (raw.status ?? "Draft") as string,
+      doc_kind: docKind,
       line_items: lineItems,
     };
 

@@ -22,6 +22,9 @@ interface Invoice {
 interface Props {
   open: boolean;
   invoice: Invoice | null;
+  // Contact person for the greeting (same source the receipt email uses). The email greets
+  // the person, falling back to the company. When omitted, falls back to client_name.
+  contact?: string;
   onClose: () => void;
   onSent?: (sender: string, publicLink: string) => void;
 }
@@ -37,7 +40,7 @@ function fmtCurrency(n: number) {
   }).format(n);
 }
 
-export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }: Props) {
+export default function SendFinalInvoiceModal({ open, invoice, contact, onClose, onSent }: Props) {
   const [step, setStep] = useState<Step>("generating");
   const [publicLink, setPublicLink] = useState("");
   const [emailTo, setEmailTo] = useState("");
@@ -57,7 +60,8 @@ export default function SendFinalInvoiceModal({ open, invoice, onClose, onSent }
     setSender("");
     setSentVia("");
 
-    const clientName = invoice.client_name || invoice.client || "there";
+    // Greet the contact person when known (same as the receipt email), else the company.
+    const clientName = (contact || "").trim() || invoice.client_name || invoice.client || "there";
     const projectName = invoice.order_name || invoice.orderName || "your order";
 
     fetch("/api/invoice/generate", {

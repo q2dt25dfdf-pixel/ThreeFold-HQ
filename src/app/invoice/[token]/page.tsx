@@ -42,6 +42,7 @@ interface InvoiceData {
   deposit_payment_method?: string | null;
   final_payment_method?: string | null;
   status: string;
+  doc_kind?: "receipt" | "invoice";
   line_items: LineItem[];
 }
 
@@ -203,13 +204,16 @@ export default function InvoicePage() {
   const receiptPaidLine = receipt ? receiptPaidPhrase(receipt.method, receipt.datePaid) : "";
   const isDepositPaid = data.deposit_paid;
   // Has HQ SENT the final invoice? This is the ONLY thing that moves a deposit-paid order
-  // from "receipt / not owed yet" to "final invoice / now due".
+  // from "receipt / not owed yet" to "final invoice / now due" — for the INVOICE link.
   const finalInvoiceSent = Boolean((data.final_invoice_sent_at ?? "").toString().trim());
-  // STATE A — a paid deposit with an outstanding balance, final invoice NOT yet sent.
-  // A receipt, not a bill — no pay buttons; the balance is a fact, "not yet owed".
-  // Once the final invoice is sent (finalInvoiceSent), this flips false and the page
-  // renders STATE B (a real final invoice with the pay panel) instead.
-  const isDepositReceipt = isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true && !finalInvoiceSent;
+  // The receipt link (r- token) is a STABLE, read-only deposit receipt — never a bill,
+  // regardless of any flag. The invoice link (tfi-) uses the flag-based State A/B/C logic.
+  const isReceiptLink = data.doc_kind === "receipt";
+  // STATE A — deposit receipt. Forced for the receipt link; for the invoice link it's a
+  // paid deposit with an outstanding balance whose final invoice has NOT been sent yet.
+  // A receipt, not a bill — no pay buttons; the balance is a fact, "not yet owed". Once the
+  // final invoice is sent (finalInvoiceSent), the INVOICE link flips to STATE B.
+  const isDepositReceipt = isReceiptLink || (isDepositPaid && data.balance_remaining > 0 && data.final_paid !== true && !finalInvoiceSent);
   const depositMethodLabel = paymentMethodLabel(data.deposit_payment_method);
   // Deposit-received thank-you copy (no dashes; contact first name, else no name).
   const contactFirst = (data.contact_name ?? "").trim().split(/\s+/)[0] || "";
