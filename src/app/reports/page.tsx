@@ -643,13 +643,13 @@ function SectionCard({
 }) {
   const styles = toneStyles[toneKey];
   return (
-    <div className="rounded-[2rem] border border-slate-200 bg-white p-5 md:p-6">
+    <div className="rounded-2xl bg-slate-50 p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={`text-sm font-semibold ${styles.heading}`}>{label}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${styles.badge}`}>{count}</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${styles.badge}`}>{count}</span>
         </div>
-        <Link href={allHref} className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900">
+        <Link href={allHref} className="flex items-center gap-1 text-xs font-semibold text-slate-500 transition hover:text-slate-900">
           See all <ArrowRight className="h-3 w-3" aria-hidden="true" />
         </Link>
       </div>
@@ -658,7 +658,7 @@ function SectionCard({
           <li key={item.id}>
             <Link
               href={item.href}
-              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${styles.itemBorder}`}
+              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-xs transition ${styles.itemBorder}`}
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span className={`h-2 w-2 shrink-0 rounded-full ${styles.dot}`} aria-hidden="true" />
@@ -682,13 +682,13 @@ function SectionCard({
 
 function TaxDueCard({ taxDue }: { taxDue: number }) {
   return (
-    <div className="rounded-[2rem] border border-slate-200 bg-white p-5 md:p-6">
+    <div className="rounded-2xl bg-slate-50 p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-rose-700">Sales Tax Owed</span>
-          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">YTD</span>
+          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-700">YTD</span>
         </div>
-        <Link href="/finances?tab=sales-tax" className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900">
+        <Link href="/finances?tab=sales-tax" className="flex items-center gap-1 text-xs font-semibold text-slate-500 transition hover:text-slate-900">
           See all <ArrowRight className="h-3 w-3" aria-hidden="true" />
         </Link>
       </div>
@@ -720,8 +720,8 @@ function StatTile({
   return (
     <Link
       href={href}
-      className={`flex flex-col gap-1 rounded-[2rem] border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
-        accent ? "border-emerald-200" : "border-slate-200"
+      className={`flex flex-col gap-1 rounded-2xl p-4 shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md md:p-5 ${
+        accent ? "bg-emerald-50 ring-emerald-100" : "bg-slate-50 ring-slate-100"
       }`}
     >
       <p className={`text-2xl font-bold tracking-tight md:text-3xl ${accent ? "text-emerald-700" : "text-slate-950"}`}>
@@ -737,7 +737,7 @@ function StatTile({
 function BriefingPanel({ briefing, loading }: { briefing: Briefing; loading: boolean }) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-3 rounded-[2rem] border border-slate-200 bg-white p-8 text-sm text-slate-500">
+      <div className="flex items-center justify-center gap-3 rounded-2xl bg-slate-50 p-8 text-sm text-slate-500">
         <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
         Loading briefing…
       </div>
@@ -746,8 +746,8 @@ function BriefingPanel({ briefing, loading }: { briefing: Briefing; loading: boo
 
   if (briefing.sections.length === 0 && briefing.taxDue === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-[2rem] border border-emerald-200 bg-emerald-50 p-6">
-        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-emerald-50 px-6 py-10 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-emerald-600 ring-1 ring-emerald-100"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
         <p className="text-sm font-semibold text-emerald-800">Everything is on track today.</p>
       </div>
     );
@@ -775,7 +775,7 @@ function BriefingPanel({ briefing, loading }: { briefing: Briefing; loading: boo
 function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean }) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-3 rounded-[2rem] border border-slate-200 bg-white p-8 text-sm text-slate-500">
+      <div className="flex items-center justify-center gap-3 rounded-2xl bg-slate-50 p-8 text-sm text-slate-500">
         <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
         Running audit…
       </div>
@@ -786,8 +786,8 @@ function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean
 
   if (allClear) {
     return (
-      <div className="flex items-center gap-4 rounded-[2rem] border border-teal-200 bg-teal-50 p-6">
-        <ShieldCheck className="h-6 w-6 shrink-0 text-teal-600" aria-hidden="true" />
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-teal-50 px-6 py-10 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-teal-600 ring-1 ring-teal-100"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span>
         <div>
           <p className="text-sm font-semibold text-teal-800">System Healthy</p>
           <p className="mt-0.5 text-xs text-teal-700">No critical issues detected.</p>
@@ -831,7 +831,7 @@ function AuditorPanel({ audit, loading }: { audit: AuditReport; loading: boolean
 function EndOfDayPanel({ report, loading }: { report: EndOfDayReport; loading: boolean }) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-3 rounded-[2rem] border border-slate-200 bg-white p-8 text-sm text-slate-500">
+      <div className="flex items-center justify-center gap-3 rounded-2xl bg-slate-50 p-8 text-sm text-slate-500">
         <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
         Loading report…
       </div>
@@ -840,8 +840,8 @@ function EndOfDayPanel({ report, loading }: { report: EndOfDayReport; loading: b
 
   if (!report.hasActivity) {
     return (
-      <div className="flex items-center gap-4 rounded-[2rem] border border-slate-200 bg-white p-6">
-        <Moon className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden="true" />
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-slate-50 px-6 py-10 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-indigo-400 ring-1 ring-slate-100"><Moon className="h-5 w-5" aria-hidden="true" /></span>
         <p className="text-sm font-semibold text-slate-700">No significant activity recorded today.</p>
       </div>
     );
@@ -977,9 +977,9 @@ export default function ReportsPage() {
     <div className="space-y-6 text-xs md:text-sm">
       {/* Header */}
       <div>
-        <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-slate-600">Reporting</p>
-        <h1 className="mt-3 text-base md:text-3xl font-semibold text-slate-950">Reports</h1>
-        <p className="mt-2 text-xs text-slate-500 md:text-sm">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Reporting</p>
+        <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Reports</h1>
+        <p className="mt-2 text-xs text-slate-600 md:text-sm">
           Operational reports for reviewing daily activity, system health, and founder briefings.
         </p>
       </div>
@@ -991,12 +991,12 @@ export default function ReportsPage() {
         <button
           type="button"
           onClick={() => setBriefingOpen((prev) => !prev)}
-          className={`flex flex-col gap-4 rounded-[2rem] border bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-7 ${
-            briefingOpen ? "border-2 border-slate-950" : "border-slate-200"
+          className={`flex flex-col gap-4 rounded-[2rem] bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-6 ${
+            briefingOpen ? "shadow-md ring-2 ring-slate-900/10" : "ring-1 ring-slate-200"
           }`}
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50">
               <Sun className="h-6 w-6 text-amber-500" aria-hidden="true" />
             </div>
             {loading ? (
@@ -1025,12 +1025,12 @@ export default function ReportsPage() {
         <button
           type="button"
           onClick={() => setEodOpen((prev) => !prev)}
-          className={`flex flex-col gap-4 rounded-[2rem] border bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-7 ${
-            eodOpen ? "border-2 border-slate-950" : "border-slate-200"
+          className={`flex flex-col gap-4 rounded-[2rem] bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-6 ${
+            eodOpen ? "shadow-md ring-2 ring-slate-900/10" : "ring-1 ring-slate-200"
           }`}
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
               <Moon className="h-6 w-6 text-indigo-500" aria-hidden="true" />
             </div>
             {loading ? (
@@ -1061,12 +1061,12 @@ export default function ReportsPage() {
         <button
           type="button"
           onClick={() => setAuditorOpen((prev) => !prev)}
-          className={`flex flex-col gap-4 rounded-[2rem] border bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-7 ${
-            auditorOpen ? "border-2 border-slate-950" : "border-slate-200"
+          className={`flex flex-col gap-4 rounded-[2rem] bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:p-6 ${
+            auditorOpen ? "shadow-md ring-2 ring-slate-900/10" : "ring-1 ring-slate-200"
           }`}
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50">
               <ShieldCheck className="h-6 w-6 text-teal-500" aria-hidden="true" />
             </div>
             {loading ? (
@@ -1100,35 +1100,35 @@ export default function ReportsPage() {
 
       {/* Morning Briefing panel */}
       {briefingOpen && (
-        <div className="space-y-4">
+        <section className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 md:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-slate-950 md:text-base">Morning Briefing</h2>
-            <p className="text-xs text-slate-500">{todayLabel}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Morning Briefing</p>
+            <p className="mt-1 text-xs text-slate-500">{todayLabel}</p>
           </div>
           <BriefingPanel briefing={briefing} loading={loading} />
-        </div>
+        </section>
       )}
 
       {/* End-of-Day panel */}
       {eodOpen && (
-        <div className="space-y-4">
+        <section className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 md:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-slate-950 md:text-base">End-of-Day Report</h2>
-            <p className="text-xs text-slate-500">{todayLabel}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">End-of-Day Report</p>
+            <p className="mt-1 text-xs text-slate-500">{todayLabel}</p>
           </div>
           <EndOfDayPanel report={endOfDay} loading={loading} />
-        </div>
+        </section>
       )}
 
       {/* HQ Auditor panel */}
       {auditorOpen && (
-        <div className="space-y-4">
+        <section className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 md:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-slate-950 md:text-base">HQ Auditor</h2>
-            <p className="text-xs text-slate-500">{todayLabel}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">HQ Auditor</p>
+            <p className="mt-1 text-xs text-slate-500">{todayLabel}</p>
           </div>
           <AuditorPanel audit={audit} loading={loading} />
-        </div>
+        </section>
       )}
     </div>
   );
