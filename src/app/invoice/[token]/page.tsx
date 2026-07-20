@@ -502,9 +502,16 @@ export default function InvoicePage() {
         {/* Right: how to pay */}
         <div className="portal-col-side">
           {isPaidInFull ? (
-            <div className="dk-card">
-              <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
-              <div style={s.bodyText}>
+            // Same dark-green confirm card as the deposit state (check circle + green label +
+            // message). Wording unchanged. Paid-in-full keeps the OPEN PORTAL pill; final does not.
+            <div style={s.handoffCard}>
+              <div style={s.handoffCheck}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 13l4 4L19 7" stroke="#7fc9a3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div style={s.portalLabel}>PAYMENT RECEIVED</div>
+              <div style={s.handoffSub}>
                 {singleFullPayment
                   ? "Payment received in full. Your project is officially underway, and we'll keep you posted at each step as we get it made. Thank you."
                   : "Your final payment has been received and confirmed. Thank you for your business. It's been a pleasure working with you."}

@@ -271,12 +271,30 @@ export async function PATCH(
       // created a new one (never repoint to a reused/existing row it already points at).
       if (leadData) {
         const nowIso = new Date().toISOString();
+        // Log the approval on the lead's activity panel (communicationHistory), newest-first,
+        // next to the existing "Quote sent" entry. Client action -> owner shown as "Client"
+        // (the lead log renders owner as free text). Reuses the existing "Other" type (no new
+        // enum). Dedup on the summary so re-approval never adds a second.
+        const existingComm = Array.isArray(leadData.communicationHistory)
+          ? (leadData.communicationHistory as { summary?: string }[])
+          : [];
+        const alreadyLogged = existingComm.some(
+          (e) => typeof e?.summary === "string" && e.summary.toLowerCase().includes("quote approved"),
+        );
+        const approvalComm = {
+          id: `comm-${Date.now()}`,
+          type: "Other",
+          date: now.slice(0, 10),
+          owner: "Client",
+          summary: "Quote approved by client.",
+        };
         const updatedLeadData: Record<string, unknown> = {
           ...leadData,
           stage: "Quote Approved",
           approved_quote_id: quoteId,
           stage_changed_at: nowIso,
           last_activity_at: nowIso,
+          communicationHistory: alreadyLogged ? existingComm : [approvalComm, ...existingComm],
           ...(newDepositId ? { deposit_request_id: newDepositId, deposit_request_number: newDepositNumber } : {}),
         };
         await db.from("crm_leads").update({ data: updatedLeadData }).eq("id", leadId);
