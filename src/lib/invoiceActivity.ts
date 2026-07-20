@@ -6,6 +6,8 @@
 // (api/stripe/webhook — Pass 2) can import the same type. The finances row stores
 // these newest-first in data.activity_log.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type InvoiceActivityType = "payment" | "send" | "status" | "edit" | "note";
 
 export interface InvoiceActivityEntry {
@@ -18,12 +20,32 @@ export interface InvoiceActivityEntry {
 }
 
 // Pure, newest-first prepend — mirrors the lead's [entry, ...history] convention.
-// Returns a NEW invoice object; never mutates. Used in Pass 2 (auto-logging); defined
-// now so the shape is settled. `T` is loosely constrained so it accepts the finances
-// Invoice type and the webhook's raw row alike.
+// Returns a NEW invoice object; never mutates. NOTE: as of the atomic-append refactor,
+// activity_log entries are AUTHORED only by appendInvoiceActivityRpc (below). This pure
+// helper is retained for tests/shape reference and is no longer used to write entries.
 export function appendInvoiceActivity<T extends { activity_log?: InvoiceActivityEntry[] }>(
   invoice: T,
   entry: InvoiceActivityEntry,
 ): T {
   return { ...invoice, activity_log: [entry, ...(invoice.activity_log ?? [])] };
+}
+
+// ATOMIC append — the SOLE writer of activity_log entries. Calls the Postgres RPC
+// append_invoice_activity (supabase/invoice-activity-append.sql), which prepends the entry
+// to data->'activity_log' in one UPDATE statement. Because the read+write happens inside a
+// single statement, it can never clobber a concurrent writer (founder save vs Stripe webhook).
+// Works with any Supabase client: the browser client (client-side handlers) or the
+// service-role admin client (Stripe webhook). Returns whether the append succeeded; logs on
+// failure rather than throwing, so a logging hiccup never breaks the payment/send flow.
+export async function appendInvoiceActivityRpc(
+  client: SupabaseClient,
+  invoiceId: string,
+  entry: InvoiceActivityEntry,
+): Promise<boolean> {
+  const { error } = await client.rpc("append_invoice_activity", { p_id: invoiceId, p_entry: [entry] });
+  if (error) {
+    console.error("[appendInvoiceActivityRpc]", invoiceId, error.message);
+    return false;
+  }
+  return true;
 }

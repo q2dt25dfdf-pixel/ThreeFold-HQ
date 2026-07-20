@@ -15,7 +15,8 @@ import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
-import { appendInvoiceActivity, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
+import { appendInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
+import { supabase } from "@/lib/supabase";
 import {
   Area,
   AreaChart,
@@ -1093,30 +1094,47 @@ function FinancesContent() {
       return;
     }
     setFormError("");
-    // Auto-log payment events, but ONLY on an actual false->true transition (comparing the
-    // current DB row to the incoming save) so re-saving an already-paid invoice never re-logs.
+    // Detect payment transitions BEFORE the save (compare the current DB row to the incoming
+    // save) so re-saving an already-paid invoice never re-logs. The activity entries are NOT
+    // authored into the upsert — they are appended via the atomic RPC after the save.
     // No SenderPicker in the edit modal → founder author is not in scope → author undefined.
     const current = invoices.find((i) => i.id === linkedInvoice.id);
     const depositNowPaid = current?.deposit_paid !== true && linkedInvoice.deposit_paid === true;
     const finalNowPaid = current?.final_paid !== true && linkedInvoice.final_paid === true;
-    // Base the log on the freshest DB copy so appends never clobber existing entries.
-    let logged: Invoice = { ...linkedInvoice, activity_log: current?.activity_log ?? linkedInvoice.activity_log ?? [] };
-    if (depositNowPaid) {
-      const method = paymentMethodLabel(linkedInvoice.deposit_payment_method);
-      const statusChanged = current?.status !== linkedInvoice.status;
-      const detail = `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`;
-      logged = appendInvoiceActivity(logged, { id: `act-${Date.now()}-payment`, type: "payment", title: "Deposit received", detail, at: new Date().toISOString() });
-    }
-    if (finalNowPaid) {
-      const method = paymentMethodLabel(linkedInvoice.final_payment_method);
-      // Amount cleared = the balance that was owed on the pre-transition row.
-      const owed = invoiceBalance(current ?? linkedInvoice);
-      const detail = `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`;
-      logged = appendInvoiceActivity(logged, { id: `act-${Date.now()}-payment-final`, type: "payment", title: "Final payment received", detail, at: new Date().toISOString() });
-    }
+    const depositEntry: InvoiceActivityEntry | null = depositNowPaid
+      ? (() => {
+          const method = paymentMethodLabel(linkedInvoice.deposit_payment_method);
+          const statusChanged = current?.status !== linkedInvoice.status;
+          return {
+            id: `act-${Date.now()}-payment`,
+            type: "payment",
+            title: "Deposit received",
+            detail: `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`,
+            at: new Date().toISOString(),
+          };
+        })()
+      : null;
+    const finalEntry: InvoiceActivityEntry | null = finalNowPaid
+      ? (() => {
+          const method = paymentMethodLabel(linkedInvoice.final_payment_method);
+          // Amount cleared = the balance that was owed on the pre-transition row.
+          const owed = invoiceBalance(current ?? linkedInvoice);
+          return {
+            id: `act-${Date.now()}-payment-final`,
+            type: "payment",
+            title: "Final payment received",
+            detail: `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`,
+            at: new Date().toISOString(),
+          };
+        })()
+      : null;
     await editSave.runSave(async () => {
-      const response = await upsertItem(preserveInvoiceTokens(logged, current));
-      if (!response.error) await syncInvoiceToOrder(linkedInvoice);
+      const response = await upsertItem(preserveInvoiceTokens(linkedInvoice, current));
+      if (!response.error) {
+        await syncInvoiceToOrder(linkedInvoice);
+        if (depositEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, depositEntry);
+        if (finalEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, finalEntry);
+      }
       return response;
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
   };
@@ -1146,6 +1164,9 @@ function FinancesContent() {
 
   const handleReceiptSent = async (updated: Invoice) => {
     const current = invoices.find((i) => i.id === updated.id);
+    // The stamp write does NOT author activity_log (preserveInvoiceTokens only carries the
+    // existing array forward). The entry is appended via the atomic RPC below.
+    await upsertItem(preserveInvoiceTokens(updated, current));
     // Phase comes from the button that opened the modal (handleOpenReceipt sets receiptPhase).
     // No SenderPicker on the receipt modal → no founder in scope → author undefined.
     const isFinal = receiptPhase === "final";
@@ -1155,18 +1176,13 @@ function FinancesContent() {
       ? [email ? `to ${email}` : null]
       : [depNum || null, email ? `to ${email}` : null]
     ).filter(Boolean).join(" · ") || undefined;
-    const entry: InvoiceActivityEntry = {
+    await appendInvoiceActivityRpc(supabase, updated.id, {
       id: `act-${Date.now()}-send`,
       type: "send",
       title: isFinal ? "Final receipt sent" : "Deposit receipt sent",
       detail,
       at: new Date().toISOString(),
-    };
-    // Prepend onto the freshest log copy (current DB row), then let preserveInvoiceTokens
-    // keep it. This never clobbers an existing log.
-    const baseLog = current?.activity_log ?? updated.activity_log ?? [];
-    const withLog = appendInvoiceActivity({ ...updated, activity_log: baseLog }, entry);
-    await upsertItem(preserveInvoiceTokens(withLog, current));
+    });
     setReceiptInvoice(null);
   };
 
@@ -1181,6 +1197,16 @@ function FinancesContent() {
   const handleFinalInvoiceSent = async (invoiceNumber?: string, sender?: string) => {
     if (!sendInvoiceTarget) return;
     const current = invoices.find((i) => i.id === sendInvoiceTarget.id);
+    // Stamp write (final_invoice_sent_at + TF-I-) does NOT author activity_log.
+    const stamped = {
+      ...sendInvoiceTarget,
+      final_invoice_sent_at: new Date().toISOString(),
+      // Keep the freshly-minted TF-I- number the modal just generated so this whole-blob
+      // write doesn't drop it (the in-memory row may not have it yet).
+      ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+    };
+    await upsertItem(preserveInvoiceTokens(stamped, current));
+    // Activity entry via the atomic RPC. author = SenderPicker choice.
     const email = ((sendInvoiceTarget.client_email || "").trim() || leadEmailFor(sendInvoiceTarget)).trim();
     const invNum = invoiceNumber || sendInvoiceTarget.invoice_number || "";
     const detail = [
@@ -1188,27 +1214,14 @@ function FinancesContent() {
       invNum || null,
       email ? `to ${email}` : null,
     ].filter(Boolean).join(" · ") || undefined;
-    const entry: InvoiceActivityEntry = {
+    await appendInvoiceActivityRpc(supabase, sendInvoiceTarget.id, {
       id: `act-${Date.now()}-send`,
       type: "send",
       title: "Final invoice sent",
       detail,
       at: new Date().toISOString(),
       author: sender || undefined,
-    };
-    const baseLog = current?.activity_log ?? sendInvoiceTarget.activity_log ?? [];
-    const stamped = appendInvoiceActivity(
-      {
-        ...sendInvoiceTarget,
-        final_invoice_sent_at: new Date().toISOString(),
-        // Keep the freshly-minted TF-I- number the modal just generated so this whole-blob
-        // write doesn't drop it (the in-memory row may not have it yet).
-        ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
-        activity_log: baseLog,
-      },
-      entry,
-    );
-    await upsertItem(preserveInvoiceTokens(stamped, current));
+    });
   };
 
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
