@@ -629,11 +629,6 @@ export default function PortalPage() {
                     PAY FINAL BALANCE →
                   </a>
                 )}
-                {data.stripeInvoiceUrl && (
-                  <a href={data.stripeInvoiceUrl} target="_blank" rel="noopener noreferrer" style={s.btnGold}>
-                    VIEW INVOICE →
-                  </a>
-                )}
               </div>
             )}
 
