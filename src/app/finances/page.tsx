@@ -15,7 +15,7 @@ import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
-import { appendInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
+import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import { supabase } from "@/lib/supabase";
 import {
   Area,
@@ -402,30 +402,170 @@ function activityVisual(entry: InvoiceActivityEntry): { icon: React.ReactNode; w
 
 // Read-only activity timeline for the invoice edit modal. Array is stored newest-first, so
 // no sort here. Scrolls (max height) rather than paginating — few entries, keeps the modal calm.
-function ActivityTimeline({ log }: { log?: InvoiceActivityEntry[] }) {
+// Founder roster for the manual note composer — mirrors the CRM lead's OWNERS list.
+const NOTE_OWNERS = ["Alliyah", "Hannah", "Jordan"] as const;
+
+function ActivityTimeline({ log, onAddNote, onEditNote, onDeleteNote }: {
+  log?: InvoiceActivityEntry[];
+  // All three go through atomic single-statement RPCs (parent-provided). Return success.
+  onAddNote?: (entry: InvoiceActivityEntry) => Promise<boolean>;
+  onEditNote?: (entryId: string, detail: string) => Promise<boolean>;
+  onDeleteNote?: (entryId: string) => Promise<boolean>;
+}) {
   const entries = log ?? [];
+  const [noteText, setNoteText] = useState("");
+  const [noteOwner, setNoteOwner] = useState<string>(NOTE_OWNERS[0]);
+  const [saving, setSaving] = useState(false);
+  // Per-row edit/delete state (only one row at a time).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+
+  const submitNote = async () => {
+    const text = noteText.trim();
+    if (!text || !onAddNote || saving) return;
+    setSaving(true);
+    const ok = await onAddNote({
+      id: `act-${Date.now()}-note`,
+      type: "note",
+      title: "Note",
+      detail: text,
+      at: new Date().toISOString(),
+      author: noteOwner,
+    });
+    setSaving(false);
+    if (ok) setNoteText("");
+  };
+
+  const startEdit = (entry: InvoiceActivityEntry) => {
+    setConfirmDeleteId(null);
+    setEditingId(entry.id);
+    setEditText(entry.detail ?? "");
+  };
+  const cancelEdit = () => { setEditingId(null); setEditText(""); };
+  const saveEdit = async (entryId: string) => {
+    const text = editText.trim();
+    if (!text || !onEditNote || rowBusy) return;
+    setRowBusy(entryId);
+    const ok = await onEditNote(entryId, text);
+    setRowBusy(null);
+    if (ok) cancelEdit();
+  };
+  const doDelete = async (entryId: string) => {
+    if (!onDeleteNote || rowBusy) return;
+    setRowBusy(entryId);
+    const ok = await onDeleteNote(entryId);
+    setRowBusy(null);
+    if (ok) setConfirmDeleteId(null);
+  };
+
   return (
     <div>
       <div className="mb-3 flex items-center gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Activity</h3>
         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{entries.length}</span>
       </div>
+
+      {/* Manual note composer — appends into the SAME timeline via the atomic RPC. */}
+      {onAddNote && (
+        <div className="mb-4 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
+          <textarea
+            rows={2}
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="Add a note (e.g. Li said the check is in the mail)"
+            className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-500 md:text-sm"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <select
+              value={noteOwner}
+              onChange={(e) => setNoteOwner(e.target.value)}
+              aria-label="Note author"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-500"
+            >
+              {NOTE_OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => void submitNote()}
+              disabled={!noteText.trim() || saving}
+              className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-2xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-40"
+            >
+              {saving ? "Adding..." : "Add"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {entries.length === 0 ? (
         <p className="text-xs text-slate-400">No activity yet.</p>
       ) : (
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
           {entries.map((entry) => {
             const { icon, wrap } = activityVisual(entry);
-            const secondary = entry.detail || (entry.author ? `by ${entry.author}` : "");
+            const base = entry.detail || (entry.author ? `by ${entry.author}` : "");
+            // Events bake the author into `detail`; notes carry it separately, so surface it.
+            const secondary = entry.type === "note" && entry.author
+              ? `${base}${base ? " · " : ""}added by ${entry.author}`
+              : base;
+            // Edit/delete ONLY on manual notes; auto-logged events are an immutable record.
+            const editable = entry.type === "note" && Boolean(onEditNote) && Boolean(onDeleteNote);
+            const isEditing = editingId === entry.id;
+            const isConfirming = confirmDeleteId === entry.id;
+            const busy = rowBusy === entry.id;
             return (
-              <div key={entry.id} className="flex items-start gap-3">
+              <div key={entry.id} className="group flex items-start gap-3">
                 <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ${wrap}`}>{icon}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-xs font-semibold text-slate-800 md:text-sm">{entry.title}</span>
-                    <span className="shrink-0 text-[10px] text-slate-400">{fmtActivityAt(entry.at)}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-[10px] text-slate-400">{fmtActivityAt(entry.at)}</span>
+                      {editable && !isEditing && !isConfirming && (
+                        <>
+                          <button type="button" aria-label="Edit note" onClick={() => startEdit(entry)} className="text-slate-300 transition hover:text-slate-600">
+                            <Pencil size={12} aria-hidden="true" />
+                          </button>
+                          <button type="button" aria-label="Delete note" onClick={() => { setEditingId(null); setConfirmDeleteId(entry.id); }} className="text-slate-300 transition hover:text-rose-600">
+                            <Trash2 size={12} aria-hidden="true" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  {secondary && <p className="mt-0.5 break-words text-[11px] text-slate-500">{secondary}</p>}
+
+                  {isEditing ? (
+                    <div className="mt-1.5">
+                      <textarea
+                        rows={2}
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        aria-label="Edit note"
+                        className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-900 outline-none focus:border-slate-500"
+                      />
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <button type="button" onClick={() => void saveEdit(entry.id)} disabled={!editText.trim() || busy} className="rounded-xl bg-slate-900 px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-slate-800 disabled:opacity-40">
+                          {busy ? "Saving..." : "Save"}
+                        </button>
+                        <button type="button" onClick={cancelEdit} disabled={busy} className="rounded-xl border border-slate-300 px-3 py-1.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : isConfirming ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500">Delete this note?</span>
+                      <button type="button" onClick={() => void doDelete(entry.id)} disabled={busy} className="rounded-lg bg-rose-600 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-rose-700 disabled:opacity-40">
+                        {busy ? "Deleting..." : "Delete"}
+                      </button>
+                      <button type="button" onClick={() => setConfirmDeleteId(null)} disabled={busy} className="rounded-lg border border-slate-300 px-2.5 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    secondary && <p className="mt-0.5 break-words text-[11px] text-slate-500">{secondary}</p>
+                  )}
                 </div>
               </div>
             );
@@ -1530,7 +1670,37 @@ function FinancesContent() {
 
           {/* Activity timeline — full-width history below the phase cards */}
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
-            <ActivityTimeline log={inv.activity_log} />
+            <ActivityTimeline
+              log={inv.activity_log}
+              onAddNote={async (entry) => {
+                // Sole writer of activity_log stays the atomic RPC — never a whole-blob write.
+                const ok = await appendInvoiceActivityRpc(supabase, inv.id, entry);
+                if (ok) {
+                  // Optimistically show it at the top of THIS open modal, and refresh the list.
+                  onChange({ ...inv, activity_log: [entry, ...(inv.activity_log ?? [])] });
+                  void reloadInvoices();
+                }
+                return ok;
+              }}
+              onEditNote={async (entryId, detail) => {
+                // Atomic single-entry edit — never a whole-blob write.
+                const ok = await editInvoiceActivityRpc(supabase, inv.id, entryId, detail);
+                if (ok) {
+                  onChange({ ...inv, activity_log: (inv.activity_log ?? []).map((e) => (e.id === entryId ? { ...e, detail } : e)) });
+                  void reloadInvoices();
+                }
+                return ok;
+              }}
+              onDeleteNote={async (entryId) => {
+                // Atomic single-entry delete — never a whole-blob write.
+                const ok = await deleteInvoiceActivityRpc(supabase, inv.id, entryId);
+                if (ok) {
+                  onChange({ ...inv, activity_log: (inv.activity_log ?? []).filter((e) => e.id !== entryId) });
+                  void reloadInvoices();
+                }
+                return ok;
+              }}
+            />
           </div>
 
           {/* Collapsed edit details — rarely-touched fields */}
