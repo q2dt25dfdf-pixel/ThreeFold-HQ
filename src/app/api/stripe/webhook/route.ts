@@ -6,6 +6,8 @@ import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { getStripe } from "@/lib/stripe";
 import { createNotification } from "@/lib/notifications";
 import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
+import { autoSendReceipt } from "@/lib/autoSendReceipt";
+import { getInvoiceBaseUrl } from "@/lib/publicUrl";
 
 // Disable body parsing — Stripe signature verification requires the raw body
 export const config = { api: { bodyParser: false } };
@@ -32,11 +34,15 @@ export async function POST(request: NextRequest) {
 
   console.log(`[webhook] event=${event.type} id=${event.id}`);
 
+  // Absolute base for any receipt links auto-send needs to mint (the webhook's own origin, or
+  // the configured invoice base URL). Threaded into the payment handlers.
+  const baseUrl = getInvoiceBaseUrl(request.nextUrl.origin);
+
   try {
     if (event.type === "checkout.session.completed") {
-      await handleSessionCompleted(event.data.object as unknown as CheckoutSession);
+      await handleSessionCompleted(event.data.object as unknown as CheckoutSession, baseUrl);
     } else if (event.type === "checkout.session.async_payment_succeeded") {
-      await handleAsyncPaymentSucceeded(event.data.object as unknown as CheckoutSession);
+      await handleAsyncPaymentSucceeded(event.data.object as unknown as CheckoutSession, baseUrl);
     } else if (event.type === "checkout.session.async_payment_failed") {
       await handleAsyncPaymentFailed(event.data.object as unknown as CheckoutSession);
     }
@@ -96,6 +102,7 @@ async function fulfillDepositPaid(
   session: CheckoutSession,
   depositRequestId: string,
   paymentIntentId: string | null,
+  baseUrl: string,
 ): Promise<void> {
   const db = getSupabaseAdmin();
   const paidAt = new Date().toISOString();
@@ -226,6 +233,9 @@ async function fulfillDepositPaid(
       at: paidAt,
       author: "system",
     });
+    // Auto-send the client receipt AFTER the money write. Never throws; a failure only logs and
+    // cannot affect the payment (already committed above).
+    await autoSendReceipt(db, fin.id as string, baseUrl, (fd.client_email as string) || "");
     // Ensure the client record exists even if it was created before the webhook was updated
     if (effectiveLeadId) {
       const { data: ldRows } = await db.from("crm_leads").select("id,data").eq("id", effectiveLeadId).limit(1);
@@ -255,6 +265,7 @@ async function fulfillDepositPaid(
       balanceRemaining,
       today,
       paidAt,
+      baseUrl,
     });
   } else {
     console.warn(
@@ -372,6 +383,7 @@ type BootstrapOpts = {
   balanceRemaining: number;
   today: string;
   paidAt: string;
+  baseUrl: string;
   depositTaxCollected?: number;
   depositPaymentMethod?: string | null;
 };
@@ -379,7 +391,7 @@ type BootstrapOpts = {
 async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
   const {
     depositRequestId, depData, leadId, clientName,
-    totalAmount, depositAmount, balanceRemaining, today, paidAt,
+    totalAmount, depositAmount, balanceRemaining, today, paidAt, baseUrl,
     depositTaxCollected, depositPaymentMethod,
   } = opts;
 
@@ -568,6 +580,8 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
       at: paidAt,
       author: "system",
     });
+    // Auto-send the client receipt AFTER the row + entries are written. Never throws.
+    await autoSendReceipt(db, invoiceId, baseUrl, (financeData.client_email as string) || "");
   } else {
     console.log(`[webhook] finance ${invoiceId} already exists — skipping create`);
   }
@@ -619,7 +633,7 @@ async function notifyFinalInvoicePaid(financeId: string, baseAmount: string | un
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
-async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
+async function handleSessionCompleted(session: CheckoutSession, baseUrl: string): Promise<void> {
   const paymentIntentId =
     typeof session.payment_intent === "string" ? session.payment_intent : null;
   const meta = session.metadata ?? {};
@@ -670,6 +684,8 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         at: paidAt,
         author: "system",
       });
+      // Auto-send the final receipt AFTER the money write. Never throws.
+      await autoSendReceipt(getSupabaseAdmin(), financeId, baseUrl, (finData.client_email as string) || "");
       notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     } else {
       // Bank ACH: initiated — wait for async_payment_succeeded
@@ -696,7 +712,7 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
   if (session.payment_status === "paid") {
     // Card: payment confirmed immediately — run full fulfillment
     console.log(`[webhook] deposit ${depositRequestId} → card payment confirmed`);
-    await fulfillDepositPaid(session, depositRequestId, paymentIntentId);
+    await fulfillDepositPaid(session, depositRequestId, paymentIntentId, baseUrl);
   } else {
     // Bank ACH: record pending state — fulfillment deferred to async_payment_succeeded
     console.log(`[webhook] deposit ${depositRequestId} → bank ACH initiated (pending)`);
@@ -709,7 +725,7 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
   }
 }
 
-async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<void> {
+async function handleAsyncPaymentSucceeded(session: CheckoutSession, baseUrl: string): Promise<void> {
   const paymentIntentId =
     typeof session.payment_intent === "string" ? session.payment_intent : null;
   const meta = session.metadata ?? {};
@@ -754,6 +770,8 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       at: paidAt,
       author: "system",
     });
+    // Auto-send the final receipt AFTER the money write. Never throws.
+    await autoSendReceipt(getSupabaseAdmin(), financeId, baseUrl, (asyncFinData.client_email as string) || "");
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     notifyAchPayment("cleared", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
     return;
@@ -771,7 +789,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
 
   // Bank ACH settled — run full deposit fulfillment (same as card path)
   console.log(`[webhook] deposit ${depositRequestId} → bank ACH settled`);
-  await fulfillDepositPaid(session, depositRequestId, paymentIntentId);
+  await fulfillDepositPaid(session, depositRequestId, paymentIntentId, baseUrl);
   notifyAchPayment("cleared", "deposit_requests", depositRequestId, undefined).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
 }
 
