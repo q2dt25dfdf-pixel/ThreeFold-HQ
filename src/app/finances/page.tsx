@@ -2,20 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Check, Link2, Pencil, Receipt, Search, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, CircleDollarSign, Link2, Pencil, Receipt, Search, Send, StickyNote, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
 import { resolveInvoiceContact } from "@/lib/greeting";
-import { PAYMENT_METHOD_OPTIONS, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
+import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
-import type { InvoiceActivityEntry } from "@/lib/invoiceActivity";
+import { appendInvoiceActivity, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import {
   Area,
   AreaChart,
@@ -59,6 +59,7 @@ type Invoice = {
   stripe_invoice_url?: string;
   public_token?: string;
   public_link?: string;
+  invoice_number?: string;
   subtotal?: number;
   discount?: unknown;
   sales_tax_rate?: number;
@@ -371,6 +372,67 @@ function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): 
     if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
   }
   return merged as T;
+}
+
+// "Jul 19, 2:41 PM" — full date + time-of-day (activity entries store a full ISO `at`).
+function fmtActivityAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+// Per-type round icon (lucide) + tint. status/edit fall back to a neutral pencil; note is
+// grey (Pass 3 adds notes — supported here now). send picks Receipt for receipt titles.
+function activityVisual(entry: InvoiceActivityEntry): { icon: React.ReactNode; wrap: string } {
+  const size = 14;
+  switch (entry.type) {
+    case "payment":
+      return { icon: <CircleDollarSign size={size} className="text-emerald-600" aria-hidden="true" />, wrap: "bg-emerald-50 ring-emerald-100" };
+    case "send":
+      return /receipt/i.test(entry.title)
+        ? { icon: <Receipt size={size} className="text-blue-600" aria-hidden="true" />, wrap: "bg-blue-50 ring-blue-100" }
+        : { icon: <Send size={size} className="text-blue-600" aria-hidden="true" />, wrap: "bg-blue-50 ring-blue-100" };
+    case "note":
+      return { icon: <StickyNote size={size} className="text-slate-500" aria-hidden="true" />, wrap: "bg-slate-100 ring-slate-200" };
+    default: // status | edit
+      return { icon: <Pencil size={size} className="text-slate-500" aria-hidden="true" />, wrap: "bg-slate-100 ring-slate-200" };
+  }
+}
+
+// Read-only activity timeline for the invoice edit modal. Array is stored newest-first, so
+// no sort here. Scrolls (max height) rather than paginating — few entries, keeps the modal calm.
+function ActivityTimeline({ log }: { log?: InvoiceActivityEntry[] }) {
+  const entries = log ?? [];
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Activity</h3>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{entries.length}</span>
+      </div>
+      {entries.length === 0 ? (
+        <p className="text-xs text-slate-400">No activity yet.</p>
+      ) : (
+        <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+          {entries.map((entry) => {
+            const { icon, wrap } = activityVisual(entry);
+            const secondary = entry.detail || (entry.author ? `by ${entry.author}` : "");
+            return (
+              <div key={entry.id} className="flex items-start gap-3">
+                <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ${wrap}`}>{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-800 md:text-sm">{entry.title}</span>
+                    <span className="shrink-0 text-[10px] text-slate-400">{fmtActivityAt(entry.at)}</span>
+                  </div>
+                  {secondary && <p className="mt-0.5 break-words text-[11px] text-slate-500">{secondary}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
@@ -1031,8 +1093,29 @@ function FinancesContent() {
       return;
     }
     setFormError("");
+    // Auto-log payment events, but ONLY on an actual false->true transition (comparing the
+    // current DB row to the incoming save) so re-saving an already-paid invoice never re-logs.
+    // No SenderPicker in the edit modal → founder author is not in scope → author undefined.
+    const current = invoices.find((i) => i.id === linkedInvoice.id);
+    const depositNowPaid = current?.deposit_paid !== true && linkedInvoice.deposit_paid === true;
+    const finalNowPaid = current?.final_paid !== true && linkedInvoice.final_paid === true;
+    // Base the log on the freshest DB copy so appends never clobber existing entries.
+    let logged: Invoice = { ...linkedInvoice, activity_log: current?.activity_log ?? linkedInvoice.activity_log ?? [] };
+    if (depositNowPaid) {
+      const method = paymentMethodLabel(linkedInvoice.deposit_payment_method);
+      const statusChanged = current?.status !== linkedInvoice.status;
+      const detail = `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`;
+      logged = appendInvoiceActivity(logged, { id: `act-${Date.now()}-payment`, type: "payment", title: "Deposit received", detail, at: new Date().toISOString() });
+    }
+    if (finalNowPaid) {
+      const method = paymentMethodLabel(linkedInvoice.final_payment_method);
+      // Amount cleared = the balance that was owed on the pre-transition row.
+      const owed = invoiceBalance(current ?? linkedInvoice);
+      const detail = `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`;
+      logged = appendInvoiceActivity(logged, { id: `act-${Date.now()}-payment-final`, type: "payment", title: "Final payment received", detail, at: new Date().toISOString() });
+    }
     await editSave.runSave(async () => {
-      const response = await upsertItem(preserveInvoiceTokens(linkedInvoice, invoices.find((i) => i.id === linkedInvoice.id)));
+      const response = await upsertItem(preserveInvoiceTokens(logged, current));
       if (!response.error) await syncInvoiceToOrder(linkedInvoice);
       return response;
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
@@ -1062,7 +1145,28 @@ function FinancesContent() {
   };
 
   const handleReceiptSent = async (updated: Invoice) => {
-    await upsertItem(preserveInvoiceTokens(updated, invoices.find((i) => i.id === updated.id)));
+    const current = invoices.find((i) => i.id === updated.id);
+    // Phase comes from the button that opened the modal (handleOpenReceipt sets receiptPhase).
+    // No SenderPicker on the receipt modal → no founder in scope → author undefined.
+    const isFinal = receiptPhase === "final";
+    const email = (updated.client_email || "").trim();
+    const depNum = depositNumberFor(updated);
+    const detail = (isFinal
+      ? [email ? `to ${email}` : null]
+      : [depNum || null, email ? `to ${email}` : null]
+    ).filter(Boolean).join(" · ") || undefined;
+    const entry: InvoiceActivityEntry = {
+      id: `act-${Date.now()}-send`,
+      type: "send",
+      title: isFinal ? "Final receipt sent" : "Deposit receipt sent",
+      detail,
+      at: new Date().toISOString(),
+    };
+    // Prepend onto the freshest log copy (current DB row), then let preserveInvoiceTokens
+    // keep it. This never clobbers an existing log.
+    const baseLog = current?.activity_log ?? updated.activity_log ?? [];
+    const withLog = appendInvoiceActivity({ ...updated, activity_log: baseLog }, entry);
+    await upsertItem(preserveInvoiceTokens(withLog, current));
     setReceiptInvoice(null);
   };
 
@@ -1074,16 +1178,37 @@ function FinancesContent() {
   // success). Stamps final_invoice_sent_at on the finances row — this is what flips the
   // balance from "upcoming" to "owed now". Mirrors orders/[id]/page.tsx:1007. No money
   // math is touched and final_paid is NOT set.
-  const handleFinalInvoiceSent = async (invoiceNumber?: string) => {
+  const handleFinalInvoiceSent = async (invoiceNumber?: string, sender?: string) => {
     if (!sendInvoiceTarget) return;
-    const stamped = {
-      ...sendInvoiceTarget,
-      final_invoice_sent_at: new Date().toISOString(),
-      // Keep the freshly-minted TF-I- number the modal just generated so this whole-blob
-      // write doesn't drop it (the in-memory row may not have it yet).
-      ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+    const current = invoices.find((i) => i.id === sendInvoiceTarget.id);
+    const email = ((sendInvoiceTarget.client_email || "").trim() || leadEmailFor(sendInvoiceTarget)).trim();
+    const invNum = invoiceNumber || sendInvoiceTarget.invoice_number || "";
+    const detail = [
+      sender ? `by ${sender}` : null,
+      invNum || null,
+      email ? `to ${email}` : null,
+    ].filter(Boolean).join(" · ") || undefined;
+    const entry: InvoiceActivityEntry = {
+      id: `act-${Date.now()}-send`,
+      type: "send",
+      title: "Final invoice sent",
+      detail,
+      at: new Date().toISOString(),
+      author: sender || undefined,
     };
-    await upsertItem(preserveInvoiceTokens(stamped, invoices.find((i) => i.id === sendInvoiceTarget.id)));
+    const baseLog = current?.activity_log ?? sendInvoiceTarget.activity_log ?? [];
+    const stamped = appendInvoiceActivity(
+      {
+        ...sendInvoiceTarget,
+        final_invoice_sent_at: new Date().toISOString(),
+        // Keep the freshly-minted TF-I- number the modal just generated so this whole-blob
+        // write doesn't drop it (the in-memory row may not have it yet).
+        ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+        activity_log: baseLog,
+      },
+      entry,
+    );
+    await upsertItem(preserveInvoiceTokens(stamped, current));
   };
 
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
@@ -1374,6 +1499,11 @@ function FinancesContent() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Activity timeline — full-width history below the phase cards */}
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
+            <ActivityTimeline log={inv.activity_log} />
           </div>
 
           {/* Collapsed edit details — rarely-touched fields */}
@@ -2733,7 +2863,7 @@ function FinancesContent() {
           }}
           contact={resolveInvoiceContact({ invoice: sendInvoiceTarget, clients, leads })}
           onClose={() => setSendInvoiceTarget(null)}
-          onSent={(_sender, _link, invoiceNumber) => void handleFinalInvoiceSent(invoiceNumber)}
+          onSent={(sender, _link, invoiceNumber) => void handleFinalInvoiceSent(invoiceNumber, sender)}
         />
       )}
       {/* Expense add / edit modal */}

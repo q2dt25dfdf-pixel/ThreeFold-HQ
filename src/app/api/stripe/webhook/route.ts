@@ -5,6 +5,11 @@ import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { getStripe } from "@/lib/stripe";
 import { createNotification } from "@/lib/notifications";
+import { appendInvoiceActivity, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
+
+// Rows carry an optional activity_log; this alias keeps the append helper's generic happy
+// when merging into the webhook's loosely-typed jsonb data objects.
+type WithActivity = Record<string, unknown> & { activity_log?: InvoiceActivityEntry[] };
 
 // Disable body parsing — Stripe signature verification requires the raw body
 export const config = { api: { bodyParser: false } };
@@ -62,6 +67,7 @@ async function updateRecord(
   table: string,
   id: string,
   fields: Record<string, unknown>,
+  activityEntry?: InvoiceActivityEntry,
 ): Promise<void> {
   const db = getSupabaseAdmin();
   const { data: rows } = await db.from(table).select("id,data").eq("id", id).limit(1);
@@ -70,7 +76,11 @@ async function updateRecord(
     return;
   }
   const existing = rows[0].data as Record<string, unknown>;
-  await db.from(table).update({ data: { ...existing, ...fields } }).eq("id", id);
+  // Read-then-write: prepend the activity entry onto the row's FRESH server-read log so an
+  // existing (client- or server-written) log is never clobbered. Newest-first, author "system".
+  const merged = { ...existing, ...fields } as WithActivity;
+  const finalData = activityEntry ? appendInvoiceActivity(merged, activityEntry) : merged;
+  await db.from(table).update({ data: finalData }).eq("id", id);
 }
 
 // ─── Full deposit fulfillment ─────────────────────────────────────────────────
@@ -180,16 +190,24 @@ async function fulfillDepositPaid(
       ? Math.round((depositAmount / finGrandTotal) * finSalesTaxAmount * 100) / 100
       : depositTaxCollected;
     const updatedTaxCollected = isFinalAlreadyPaid ? finSalesTaxAmount : finDepositTax;
-    await db.from("finances").update({
-      data: {
-        ...fd,
-        deposit_paid: true,
-        deposit_paid_date: today,
-        status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
-        ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
-        ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
-      },
-    }).eq("id", fin.id);
+    const depositMethodWord = meta.payment_method === "card" ? "card" : meta.payment_method === "bank" ? "bank" : (meta.payment_method || "");
+    const depositEntry: InvoiceActivityEntry = {
+      id: `act-${Date.now()}-payment`,
+      type: "payment",
+      title: "Deposit received",
+      detail: `${fmtNotifAmount(depositAmount)}${depositMethodWord ? ` by ${depositMethodWord}` : ""} · via Stripe`,
+      at: paidAt,
+      author: "system",
+    };
+    const updatedFinData = {
+      ...fd,
+      deposit_paid: true,
+      deposit_paid_date: today,
+      status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
+      ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
+      ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
+    } as WithActivity;
+    await db.from("finances").update({ data: appendInvoiceActivity(updatedFinData, depositEntry) }).eq("id", fin.id);
     console.log(`[webhook] finances ${fin.id} → deposit_paid=true`);
     // Ensure the client record exists even if it was created before the webhook was updated
     if (effectiveLeadId) {
@@ -501,7 +519,16 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
         financeData.tax_collected_at = today;
       }
     }
-    await db.from("finances").upsert({ id: invoiceId, data: financeData });
+    const bootstrapMethodWord = depositPaymentMethod === "card" ? "card" : depositPaymentMethod === "bank" ? "bank" : (depositPaymentMethod || "");
+    const bootstrapEntry: InvoiceActivityEntry = {
+      id: `act-${Date.now()}-payment`,
+      type: "payment",
+      title: "Deposit received",
+      detail: `${fmtNotifAmount(depositAmount)}${bootstrapMethodWord ? ` by ${bootstrapMethodWord}` : ""} · via Stripe`,
+      at: paidAt,
+      author: "system",
+    };
+    await db.from("finances").upsert({ id: invoiceId, data: appendInvoiceActivity(financeData as WithActivity, bootstrapEntry) });
     console.log(`[webhook] created finance ${invoiceId} for order ${orderId}`);
   } else {
     console.log(`[webhook] finance ${invoiceId} already exists — skipping create`);
@@ -596,6 +623,13 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         final_paid_at: paidAt,
         ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
         ...finalTaxFields,
+      }, {
+        id: `act-${Date.now()}-payment-final`,
+        type: "payment",
+        title: "Final payment received",
+        detail: `${fmtNotifAmount(Number(meta.base_amount ?? 0))} · via Stripe · balance cleared`,
+        at: paidAt,
+        author: "system",
       });
       notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     } else {
@@ -672,6 +706,13 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       final_paid_at: paidAt,
       ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
       ...asyncFinalTaxFields,
+    }, {
+      id: `act-${Date.now()}-payment-final`,
+      type: "payment",
+      title: "Final payment received",
+      detail: `${fmtNotifAmount(Number(meta.base_amount ?? 0))} · via Stripe · balance cleared`,
+      at: paidAt,
+      author: "system",
     });
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     notifyAchPayment("cleared", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
