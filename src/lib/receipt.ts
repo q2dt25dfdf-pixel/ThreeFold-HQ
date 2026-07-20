@@ -47,10 +47,15 @@ export interface ReceiptSource {
   balance_remaining?: number | string | null;
   grand_total?: number | string | null;
   total_amount?: number | string | null;
+  // True only when the whole total was paid in ONE payment (distinct from a completed
+  // deposit + balance, which also ends with final_paid true). Single source of truth for
+  // the clean single-payment receipt wording.
+  paid_in_full?: boolean;
 }
 
 export interface ReceiptInfo {
   paidInFull: boolean;                 // true => "Paid in Full", false => "Deposit Received"
+  singleFullPayment: boolean;          // true only for ONE full payment (paid_in_full flag)
   markLabel: string;                   // "PAID IN FULL" | "DEPOSIT RECEIVED"
   amountPaid: number;
   datePaid: string;                    // ISO (date-only ok); "" when unknown
@@ -71,10 +76,13 @@ export function resolveReceipt(src: ReceiptSource): ReceiptInfo | null {
   const grandTotal = src.grand_total != null ? num(src.grand_total) : num(src.total_amount);
   const balance = num(src.balance_remaining);
   const depositAmount = num(src.deposit_amount);
+  // One full payment (not a completed deposit + balance). Drives the clean single-payment copy.
+  const singleFullPayment = src.paid_in_full === true;
 
   if (src.final_paid === true) {
     return {
       paidInFull: true,
+      singleFullPayment,
       markLabel: "PAID IN FULL",
       amountPaid: grandTotal,
       datePaid: src.final_paid_date ?? "",
@@ -91,6 +99,7 @@ export function resolveReceipt(src: ReceiptSource): ReceiptInfo | null {
     if (coversFull) {
       return {
         paidInFull: true,
+        singleFullPayment,
         markLabel: "PAID IN FULL",
         amountPaid: grandTotal || depositAmount,
         datePaid: src.deposit_paid_date ?? "",
@@ -102,6 +111,7 @@ export function resolveReceipt(src: ReceiptSource): ReceiptInfo | null {
     }
     return {
       paidInFull: false,
+      singleFullPayment: false,
       markLabel: "DEPOSIT RECEIVED",
       amountPaid: depositAmount,
       datePaid: src.deposit_paid_date ?? "",
@@ -153,16 +163,24 @@ export interface ReceiptEmailInput {
   salesTaxAmount?: number | null;
   grandTotal?: number | null;
   depositNumber?: string | null;
+  // Final-invoice number (TF-I-). Shown instead of the deposit number on a single full payment.
+  invoiceNumber?: string | null;
 }
 
 export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; body: string } {
   const { receipt } = input;
+  const single = receipt.singleFullPayment;
   const name = (input.clientName || "there").trim();
   const lines: string[] = [];
 
   lines.push(`Hi ${name},`);
   lines.push("");
-  lines.push("Thank you. Your payment has been received.");
+  // Single full payment gets its own warmer, no-balance opener. All other cases keep today's line.
+  if (single) {
+    lines.push("Payment received in full. Your project is officially underway, and we'll keep you posted at each step as we get it made.");
+  } else {
+    lines.push("Thank you. Your payment has been received.");
+  }
   lines.push("");
 
   if (receipt.paidInFull) {
@@ -175,7 +193,13 @@ export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; 
   const methodLabel = paymentMethodLabel(receipt.method);
   if (methodLabel) lines.push(`Payment Method: ${methodLabel}`);
   if (input.orderName) lines.push(`Order: ${input.orderName}`);
-  if (input.depositNumber) lines.push(`Deposit Number: ${input.depositNumber}`);
+  // Single full payment leads with its own invoice number (TF-I-); no deposit number, since
+  // there was no separate deposit. Every other case keeps the deposit number as before.
+  if (single) {
+    if (input.invoiceNumber) lines.push(`Invoice Number: ${input.invoiceNumber}`);
+  } else if (input.depositNumber) {
+    lines.push(`Deposit Number: ${input.depositNumber}`);
+  }
 
   // Breakdown block, same format as the deposit/quote emails.
   const subtotal = input.subtotal ?? null;
@@ -200,5 +224,8 @@ export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; 
   lines.push("");
   lines.push(TF_PLAIN_CLOSING);
 
-  return { subject: "Receipt - Threefold Supply Co.", body: lines.join("\n") };
+  const subject = single
+    ? "Payment received in full - Threefold Supply Co."
+    : "Receipt - Threefold Supply Co.";
+  return { subject, body: lines.join("\n") };
 }

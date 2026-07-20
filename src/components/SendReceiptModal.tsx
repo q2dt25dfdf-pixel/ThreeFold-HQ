@@ -117,6 +117,8 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
           salesTaxAmount: invoice.sales_tax_amount ?? null,
           grandTotal: invoice.grand_total ?? null,
           depositNumber: (depositNumber || "").trim() || null,
+          // Shown instead of the deposit number on a single full-payment receipt.
+          invoiceNumber: ((invoice.invoice_number as string | undefined) || "").trim() || null,
         });
         setEmailSubject(subject);
         setEmailBody(body);

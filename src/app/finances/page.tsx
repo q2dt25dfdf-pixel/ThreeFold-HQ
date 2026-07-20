@@ -54,6 +54,8 @@ type Invoice = {
   final_payment_method?: string | null;
   final_receipt_sent_at?: string;
   final_invoice_sent_at?: string;
+  // True only when the whole total was paid in ONE payment (not a completed deposit+balance).
+  paid_in_full?: boolean;
   dueDate?: string;
   status: InvoiceStatus;
   notes: string;
@@ -231,7 +233,7 @@ function expenseCategoryBadgeClass(category: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
-const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", deposit_payment_method: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", final_payment_method: "", dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
+const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", deposit_payment_method: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", final_payment_method: "", paid_in_full: false, dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
 
 type FinanceTab = "overview" | "invoices" | "expenses" | "sales-tax";
@@ -368,7 +370,7 @@ function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): 
   const current = currentRaw as Record<string, unknown> | undefined;
   if (!current) return next;
   const merged = { ...next } as Record<string, unknown>;
-  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number", "activity_log"]) {
+  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number", "activity_log", "paid_in_full"]) {
     const v = merged[key];
     if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
   }
@@ -717,6 +719,9 @@ function FinancesContent() {
   const invoiceParamId = searchParams.get("invoice");
   const [showModal, setShowModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
+  // Payment-recording mode for the edit modal: "split" = deposit + balance (default), "full" =
+  // one payment. Initialized from the row's paid_in_full when the modal opens.
+  const [payMode, setPayMode] = useState<"split" | "full">("split");
   const [receiptInvoice, setReceiptInvoice] = useState<Invoice | null>(null);
   const [receiptPhase, setReceiptPhase] = useState<"deposit" | "final" | null>(null);
   const [sendInvoiceTarget, setSendInvoiceTarget] = useState<Invoice | null>(null);
@@ -1173,6 +1178,7 @@ function FinancesContent() {
     setClientDropdownOpen(false);
     setOrderDropdownOpen(false);
     editSave.resetSaveState();
+    setPayMode(invoice.paid_in_full === true ? "full" : "split");
     setEditInvoice(hydrateInvoiceLinks(invoice));
   };
 
@@ -1255,39 +1261,52 @@ function FinancesContent() {
     const current = invoices.find((i) => i.id === linkedInvoice.id);
     const depositNowPaid = current?.deposit_paid !== true && linkedInvoice.deposit_paid === true;
     const finalNowPaid = current?.final_paid !== true && linkedInvoice.final_paid === true;
-    const depositEntry: InvoiceActivityEntry | null = depositNowPaid
-      ? (() => {
-          const method = paymentMethodLabel(linkedInvoice.deposit_payment_method);
-          const statusChanged = current?.status !== linkedInvoice.status;
-          return {
-            id: `act-${Date.now()}-payment`,
-            type: "payment",
-            title: "Deposit received",
-            detail: `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`,
-            at: new Date().toISOString(),
-          };
-        })()
-      : null;
-    const finalEntry: InvoiceActivityEntry | null = finalNowPaid
-      ? (() => {
-          const method = paymentMethodLabel(linkedInvoice.final_payment_method);
-          // Amount cleared = the balance that was owed on the pre-transition row.
-          const owed = invoiceBalance(current ?? linkedInvoice);
-          return {
-            id: `act-${Date.now()}-payment-final`,
-            type: "payment",
-            title: "Final payment received",
-            detail: `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`,
-            at: new Date().toISOString(),
-          };
-        })()
-      : null;
+    const paidInFullNow = current?.paid_in_full !== true && linkedInvoice.paid_in_full === true;
+    // Build the activity entries. A SINGLE full payment logs ONE "Payment received" entry, not
+    // a Deposit + Final pair. The normal deposit+balance flow keeps its two-entry behavior.
+    const activityEntries: InvoiceActivityEntry[] = [];
+    if (linkedInvoice.paid_in_full === true) {
+      if (depositNowPaid || finalNowPaid || paidInFullNow) {
+        const method = paymentMethodLabel(linkedInvoice.final_payment_method || linkedInvoice.deposit_payment_method);
+        const fullAmt = parseAmount(linkedInvoice.grand_total ?? linkedInvoice.total_amount);
+        activityEntries.push({
+          id: `act-${Date.now()}-payment`,
+          type: "payment",
+          title: "Payment received",
+          detail: `${currency.format(fullAmt)}${method ? ` by ${method}` : ""} · paid in full`,
+          at: new Date().toISOString(),
+        });
+      }
+    } else {
+      if (depositNowPaid) {
+        const method = paymentMethodLabel(linkedInvoice.deposit_payment_method);
+        const statusChanged = current?.status !== linkedInvoice.status;
+        activityEntries.push({
+          id: `act-${Date.now()}-payment`,
+          type: "payment",
+          title: "Deposit received",
+          detail: `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`,
+          at: new Date().toISOString(),
+        });
+      }
+      if (finalNowPaid) {
+        const method = paymentMethodLabel(linkedInvoice.final_payment_method);
+        // Amount cleared = the balance that was owed on the pre-transition row.
+        const owed = invoiceBalance(current ?? linkedInvoice);
+        activityEntries.push({
+          id: `act-${Date.now()}-payment-final`,
+          type: "payment",
+          title: "Final payment received",
+          detail: `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`,
+          at: new Date().toISOString(),
+        });
+      }
+    }
     await editSave.runSave(async () => {
       const response = await saveFinanceFields(preserveInvoiceTokens(linkedInvoice, current));
       if (!response.error) {
         await syncInvoiceToOrder(linkedInvoice);
-        if (depositEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, depositEntry);
-        if (finalEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, finalEntry);
+        for (const entry of activityEntries) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, entry);
       }
       return response;
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
@@ -1617,7 +1636,26 @@ function FinancesContent() {
             </div>
           </div>
 
-          {/* Two-column: deposit | final (stacks on mobile) */}
+          {/* Payment-mode toggle: how this order was paid. Never mentions a percentage. */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setPayMode("split"); if (data.paid_in_full) onChange(normalizeInvoiceFinancials({ ...data, paid_in_full: false })); }}
+              className={`flex-1 rounded-2xl px-3 py-2 text-xs font-semibold transition md:text-sm ${payMode === "split" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              Deposit + balance
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayMode("full")}
+              className={`flex-1 rounded-2xl px-3 py-2 text-xs font-semibold transition md:text-sm ${payMode === "full" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              Paid in full (one payment)
+            </button>
+          </div>
+
+          {payMode === "split" ? (
+          /* Two-column: deposit | final (stacks on mobile) */
           <div className="grid gap-4 md:grid-cols-2">
             {/* Deposit phase */}
             <div className={`rounded-2xl p-4 ring-1 md:p-5 ${data.deposit_paid ? "bg-emerald-50 ring-emerald-100" : "bg-white ring-slate-200"}`}>
@@ -1667,6 +1705,59 @@ function FinancesContent() {
               )}
             </div>
           </div>
+          ) : (
+          /* Paid in full: ONE payment entry (amount defaults to the total, editable). */
+          <div className={`rounded-2xl p-4 ring-1 md:p-5 ${data.paid_in_full ? "bg-emerald-50 ring-emerald-100" : "bg-white ring-slate-200"}`}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Paid in full</h3>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${data.paid_in_full ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                {data.paid_in_full ? `Paid${data.final_paid_date ? ` · ${data.final_paid_date}` : ""}` : "Not received"}
+              </span>
+            </div>
+            <div className="grid gap-3">
+              <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-700 md:text-sm">
+                <input type="checkbox" checked={Boolean(data.paid_in_full)} onChange={(event) => {
+                  const checked = event.target.checked;
+                  const dateVal = data.final_paid_date || data.deposit_paid_date || todayDate();
+                  onChange(normalizeInvoiceFinancials({
+                    ...data,
+                    paid_in_full: checked,
+                    deposit_paid: checked,
+                    final_paid: checked,
+                    deposit_paid_date: checked ? dateVal : "",
+                    final_paid_date: checked ? dateVal : "",
+                    // One payment = the whole total; setting deposit_amount to the total makes
+                    // the balance 0 (normalizeInvoiceFinancials recomputes it).
+                    deposit_amount: checked ? calcTotal(data) : parseAmount(data.deposit_amount),
+                  }));
+                }} />
+                Payment received
+              </label>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount paid</label>
+                <input type="text" inputMode="numeric" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={currencyInputValue(calcTotal(data))} onChange={(event) => {
+                  const n = currencyInputNumber(event.target.value);
+                  onChange(normalizeInvoiceFinancials({ ...data, total_amount: n, amount: n, deposit_amount: n }));
+                }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date received</label>
+                <input type="date" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm" value={data.final_paid_date || ""} disabled={!data.paid_in_full} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, deposit_paid_date: event.target.value, final_paid_date: event.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Payment method</label>
+                <select className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 md:text-sm" value={data.final_payment_method || ""} disabled={!data.paid_in_full} onChange={(event) => onChange(normalizeInvoiceFinancials({ ...data, deposit_payment_method: event.target.value, final_payment_method: event.target.value }))}>
+                  <option value="">Not specified</option>
+                  {PAYMENT_METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <button type="button" disabled={!data.paid_in_full || !effectiveEmail} onClick={() => void handleOpenReceipt("final")} className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40 disabled:hover:bg-emerald-50 md:text-sm">
+              <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
+              {inv.final_receipt_sent_at ? "Resend receipt" : "Send receipt"}
+            </button>
+          </div>
+          )}
 
           {/* Activity timeline — full-width history below the phase cards */}
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
