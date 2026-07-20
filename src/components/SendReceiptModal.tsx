@@ -5,7 +5,7 @@ import { CheckCircle, Loader2, Send } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { supabase } from "@/lib/supabase";
 import { calcDiscountAmount, normalizeDiscount } from "@/lib/salesTax";
-import { buildReceiptEmail, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
+import { buildReceiptEmail, chooseReceiptEmailLink, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 
 // Loose shape — the full finances record is passed through so onSent can spread
 // it back unchanged (preserving webhook-written keys) plus the receipt stamp.
@@ -108,8 +108,10 @@ export default function SendReceiptModal({ open, invoice, fallbackEmail, fallbac
           clientName,
           receipt: info,
           orderName,
-          // Receipt email links to the STABLE receipt link (r- token), never the tfi- bill.
-          publicLink: d.receiptLink ?? d.publicLink,
+          // Route by context: a fully-paid receipt (final or paid-in-full) links to the tfi-
+          // page (clean paid view); a partial deposit receipt links to the stable r- page.
+          // Falls back to the other link if the preferred one is missing (never empty).
+          publicLink: chooseReceiptEmailLink(info.paidInFull, d.publicLink, d.receiptLink),
           subtotal,
           discountLabel: discount?.label ?? null,
           discountAmount,

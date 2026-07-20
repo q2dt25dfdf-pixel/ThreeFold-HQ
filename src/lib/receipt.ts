@@ -58,6 +58,7 @@ export interface ReceiptInfo {
   singleFullPayment: boolean;          // true only for ONE full payment (paid_in_full flag)
   markLabel: string;                   // "PAID IN FULL" | "DEPOSIT RECEIVED"
   amountPaid: number;
+  finalPaymentAmount: number;          // the balance cleared by a final (50/50) payment; 0 otherwise
   datePaid: string;                    // ISO (date-only ok); "" when unknown
   method: string | null;               // raw enum value or null
   balanceRemaining: number;            // 0 when paid in full
@@ -85,6 +86,8 @@ export function resolveReceipt(src: ReceiptSource): ReceiptInfo | null {
       singleFullPayment,
       markLabel: "PAID IN FULL",
       amountPaid: grandTotal,
+      // The final (50/50) payment cleared the balance = total minus the deposit already paid.
+      finalPaymentAmount: Math.max(Math.round((grandTotal - depositAmount) * 100) / 100, 0),
       datePaid: src.final_paid_date ?? "",
       method: src.final_payment_method ?? null,
       balanceRemaining: 0,
@@ -102,6 +105,7 @@ export function resolveReceipt(src: ReceiptSource): ReceiptInfo | null {
         singleFullPayment,
         markLabel: "PAID IN FULL",
         amountPaid: grandTotal || depositAmount,
+        finalPaymentAmount: 0,
         datePaid: src.deposit_paid_date ?? "",
         method: src.deposit_payment_method ?? null,
         balanceRemaining: 0,
@@ -114,6 +118,7 @@ export function resolveReceipt(src: ReceiptSource): ReceiptInfo | null {
       singleFullPayment: false,
       markLabel: "DEPOSIT RECEIVED",
       amountPaid: depositAmount,
+      finalPaymentAmount: 0,
       datePaid: src.deposit_paid_date ?? "",
       method: src.deposit_payment_method ?? null,
       balanceRemaining: balance,
@@ -169,21 +174,29 @@ export interface ReceiptEmailInput {
 
 export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; body: string } {
   const { receipt } = input;
-  const single = receipt.singleFullPayment;
+  const single = receipt.singleFullPayment;         // one full payment (paid_in_full)
+  const isFinalLeg = receipt.paidInFull && !single; // the 50/50 final balance payment
   const name = (input.clientName || "there").trim();
   const lines: string[] = [];
 
   lines.push(`Hi ${name},`);
   lines.push("");
-  // Single full payment gets its own warmer, no-balance opener. All other cases keep today's line.
+  // Opener per context: single full payment / final balance cleared / initial payment.
   if (single) {
     lines.push("Payment received in full. Your project is officially underway, and we'll keep you posted at each step as we get it made.");
+  } else if (isFinalLeg) {
+    lines.push("Thank you. Your final payment has been received and your order is now paid in full.");
   } else {
     lines.push("Thank you. Your payment has been received.");
   }
   lines.push("");
 
-  if (receipt.paidInFull) {
+  if (isFinalLeg && receipt.finalPaymentAmount > 0) {
+    // Final (50/50) leg: show the balance just cleared and the order total, not the total as
+    // "amount paid" (which would read as if the whole total was paid again).
+    lines.push(`Final Payment Received: ${fmtCurrency(receipt.finalPaymentAmount)}`);
+    lines.push(`Order Total: ${fmtCurrency(input.grandTotal ?? receipt.amountPaid)}`);
+  } else if (receipt.paidInFull) {
     lines.push(`Amount Paid: ${fmtCurrency(receipt.amountPaid)}`);
   } else {
     lines.push(`Deposit Received: ${fmtCurrency(receipt.amountPaid)}`);
@@ -193,9 +206,9 @@ export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; 
   const methodLabel = paymentMethodLabel(receipt.method);
   if (methodLabel) lines.push(`Payment Method: ${methodLabel}`);
   if (input.orderName) lines.push(`Order: ${input.orderName}`);
-  // Single full payment leads with its own invoice number (TF-I-); no deposit number, since
-  // there was no separate deposit. Every other case keeps the deposit number as before.
-  if (single) {
+  // Any fully-paid receipt (single full payment OR final leg) leads with the invoice number
+  // (TF-I-); a partial deposit receipt keeps the deposit number (TF-D-).
+  if (receipt.paidInFull) {
     if (input.invoiceNumber) lines.push(`Invoice Number: ${input.invoiceNumber}`);
   } else if (input.depositNumber) {
     lines.push(`Deposit Number: ${input.depositNumber}`);
@@ -224,8 +237,25 @@ export function buildReceiptEmail(input: ReceiptEmailInput): { subject: string; 
   lines.push("");
   lines.push(TF_PLAIN_CLOSING);
 
+  // Distinct subjects so a deposit, a final payment, and a full payment are told apart in the inbox.
   const subject = single
     ? "Payment received in full - Threefold Supply Co."
-    : "Receipt - Threefold Supply Co.";
+    : isFinalLeg
+    ? "Final payment received - Threefold Supply Co."
+    : "Deposit received - Threefold Supply Co.";
   return { subject, body: lines.join("\n") };
+}
+
+// Which link the RECEIPT email should point to. A fully-paid receipt (single full payment or
+// the final leg) links to the tfi- invoice page, which renders the clean paid view (INVOICE NO,
+// no DEPOSIT RECEIVED stamp). A partial deposit receipt links to the stable r- receipt page.
+// Falls back to the other link if the preferred one is missing, so the email is never empty.
+export function chooseReceiptEmailLink(
+  paidInFull: boolean,
+  tfiLink: string | null | undefined,
+  receiptLink: string | null | undefined,
+): string {
+  const tfi = (tfiLink ?? "").trim();
+  const r = (receiptLink ?? "").trim();
+  return paidInFull ? (tfi || r) : (r || tfi);
 }
