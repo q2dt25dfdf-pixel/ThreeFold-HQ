@@ -5,6 +5,7 @@ import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { getStripe } from "@/lib/stripe";
 import { createNotification } from "@/lib/notifications";
+import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
 
 // Disable body parsing — Stripe signature verification requires the raw body
 export const config = { api: { bodyParser: false } };
@@ -70,7 +71,19 @@ async function updateRecord(
     return;
   }
   const existing = rows[0].data as Record<string, unknown>;
+  // NOTE: this whole-blob write does NOT author activity_log — entries are appended
+  // separately via the atomic append_invoice_activity RPC. It only carries the existing
+  // array forward (spread of `existing`) so the column is never nulled.
   await db.from(table).update({ data: { ...existing, ...fields } }).eq("id", id);
+}
+
+// Finances-only field write that NEVER touches activity_log: the update_finances_fields RPC
+// applies these fields in one statement and re-attaches the row's own activity_log, so a
+// money/status write can never overwrite an entry the append RPC added concurrently. Use this
+// instead of updateRecord for existing finances rows.
+async function updateFinancesFields(id: string, fields: Record<string, unknown>): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("update_finances_fields", { p_id: id, p_fields: fields });
+  if (error) console.error(`[webhook] update_finances_fields ${id}:`, error.message);
 }
 
 // ─── Full deposit fulfillment ─────────────────────────────────────────────────
@@ -180,17 +193,26 @@ async function fulfillDepositPaid(
       ? Math.round((depositAmount / finGrandTotal) * finSalesTaxAmount * 100) / 100
       : depositTaxCollected;
     const updatedTaxCollected = isFinalAlreadyPaid ? finSalesTaxAmount : finDepositTax;
-    await db.from("finances").update({
-      data: {
-        ...fd,
-        deposit_paid: true,
-        deposit_paid_date: today,
-        status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
-        ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
-        ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
-      },
-    }).eq("id", fin.id);
+    // Money/status write via the merge RPC — applies these fields and re-preserves the row's
+    // own activity_log, so it can never overwrite the payment entry appended below.
+    await updateFinancesFields(fin.id as string, {
+      deposit_paid: true,
+      deposit_paid_date: today,
+      status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
+      ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
+      ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
+    });
     console.log(`[webhook] finances ${fin.id} → deposit_paid=true`);
+    // Activity entry via the atomic RPC (sole writer of activity_log) — after the money write.
+    const depositMethodWord = meta.payment_method === "card" ? "card" : meta.payment_method === "bank" ? "bank" : (meta.payment_method || "");
+    await appendInvoiceActivityRpc(db, fin.id as string, {
+      id: `act-${Date.now()}-payment`,
+      type: "payment",
+      title: "Deposit received",
+      detail: `${fmtNotifAmount(depositAmount)}${depositMethodWord ? ` by ${depositMethodWord}` : ""} · via Stripe`,
+      at: paidAt,
+      author: "system",
+    });
     // Ensure the client record exists even if it was created before the webhook was updated
     if (effectiveLeadId) {
       const { data: ldRows } = await db.from("crm_leads").select("id,data").eq("id", effectiveLeadId).limit(1);
@@ -503,6 +525,16 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     }
     await db.from("finances").upsert({ id: invoiceId, data: financeData });
     console.log(`[webhook] created finance ${invoiceId} for order ${orderId}`);
+    // Seed the first activity entry via the atomic RPC (after the row exists).
+    const bootstrapMethodWord = depositPaymentMethod === "card" ? "card" : depositPaymentMethod === "bank" ? "bank" : (depositPaymentMethod || "");
+    await appendInvoiceActivityRpc(db, invoiceId, {
+      id: `act-${Date.now()}-payment`,
+      type: "payment",
+      title: "Deposit received",
+      detail: `${fmtNotifAmount(depositAmount)}${bootstrapMethodWord ? ` by ${bootstrapMethodWord}` : ""} · via Stripe`,
+      at: paidAt,
+      author: "system",
+    });
   } else {
     console.log(`[webhook] finance ${invoiceId} already exists — skipping create`);
   }
@@ -586,7 +618,7 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         finalTaxFields.tax_collected_amount = finTaxAlreadyCollected + remainingTax;
         finalTaxFields.tax_collected_at = paidAt.slice(0, 10);
       }
-      await updateRecord("finances", financeId, {
+      await updateFinancesFields(financeId, {
         final_paid: true,
         final_paid_date: paidAt.slice(0, 10),
         balance_remaining: 0,
@@ -597,11 +629,19 @@ async function handleSessionCompleted(session: CheckoutSession): Promise<void> {
         ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
         ...finalTaxFields,
       });
+      await appendInvoiceActivityRpc(getSupabaseAdmin(), financeId, {
+        id: `act-${Date.now()}-payment-final`,
+        type: "payment",
+        title: "Final payment received",
+        detail: `${fmtNotifAmount(Number(meta.base_amount ?? 0))} · via Stripe · balance cleared`,
+        at: paidAt,
+        author: "system",
+      });
       notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     } else {
       // Bank ACH: initiated — wait for async_payment_succeeded
       console.log(`[webhook] final invoice ${financeId} → bank ACH initiated (awaiting settlement)`);
-      await updateRecord("finances", financeId, {
+      await updateFinancesFields(financeId, {
         stripe_final_session_id: session.id,
         stripe_final_payment_intent_id: paymentIntentId,
         final_payment_initiated_at: paidAt,
@@ -663,7 +703,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       asyncFinalTaxFields.tax_collected_amount = asyncFinTaxCollected + remainingTax;
       asyncFinalTaxFields.tax_collected_at = paidAt.slice(0, 10);
     }
-    await updateRecord("finances", financeId, {
+    await updateFinancesFields(financeId, {
       final_paid: true,
       final_paid_date: paidAt.slice(0, 10),
       balance_remaining: 0,
@@ -672,6 +712,14 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession): Promise<vo
       final_paid_at: paidAt,
       ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
       ...asyncFinalTaxFields,
+    });
+    await appendInvoiceActivityRpc(getSupabaseAdmin(), financeId, {
+      id: `act-${Date.now()}-payment-final`,
+      type: "payment",
+      title: "Final payment received",
+      detail: `${fmtNotifAmount(Number(meta.base_amount ?? 0))} · via Stripe · balance cleared`,
+      at: paidAt,
+      author: "system",
     });
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     notifyAchPayment("cleared", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
@@ -706,7 +754,7 @@ async function handleAsyncPaymentFailed(session: CheckoutSession): Promise<void>
 
   const financeId = meta.finance_id;
   if (financeId) {
-    await updateRecord("finances", financeId, {
+    await updateFinancesFields(financeId, {
       final_payment_failed_at: new Date().toISOString(),
     });
     notifyAchPayment("failed", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH failed notification error:", err));

@@ -2,19 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Check, Link2, Pencil, Receipt, Search, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, CircleDollarSign, Link2, Pencil, Receipt, Search, Send, StickyNote, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
 import { resolveInvoiceContact } from "@/lib/greeting";
-import { PAYMENT_METHOD_OPTIONS, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
+import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
+import { appendInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
+import { supabase } from "@/lib/supabase";
 import {
   Area,
   AreaChart,
@@ -58,12 +60,15 @@ type Invoice = {
   stripe_invoice_url?: string;
   public_token?: string;
   public_link?: string;
+  invoice_number?: string;
   subtotal?: number;
   discount?: unknown;
   sales_tax_rate?: number;
   sales_tax_amount?: number;
   grand_total?: number;
   tax_collected_amount?: number;
+  // Newest-first activity timeline (Pass 1: storage only; nothing appends yet).
+  activity_log?: InvoiceActivityEntry[];
 };
 
 type SalesTaxPayment = {
@@ -363,11 +368,72 @@ function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): 
   const current = currentRaw as Record<string, unknown> | undefined;
   if (!current) return next;
   const merged = { ...next } as Record<string, unknown>;
-  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number"]) {
+  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number", "activity_log"]) {
     const v = merged[key];
     if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
   }
   return merged as T;
+}
+
+// "Jul 19, 2:41 PM" — full date + time-of-day (activity entries store a full ISO `at`).
+function fmtActivityAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+// Per-type round icon (lucide) + tint. status/edit fall back to a neutral pencil; note is
+// grey (Pass 3 adds notes — supported here now). send picks Receipt for receipt titles.
+function activityVisual(entry: InvoiceActivityEntry): { icon: React.ReactNode; wrap: string } {
+  const size = 14;
+  switch (entry.type) {
+    case "payment":
+      return { icon: <CircleDollarSign size={size} className="text-emerald-600" aria-hidden="true" />, wrap: "bg-emerald-50 ring-emerald-100" };
+    case "send":
+      return /receipt/i.test(entry.title)
+        ? { icon: <Receipt size={size} className="text-blue-600" aria-hidden="true" />, wrap: "bg-blue-50 ring-blue-100" }
+        : { icon: <Send size={size} className="text-blue-600" aria-hidden="true" />, wrap: "bg-blue-50 ring-blue-100" };
+    case "note":
+      return { icon: <StickyNote size={size} className="text-slate-500" aria-hidden="true" />, wrap: "bg-slate-100 ring-slate-200" };
+    default: // status | edit
+      return { icon: <Pencil size={size} className="text-slate-500" aria-hidden="true" />, wrap: "bg-slate-100 ring-slate-200" };
+  }
+}
+
+// Read-only activity timeline for the invoice edit modal. Array is stored newest-first, so
+// no sort here. Scrolls (max height) rather than paginating — few entries, keeps the modal calm.
+function ActivityTimeline({ log }: { log?: InvoiceActivityEntry[] }) {
+  const entries = log ?? [];
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Activity</h3>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{entries.length}</span>
+      </div>
+      {entries.length === 0 ? (
+        <p className="text-xs text-slate-400">No activity yet.</p>
+      ) : (
+        <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+          {entries.map((entry) => {
+            const { icon, wrap } = activityVisual(entry);
+            const secondary = entry.detail || (entry.author ? `by ${entry.author}` : "");
+            return (
+              <div key={entry.id} className="flex items-start gap-3">
+                <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ${wrap}`}>{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-800 md:text-sm">{entry.title}</span>
+                    <span className="shrink-0 text-[10px] text-slate-400">{fmtActivityAt(entry.at)}</span>
+                  </div>
+                  {secondary && <p className="mt-0.5 break-words text-[11px] text-slate-500">{secondary}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function normalizeInvoiceFinancials<T extends InvoiceFields>(invoice: T): T {
@@ -466,7 +532,7 @@ function FinancesContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
+  const { data: invoices, upsertItem, deleteItem, loading, error, reload: reloadInvoices } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
@@ -998,6 +1064,20 @@ function FinancesContent() {
     return () => window.clearTimeout(timeout);
   }, [form.client, form.client_id, form.client_name, form.order_id, orders, showModal]);
 
+  // Field-write for an EXISTING finances row that NEVER touches activity_log: strips it and
+  // calls the update_finances_fields RPC, which merges the fields and re-preserves the row's
+  // own activity_log at the DB level. This is what makes the append RPC the sole writer of the
+  // log — a founder save can no longer overwrite a concurrently-appended entry. (handleAdd
+  // still uses upsertItem: it INSERTS a brand-new row, which the UPDATE-based RPC can't do and
+  // which has no existing log to preserve.) Mirrors upsertItem's post-write reload().
+  const saveFinanceFields = async (obj: Invoice) => {
+    const fields: Record<string, unknown> = { ...obj };
+    delete fields.activity_log;
+    const response = await supabase.rpc("update_finances_fields", { p_id: obj.id, p_fields: fields });
+    await reloadInvoices();
+    return response;
+  };
+
   const handleAdd = async () => {
     const linkedForm = normalizeInvoice(form);
     if (!linkedForm.client_name.trim()) {
@@ -1007,7 +1087,9 @@ function FinancesContent() {
     setFormError("");
     const newInvoice = { id: "invoice-" + Date.now(), ...linkedForm };
     await addSave.runSave(async () => {
-      const response = await upsertItem(newInvoice);
+      // New id => nothing to preserve, but route through the same merge so every
+      // finances upsert honors the activity_log/token preservation invariant.
+      const response = await upsertItem(preserveInvoiceTokens(newInvoice, invoices.find((i) => i.id === newInvoice.id)));
       if (!response.error) {
         await syncInvoiceToOrder(newInvoice);
         setForm(emptyForm);
@@ -1026,9 +1108,47 @@ function FinancesContent() {
       return;
     }
     setFormError("");
+    // Detect payment transitions BEFORE the save (compare the current DB row to the incoming
+    // save) so re-saving an already-paid invoice never re-logs. The activity entries are NOT
+    // authored into the upsert — they are appended via the atomic RPC after the save.
+    // No SenderPicker in the edit modal → founder author is not in scope → author undefined.
+    const current = invoices.find((i) => i.id === linkedInvoice.id);
+    const depositNowPaid = current?.deposit_paid !== true && linkedInvoice.deposit_paid === true;
+    const finalNowPaid = current?.final_paid !== true && linkedInvoice.final_paid === true;
+    const depositEntry: InvoiceActivityEntry | null = depositNowPaid
+      ? (() => {
+          const method = paymentMethodLabel(linkedInvoice.deposit_payment_method);
+          const statusChanged = current?.status !== linkedInvoice.status;
+          return {
+            id: `act-${Date.now()}-payment`,
+            type: "payment",
+            title: "Deposit received",
+            detail: `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`,
+            at: new Date().toISOString(),
+          };
+        })()
+      : null;
+    const finalEntry: InvoiceActivityEntry | null = finalNowPaid
+      ? (() => {
+          const method = paymentMethodLabel(linkedInvoice.final_payment_method);
+          // Amount cleared = the balance that was owed on the pre-transition row.
+          const owed = invoiceBalance(current ?? linkedInvoice);
+          return {
+            id: `act-${Date.now()}-payment-final`,
+            type: "payment",
+            title: "Final payment received",
+            detail: `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`,
+            at: new Date().toISOString(),
+          };
+        })()
+      : null;
     await editSave.runSave(async () => {
-      const response = await upsertItem(linkedInvoice);
-      if (!response.error) await syncInvoiceToOrder(linkedInvoice);
+      const response = await saveFinanceFields(preserveInvoiceTokens(linkedInvoice, current));
+      if (!response.error) {
+        await syncInvoiceToOrder(linkedInvoice);
+        if (depositEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, depositEntry);
+        if (finalEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, finalEntry);
+      }
       return response;
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
   };
@@ -1048,7 +1168,7 @@ function FinancesContent() {
     const alreadyAt = editInvoice[info.sentField] as string | undefined;
     if (alreadyAt && !window.confirm(`A receipt was already sent on ${fmtReceiptDate(alreadyAt)}. Send another receipt to the client?`)) return;
     const linked = normalizeInvoice(editInvoice);
-    await upsertItem(linked);
+    await saveFinanceFields(preserveInvoiceTokens(linked, invoices.find((i) => i.id === linked.id)));
     await syncInvoiceToOrder(linked);
     setReceiptInvoice(linked);
     setReceiptPhase(phase ?? null);
@@ -1057,7 +1177,26 @@ function FinancesContent() {
   };
 
   const handleReceiptSent = async (updated: Invoice) => {
-    await upsertItem(preserveInvoiceTokens(updated, invoices.find((i) => i.id === updated.id)));
+    const current = invoices.find((i) => i.id === updated.id);
+    // The stamp write goes through the merge RPC, which never touches activity_log. The
+    // entry is appended via the atomic RPC below.
+    await saveFinanceFields(preserveInvoiceTokens(updated, current));
+    // Phase comes from the button that opened the modal (handleOpenReceipt sets receiptPhase).
+    // No SenderPicker on the receipt modal → no founder in scope → author undefined.
+    const isFinal = receiptPhase === "final";
+    const email = (updated.client_email || "").trim();
+    const depNum = depositNumberFor(updated);
+    const detail = (isFinal
+      ? [email ? `to ${email}` : null]
+      : [depNum || null, email ? `to ${email}` : null]
+    ).filter(Boolean).join(" · ") || undefined;
+    await appendInvoiceActivityRpc(supabase, updated.id, {
+      id: `act-${Date.now()}-send`,
+      type: "send",
+      title: isFinal ? "Final receipt sent" : "Deposit receipt sent",
+      detail,
+      at: new Date().toISOString(),
+    });
     setReceiptInvoice(null);
   };
 
@@ -1069,8 +1208,10 @@ function FinancesContent() {
   // success). Stamps final_invoice_sent_at on the finances row — this is what flips the
   // balance from "upcoming" to "owed now". Mirrors orders/[id]/page.tsx:1007. No money
   // math is touched and final_paid is NOT set.
-  const handleFinalInvoiceSent = async (invoiceNumber?: string) => {
+  const handleFinalInvoiceSent = async (invoiceNumber?: string, sender?: string) => {
     if (!sendInvoiceTarget) return;
+    const current = invoices.find((i) => i.id === sendInvoiceTarget.id);
+    // Stamp write (final_invoice_sent_at + TF-I-) does NOT author activity_log.
     const stamped = {
       ...sendInvoiceTarget,
       final_invoice_sent_at: new Date().toISOString(),
@@ -1078,7 +1219,23 @@ function FinancesContent() {
       // write doesn't drop it (the in-memory row may not have it yet).
       ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
     };
-    await upsertItem(preserveInvoiceTokens(stamped, invoices.find((i) => i.id === sendInvoiceTarget.id)));
+    await saveFinanceFields(preserveInvoiceTokens(stamped, current));
+    // Activity entry via the atomic RPC. author = SenderPicker choice.
+    const email = ((sendInvoiceTarget.client_email || "").trim() || leadEmailFor(sendInvoiceTarget)).trim();
+    const invNum = invoiceNumber || sendInvoiceTarget.invoice_number || "";
+    const detail = [
+      sender ? `by ${sender}` : null,
+      invNum || null,
+      email ? `to ${email}` : null,
+    ].filter(Boolean).join(" · ") || undefined;
+    await appendInvoiceActivityRpc(supabase, sendInvoiceTarget.id, {
+      id: `act-${Date.now()}-send`,
+      type: "send",
+      title: "Final invoice sent",
+      detail,
+      at: new Date().toISOString(),
+      author: sender || undefined,
+    });
   };
 
   // Lead email fallback (matches /api/invoice/generate). Empty string when none.
@@ -1369,6 +1526,11 @@ function FinancesContent() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Activity timeline — full-width history below the phase cards */}
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
+            <ActivityTimeline log={inv.activity_log} />
           </div>
 
           {/* Collapsed edit details — rarely-touched fields */}
@@ -2728,7 +2890,7 @@ function FinancesContent() {
           }}
           contact={resolveInvoiceContact({ invoice: sendInvoiceTarget, clients, leads })}
           onClose={() => setSendInvoiceTarget(null)}
-          onSent={(_sender, _link, invoiceNumber) => void handleFinalInvoiceSent(invoiceNumber)}
+          onSent={(sender, _link, invoiceNumber) => void handleFinalInvoiceSent(invoiceNumber, sender)}
         />
       )}
       {/* Expense add / edit modal */}
