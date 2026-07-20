@@ -402,21 +402,84 @@ function activityVisual(entry: InvoiceActivityEntry): { icon: React.ReactNode; w
 
 // Read-only activity timeline for the invoice edit modal. Array is stored newest-first, so
 // no sort here. Scrolls (max height) rather than paginating — few entries, keeps the modal calm.
-function ActivityTimeline({ log }: { log?: InvoiceActivityEntry[] }) {
+// Founder roster for the manual note composer — mirrors the CRM lead's OWNERS list.
+const NOTE_OWNERS = ["Alliyah", "Hannah", "Jordan"] as const;
+
+function ActivityTimeline({ log, onAddNote }: {
+  log?: InvoiceActivityEntry[];
+  // Appends a manual note via the atomic RPC (parent-provided). Returns success.
+  onAddNote?: (entry: InvoiceActivityEntry) => Promise<boolean>;
+}) {
   const entries = log ?? [];
+  const [noteText, setNoteText] = useState("");
+  const [noteOwner, setNoteOwner] = useState<string>(NOTE_OWNERS[0]);
+  const [saving, setSaving] = useState(false);
+
+  const submitNote = async () => {
+    const text = noteText.trim();
+    if (!text || !onAddNote || saving) return;
+    setSaving(true);
+    const ok = await onAddNote({
+      id: `act-${Date.now()}-note`,
+      type: "note",
+      title: "Note",
+      detail: text,
+      at: new Date().toISOString(),
+      author: noteOwner,
+    });
+    setSaving(false);
+    if (ok) setNoteText("");
+  };
+
   return (
     <div>
       <div className="mb-3 flex items-center gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Activity</h3>
         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{entries.length}</span>
       </div>
+
+      {/* Manual note composer — appends into the SAME timeline via the atomic RPC. */}
+      {onAddNote && (
+        <div className="mb-4 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
+          <textarea
+            rows={2}
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="Add a note (e.g. Li said the check is in the mail)"
+            className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-500 md:text-sm"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <select
+              value={noteOwner}
+              onChange={(e) => setNoteOwner(e.target.value)}
+              aria-label="Note author"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-500"
+            >
+              {NOTE_OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => void submitNote()}
+              disabled={!noteText.trim() || saving}
+              className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-2xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-40"
+            >
+              {saving ? "Adding..." : "Add"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {entries.length === 0 ? (
         <p className="text-xs text-slate-400">No activity yet.</p>
       ) : (
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
           {entries.map((entry) => {
             const { icon, wrap } = activityVisual(entry);
-            const secondary = entry.detail || (entry.author ? `by ${entry.author}` : "");
+            const base = entry.detail || (entry.author ? `by ${entry.author}` : "");
+            // Events bake the author into `detail`; notes carry it separately, so surface it.
+            const secondary = entry.type === "note" && entry.author
+              ? `${base}${base ? " · " : ""}added by ${entry.author}`
+              : base;
             return (
               <div key={entry.id} className="flex items-start gap-3">
                 <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ${wrap}`}>{icon}</span>
@@ -1530,7 +1593,19 @@ function FinancesContent() {
 
           {/* Activity timeline — full-width history below the phase cards */}
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
-            <ActivityTimeline log={inv.activity_log} />
+            <ActivityTimeline
+              log={inv.activity_log}
+              onAddNote={async (entry) => {
+                // Sole writer of activity_log stays the atomic RPC — never a whole-blob write.
+                const ok = await appendInvoiceActivityRpc(supabase, inv.id, entry);
+                if (ok) {
+                  // Optimistically show it at the top of THIS open modal, and refresh the list.
+                  onChange({ ...inv, activity_log: [entry, ...(inv.activity_log ?? [])] });
+                  void reloadInvoices();
+                }
+                return ok;
+              }}
+            />
           </div>
 
           {/* Collapsed edit details — rarely-touched fields */}
