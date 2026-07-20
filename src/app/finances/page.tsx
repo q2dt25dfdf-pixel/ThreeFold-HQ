@@ -1309,6 +1309,16 @@ function FinancesContent() {
       if (!response.error) {
         await syncInvoiceToOrder(linkedInvoice);
         for (const entry of activityEntries) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, entry);
+        // A payment just became real -> auto-send the client receipt server-side (dedup on the
+        // receipt-sent stamp means this is safe even if a receipt was already sent). Fire-and-
+        // forget: a receipt failure must not affect the save.
+        if (depositNowPaid || finalNowPaid || paidInFullNow) {
+          void fetch("/api/invoice/auto-receipt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ invoiceId: linkedInvoice.id }),
+          }).catch((err) => console.error("[auto-receipt]", err));
+        }
       }
       return response;
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });

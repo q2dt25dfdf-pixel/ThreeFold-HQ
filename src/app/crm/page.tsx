@@ -798,6 +798,15 @@ function CRMContent() {
       });
     }
 
+    // The Deposit Paid cascade just created a paid invoice -> auto-send the client receipt
+    // server-side (dedup on the receipt-sent stamp). Fire-and-forget: a receipt failure must
+    // not affect the cascade.
+    void fetch("/api/invoice/auto-receipt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoiceId }),
+    }).catch((err) => console.error("[auto-receipt]", err));
+
     setToastMessage(
       `${lead.company} moved to Deposit Paid. Order ${orderNumber}, Invoice, and Client Portal created.`,
     );

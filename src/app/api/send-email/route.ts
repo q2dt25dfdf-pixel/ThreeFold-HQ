@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { TF_FROM_ADDRESS, TF_FROM_HEADER, wrapInEmailTemplate } from "@/lib/emailSignature";
-import { sendViaGmail, isGmailConfigured } from "@/lib/gmailSend";
+import { sendEmail } from "@/lib/sendEmail";
 
 async function updateRecordSent(
   recordType: string,
@@ -55,66 +54,14 @@ export async function POST(request: NextRequest) {
     }
 
     const sentAt = new Date().toISOString();
-    const html = wrapInEmailTemplate(body);
 
-    // ── Try Gmail first ──────────────────────────────────────────────────────────
-    let gmailError: string | undefined;
-    if (isGmailConfigured()) {
-      try {
-        const gmailResult = await sendViaGmail({ to, subject, html });
-        await updateRecordSent(recordType, recordId, sentAt, "sent", gmailResult.messageId);
-        return NextResponse.json({ sent: true, messageId: gmailResult.messageId, sentVia: "gmail" });
-      } catch (gmailErr) {
-        gmailError = String(gmailErr);
-        console.error("[send-email] Gmail send failed, falling back to Resend:", gmailErr);
-      }
+    // Single shared send path (Gmail first, Resend fallback) — identical to auto-send.
+    const result = await sendEmail({ to, subject, body });
+    if (result.sent) {
+      await updateRecordSent(recordType, recordId, sentAt, "sent", result.messageId);
+      return NextResponse.json({ sent: true, messageId: result.messageId, sentVia: result.sentVia, ...(result.gmailError ? { gmailError: result.gmailError } : {}) });
     }
-
-    // ── Try Resend ───────────────────────────────────────────────────────────────
-    const resendKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM_EMAIL;
-
-    if (resendKey) {
-      if (!fromEmail) {
-        return NextResponse.json(
-          { error: "Sender email is not configured. Set RESEND_FROM_EMAIL in Vercel." },
-          { status: 500 },
-        );
-      }
-      try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${resendKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from:     `ThreeFold Supply Co. <${fromEmail}>`,
-            reply_to: [TF_FROM_ADDRESS],
-            to:       [to],
-            subject,
-            html,
-          }),
-        });
-
-        if (res.ok) {
-          const { id: messageId } = (await res.json()) as { id: string };
-          await updateRecordSent(recordType, recordId, sentAt, "sent", messageId);
-          return NextResponse.json({ sent: true, messageId, sentVia: "resend", ...(gmailError ? { gmailError } : {}) });
-        }
-
-        const resendError = await res.text();
-        console.error("[send-email] Resend API error:", resendError);
-      } catch (emailErr) {
-        console.error("[send-email] Resend fetch error:", emailErr);
-      }
-    }
-
-    // No service configured — return a clear error instead of opening a compose window.
-    return NextResponse.json(
-      { error: "Email service not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in Vercel (Gmail API), or set RESEND_API_KEY as a fallback." },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: result.error }, { status: result.status });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
