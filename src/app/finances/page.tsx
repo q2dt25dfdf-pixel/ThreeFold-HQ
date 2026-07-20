@@ -1688,7 +1688,7 @@ function FinancesContent() {
             </div>
 
             {/* Final phase */}
-            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 md:p-5">
+            <div className={`rounded-2xl p-4 ring-1 md:p-5 ${data.final_paid ? "bg-emerald-50 ring-emerald-100" : "bg-white ring-slate-200"}`}>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Final payment</h3>
                 <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${data.final_paid ? "bg-emerald-100 text-emerald-700" : finalSent ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
