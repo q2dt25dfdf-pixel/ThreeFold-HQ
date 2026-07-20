@@ -92,6 +92,10 @@ export type Lead = {
   // active-pipeline rollups. Delete is still the hard-remove path; archive is reversible.
   archived?: boolean;
   archivedAt?: string;
+  // Test lead: excluded from all metrics, shows a TEST badge, and can be hard-deleted freely
+  // (bypasses the paid-lead delete guard). Separate from archived. Its linked order/invoice are
+  // treated as test by lead_id (no per-row copy required).
+  is_test?: boolean;
   // Lifecycle timestamps (additive; null on legacy records = "unknown", never backfilled).
   // created_at + stage_changed_at are stamped at creation (initial stage counts as a
   // stage-set); stage_changed_at re-stamps on every stage change; last_activity_at on

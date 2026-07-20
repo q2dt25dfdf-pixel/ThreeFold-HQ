@@ -552,11 +552,18 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   return (
     <ModalShell
       title={
-        <InlineEditTitle
-          value={current.company}
-          onSave={v => patch({ company: v })}
-          as="span"
-        />
+        <span className="inline-flex items-center gap-2">
+          <InlineEditTitle
+            value={current.company}
+            onSave={v => patch({ company: v })}
+            as="span"
+          />
+          {current.is_test && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+              Test
+            </span>
+          )}
+        </span>
       }
       subtitle={subtitle}
       onClose={onClose}
@@ -633,6 +640,33 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               )}
             </StripCell>
           </div>
+        </div>
+
+        {/* Test toggle — flips is_test (excludes from metrics, allows free delete) */}
+        <div className={`flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 ${
+          current.is_test ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"
+        }`}>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900">Mark as test</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Excludes this lead and its order/invoice from all metrics. Lets it be deleted freely.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={Boolean(current.is_test)}
+            onClick={() => patch({ is_test: !current.is_test })}
+            className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+              current.is_test ? "bg-amber-500" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                current.is_test ? "translate-x-5" : "translate-x-0.5"
+              }`}
+            />
+          </button>
         </div>
 
         {/* Main layout — stacked on mobile, 2-column on desktop */}
