@@ -5,6 +5,7 @@ import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { createNotification } from "@/lib/notifications";
 import { getDepositBaseUrl } from "@/lib/publicUrl";
 import { buildDepositEmailBody, buildDepositEmailSubject } from "@/lib/depositEmail";
+import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
 import type { QuoteDiscount } from "@/lib/salesTax";
 
 export async function GET(
@@ -154,6 +155,9 @@ export async function PATCH(
       status: "approved",
       acknowledgementAccepted: true,
       acknowledgementAcceptedAt: now,
+      // Real approval time, mirrored onto the deposit request below so the finances row
+      // (created later, at Deposit Paid) can seed a "Quote approved" entry with THIS time.
+      quote_approved_at: now,
     };
 
     const { error: quoteUpdateError } = await db
@@ -231,6 +235,8 @@ export async function PATCH(
           deposit_request_number: newDepositNumber,
           lead_id: leadId,
           quote_id: quoteId,
+          // Real approval time, read when the finances row is later created.
+          quote_approved_at: now,
           client_name: (quoteData.client_name ?? leadData?.company ?? "") as string,
           client_email: (quoteData.client_email || leadData?.email || "") as string,
           total_amount: grandTotal,
@@ -282,6 +288,35 @@ export async function PATCH(
           entity_type: "lead",
           entity_id: leadId,
         }).catch((err) => console.error("[quote approval] notification failed:", err));
+      }
+
+      // "Quote approved" activity entry. The finances row usually does not exist yet (it is
+      // created later at Deposit Paid), so we stamped quote_approved_at on the deposit request
+      // above and the finances-creation paths (crm handleApproveLead / webhook bootstrap) seed
+      // the entry from it. If a finances row IS already linked (e.g. re-approval), append it
+      // now via the atomic RPC. Also backfill quote_approved_at onto a REUSED deposit request.
+      try {
+        if (usable && !usable.data.quote_approved_at && depositStatus !== "paid" && depositStatus !== "pending") {
+          await db.from("deposit_requests").update({ data: { ...usable.data, quote_approved_at: now } }).eq("id", usable.id);
+        }
+        const { data: finRows } = await db.from("finances").select("id,data").eq("data->>lead_id", leadId).limit(1);
+        const fin = finRows?.[0];
+        if (fin) {
+          const already = Array.isArray((fin.data as Record<string, unknown>).activity_log)
+            ? ((fin.data as { activity_log?: { title?: string }[] }).activity_log ?? []).some((e) => e?.title === "Quote approved")
+            : false;
+          if (!already) {
+            await appendInvoiceActivityRpc(db, fin.id as string, {
+              id: `act-${Date.now()}-approved`,
+              type: "approved",
+              title: "Quote approved",
+              detail: "Approved by client",
+              at: now,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[quote approval] activity log failed:", err);
       }
 
       // Send the deposit email via the shared sender (marks the deposit "sent"). Reuses the

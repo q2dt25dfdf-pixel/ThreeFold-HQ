@@ -397,6 +397,8 @@ function activityVisual(entry: InvoiceActivityEntry): { icon: React.ReactNode; w
         : { icon: <Send size={size} className="text-blue-600" aria-hidden="true" />, wrap: "bg-blue-50 ring-blue-100" };
     case "note":
       return { icon: <StickyNote size={size} className="text-slate-500" aria-hidden="true" />, wrap: "bg-slate-100 ring-slate-200" };
+    case "approved":
+      return { icon: <Check size={size} className="text-emerald-600" aria-hidden="true" />, wrap: "bg-emerald-50 ring-emerald-100" };
     default: // status | edit
       return { icon: <Pencil size={size} className="text-slate-500" aria-hidden="true" />, wrap: "bg-slate-100 ring-slate-200" };
   }

@@ -19,6 +19,7 @@ import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
+import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
 import {
   autoFollowUpTaskId,
   canCompleteLeadFollowUp,
@@ -570,6 +571,7 @@ function CRMContent() {
       sales_tax_rate?: number;
       sales_tax_amount?: number;
       client_payment_method_intent?: string;
+      quote_approved_at?: string;
       line_items?: unknown[];
     };
     const leadDepositRequestId = lead.deposit_request_id;
@@ -780,6 +782,21 @@ function CRMContent() {
       notes: invoiceNotes,
       ...discountFinanceFields,
     });
+
+    // Seed the "Quote approved" activity entry on the just-created finances row, using the
+    // REAL approval time stored at quote-approval (deposit request, else quote), not now.
+    // Atomic RPC append (never a whole-blob write). Fire-and-forget: a failure must not
+    // block the cascade.
+    const quoteApprovedAt = (depositData?.quote_approved_at as string | undefined) || (quoteData?.quote_approved_at as string | undefined);
+    if (quoteApprovedAt) {
+      void appendInvoiceActivityRpc(supabase, invoiceId, {
+        id: `act-${Date.now()}-approved`,
+        type: "approved",
+        title: "Quote approved",
+        detail: "Approved by client",
+        at: quoteApprovedAt,
+      });
+    }
 
     setToastMessage(
       `${lead.company} moved to Deposit Paid. Order ${orderNumber}, Invoice, and Client Portal created.`,
