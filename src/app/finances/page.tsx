@@ -1428,7 +1428,16 @@ function FinancesContent() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this item?")) return;
+    // An invoice hangs off an order, so deleting it does NOT delete the order (that would
+    // wrongly nuke the order/lead). Warn that the order stays. There is no dangling pointer
+    // to clear: orders reference their invoice only by a derived id (`invoice-{orderId}`)
+    // and store no finance_id, so nothing on the order points at the deleted invoice.
+    const inv = invoices.find((x) => x.id === id);
+    const linkedToOrder = Boolean(inv?.order_id) || id.startsWith("invoice-");
+    const message = linkedToOrder
+      ? "Delete this invoice? The linked order stays and is not deleted. Remove the order separately if you want it gone too."
+      : "Delete this item?";
+    if (!window.confirm(message)) return;
     setDeletingId(id);
     await deleteItem(id);
     setDeletingId("");

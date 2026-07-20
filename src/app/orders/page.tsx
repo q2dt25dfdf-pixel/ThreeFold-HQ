@@ -6,6 +6,7 @@ import { Check, ChevronDown, Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { supabase } from "@/lib/supabase";
 
 type OrderStatus =
   | "Production"
@@ -135,8 +136,24 @@ function OrdersContent() {
     });
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this order?")) return;
+    if (!window.confirm("Delete this order? Its linked invoice will be removed too. The lead and client are not affected.")) return;
     setDeletingId(id);
+    // Remove the order AND its own invoice so no orphaned invoice is left behind (an
+    // orphaned finances row keeps inflating totals). The finance/invoice row points at
+    // this order via data.order_id, and its id is `invoice-{orderId}`; match both. Also
+    // remove the deposit_request tied to THIS order (by the order's own ref, then by
+    // order_id) so its financial trail goes cleanly. We do NOT touch the lead or the
+    // shared client, and we scope strictly to this order (never by lead_id) so an
+    // order-level delete can never take out a real lead's whole chain.
+    const order = orders.find((o) => o.id === id) as (Order & { deposit_request_id?: string }) | undefined;
+    await Promise.all([
+      supabase.from("finances").delete().eq("data->>order_id", id),
+      supabase.from("finances").delete().eq("id", `invoice-${id}`),
+      supabase.from("deposit_requests").delete().eq("data->>order_id", id),
+      ...(order?.deposit_request_id
+        ? [supabase.from("deposit_requests").delete().eq("id", order.deposit_request_id)]
+        : []),
+    ]);
     await deleteItem(id);
     setDeletingId("");
   };
