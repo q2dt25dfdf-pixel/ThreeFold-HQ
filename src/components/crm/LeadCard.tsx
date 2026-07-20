@@ -1,5 +1,5 @@
 import type { Lead, PipelineStage, DuplicateMatch } from "./types";
-import { AlertTriangle, CheckCircle, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, FlaskConical, Trash2 } from "lucide-react";
 
 interface LeadCardProps {
   lead: Lead;
@@ -9,6 +9,7 @@ interface LeadCardProps {
   onEdit: (lead: Lead) => void;
   onMove: (lead: Lead, targetStage: PipelineStage) => void;
   onDelete: (lead: Lead) => void;
+  onToggleTest?: (lead: Lead) => void;
   onCompleteFollowUp?: (lead: Lead) => void;
   canCompleteFollowUp?: boolean;
   duplicateMatch?: DuplicateMatch | null;
@@ -72,6 +73,7 @@ export default function LeadCard({
   onEdit,
   onMove,
   onDelete,
+  onToggleTest,
   onCompleteFollowUp,
   canCompleteFollowUp = false,
   duplicateMatch,
@@ -95,7 +97,9 @@ export default function LeadCard({
           onOpen(lead);
         }
       }}
-      className="group w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5"
+      className={`group w-full rounded-[2rem] border bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5 ${
+        lead.is_test ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1.5">
@@ -107,6 +111,11 @@ export default function LeadCard({
             {(lead as Lead & { source?: string }).source === "Website" && (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
                 Web
+              </span>
+            )}
+            {lead.is_test && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                Test
               </span>
             )}
           </div>
@@ -122,6 +131,24 @@ export default function LeadCard({
             <div className="text-base font-semibold text-slate-950">{formatLeadValue(lead.value)}</div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Value</div>
           </div>
+          {onToggleTest && (
+            <button
+              type="button"
+              className={`flex min-h-11 min-w-11 items-center justify-center rounded-full border md:min-h-10 md:min-w-10 ${
+                lead.is_test
+                  ? "border-amber-300 bg-amber-100 text-amber-700 hover:bg-amber-200"
+                  : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              }`}
+              aria-label={lead.is_test ? `Unmark ${lead.company} as test` : `Mark ${lead.company} as test`}
+              title={lead.is_test ? "Test record — click to unmark" : "Mark as test"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleTest(lead);
+              }}
+            >
+              <FlaskConical className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"

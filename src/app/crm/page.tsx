@@ -401,11 +401,13 @@ function CRMContent() {
 
   const activePipelineLeads = leads.filter(
     (lead) =>
+      lead.is_test !== true &&
       lead.archived !== true &&
       !isDepositPaid(lead.stage as string) &&
       !isClosedLost(lead.stage as string),
   );
   const totalValue = activePipelineLeads.reduce((sum, lead) => sum + leadValueNumber(lead.value), 0);
+  const testLeadCount = leads.filter((lead) => lead.is_test === true).length;
 
   const createId = () => {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -895,12 +897,58 @@ function CRMContent() {
     setDepositConfirm(null);
   };
 
+  // The hard-delete cascade, factored out so both single-lead delete and the bulk
+  // test purge run the exact same removal. Removes every child row linked to this lead
+  // so nothing is orphaned. finances is included ON PURPOSE — an orphaned finances row
+  // keeps inflating the Sales Tax total. Clients are intentionally NOT cascaded (they are
+  // shared/deduped across leads); the order's portal token lives on the order row and dies
+  // with it. This does NOT check the paid-lead guard — callers must gate as needed.
+  const cascadeDeleteLead = async (lead: Lead) => {
+    await Promise.all([
+      supabase.from("quotes").delete().eq("data->>lead_id", lead.id),
+      supabase.from("deposit_requests").delete().eq("data->>lead_id", lead.id),
+      supabase.from("orders").delete().eq("data->>lead_id", lead.id),
+      supabase.from("finances").delete().eq("data->>lead_id", lead.id),
+    ]);
+    await deleteItem(lead.id);
+    deleteTask(autoFollowUpTaskId(lead.id));
+    if (viewLeadId === lead.id) setViewLeadId(null);
+  };
+
+  // Flip is_test on a lead. Excludes it (and its order/invoice, derived by lead_id) from
+  // every metric, shows a TEST badge, and lets it be hard-deleted freely. Persisted via saveLead.
+  const handleToggleTest = async (lead: Lead) => {
+    await saveLead({ ...lead, is_test: !lead.is_test });
+  };
+
+  // Bulk purge: hard-delete every test lead and its children in one action. Reuses the
+  // same cascade as single delete; real records are never touched.
+  const handlePurgeTests = async () => {
+    const tests = leads.filter((l) => l.is_test === true);
+    if (tests.length === 0) {
+      setToastMessage("No test records to purge.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Purge all test records (${tests.length})? This permanently removes ${tests.length} test leads and their orders, invoices, quotes, and deposits. Real records are not touched.`,
+      )
+    ) {
+      return;
+    }
+    for (const t of tests) {
+      await cascadeDeleteLead(t);
+    }
+    setToastMessage(`Purged ${tests.length} test records.`);
+  };
+
   const handleDeleteLead = async (lead: Lead) => {
     // Guard: never hard-delete real money. "Deposit Paid" stage / "Won" status are set
     // together by the Stripe webhook; also catch a paid deposit or a deposit_paid finance
     // recorded manually without a stage move. Refuse the delete and offer Archive instead.
-    let paidOrWon = lead.stage === "Deposit Paid" || lead.status === "Won";
-    if (!paidOrWon) {
+    // TEST leads bypass the guard entirely -- they are fake money and meant to be purged.
+    let paidOrWon = lead.is_test !== true && (lead.stage === "Deposit Paid" || lead.status === "Won");
+    if (lead.is_test !== true && !paidOrWon) {
       const [fin, dep] = await Promise.all([
         supabase.from("finances").select("id").eq("data->>lead_id", lead.id).eq("data->>deposit_paid", "true").limit(1),
         supabase.from("deposit_requests").select("id").eq("data->>lead_id", lead.id).eq("data->>status", "paid").limit(1),
@@ -914,19 +962,8 @@ function CRMContent() {
       return;
     }
 
-    // Cascade: remove every child row linked to this lead so nothing is orphaned.
-    // finances is included ON PURPOSE — an orphaned finances row keeps inflating the
-    // Sales Tax total. Clients are intentionally NOT cascaded (they are shared/deduped
-    // across leads); the order's portal token lives on the order row and dies with it.
-    await Promise.all([
-      supabase.from("quotes").delete().eq("data->>lead_id", lead.id),
-      supabase.from("deposit_requests").delete().eq("data->>lead_id", lead.id),
-      supabase.from("orders").delete().eq("data->>lead_id", lead.id),
-      supabase.from("finances").delete().eq("data->>lead_id", lead.id),
-    ]);
-    await deleteItem(lead.id);
-    deleteTask(autoFollowUpTaskId(lead.id));
-    if (viewLeadId === lead.id) setViewLeadId(null);
+    // Not paid/won — safe to hard-delete. Run the shared cascade.
+    await cascadeDeleteLead(lead);
   };
 
   const handleArchiveLead = async (lead: Lead) => {
@@ -1102,6 +1139,15 @@ function CRMContent() {
           >
             {showArchived ? "Showing archived" : "Show archived"}
           </button>
+          {testLeadCount > 0 && (
+            <button
+              type="button"
+              onClick={handlePurgeTests}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 md:py-2.5 md:text-sm"
+            >
+              Delete all test records ({testLeadCount})
+            </button>
+          )}
           <button
             type="button"
             onClick={() => openAddLeadModal()}
@@ -1124,7 +1170,7 @@ function CRMContent() {
         </div>
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Deposit paid</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => isDepositPaid(lead.stage as string)).length}</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => lead.is_test !== true && isDepositPaid(lead.stage as string)).length}</p>
         </div>
       </div>
 
@@ -1227,6 +1273,7 @@ function CRMContent() {
                       onEdit={() => {}}
                       onMove={handleMoveLead}
                       onDelete={handleDeleteLead}
+                      onToggleTest={handleToggleTest}
                       onCompleteFollowUp={(l) => setCompletingLead(l)}
                       canCompleteFollowUp={canCompleteLeadFollowUp(lead, tasks)}
                       duplicateMatch={detectDuplicateMatch(lead, clients)}

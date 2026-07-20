@@ -604,16 +604,25 @@ function AttentionBanner({ summary }: { summary: AttentionSummary }) {
 }
 
 export default function DashboardVisualGrid({ orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO }: Props) {
-  const metrics = useMemo(() => ({
-    revenue: monthlyRevenueProgress(finances, todayISO),
-    pipeline: pipelineOverview(crmLeads),
-    invoices: invoiceHealth(finances, todayISO),
-    orderStatuses: ordersByStatus(orders),
-    followUps: followUpLoad(crmLeads, tasks, todayISO),
-    taskLoad: taskLoadByFounder(tasks, todayISO),
-    attention: needsAttention(orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO),
-    summary: attentionSummary(orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO),
-  }), [crmLeads, finances, orders, sevenDaysAheadISO, tasks, todayISO]);
+  const metrics = useMemo(() => {
+    // Exclude TEST records from every metric. Test-ness is derived from the lead (is_test):
+    // drop is_test leads, and drop the finances/orders whose lead_id belongs to a test lead.
+    const testLeadIds = new Set(crmLeads.filter((l) => l.is_test === true).map((l) => l.id));
+    const isTestRow = (r: Record<string, unknown>) => testLeadIds.has(String(r.lead_id ?? ""));
+    const rLeads = crmLeads.filter((l) => l.is_test !== true);
+    const rFinances = finances.filter((f) => !isTestRow(f));
+    const rOrders = orders.filter((o) => !isTestRow(o));
+    return {
+      revenue: monthlyRevenueProgress(rFinances, todayISO),
+      pipeline: pipelineOverview(rLeads),
+      invoices: invoiceHealth(rFinances, todayISO),
+      orderStatuses: ordersByStatus(rOrders),
+      followUps: followUpLoad(rLeads, tasks, todayISO),
+      taskLoad: taskLoadByFounder(tasks, todayISO),
+      attention: needsAttention(rOrders, rFinances, tasks, rLeads, todayISO, sevenDaysAheadISO),
+      summary: attentionSummary(rOrders, rFinances, tasks, rLeads, todayISO, sevenDaysAheadISO),
+    };
+  }, [crmLeads, finances, orders, sevenDaysAheadISO, tasks, todayISO]);
 
   return (
     <div className="space-y-5">
