@@ -176,7 +176,16 @@ export function isInactiveLeadStage(stage: string): boolean {
 }
 
 export function pipelineOverview(leads: DashboardRecord[]): ChartDatum[] {
-  const openLeads = leads.filter((lead) => statusText(lead) !== "won");
+  // Match the CRM's active-pipeline inclusion rule (crm/page.tsx active-stage logic):
+  // exclude archived leads and inactive stages (Deposit Paid / Closed Lost). Test leads
+  // (is_test) are already dropped upstream in DashboardVisualGrid, so the two numbers
+  // count the same set. The legacy `status !== "won"` check is kept as a harmless belt.
+  const openLeads = leads.filter(
+    (lead) =>
+      statusText(lead) !== "won" &&
+      lead.archived !== true &&
+      !isInactiveLeadStage(normalizeCRMStage(stringField(lead, "stage"))),
+  );
   return pipelineStages.map((stage) => {
     const matchingLeads = openLeads.filter((lead) => normalizeCRMStage(stringField(lead, "stage")) === stage);
     return {
