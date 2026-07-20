@@ -167,6 +167,10 @@ async function fulfillDepositPaid(
   const depositAmount = Number(depData.deposit_amount ?? totalAmount * 0.5);
   const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
   const clientName = (depData.client_name ?? "") as string;
+  // "Pay in Full": the client paid the whole total through the deposit link (deposit amount
+  // covers the total, nothing left owed). Promote to fully paid instead of stalling at
+  // "Deposit Paid". A normal partial deposit leaves this false and behaves exactly as before.
+  const paidInFullDeposit = depositAmount > 0 && depositAmount >= totalAmount;
 
   // Proportional tax collected with deposit
   const depSalesTaxAmount = Number(depData.sales_tax_amount ?? 0);
@@ -198,18 +202,27 @@ async function fulfillDepositPaid(
     await updateFinancesFields(fin.id as string, {
       deposit_paid: true,
       deposit_paid_date: today,
-      status: isFinalAlreadyPaid ? "Paid" : "Deposit Paid",
+      status: (paidInFullDeposit || isFinalAlreadyPaid) ? "Paid" : "Deposit Paid",
       ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
       ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
+      // Paid in full via the deposit link: promote to fully paid (fixes the stuck "Deposit
+      // Paid" bug). Does not change the charged amount.
+      ...(paidInFullDeposit ? {
+        paid_in_full: true,
+        final_paid: true,
+        final_paid_date: today,
+        balance_remaining: 0,
+        ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
+      } : {}),
     });
-    console.log(`[webhook] finances ${fin.id} → deposit_paid=true`);
+    console.log(`[webhook] finances ${fin.id} → deposit_paid=true${paidInFullDeposit ? " (paid in full)" : ""}`);
     // Activity entry via the atomic RPC (sole writer of activity_log) — after the money write.
     const depositMethodWord = meta.payment_method === "card" ? "card" : meta.payment_method === "bank" ? "bank" : (meta.payment_method || "");
     await appendInvoiceActivityRpc(db, fin.id as string, {
       id: `act-${Date.now()}-payment`,
       type: "payment",
-      title: "Deposit received",
-      detail: `${fmtNotifAmount(depositAmount)}${depositMethodWord ? ` by ${depositMethodWord}` : ""} · via Stripe`,
+      title: paidInFullDeposit ? "Payment received" : "Deposit received",
+      detail: `${fmtNotifAmount(depositAmount)}${depositMethodWord ? ` by ${depositMethodWord}` : ""} · via Stripe${paidInFullDeposit ? " · paid in full" : ""}`,
       at: paidAt,
       author: "system",
     });
@@ -489,6 +502,9 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
 
   if (!existingFin || existingFin.length === 0) {
     const salesTaxAmount = Number(depData.sales_tax_amount ?? 0);
+    // "Pay in Full" via the deposit link: the whole total was paid in one go. Create the row
+    // as fully paid instead of "Deposit Paid"/final_paid:false. Partial deposit is unchanged.
+    const paidInFull = depositAmount > 0 && depositAmount >= totalAmount;
     const financeData: Record<string, unknown> = {
       id: invoiceId,
       client: clientName,
@@ -505,11 +521,16 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
       deposit_amount: depositAmount,
       deposit_paid: true,
       deposit_paid_date: today,
-      balance_remaining: balanceRemaining,
-      final_paid: false,
-      status: "Deposit Paid",
+      balance_remaining: paidInFull ? 0 : balanceRemaining,
+      final_paid: paidInFull,
+      paid_in_full: paidInFull,
+      status: paidInFull ? "Paid" : "Deposit Paid",
       created_at: paidAt,
     };
+    if (paidInFull) {
+      financeData.final_paid_date = today;
+      if (depositPaymentMethod) financeData.final_payment_method = depositPaymentMethod;
+    }
     if (depositPaymentMethod) financeData.deposit_payment_method = depositPaymentMethod;
     if (depData.subtotal != null) financeData.subtotal = depData.subtotal;
     if (depData.discount != null) financeData.discount = depData.discount;
@@ -530,8 +551,8 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     await appendInvoiceActivityRpc(db, invoiceId, {
       id: `act-${Date.now()}-payment`,
       type: "payment",
-      title: "Deposit received",
-      detail: `${fmtNotifAmount(depositAmount)}${bootstrapMethodWord ? ` by ${bootstrapMethodWord}` : ""} · via Stripe`,
+      title: paidInFull ? "Payment received" : "Deposit received",
+      detail: `${fmtNotifAmount(depositAmount)}${bootstrapMethodWord ? ` by ${bootstrapMethodWord}` : ""} · via Stripe${paidInFull ? " · paid in full" : ""}`,
       at: paidAt,
       author: "system",
     });

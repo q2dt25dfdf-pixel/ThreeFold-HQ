@@ -38,6 +38,7 @@ interface InvoiceData {
   balance_remaining: number;
   final_paid: boolean;
   final_paid_date: string | null;
+  paid_in_full?: boolean;
   final_invoice_sent_at?: string | null;
   final_due_date: string | null;
   deposit_payment_method?: string | null;
@@ -202,6 +203,10 @@ export default function InvoicePage() {
   const receipt = resolveReceipt(data);
   const isPaidInFull = data.final_paid || (data.deposit_paid && data.balance_remaining <= 0);
   const isReceipt = receipt?.paidInFull === true;
+  // ONE full payment (paid_in_full flag) reads as a clean single-payment receipt: one amount
+  // row, no deposit/balance split, only the invoice number. A completed deposit+balance keeps
+  // today's wording. Only meaningful in the paid state.
+  const singleFullPayment = isPaidInFull && receipt?.singleFullPayment === true;
   const receiptPaidLine = receipt ? receiptPaidPhrase(receipt.method, receipt.datePaid) : "";
   const isDepositPaid = data.deposit_paid;
   // The deposit-receipt handoff view belongs ONLY to the receipt link (r- token) — a stable,
@@ -273,7 +278,7 @@ export default function InvoicePage() {
             <div style={s.chipValue}>{data.invoice_number}</div>
           </div>
         )}
-        {data.deposit_request_number && (
+        {!singleFullPayment && data.deposit_request_number && (
           <div style={s.chip}>
             <div style={s.chipLabel}>DEPOSIT NO.</div>
             <div style={s.chipValue}>{data.deposit_request_number}</div>
@@ -356,52 +361,71 @@ export default function InvoicePage() {
                 <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL PROJECT VALUE</span>
                 <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
               </div>
-              <div style={isDepositReceipt ? { ...s.detailRow, ...s.depositPaidTint } : s.detailRow}>
-                <div style={{ flex: 1 }}>
-                  <span style={s.detailKey}>DEPOSIT</span>
-                  {isDepositPaid && data.deposit_paid_date && (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
-                      Paid {fmtDate(data.deposit_paid_date)}{isDepositReceipt && depositMethodLabel ? ` · ${depositMethodLabel}` : ""}
-                    </div>
-                  )}
+              {singleFullPayment ? (
+                // ONE full payment: a single amount row, no deposit/balance split.
+                <div style={{ ...s.detailRow, borderBottom: hasTax ? undefined : "none" }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ ...s.detailKey, color: C.green, fontWeight: 700 }}>AMOUNT PAID</span>
+                    {receiptPaidLine && (
+                      <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: C.textMuted, textTransform: "none" as const }}>
+                        {receiptPaidLine}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "16px" }}>
+                    <span style={{ ...s.detailVal, color: C.green }}>{fmt(grandTotalDisplay)}</span>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "16px" }}>
-                  <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
-                  {isDepositPaid && (
-                    <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", color: C.green, marginTop: "2px" }}>
-                      {isDepositReceipt ? "PAID" : "PAID ✓"}
+              ) : (
+                <>
+                  <div style={isDepositReceipt ? { ...s.detailRow, ...s.depositPaidTint } : s.detailRow}>
+                    <div style={{ flex: 1 }}>
+                      <span style={s.detailKey}>DEPOSIT</span>
+                      {isDepositPaid && data.deposit_paid_date && (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
+                          Paid {fmtDate(data.deposit_paid_date)}{isDepositReceipt && depositMethodLabel ? ` · ${depositMethodLabel}` : ""}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-              <div style={{ ...s.detailRow, borderBottom: hasTax ? undefined : "none" }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ ...s.detailKey, color: isPaidInFull ? C.green : C.textSecondary, fontWeight: 700 }}>
-                    BALANCE REMAINING
-                  </span>
-                  {isDepositReceipt ? (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: C.textMuted, textTransform: "none" as const }}>
-                      Due before delivery · not yet owed
+                    <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "16px" }}>
+                      <span style={s.detailVal}>{fmt(data.deposit_amount)}</span>
+                      {isDepositPaid && (
+                        <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", color: C.green, marginTop: "2px" }}>
+                          {isDepositReceipt ? "PAID" : "PAID ✓"}
+                        </div>
+                      )}
                     </div>
-                  ) : data.final_due_date && !isPaidInFull ? (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: isOverdue ? C.red : C.textMuted, textTransform: "none" as const }}>
-                      Due {fmtDate(data.final_due_date)}{isOverdue ? " (OVERDUE)" : ""}
+                  </div>
+                  <div style={{ ...s.detailRow, borderBottom: hasTax ? undefined : "none" }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ ...s.detailKey, color: isPaidInFull ? C.green : C.textSecondary, fontWeight: 700 }}>
+                        BALANCE REMAINING
+                      </span>
+                      {isDepositReceipt ? (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: C.textMuted, textTransform: "none" as const }}>
+                          Due before delivery · not yet owed
+                        </div>
+                      ) : data.final_due_date && !isPaidInFull ? (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px", color: isOverdue ? C.red : C.textMuted, textTransform: "none" as const }}>
+                          Due {fmtDate(data.final_due_date)}{isOverdue ? " (OVERDUE)" : ""}
+                        </div>
+                      ) : null}
+                      {isPaidInFull && data.final_paid_date && (
+                        <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
+                          Paid {fmtDate(data.final_paid_date)}
+                        </div>
+                      )}
                     </div>
-                  ) : null}
-                  {isPaidInFull && data.final_paid_date && (
-                    <div style={{ ...s.detailKey, fontWeight: 400, letterSpacing: "0.04em", marginTop: "3px" }}>
-                      Paid {fmtDate(data.final_paid_date)}
+                    <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "16px" }}>
+                      {isPaidInFull ? (
+                        <span style={{ ...s.detailVal, color: C.green }}>PAID IN FULL ✓</span>
+                      ) : (
+                        <span style={{ ...s.detailVal, fontSize: "20px" }}>{fmt(data.balance_remaining)}</span>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "16px" }}>
-                  {isPaidInFull ? (
-                    <span style={{ ...s.detailVal, color: C.green }}>PAID IN FULL ✓</span>
-                  ) : (
-                    <span style={{ ...s.detailVal, fontSize: "20px" }}>{fmt(data.balance_remaining)}</span>
-                  )}
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
               {(hasTax || hasDiscount) && (
                 <>
                   <button
@@ -481,8 +505,9 @@ export default function InvoicePage() {
             <div className="dk-card">
               <div style={s.cardEyebrow}>PAYMENT RECEIVED</div>
               <div style={s.bodyText}>
-                Your final payment has been received and confirmed. Thank you for
-                your business. It&apos;s been a pleasure working with you.
+                {singleFullPayment
+                  ? "Payment received in full. Your project is officially underway, and we'll keep you posted at each step as we get it made. Thank you."
+                  : "Your final payment has been received and confirmed. Thank you for your business. It's been a pleasure working with you."}
               </div>
             </div>
           ) : isDepositReceipt ? (
