@@ -509,6 +509,22 @@ export default function InvoicePage() {
                   ? "Payment received in full. Your project is officially underway, and we'll keep you posted at each step as we get it made. Thank you."
                   : "Your final payment has been received and confirmed. Thank you for your business. It's been a pleasure working with you."}
               </div>
+              {/* Paid in full is an INITIAL payment (production about to start), so point the
+                  client to their portal. Not shown on the 50/50 final leg (order complete). */}
+              {singleFullPayment && data.portal_url && (
+                <div style={s.portalRow}>
+                  <div style={s.portalRowText}>
+                    <div style={s.portalLabel}>YOUR CLIENT PORTAL</div>
+                    <div style={s.portalDesc}>Track your order, designs, and payments anytime.</div>
+                  </div>
+                  <a href={data.portal_url} style={s.portalBtn}>
+                    OPEN PORTAL
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </a>
+                </div>
+              )}
             </div>
           ) : isDepositReceipt ? (
             <div style={s.handoffCard}>

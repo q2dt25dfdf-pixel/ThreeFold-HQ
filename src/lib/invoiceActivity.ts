@@ -8,7 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type InvoiceActivityType = "payment" | "send" | "status" | "edit" | "note";
+export type InvoiceActivityType = "payment" | "send" | "status" | "edit" | "note" | "approved";
 
 export interface InvoiceActivityEntry {
   id: string;

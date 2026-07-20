@@ -546,7 +546,19 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     }
     await db.from("finances").upsert({ id: invoiceId, data: financeData });
     console.log(`[webhook] created finance ${invoiceId} for order ${orderId}`);
-    // Seed the first activity entry via the atomic RPC (after the row exists).
+    // Seed the "Quote approved" entry FIRST (older) so newest-first ordering ends with the
+    // payment on top and the approval below. Uses the real approval time stored at approval.
+    const quoteApprovedAt = (depData.quote_approved_at as string | undefined) || "";
+    if (quoteApprovedAt) {
+      await appendInvoiceActivityRpc(db, invoiceId, {
+        id: `act-${Date.now()}-approved`,
+        type: "approved",
+        title: "Quote approved",
+        detail: "Approved by client",
+        at: quoteApprovedAt,
+      });
+    }
+    // Seed the payment entry via the atomic RPC (after the row exists).
     const bootstrapMethodWord = depositPaymentMethod === "card" ? "card" : depositPaymentMethod === "bank" ? "bank" : (depositPaymentMethod || "");
     await appendInvoiceActivityRpc(db, invoiceId, {
       id: `act-${Date.now()}-payment`,
