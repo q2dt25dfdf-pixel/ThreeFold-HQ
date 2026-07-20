@@ -165,6 +165,9 @@ export async function GET(
     balanceDue,
     paymentStatus,
     stripeInvoiceUrl: d.stripe_invoice_url || '',
+    // tfi- invoice pay page (from the linked finances row). Empty when no invoice has
+    // been generated yet — the portal hides the "Pay final balance" button in that case.
+    invoicePayUrl: inv?.public_link || '',
     designVersions: visibleDesignVersions.map((v) => ({
       ...v,
       file_url: v.drive_url || v.file_url || '',
