@@ -11,6 +11,7 @@ import SendDesignModal from "../../components/crm/SendDesignModal";
 import SendQuoteModal from "../../components/crm/SendQuoteModal";
 import SendDepositModal from "../../components/crm/SendDepositModal";
 import CompleteFollowUpModal from "../../components/crm/CompleteFollowUpModal";
+import DepositPaidConfirmModal, { type DepositPaidConfirmation } from "../../components/crm/DepositPaidConfirmModal";
 import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, type QuestionnaireFile, type CommunicationEntry } from "../../components/crm/types";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
@@ -128,6 +129,9 @@ type InvoiceRecord = {
   balance_remaining: number;
   final_due_date?: string;
   final_paid: boolean;
+  final_paid_date?: string;
+  final_payment_method?: string;
+  paid_in_full?: boolean;
   status: string;
   notes: string;
   subtotal?: number;
@@ -347,6 +351,9 @@ function CRMContent() {
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
   const [depositLead, setDepositLead] = useState<Lead | null>(null);
   const [completingLead, setCompletingLead] = useState<Lead | null>(null);
+  // Gate for the "Deposit Paid" move: hold the lead + declared prefill until the founder
+  // confirms the real amount/method/date. Only then does handleApproveLead create anything.
+  const [depositConfirm, setDepositConfirm] = useState<{ lead: Lead; prefill: { total: number; amount: number; method: string } } | null>(null);
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -540,7 +547,7 @@ function CRMContent() {
     });
   };
 
-  const handleApproveLead = async (lead: Lead) => {
+  const handleApproveLead = async (lead: Lead, confirmed?: DepositPaidConfirmation) => {
     const existingClient = findClientForLead(lead);
     const clientId = existingClient?.id ?? `client-${lead.id}`;
     await syncClientFromLead(lead);
@@ -625,9 +632,21 @@ function CRMContent() {
         : quoteTotal > 0
         ? quoteTotal
         : leadTotal;
-    const depositAmount = depositData?.deposit_amount ?? Math.round(totalAmount * 0.5 * 100) / 100;
-    const balanceRemaining = depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0);
-    const today = businessTodayISO();
+    // When the founder confirmed real values (the Deposit Paid confirm modal), USE them —
+    // amount, method, date, and deposit-vs-full. Otherwise fall back to the auto-resolved
+    // defaults exactly as before (e.g. if this is ever called without confirmation). The
+    // ORDER total is always the project total; the confirmed amount is only what was paid.
+    const paidInFull = confirmed ? confirmed.paymentType === "full" : false;
+    const depositAmount = confirmed
+      ? confirmed.amount
+      : (depositData?.deposit_amount ?? Math.round(totalAmount * 0.5 * 100) / 100);
+    const balanceRemaining = paidInFull
+      ? 0
+      : confirmed
+      ? Math.max(Math.round((totalAmount - confirmed.amount) * 100) / 100, 0)
+      : (depositData?.balance_remaining ?? Math.max(totalAmount - depositAmount, 0));
+    const depositMethod = confirmed ? confirmed.method : (depositData?.client_payment_method_intent ?? "");
+    const today = confirmed ? confirmed.date : businessTodayISO();
 
     // Create the order. Copy the quote's line items (full array incl. blank + colors +
     // print_detail) as a stable snapshot; derive the string[] item names + total qty so
@@ -747,13 +766,17 @@ function CRMContent() {
       deposit_amount: depositAmount,
       deposit_paid: true,
       deposit_paid_date: today,
-      // Carry the client's declared method (e.g. "check") from the deposit_request
-      // onto the finance row so the editor and receipt show it. Editable afterward.
-      deposit_payment_method: depositData?.client_payment_method_intent ?? "",
+      // Confirmed method (e.g. "check"); falls back to the client's declared intent.
+      // Editable afterward in Finances.
+      deposit_payment_method: depositMethod,
       balance_remaining: balanceRemaining,
       final_due_date: "",
-      final_paid: false,
-      status: "Deposit Paid",
+      // Paid in full: mirror the finances pay-in-full result so the receipt reads correctly
+      // with no Finances correction. Deposit-only stays exactly as before.
+      final_paid: paidInFull,
+      paid_in_full: paidInFull,
+      ...(paidInFull ? { final_paid_date: today, final_payment_method: depositMethod } : {}),
+      status: paidInFull ? "Paid in Full" : "Deposit Paid",
       notes: invoiceNotes,
       ...discountFinanceFields,
     });
@@ -782,20 +805,68 @@ function CRMContent() {
     return leadResponse;
   };
 
+  // Read the client's declared amount/method (deposit request first, then quote) so the
+  // confirm modal opens pre-filled. Mirrors the money resolution in handleApproveLead.
+  const resolveDepositPrefill = async (lead: Lead): Promise<{ total: number; amount: number; method: string }> => {
+    const depId = lead.deposit_request_id;
+    const { data: depRows } = depId
+      ? await supabase.from("deposit_requests").select("data").eq("id", depId).limit(1)
+      : await supabase.from("deposit_requests").select("data").eq("data->>lead_id", lead.id).order("id", { ascending: false }).limit(1);
+    const dep = depRows?.[0]?.data as Record<string, unknown> | undefined;
+    let quote: Record<string, unknown> | undefined;
+    if (lead.quote_id) {
+      const { data: qr } = await supabase.from("quotes").select("data").eq("id", lead.quote_id).limit(1);
+      quote = qr?.[0]?.data as Record<string, unknown> | undefined;
+    }
+    const money = { ...(quote ?? {}), ...(dep ?? {}) };
+    const rawValue = lead.value;
+    const leadTotal = typeof rawValue === "number" ? rawValue : Number(String(rawValue).replace(/[^0-9.-]/g, "")) || 0;
+    const quoteTotal = Number(money.grand_total) > 0 ? Number(money.grand_total) : Number(money.total_amount) > 0 ? Number(money.total_amount) : 0;
+    const total = Number(dep?.total_amount) > 0 ? Number(dep?.total_amount) : quoteTotal > 0 ? quoteTotal : leadTotal;
+    const amount = dep?.deposit_amount != null ? Number(dep?.deposit_amount) : Math.round(total * 0.5 * 100) / 100;
+    const method = (dep?.client_payment_method_intent as string) || "";
+    return { total, amount, method };
+  };
+
+  // Open the confirm gate for a "Deposit Paid" move. The lead carried here already has
+  // stage "Deposit Paid"; nothing is created (or the stage persisted) until confirm.
+  const openDepositConfirm = async (leadAtDepositPaid: Lead) => {
+    const prefill = await resolveDepositPrefill(leadAtDepositPaid);
+    setDepositConfirm({ lead: leadAtDepositPaid, prefill });
+  };
+
   const handleSaveDetailLead = async (updated: Lead) => {
+    const becomingDepositPaid = isDepositPaid(updated.stage as string) && !isDepositPaid(viewLead?.stage as string ?? "");
+    if (becomingDepositPaid) {
+      // Persist every edit EXCEPT the stage move (hold at the prior stage) until confirmed,
+      // so cancelling leaves the lead where it was and creates nothing.
+      const held = { ...updated, stage: (viewLead?.stage ?? updated.stage) as PipelineStage };
+      await saveLead(held);
+      syncFollowUpTask(held);
+      await openDepositConfirm(updated);
+      return;
+    }
     await saveLead(updated);
     syncFollowUpTask(updated);
-    if (isDepositPaid(updated.stage as string) && !isDepositPaid(viewLead?.stage as string ?? "")) {
-      await handleApproveLead(updated);
-    }
   };
 
   const handleMoveLead = async (lead: Lead, targetStage: PipelineStage) => {
-    const updated = { ...lead, stage: targetStage };
-    await saveLead(updated);
     if (targetStage === "Deposit Paid") {
-      await handleApproveLead(updated);
+      // Do NOT persist the move yet — gate on the confirm modal. Cancel leaves it in place.
+      await openDepositConfirm({ ...lead, stage: targetStage });
+      return;
     }
+    await saveLead({ ...lead, stage: targetStage });
+  };
+
+  // Fires only on "Confirm & create": now persist the stage move and run the cascade with the
+  // confirmed amount/method/date/deposit-vs-full.
+  const handleConfirmDepositPaid = async (confirmed: DepositPaidConfirmation) => {
+    if (!depositConfirm) return;
+    const lead = depositConfirm.lead;
+    await saveLead(lead);
+    await handleApproveLead(lead, confirmed);
+    setDepositConfirm(null);
   };
 
   const handleDeleteLead = async (lead: Lead) => {
@@ -1225,6 +1296,15 @@ function CRMContent() {
           lead={completingLead}
           onSubmit={(entry) => handleCompleteFollowUpWithLog(completingLead, entry)}
           onClose={() => setCompletingLead(null)}
+        />
+      )}
+
+      {depositConfirm && (
+        <DepositPaidConfirmModal
+          lead={depositConfirm.lead}
+          prefill={depositConfirm.prefill}
+          onConfirm={handleConfirmDepositPaid}
+          onClose={() => setDepositConfirm(null)}
         />
       )}
 
