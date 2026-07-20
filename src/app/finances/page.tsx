@@ -532,7 +532,7 @@ function FinancesContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { data: invoices, upsertItem, deleteItem, loading, error } = useSupabaseTable<Invoice>("finances", []);
+  const { data: invoices, upsertItem, deleteItem, loading, error, reload: reloadInvoices } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
   const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
@@ -1064,6 +1064,20 @@ function FinancesContent() {
     return () => window.clearTimeout(timeout);
   }, [form.client, form.client_id, form.client_name, form.order_id, orders, showModal]);
 
+  // Field-write for an EXISTING finances row that NEVER touches activity_log: strips it and
+  // calls the update_finances_fields RPC, which merges the fields and re-preserves the row's
+  // own activity_log at the DB level. This is what makes the append RPC the sole writer of the
+  // log — a founder save can no longer overwrite a concurrently-appended entry. (handleAdd
+  // still uses upsertItem: it INSERTS a brand-new row, which the UPDATE-based RPC can't do and
+  // which has no existing log to preserve.) Mirrors upsertItem's post-write reload().
+  const saveFinanceFields = async (obj: Invoice) => {
+    const fields: Record<string, unknown> = { ...obj };
+    delete fields.activity_log;
+    const response = await supabase.rpc("update_finances_fields", { p_id: obj.id, p_fields: fields });
+    await reloadInvoices();
+    return response;
+  };
+
   const handleAdd = async () => {
     const linkedForm = normalizeInvoice(form);
     if (!linkedForm.client_name.trim()) {
@@ -1129,7 +1143,7 @@ function FinancesContent() {
         })()
       : null;
     await editSave.runSave(async () => {
-      const response = await upsertItem(preserveInvoiceTokens(linkedInvoice, current));
+      const response = await saveFinanceFields(preserveInvoiceTokens(linkedInvoice, current));
       if (!response.error) {
         await syncInvoiceToOrder(linkedInvoice);
         if (depositEntry) await appendInvoiceActivityRpc(supabase, linkedInvoice.id, depositEntry);
@@ -1154,7 +1168,7 @@ function FinancesContent() {
     const alreadyAt = editInvoice[info.sentField] as string | undefined;
     if (alreadyAt && !window.confirm(`A receipt was already sent on ${fmtReceiptDate(alreadyAt)}. Send another receipt to the client?`)) return;
     const linked = normalizeInvoice(editInvoice);
-    await upsertItem(preserveInvoiceTokens(linked, invoices.find((i) => i.id === linked.id)));
+    await saveFinanceFields(preserveInvoiceTokens(linked, invoices.find((i) => i.id === linked.id)));
     await syncInvoiceToOrder(linked);
     setReceiptInvoice(linked);
     setReceiptPhase(phase ?? null);
@@ -1164,9 +1178,9 @@ function FinancesContent() {
 
   const handleReceiptSent = async (updated: Invoice) => {
     const current = invoices.find((i) => i.id === updated.id);
-    // The stamp write does NOT author activity_log (preserveInvoiceTokens only carries the
-    // existing array forward). The entry is appended via the atomic RPC below.
-    await upsertItem(preserveInvoiceTokens(updated, current));
+    // The stamp write goes through the merge RPC, which never touches activity_log. The
+    // entry is appended via the atomic RPC below.
+    await saveFinanceFields(preserveInvoiceTokens(updated, current));
     // Phase comes from the button that opened the modal (handleOpenReceipt sets receiptPhase).
     // No SenderPicker on the receipt modal → no founder in scope → author undefined.
     const isFinal = receiptPhase === "final";
@@ -1205,7 +1219,7 @@ function FinancesContent() {
       // write doesn't drop it (the in-memory row may not have it yet).
       ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
     };
-    await upsertItem(preserveInvoiceTokens(stamped, current));
+    await saveFinanceFields(preserveInvoiceTokens(stamped, current));
     // Activity entry via the atomic RPC. author = SenderPicker choice.
     const email = ((sendInvoiceTarget.client_email || "").trim() || leadEmailFor(sendInvoiceTarget)).trim();
     const invNum = invoiceNumber || sendInvoiceTarget.invoice_number || "";
