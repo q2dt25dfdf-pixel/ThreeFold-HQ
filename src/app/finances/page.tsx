@@ -15,6 +15,7 @@ import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
+import type { InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import {
   Area,
   AreaChart,
@@ -64,6 +65,8 @@ type Invoice = {
   sales_tax_amount?: number;
   grand_total?: number;
   tax_collected_amount?: number;
+  // Newest-first activity timeline (Pass 1: storage only; nothing appends yet).
+  activity_log?: InvoiceActivityEntry[];
 };
 
 type SalesTaxPayment = {
@@ -363,7 +366,7 @@ function preserveInvoiceTokens<T extends object>(next: T, currentRaw: unknown): 
   const current = currentRaw as Record<string, unknown> | undefined;
   if (!current) return next;
   const merged = { ...next } as Record<string, unknown>;
-  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number"]) {
+  for (const key of ["public_token", "public_link", "receipt_public_token", "receipt_public_link", "invoice_number", "activity_log"]) {
     const v = merged[key];
     if ((v == null || v === "") && current[key] != null && current[key] !== "") merged[key] = current[key];
   }
@@ -1007,7 +1010,9 @@ function FinancesContent() {
     setFormError("");
     const newInvoice = { id: "invoice-" + Date.now(), ...linkedForm };
     await addSave.runSave(async () => {
-      const response = await upsertItem(newInvoice);
+      // New id => nothing to preserve, but route through the same merge so every
+      // finances upsert honors the activity_log/token preservation invariant.
+      const response = await upsertItem(preserveInvoiceTokens(newInvoice, invoices.find((i) => i.id === newInvoice.id)));
       if (!response.error) {
         await syncInvoiceToOrder(newInvoice);
         setForm(emptyForm);
@@ -1027,7 +1032,7 @@ function FinancesContent() {
     }
     setFormError("");
     await editSave.runSave(async () => {
-      const response = await upsertItem(linkedInvoice);
+      const response = await upsertItem(preserveInvoiceTokens(linkedInvoice, invoices.find((i) => i.id === linkedInvoice.id)));
       if (!response.error) await syncInvoiceToOrder(linkedInvoice);
       return response;
     }, () => { setEditInvoice(null); setFormError(""); setClientDropdownOpen(false); setOrderDropdownOpen(false); });
@@ -1048,7 +1053,7 @@ function FinancesContent() {
     const alreadyAt = editInvoice[info.sentField] as string | undefined;
     if (alreadyAt && !window.confirm(`A receipt was already sent on ${fmtReceiptDate(alreadyAt)}. Send another receipt to the client?`)) return;
     const linked = normalizeInvoice(editInvoice);
-    await upsertItem(linked);
+    await upsertItem(preserveInvoiceTokens(linked, invoices.find((i) => i.id === linked.id)));
     await syncInvoiceToOrder(linked);
     setReceiptInvoice(linked);
     setReceiptPhase(phase ?? null);
