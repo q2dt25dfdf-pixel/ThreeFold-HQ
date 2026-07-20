@@ -49,3 +49,35 @@ export async function appendInvoiceActivityRpc(
   }
   return true;
 }
+
+// ATOMIC delete of ONE entry (by id) via the delete_invoice_activity RPC — single-statement,
+// order-preserving, no-ops if the id isn't found. Used only for manual note entries. Logs on
+// failure rather than throwing.
+export async function deleteInvoiceActivityRpc(
+  client: SupabaseClient,
+  invoiceId: string,
+  entryId: string,
+): Promise<boolean> {
+  const { error } = await client.rpc("delete_invoice_activity", { p_id: invoiceId, p_entry_id: entryId });
+  if (error) {
+    console.error("[deleteInvoiceActivityRpc]", invoiceId, entryId, error.message);
+    return false;
+  }
+  return true;
+}
+
+// ATOMIC edit of ONE entry's detail text (by id) via the edit_invoice_activity RPC —
+// single-statement; author/date/type/title stay untouched. Used only for manual note bodies.
+export async function editInvoiceActivityRpc(
+  client: SupabaseClient,
+  invoiceId: string,
+  entryId: string,
+  detail: string,
+): Promise<boolean> {
+  const { error } = await client.rpc("edit_invoice_activity", { p_id: invoiceId, p_entry_id: entryId, p_detail: detail });
+  if (error) {
+    console.error("[editInvoiceActivityRpc]", invoiceId, entryId, error.message);
+    return false;
+  }
+  return true;
+}
