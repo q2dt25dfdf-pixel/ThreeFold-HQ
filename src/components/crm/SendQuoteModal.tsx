@@ -15,7 +15,7 @@ import {
   fmtTaxRate,
   type QuoteDiscount,
 } from "@/lib/salesTax";
-import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
+import { getSalesTaxRateForAddress, zipFromText } from "@/lib/tax-rates";
 import type { Lead, QuoteItem } from "./types";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { CurrencyInput } from "@/components/orders/OrderFormShared";
@@ -189,7 +189,12 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   // A discount that leaves a sub-$1.00 total is unpayable (Stripe rejects charges
   // under ~$0.50). Block it here to match the server guard.
   const discountZeroesTotal = discount != null && discountedSubtotal < 1;
-  const canPreview = hasValidItems && !discountLabelMissing && !discountZeroesTotal;
+  // Sales tax needs a real ship-to ZIP. The quote uses the client's address
+  // (lead.companyProfile.address) - the SAME clientAddressText passed to /api/quote/generate -
+  // and the business ships there. "Valid" == the tax calc will resolve a ZIP, checked with the
+  // EXACT parser the tax lookup uses (zipFromText). Block the quote until that address has a ZIP.
+  const addressHasZip = Boolean(zipFromText(lead?.companyProfile?.address ?? ""));
+  const canPreview = hasValidItems && !discountLabelMissing && !discountZeroesTotal && addressHasZip;
 
   const handlePreviewEmail = async () => {
     if (!lead || !canPreview) return;
@@ -345,29 +350,39 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
 
   const footer =
     step === "details" ? (
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => void handlePreviewEmail()}
-          disabled={!canPreview}
-          title={
-            discountLabelMissing
-              ? "Add a discount label first"
-              : discountZeroesTotal
-              ? "Discount reduces the total below $1.00"
-              : undefined
-          }
-          className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-        >
-          Preview Email
-        </button>
+      <div className="flex flex-col gap-3">
+        {!addressHasZip && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 md:text-sm">
+            Add a delivery address with a ZIP code before sending this quote. The address is used
+            to calculate sales tax. Add it on the lead, then reopen this quote.
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 rounded-3xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void handlePreviewEmail()}
+            disabled={!canPreview}
+            title={
+              !addressHasZip
+                ? "Add a delivery address with a ZIP code first (used to calculate sales tax)"
+                : discountLabelMissing
+                ? "Add a discount label first"
+                : discountZeroesTotal
+                ? "Discount reduces the total below $1.00"
+                : undefined
+            }
+            className="min-h-11 rounded-3xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+          >
+            Preview Email
+          </button>
+        </div>
       </div>
     ) : step === "preview" ? (
       <div className="flex flex-col gap-3">
