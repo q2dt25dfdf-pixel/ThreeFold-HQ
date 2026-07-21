@@ -365,7 +365,7 @@ export default function TasksPage() {
   if (loading) return <LoadingState label="Loading tasks..." />;
 
   return (
-    <div className="space-y-6 text-xs md:text-sm">
+    <div className="space-y-6 text-sm md:text-base">
       <ErrorBanner message={error} />
 
       {/* ── Compact header: title + inline urgency line + search + add ─────────── */}

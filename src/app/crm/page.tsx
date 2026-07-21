@@ -1084,7 +1084,7 @@ function CRMContent() {
   if (loading) return <LoadingState label="Loading CRM..." />;
 
   return (
-    <div className="min-h-screen min-w-0 space-y-6 text-xs md:text-sm">
+    <div className="min-h-screen min-w-0 space-y-6 text-sm md:text-base">
       <ErrorBanner message={error} />
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:overflow-x-visible">
         <div>
