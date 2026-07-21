@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, DollarSign, Users, CircleCheck } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
@@ -1159,18 +1159,40 @@ function CRMContent() {
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total leads</p>
-          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">{activePipelineLeads.length}</p>
+      {/* Hero stats V3: one box - emerald pipeline-value hero on the left, total leads +
+          deposit paid stacked on the right. Values are unchanged (display only). */}
+      <div className="flex flex-col overflow-hidden rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-100 md:flex-row">
+        {/* HERO - Pipeline value (emerald) */}
+        <div className="flex min-w-0 flex-[1.4] items-center gap-4 bg-emerald-50 p-6">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-200 text-emerald-700">
+            <DollarSign className="h-[18px] w-[18px]" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-600">Pipeline value</p>
+            <p className="mt-1 text-4xl font-extrabold tracking-tight text-emerald-950 md:text-[40px]">${totalValue.toLocaleString()}</p>
+            <p className="mt-1 text-[11px] text-emerald-600">across {activePipelineLeads.length} active leads</p>
+          </div>
         </div>
-        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Pipeline value</p>
-          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">${totalValue.toLocaleString()}</p>
-        </div>
-        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Deposit paid</p>
-          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">{leads.filter((lead) => lead.is_test !== true && isDepositPaid(lead.stage as string)).length}</p>
+        {/* Two stacked supporting stats */}
+        <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 items-center gap-3 border-t border-slate-100 p-4 md:border-l md:border-t-0">
+            <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+              <Users className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">Total leads</p>
+              <p className="text-xl font-bold text-slate-950">{activePipelineLeads.length}</p>
+            </div>
+          </div>
+          <div className="flex flex-1 items-center gap-3 border-t border-slate-100 p-4 md:border-l">
+            <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+              <CircleCheck className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">Deposit paid</p>
+              <p className="text-xl font-bold text-slate-950">{leads.filter((lead) => lead.is_test !== true && isDepositPaid(lead.stage as string)).length}</p>
+            </div>
+          </div>
         </div>
       </div>
 
