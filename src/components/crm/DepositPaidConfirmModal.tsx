@@ -4,6 +4,7 @@ import { useState } from "react";
 import ModalShell from "@/components/ModalShell";
 import { businessTodayISO } from "@/lib/businessDate";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/receipt";
+import { CurrencyInput } from "@/components/orders/OrderFormShared";
 import type { Lead } from "./types";
 
 // What the founder confirms before the client/order/invoice are created.
@@ -95,13 +96,11 @@ export default function DepositPaidConfirmModal({ lead, prefill, onConfirm, onCl
 
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount received</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+          <CurrencyInput
+            valueDollars={parseFloat(amount) || 0}
+            onChangeDollars={(d) => setAmount(d ? String(d) : "")}
+            ariaLabel="Amount received"
             className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
-            placeholder="0.00"
           />
           {prefill.total > 0 && (
             <p className="mt-1 text-[11px] text-slate-400">Order total: {fmt(prefill.total)}</p>
