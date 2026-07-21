@@ -10,7 +10,7 @@ import {
   normalizeDiscount,
   type QuoteDiscount,
 } from "@/lib/salesTax";
-import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
+import { resolveSalesTax } from "@/lib/resolveSalesTax";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 import { voidDepositOnRevision } from "@/lib/supersede";
 
@@ -104,16 +104,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const taxLookup = getSalesTaxRateForAddress({
-      deliveryZip,
-      clientZip: resolvedClientZip,
-      clientAddressText: clientAddressText ?? "",
-    });
-
     // Order of operations: subtotal → discount → discountedSubtotal → tax → grand.
     // subtotal stays PRE-discount; when there is no discount, discountedSubtotal is
     // exactly computedSubtotal so tax/grand are byte-identical to the old behavior.
-    const taxRate = taxLookup.rate;
     const discountedSubtotal = discount
       ? calcDiscountedSubtotal(computedSubtotal, discount)
       : computedSubtotal;
@@ -127,6 +120,16 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    // Rate SOURCE only: Stripe Tax as an accurate rate lookup, falling back to the CA ZIP
+    // table on any error/timeout. HQ still bakes this rate into its own total (calcSalesTax
+    // below); automatic_tax at checkout stays OFF and the stored field shapes are unchanged.
+    const taxLookup = await resolveSalesTax({
+      deliveryZip,
+      clientZip: resolvedClientZip,
+      clientAddressText: clientAddressText ?? "",
+      taxableAmountCents: Math.round(discountedSubtotal * 100),
+    });
+    const taxRate = taxLookup.rate;
     const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
     const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
 
