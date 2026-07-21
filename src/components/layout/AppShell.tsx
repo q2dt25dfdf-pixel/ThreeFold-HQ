@@ -104,7 +104,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {checkingSession ? (
           <LoadingState />
         ) : (
-          <div className="fade-in">{children}</div>
+          // Keyed on pathname so the fade replays on EVERY route change (a subtle cross-fade),
+          // not just first load. Only this content wrapper remounts; the sidebar/shell above
+          // are outside this branch and stay mounted across navigation.
+          <div key={pathname} className="fade-in">{children}</div>
         )}
       </main>
       {!checkingSession && <NotificationCenter />}

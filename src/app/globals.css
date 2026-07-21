@@ -15,6 +15,13 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* Always reserve the vertical scrollbar gutter so opening a modal (which locks body scroll)
+   never removes the scrollbar and shifts the page sideways. Desktop only; mobile overlay
+   scrollbars are unaffected. */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* Form fields never exceed their container */
 input,
 select,
@@ -36,6 +43,16 @@ input[type="time"] {
 
 .modal-enter {
   animation: modalEnter 0.18s ease-out both;
+}
+
+/* Modal exit animation (played briefly before unmount so closing is not abrupt) */
+@keyframes modalExit {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.97) translateY(6px); }
+}
+
+.modal-exit {
+  animation: modalExit 0.15s ease-in both;
 }
 
 /* Smooth page content fade-in */
