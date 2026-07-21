@@ -909,8 +909,20 @@ function CRMContent() {
       supabase.from("deposit_requests").delete().eq("data->>lead_id", lead.id),
       supabase.from("orders").delete().eq("data->>lead_id", lead.id),
       supabase.from("finances").delete().eq("data->>lead_id", lead.id),
+      // Remove EVERY task linked to this lead, not just the deterministic auto follow-up
+      // (deleteTask below). Jarvis/CRM tasks carry the lead id under any of these spellings;
+      // deleting them here prevents orphaned CRM tasks (source CRM + a lead that no longer
+      // exists) from lingering in the tasks table.
+      supabase
+        .from("tasks")
+        .delete()
+        .or(
+          `data->>leadId.eq.${lead.id},data->>lead_id.eq.${lead.id},data->>crmLeadId.eq.${lead.id},data->>crm_lead_id.eq.${lead.id}`,
+        ),
     ]);
     await deleteItem(lead.id);
+    // Also drop the deterministic auto follow-up via the tasks hook so local board state
+    // updates immediately (the DB-level purge above already covers it, idempotently).
     deleteTask(autoFollowUpTaskId(lead.id));
     if (viewLeadId === lead.id) setViewLeadId(null);
   };
