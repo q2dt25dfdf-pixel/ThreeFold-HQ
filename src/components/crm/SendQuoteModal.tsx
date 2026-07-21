@@ -13,9 +13,9 @@ import {
   calcDiscountAmount,
   calcDiscountedSubtotal,
   fmtTaxRate,
-  salesTaxRate,
   type QuoteDiscount,
 } from "@/lib/salesTax";
+import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
 import type { Lead, QuoteItem } from "./types";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { CurrencyInput } from "@/components/orders/OrderFormShared";
@@ -161,7 +161,13 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   };
 
   const subTotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
-  const taxRate = salesTaxRate();
+  // Preview rate mirrors the server: derive it from the lead's address via the SAME pure
+  // lookup (getSalesTaxRateForAddress) the server uses, using the SAME clientAddressText the
+  // modal already sends to /api/quote/generate. This is display-only; the server remains the
+  // source of truth and still computes/stores the rate itself. getSalesTaxRateForAddress
+  // handles the fallback to the 0.09375 default (with a warning) when no ZIP resolves.
+  const taxLookup = getSalesTaxRateForAddress({ clientAddressText: lead?.companyProfile?.address ?? "" });
+  const taxRate = taxLookup.rate;
 
   // Discount (client-side, using the shared lib helpers — no local math).
   // subtotal stays PRE-discount; discountedSubtotal feeds tax + grand total.
@@ -698,6 +704,10 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Sales Tax ({fmtTaxRate(taxRate)})</span>
               <span className="text-sm font-semibold text-slate-500">{fmtCurrency(salesTaxAmount)}</span>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              {taxLookup.jurisdictionLabel}
+              {taxLookup.warning && <span className="text-amber-600"> · {taxLookup.warning}</span>}
             </div>
             <div className="flex items-center justify-between border-t border-slate-200 pt-2">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Total</span>
