@@ -88,99 +88,52 @@ export default function LeadCard({
           onOpen(lead);
         }
       }}
-      className={`group w-full rounded-[2rem] bg-white p-4 text-left shadow-sm ring-1 transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5 ${
+      className={`group w-full rounded-[1.5rem] bg-white p-3.5 text-left shadow-sm ring-1 transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 ${
         lead.is_test ? "ring-amber-200" : "ring-slate-100"
       }`}
     >
-      {/* Landscape two-side row: identity on the left, value/meta/actions on the right */}
-      <div className="flex items-stretch gap-4">
-        {/* LEFT: identity */}
-        <div className="min-w-0 flex-1 space-y-1.5">
+      {/* Top row: name + badges on the left, value on the right (no collision) */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`inline-block whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${stageBadgeStyles[lead.stage]}`}>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.1em] ${stageBadgeStyles[lead.stage]}`}>
               {lead.stage}
             </span>
             {(lead as Lead & { source?: string }).source === "Website" && (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-700">
+              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.1em] text-amber-700">
                 Web
               </span>
             )}
             {lead.is_test && (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-700">
+              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.1em] text-amber-700">
                 Test
               </span>
             )}
           </div>
-          <div className="text-xs text-slate-600">{lead.contact}</div>
-          <div className="text-xs text-slate-400">
+        </div>
+        <span className="shrink-0 text-sm font-bold text-slate-900">{formatLeadValue(lead.value)}</span>
+      </div>
+
+      {/* Meta: quiet grey-dot labeled lines */}
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" />
+          <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.06em] text-slate-400">Last</span>
+          <span className="min-w-0 truncate text-[11px] text-slate-600">
             {latestActivity
               ? `${latestActivity.type} · ${formatActivityDate(latestActivity.date)}`
               : "No activity"}
-          </div>
+          </span>
         </div>
-
-        {/* RIGHT: value, follow-up + owner side by side, actions */}
-        <div className="flex w-[200px] shrink-0 flex-col justify-between gap-2">
-          {/* Value - calm soft row */}
-          <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Value</span>
-            <span className="text-base font-semibold text-slate-900">{formatLeadValue(lead.value)}</span>
-          </div>
-
-          {/* Follow-up + owner mini-cards, side by side */}
-          <div className="flex gap-2">
-            <div className="min-w-0 flex-1 rounded-2xl bg-slate-50 px-3 py-2 text-xs">
-              <div className="font-semibold text-slate-900">Follow-up</div>
-              <div className="mt-0.5 truncate text-xs text-slate-600">{lead.followUpDate}</div>
-            </div>
-            <div className="min-w-0 flex-1 rounded-2xl bg-slate-50 px-3 py-2 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-semibold text-white">
-                  {lead.owner[0]}
-                </span>
-                <span className="min-w-0 truncate text-xs font-semibold text-slate-900">{lead.owner}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer actions - flask test toggle + trash delete (lucide icons only) */}
-          <div className="flex justify-end gap-2">
-            {onToggleTest && (
-              <button
-                type="button"
-                className={`flex h-10 w-10 items-center justify-center rounded-full border ${
-                  lead.is_test
-                    ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                    : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                }`}
-                aria-label={lead.is_test ? `Unmark ${lead.company} as test` : `Mark ${lead.company} as test`}
-                title={lead.is_test ? "Test record - click to unmark" : "Mark as test"}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleTest(lead);
-                }}
-              >
-                <FlaskConical className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-              aria-label={`Delete ${lead.company}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!window.confirm("Delete this item?")) return;
-                onDelete(lead);
-              }}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" />
+          <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.06em] text-slate-400">Follow-up</span>
+          <span className="min-w-0 truncate text-[11px] text-slate-600">{lead.followUpDate || "TBD"}</span>
         </div>
       </div>
 
-      {/* Conditional strips span the full landscape width, below the two-side row */}
+      {/* Conditional strips, full-width below meta */}
       {lead.stage === "Closed Lost" && lead.lostReason && (
         <div className="mt-3 rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-600">
           <span className="font-semibold text-slate-700">Lost:</span> {lead.lostReason}
@@ -211,6 +164,48 @@ export default function LeadCard({
           </span>
         </div>
       )}
+
+      {/* Footer: owner on the left, action buttons on the right */}
+      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[9px] font-semibold text-white">
+            {lead.owner[0]}
+          </span>
+          <span className="min-w-0 truncate text-[11px] text-slate-600">{lead.owner}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {onToggleTest && (
+            <button
+              type="button"
+              className={`flex h-8 w-8 items-center justify-center rounded-full border ${
+                lead.is_test
+                  ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              }`}
+              aria-label={lead.is_test ? `Unmark ${lead.company} as test` : `Mark ${lead.company} as test`}
+              title={lead.is_test ? "Test record - click to unmark" : "Mark as test"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleTest(lead);
+              }}
+            >
+              <FlaskConical className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+            aria-label={`Delete ${lead.company}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!window.confirm("Delete this item?")) return;
+              onDelete(lead);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     </article>
   );
 }

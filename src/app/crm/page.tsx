@@ -1160,17 +1160,17 @@ function CRMContent() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Total leads</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{activePipelineLeads.length}</p>
+        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total leads</p>
+          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">{activePipelineLeads.length}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Pipeline value</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">${totalValue.toLocaleString()}</p>
+        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Pipeline value</p>
+          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">${totalValue.toLocaleString()}</p>
         </div>
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500 md:text-sm">Deposit paid</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 md:mt-3 md:text-3xl">{leads.filter((lead) => lead.is_test !== true && isDepositPaid(lead.stage as string)).length}</p>
+        <div className="rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Deposit paid</p>
+          <p className="mt-2 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">{leads.filter((lead) => lead.is_test !== true && isDepositPaid(lead.stage as string)).length}</p>
         </div>
       </div>
 
@@ -1238,8 +1238,8 @@ function CRMContent() {
               key={stage}
               className={
                 isLostColumn
-                  ? "w-full lg:w-[380px] lg:shrink-0 rounded-[2rem] border border-slate-300 bg-slate-100 p-3 shadow-sm md:p-4 lg:ml-4 lg:border-l-4 lg:border-l-slate-400"
-                  : "w-full lg:w-[380px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4"
+                  ? "w-full lg:w-[300px] lg:shrink-0 rounded-[2rem] border border-slate-300 bg-slate-100 p-3 shadow-sm md:p-4 lg:ml-4 lg:border-l-4 lg:border-l-slate-400"
+                  : "w-full lg:w-[300px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4"
               }
             >
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
