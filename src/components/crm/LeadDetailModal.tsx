@@ -193,7 +193,7 @@ function Row({
 function StripCell({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
   return (
     <div className={`min-w-0 border-b border-r border-slate-200 px-3 py-2.5 ${className ?? ""}`}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -226,7 +226,7 @@ function NoteCard({ note, onTogglePin, onDelete }: { note: NoteEntry; onTogglePi
           </button>
         </div>
       </div>
-      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-400">
+      <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-400">
         {note.pinned && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">PINNED</span>}
         <span className="truncate">{note.author} · {fmtNoteDate(note.created_at)}</span>
       </div>
@@ -567,7 +567,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
       }
       subtitle={subtitle}
       onClose={onClose}
-      maxWidth="max-w-4xl"
+      maxWidth="max-w-5xl"
       footer={footer}
     >
       <div className="flex flex-col gap-5">
@@ -689,7 +689,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             {/* Notes — separate, pinnable, deletable entries */}
             <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Notes</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Notes</h3>
                 <span className="text-xs font-semibold text-slate-400">{notesList.length}</span>
               </div>
 
@@ -799,7 +799,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               {/* Header: label left, total count right */}
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Activity</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Activity</h3>
                 <span className="text-xs font-semibold text-slate-400">{current.communicationHistory.length}</span>
               </div>
 
@@ -888,7 +888,7 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                             <div key={entry.id || i} className="relative">
                               <div className={`rounded-2xl border bg-white p-4 ${editingIndex === i ? "border-slate-400 ring-1 ring-slate-300" : "border-slate-200"}`}>
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${typeColors[entry.type]}`}>
+                                  <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${typeColors[entry.type]}`}>
                                     {entry.type}
                                   </span>
                                   <div className="flex shrink-0 items-center gap-3">
@@ -896,20 +896,20 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                                     <button
                                       type="button"
                                       onClick={() => startEdit(i)}
-                                      className="text-[11px] text-slate-400 underline hover:text-slate-700"
+                                      className="text-xs text-slate-400 underline hover:text-slate-700"
                                     >
                                       Edit
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => deleteEntry(i)}
-                                      className="text-[11px] text-rose-400 underline hover:text-rose-600"
+                                      className="text-xs text-rose-400 underline hover:text-rose-600"
                                     >
                                       Delete
                                     </button>
                                   </div>
                                 </div>
-                                <p className="mt-2 break-words text-sm text-slate-700">{entry.summary}</p>
+                                <p className="mt-2 break-words text-base text-slate-700">{entry.summary}</p>
                               </div>
                               {fade && (
                                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 rounded-b-2xl bg-gradient-to-t from-slate-50 to-transparent" aria-hidden="true" />
