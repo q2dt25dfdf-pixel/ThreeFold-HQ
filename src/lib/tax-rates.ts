@@ -213,7 +213,9 @@ function lookupByZip(rawZip: string): (ZipEntry & { zip: string }) | null {
   return { ...entry, zip };
 }
 
-function zipFromText(text: string): string | null {
+// Exported so the quote UI can gate on "the tax calc will have a real ZIP" using the exact
+// same parser the tax lookup uses. Pure string parse; no behavior change to the lookups.
+export function zipFromText(text: string): string | null {
   const match = text.match(/\b(\d{5})\b/);
   return match ? match[1] : null;
 }
