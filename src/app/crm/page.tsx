@@ -1238,8 +1238,8 @@ function CRMContent() {
               key={stage}
               className={
                 isLostColumn
-                  ? "w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-300 bg-slate-100 p-3 shadow-sm md:p-4 lg:ml-4 lg:border-l-4 lg:border-l-slate-400"
-                  : "w-full lg:w-[295px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4"
+                  ? "w-full lg:w-[460px] lg:shrink-0 rounded-[2rem] border border-slate-300 bg-slate-100 p-3 shadow-sm md:p-4 lg:ml-4 lg:border-l-4 lg:border-l-slate-400"
+                  : "w-full lg:w-[460px] lg:shrink-0 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm md:p-4"
               }
             >
               <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60">
