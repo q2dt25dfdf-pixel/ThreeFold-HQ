@@ -56,15 +56,6 @@ function formatActivityDate(dateStr: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const ACTIVITY_EMOJI: Record<string, string> = {
-  Call: "📞",
-  Email: "✉️",
-  Text: "💬",
-  Meeting: "📅",
-  "In Person": "🤝",
-  Other: "📋",
-};
-
 export default function LeadCard({
   lead,
   stageIndex,
@@ -97,74 +88,44 @@ export default function LeadCard({
           onOpen(lead);
         }
       }}
-      className={`group w-full rounded-[2rem] border bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5 ${
-        lead.is_test ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"
+      className={`group w-full rounded-[2rem] bg-white p-4 text-left shadow-sm ring-1 transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 md:p-5 ${
+        lead.is_test ? "ring-amber-200" : "ring-slate-100"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`inline-block whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.06em] ${stageBadgeStyles[lead.stage]}`}>
-              {lead.stage}
+      {/* Top block: name, badges, contact, activity — no value/actions crammed here */}
+      <div className="min-w-0 space-y-1.5">
+        <h3 className="truncate text-sm font-semibold text-slate-950">{lead.company}</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={`inline-block whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${stageBadgeStyles[lead.stage]}`}>
+            {lead.stage}
+          </span>
+          {(lead as Lead & { source?: string }).source === "Website" && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-700">
+              Web
             </span>
-            {(lead as Lead & { source?: string }).source === "Website" && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                Web
-              </span>
-            )}
-            {lead.is_test && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                Test
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-slate-600">{lead.contact}</div>
-          <div className="text-xs text-slate-400">
-            {latestActivity
-              ? `${ACTIVITY_EMOJI[latestActivity.type] ?? "•"} ${latestActivity.type} · ${formatActivityDate(latestActivity.date)}`
-              : "No activity"}
-          </div>
-        </div>
-        <div className="flex flex-shrink-0 items-start gap-2 text-right">
-          <div>
-            <div className="text-base font-semibold text-slate-950">{formatLeadValue(lead.value)}</div>
-            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Value</div>
-          </div>
-          {onToggleTest && (
-            <button
-              type="button"
-              className={`flex min-h-11 min-w-11 items-center justify-center rounded-full border md:min-h-10 md:min-w-10 ${
-                lead.is_test
-                  ? "border-amber-300 bg-amber-100 text-amber-700 hover:bg-amber-200"
-                  : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              }`}
-              aria-label={lead.is_test ? `Unmark ${lead.company} as test` : `Mark ${lead.company} as test`}
-              title={lead.is_test ? "Test record — click to unmark" : "Mark as test"}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleTest(lead);
-              }}
-            >
-              <FlaskConical className="h-4 w-4" aria-hidden="true" />
-            </button>
           )}
-          <button
-            type="button"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 md:min-h-10 md:min-w-10"
-            aria-label={`Delete ${lead.company}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!window.confirm("Delete this item?")) return;
-              onDelete(lead);
-            }}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+          {lead.is_test && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-700">
+              Test
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-slate-600">{lead.contact}</div>
+        <div className="text-xs text-slate-400">
+          {latestActivity
+            ? `${latestActivity.type} · ${formatActivityDate(latestActivity.date)}`
+            : "No activity"}
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2 grid-cols-2">
+      {/* Value — calm soft row */}
+      <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Value</span>
+        <span className="text-base font-semibold text-slate-900">{formatLeadValue(lead.value)}</span>
+      </div>
+
+      {/* Follow-up + owner mini-grid */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-2xl bg-slate-50 px-3 py-2 text-xs">
           <div className="font-semibold text-slate-900">Follow-up</div>
           <div className="mt-0.5 text-xs text-slate-600">{lead.followUpDate}</div>
@@ -178,6 +139,7 @@ export default function LeadCard({
           </div>
         </div>
       </div>
+
       {lead.stage === "Closed Lost" && lead.lostReason && (
         <div className="mt-3 rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-600">
           <span className="font-semibold text-slate-700">Lost:</span> {lead.lostReason}
@@ -208,6 +170,40 @@ export default function LeadCard({
           </span>
         </div>
       )}
+
+      {/* Footer action row — flask test toggle + trash delete */}
+      <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+        {onToggleTest && (
+          <button
+            type="button"
+            className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+              lead.is_test
+                ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            }`}
+            aria-label={lead.is_test ? `Unmark ${lead.company} as test` : `Mark ${lead.company} as test`}
+            title={lead.is_test ? "Test record — click to unmark" : "Mark as test"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleTest(lead);
+            }}
+          >
+            <FlaskConical className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+          aria-label={`Delete ${lead.company}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!window.confirm("Delete this item?")) return;
+            onDelete(lead);
+          }}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
     </article>
   );
 }
