@@ -14,7 +14,8 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
-import { ErrorBanner, LoadingState } from "@/components/AppState";
+import { ErrorBanner } from "@/components/AppState";
+import { NotesSkeleton } from "@/components/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { extractTextFromBody } from "@/lib/noteUtils";
@@ -195,7 +196,7 @@ export default function NotesPage() {
     setMobileLevel("notes");
   };
 
-  if (loading) return <LoadingState label="Loading notes..." />;
+  if (loading) return <NotesSkeleton />;
 
   const currentLabel =
     selection.type === "all"

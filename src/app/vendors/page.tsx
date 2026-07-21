@@ -6,7 +6,8 @@ import ModalShell from "@/components/ModalShell";
 import { Check, Edit2, Search, Trash2 } from "lucide-react";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
-import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import { ErrorBanner, FieldError } from "@/components/AppState";
+import { VendorsSkeleton } from "@/components/Skeleton";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import {
   VENDOR_PRODUCT_CATEGORIES,
@@ -426,7 +427,7 @@ export default function VendorsPage() {
     </div>
   );
 
-  if (loading) return <LoadingState label="Loading suppliers..." />;
+  if (loading) return <VendorsSkeleton />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">

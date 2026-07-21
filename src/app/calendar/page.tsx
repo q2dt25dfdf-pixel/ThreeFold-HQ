@@ -29,7 +29,8 @@ function fmtEventDateTime(date: string, time?: string): string {
   return `${dateStr} at ${h12}:${String(m).padStart(2, "0")} ${ampm}`
 }
 import { ChevronLeft, ChevronRight, Home, Plus, Trash2 } from "lucide-react";
-import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import { ErrorBanner, FieldError } from "@/components/AppState";
+import { CalendarSkeleton } from "@/components/Skeleton";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -530,7 +531,7 @@ export default function CalendarPage() {
     }, () => closeEvent());
   };
 
-  if (eventsLoading) return <LoadingState label="Loading calendar..." />;
+  if (eventsLoading) return <CalendarSkeleton />;
 
   return (
     <div className="space-y-6 text-xs md:text-sm">

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Check, CircleDollarSign, Link2, Pencil, Receipt, Search, Send, StickyNote, Trash2 } from "lucide-react";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import { FinancesSkeleton } from "@/components/Skeleton";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
@@ -2106,7 +2107,7 @@ function FinancesContent() {
   const expenseBadgeCount = expenses.filter((e) => e.payment_status !== "paid").length;
   // Sales Tax: taxDue is already computed — badge shows only when tax is owed
 
-  if (loading) return <LoadingState label="Loading finances..." />;
+  if (loading) return <FinancesSkeleton />;
 
   // Display-only lists for the Overview "Needs Attention" block. Reuse existing helpers
   // and fields only (invoiceBalance / final_paid / status / reimbursement_status) — no
