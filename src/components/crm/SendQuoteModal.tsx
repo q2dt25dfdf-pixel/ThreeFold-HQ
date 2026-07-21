@@ -18,6 +18,7 @@ import {
 } from "@/lib/salesTax";
 import type { Lead, QuoteItem } from "./types";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
+import { CurrencyInput } from "@/components/orders/OrderFormShared";
 
 interface QuoteResult {
   quoteId: string;
@@ -476,14 +477,11 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
                   </div>
                   <div className="flex-1">
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Client unit price</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={item.unitPrice === 0 ? "" : item.unitPrice}
-                      onChange={(e) => updateItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
+                    <CurrencyInput
+                      valueDollars={item.unitPrice}
+                      onChangeDollars={(d) => updateItem(idx, "unitPrice", d)}
                       className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
-                      placeholder="0.00"
+                      ariaLabel="Client unit price"
                     />
                     {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
                       <p className="mt-1.5 text-[10px] leading-snug text-slate-400">

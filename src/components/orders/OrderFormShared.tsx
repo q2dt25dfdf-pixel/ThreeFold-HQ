@@ -77,20 +77,32 @@ export function handleCurrencyKeyDown(
 export function CurrencyInput({
   valueCents,
   onChangeCents,
+  valueDollars,
+  onChangeDollars,
   className,
   placeholder = "$0.00",
   ariaLabel,
 }: {
-  valueCents: number;
-  onChangeCents: (cents: number) => void;
+  valueCents?: number;
+  onChangeCents?: (cents: number) => void;
+  // Optional DOLLARS mode: pass a dollar amount in and receive dollars back; CurrencyInput
+  // converts to/from its canonical integer-cents core. When valueDollars is provided it wins.
+  // The cents API above is unchanged, so the existing cents callers keep behaving identically.
+  valueDollars?: number;
+  onChangeDollars?: (dollars: number) => void;
   className?: string;
   placeholder?: string;
   ariaLabel?: string;
 }) {
-  const digits = valueCents ? String(Math.max(0, Math.round(valueCents))) : "";
+  const cents = valueDollars != null ? Math.round(valueDollars * 100) : (valueCents ?? 0);
+  const emit = (nextCents: number) => {
+    onChangeCents?.(nextCents);
+    onChangeDollars?.(nextCents / 100);
+  };
+  const digits = cents ? String(Math.max(0, Math.round(cents))) : "";
   const setDigits: React.Dispatch<React.SetStateAction<string>> = (action) => {
     const next = typeof action === "function" ? (action as (c: string) => string)(digits) : action;
-    onChangeCents(Number(next || "0"));
+    emit(Number(next || "0"));
   };
   return (
     <input

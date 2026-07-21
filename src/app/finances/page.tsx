@@ -14,6 +14,7 @@ import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO } from "@/lib/businessDate";
 import { INVOICE_STATUS_OPTIONS, type InvoiceStatus } from "@/lib/constants";
 import { calcBalance, calcCollected, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
+import { CurrencyInput } from "@/components/orders/OrderFormShared";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import { supabase } from "@/lib/supabase";
@@ -3039,15 +3040,11 @@ function FinancesContent() {
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount <span className="text-rose-500">*</span></label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">$</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  placeholder="0.00"
-                  value={taxForm.amount}
-                  onChange={(e) => setTaxForm((f) => ({ ...f, amount: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-300 py-3 pl-8 pr-4 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
+                <CurrencyInput
+                  valueDollars={Number(taxForm.amount) || 0}
+                  onChangeDollars={(d) => setTaxForm((f) => ({ ...f, amount: d ? String(d) : "" }))}
+                  ariaLabel="Tax payment amount"
+                  className="w-full rounded-2xl border border-slate-300 py-3 pl-4 pr-4 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
                 />
               </div>
             </div>
@@ -3218,16 +3215,11 @@ function FinancesContent() {
               <div>
                 <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Amount <span className="text-rose-500">*</span></label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">$</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="0.00"
-                    className="w-full rounded-2xl border border-slate-300 py-3 pl-8 pr-4 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
-                    value={expenseForm.amountStr}
-                    onChange={(e) => setExpenseForm((f) => ({ ...f, amountStr: e.target.value }))}
+                  <CurrencyInput
+                    valueDollars={Number(expenseForm.amountStr) || 0}
+                    onChangeDollars={(d) => setExpenseForm((f) => ({ ...f, amountStr: d ? String(d) : "" }))}
+                    ariaLabel="Expense amount"
+                    className="w-full rounded-2xl border border-slate-300 py-3 pl-4 pr-4 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm"
                   />
                 </div>
               </div>
