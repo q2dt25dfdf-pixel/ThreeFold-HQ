@@ -33,7 +33,7 @@ export default function Home() {
   if (loading) return <LoadingState label="Loading dashboard..." />;
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden text-xs text-[#0f172a] md:text-sm">
+    <main className="min-h-screen w-full overflow-x-hidden text-sm text-[#0f172a] md:text-base">
       <div className="space-y-5">
         <ErrorBanner message={loadError} />
 

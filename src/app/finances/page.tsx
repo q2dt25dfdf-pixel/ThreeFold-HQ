@@ -2167,7 +2167,7 @@ function FinancesContent() {
   };
 
   return (
-    <div className="space-y-7 text-xs md:text-sm">
+    <div className="space-y-7 text-sm md:text-base">
       <ErrorBanner message={error} />
 
       {/* Page header */}
