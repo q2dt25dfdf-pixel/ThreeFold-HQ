@@ -209,7 +209,7 @@ async function fulfillDepositPaid(
     await updateFinancesFields(fin.id as string, {
       deposit_paid: true,
       deposit_paid_date: today,
-      status: (paidInFullDeposit || isFinalAlreadyPaid) ? "Paid" : "Deposit Paid",
+      status: (paidInFullDeposit || isFinalAlreadyPaid) ? "Paid in Full" : "Deposit Paid",
       ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
       ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
       // Paid in full via the deposit link: promote to fully paid (fixes the stuck "Deposit
@@ -536,7 +536,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
       balance_remaining: paidInFull ? 0 : balanceRemaining,
       final_paid: paidInFull,
       paid_in_full: paidInFull,
-      status: paidInFull ? "Paid" : "Deposit Paid",
+      status: paidInFull ? "Paid in Full" : "Deposit Paid",
       created_at: paidAt,
     };
     if (paidInFull) {
@@ -669,7 +669,7 @@ async function handleSessionCompleted(session: CheckoutSession, baseUrl: string)
         final_paid: true,
         final_paid_date: paidAt.slice(0, 10),
         balance_remaining: 0,
-        status: "Paid",
+        status: "Paid in Full",
         stripe_final_session_id: session.id,
         stripe_final_payment_intent_id: paymentIntentId,
         final_paid_at: paidAt,
@@ -756,7 +756,7 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession, baseUrl: st
       final_paid: true,
       final_paid_date: paidAt.slice(0, 10),
       balance_remaining: 0,
-      status: "Paid",
+      status: "Paid in Full",
       stripe_final_payment_intent_id: paymentIntentId,
       final_paid_at: paidAt,
       ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
