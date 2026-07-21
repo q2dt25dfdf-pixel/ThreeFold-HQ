@@ -81,6 +81,11 @@ export async function GET(request: Request): Promise<Response> {
       .map((r) => ({ id: r.id, data: (r.data ?? { id: r.id }) as DashboardRecord }))
       .filter((r) => Boolean(r.data?.id || r.id))
       .filter(({ data }) => !isTaskDone(data)) // OPEN only
+      // Mirror the founder Tasks board, which hides CRM follow-up tasks (openTasks uses
+      // `!isCrmTask`). Without this the endpoint leaked CRM-sourced tasks the board never
+      // shows -- e.g. orphaned CRM tasks whose lead was deleted. Same shared rule as
+      // tasks/page.tsx and dashboardMetrics (see lib/followUps isCrmTask).
+      .filter(({ data }) => !isCrmTask(data))
       .filter(({ data }) => {
         const who = taskAssignee(data).toLowerCase();
         if (who === wanted) return true;
