@@ -9,6 +9,7 @@ import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import { fmtTaxRate, calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 import { depositTerms } from "@/lib/depositTerms";
 import type { Lead, QuoteItem } from "./types";
+import { CurrencyInput } from "@/components/orders/OrderFormShared";
 
 interface DepositResult {
   depositRequestId: string;
@@ -430,16 +431,11 @@ export default function SendDepositModal({ open, lead, onClose, onSent }: Props)
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-600">Total Project Value</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500">
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(Number(e.target.value))}
-                    className="w-full rounded-2xl border border-slate-300 bg-white py-2.5 pl-8 pr-4 text-sm font-semibold text-slate-900 outline-none focus:border-slate-500"
+                  <CurrencyInput
+                    valueDollars={totalAmount}
+                    onChangeDollars={(d) => setTotalAmount(d)}
+                    ariaLabel="Total project value"
+                    className="w-full rounded-2xl border border-slate-300 bg-white py-2.5 pl-4 pr-4 text-sm font-semibold text-slate-900 outline-none focus:border-slate-500"
                   />
                 </div>
               </div>
