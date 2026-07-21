@@ -38,6 +38,12 @@ function isCrmTask(task: DashboardRecord): boolean {
   );
 }
 
+// The lead id a CRM task links to, under any spelling (leadId / lead_id / crmLeadId /
+// crm_lead_id). "" when the task carries no linked lead.
+function taskLeadId(task: DashboardRecord): string {
+  return (readField(task, "leadId", "lead_id") || readField(task, "crmLeadId", "crm_lead_id")).trim();
+}
+
 /**
  * GET /api/ai/tasks-by-assignee?assignee=Alliyah[&includeAll=true]
  *
@@ -77,10 +83,29 @@ export async function GET(request: Request): Promise<Response> {
 
     const todayISO = businessTodayISO();
 
+    // Live CRM follow-ups belong on Alliyah's list, so we KEEP CRM tasks whose lead still
+    // exists. Only ORPHANED CRM tasks (source CRM + a linked lead that was deleted) are
+    // dropped -- those show nowhere in HQ and are the genuine leak. One lightweight lookup
+    // (all lead ids -> Set) gives O(1) existence checks; crm_leads is small (hundreds of
+    // rows at most). If the leads lookup fails, we skip the orphan filter (keep everything)
+    // rather than risk mass-dropping live CRM tasks.
+    const { data: leadRows, error: leadErr } = await db.from("crm_leads").select("id");
+    const leadIds = leadErr ? null : new Set((leadRows ?? []).map((r) => (r as { id: string }).id));
+    const isOrphanCrm = (data: DashboardRecord): boolean => {
+      if (!leadIds) return false; // lookup failed -> do not drop anything
+      if (!isCrmTask(data)) return false; // non-CRM tasks are never orphans
+      const lid = taskLeadId(data);
+      if (!lid) return false; // CRM task with no linked lead id -> cannot prove orphan, keep
+      return !leadIds.has(lid); // orphan only when the linked lead no longer exists
+    };
+
     const matched = ((rows ?? []) as TaskRow[])
       .map((r) => ({ id: r.id, data: (r.data ?? { id: r.id }) as DashboardRecord }))
       .filter((r) => Boolean(r.data?.id || r.id))
       .filter(({ data }) => !isTaskDone(data)) // OPEN only
+      // Drop ONLY orphaned CRM tasks (lead deleted); live CRM follow-ups are kept and
+      // returned with isCrm:true so Jarvis can still tag them.
+      .filter(({ data }) => !isOrphanCrm(data))
       .filter(({ data }) => {
         const who = taskAssignee(data).toLowerCase();
         if (who === wanted) return true;
