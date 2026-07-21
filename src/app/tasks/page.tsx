@@ -294,7 +294,7 @@ export default function TasksPage() {
           setEditTask({ ...task });
         }
       }}
-      className="group flex items-start justify-between gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
+      className="group flex min-w-0 items-start justify-between gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md md:p-5"
     >
       <div className="flex min-w-0 items-start gap-2.5">
         <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-hidden="true" />
@@ -303,7 +303,7 @@ export default function TasksPage() {
           <p className="mt-1 text-[11px] text-slate-400">{dueLabel(task)} · {task.priority}</p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
         <button
           type="button"
           aria-label={`Complete ${task.title}`}
@@ -331,7 +331,7 @@ export default function TasksPage() {
   const PersonRow = ({ task }: { task: Task }) => {
     const isOverdue = isDated(task.dueDate) && task.dueDate < todayISO;
     return (
-      <div className="group flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-slate-50">
+      <div className="group flex min-w-0 items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-slate-50">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dueDotClass(task)}`} aria-hidden="true" />
         <button
           type="button"
@@ -458,7 +458,7 @@ export default function TasksPage() {
 
       {/* ── Team & Anyone — shared tasks anyone can grab (only in the All view) ── */}
       {filterOwner === "All" && (
-        <section className="rounded-[2rem] bg-violet-50 p-5 shadow-sm ring-1 ring-violet-200 md:p-6">
+        <section className="min-w-0 rounded-[2rem] bg-violet-50 p-5 shadow-sm ring-1 ring-violet-200 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-600">
               <Users className="h-4 w-4" aria-hidden="true" />
@@ -491,7 +491,7 @@ export default function TasksPage() {
       {/* ── By person — the main workspace (urgent-band tasks excluded) ────────── */}
       <div>
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">By person</p>
-        <div className="grid items-stretch gap-5 xl:grid-cols-3">
+        <div className="grid min-w-0 items-stretch gap-5 xl:grid-cols-3">
           {founderColumns
             .filter((founder) => filterOwner === "All" || founder.name === filterOwner)
             .map((founder) => {
@@ -500,7 +500,7 @@ export default function TasksPage() {
               );
 
               return (
-                <section key={founder.name} className="flex min-h-[18rem] flex-col rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 md:p-6">
+                <section key={founder.name} className="flex min-h-[18rem] min-w-0 flex-col rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 md:p-6">
                   <div className="inline-flex items-center gap-2 self-start rounded-full bg-slate-50 py-1 pl-1 pr-3 ring-1 ring-slate-100">
                     <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white ${founderAvatar[founder.name]}`} aria-hidden="true">{founder.name[0]}</span>
                     <span className="text-sm font-bold text-slate-950">{founder.name}</span>
