@@ -307,7 +307,7 @@ function PipelineOverviewCard({ data }: { data: ChartDatum[] }) {
 
           <div className="min-h-[52px] rounded-lg bg-slate-50 px-3 py-2.5">
             {hovered ? (
-              <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="grid grid-cols-2 gap-2 text-center md:grid-cols-4">
                 <div>
                   <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Stage</p>
                   <p className="mt-0.5 text-[11px] font-bold leading-tight text-slate-800">{hovered.name}</p>
