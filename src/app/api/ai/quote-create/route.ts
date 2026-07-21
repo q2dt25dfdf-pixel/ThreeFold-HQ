@@ -10,7 +10,7 @@ import {
   calcDiscountedSubtotal,
   normalizeDiscount,
 } from "@/lib/salesTax";
-import { getSalesTaxRateForAddress } from "@/lib/tax-rates";
+import { resolveSalesTax } from "@/lib/resolveSalesTax";
 import { voidDepositOnRevision } from "@/lib/supersede";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 import { findProduct } from "@/lib/products";
@@ -273,15 +273,9 @@ export async function POST(request: Request): Promise<Response> {
     const subtotal = computedLineItems.reduce((sum, i) => sum + i.lineTotal, 0);
 
     // ── Tax calculation ───────────────────────────────────────────────────
-    const taxLookup = getSalesTaxRateForAddress({
-      deliveryZip: typeof deliveryZip === "string" ? deliveryZip : undefined,
-      clientZip:   typeof clientZip === "string" ? clientZip : undefined,
-      clientAddressText: "",
-    });
     // Order of operations: subtotal → discount → discountedSubtotal → tax → grand.
     // subtotal stays PRE-discount; with no discount, discountedSubtotal === subtotal
     // so tax/grand are byte-identical to the old behavior.
-    const taxRate = taxLookup.rate;
     const discountedSubtotal = discount
       ? calcDiscountedSubtotal(subtotal, discount)
       : subtotal;
@@ -294,6 +288,15 @@ export async function POST(request: Request): Promise<Response> {
         400,
       );
     }
+    // Rate SOURCE only: Stripe Tax as the rate lookup, falling back to the CA ZIP table on
+    // any error/timeout. HQ still bakes this rate into its own total; stored shapes unchanged.
+    const taxLookup = await resolveSalesTax({
+      deliveryZip: typeof deliveryZip === "string" ? deliveryZip : undefined,
+      clientZip:   typeof clientZip === "string" ? clientZip : undefined,
+      clientAddressText: "",
+      taxableAmountCents: Math.round(discountedSubtotal * 100),
+    });
+    const taxRate = taxLookup.rate;
     const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
     const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
 
