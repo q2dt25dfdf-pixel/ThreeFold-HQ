@@ -70,7 +70,7 @@ export default function ModalShell({
 
         {/* Content — only scrollable area */}
         <div
-          className="overscroll-y-none px-5 py-5"
+          className="overscroll-y-none px-5 py-5 text-sm"
           style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
         >
           {children}
@@ -93,7 +93,7 @@ export default function ModalShell({
         style={{ position: "fixed", inset: 0, zIndex: 100000 }}
       >
         <div
-          className={`modal-enter ${maxHeight} w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 shadow-2xl`}
+          className={`modal-enter ${maxHeight} w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 text-sm shadow-2xl md:text-base`}
         >
           <div className="mb-6">{header}</div>
           {children}
