@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
+import { OrdersSkeleton } from "@/components/Skeleton";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
@@ -247,7 +248,7 @@ function OrdersContent() {
     );
   };
 
-  if (loading) return <LoadingState label="Loading orders..." />;
+  if (loading) return <OrdersSkeleton />;
 
   return (
     <div className="space-y-6 text-sm md:text-base">

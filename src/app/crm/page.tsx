@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, DollarSign, Users, CircleCheck } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
+import { CrmSkeleton } from "@/components/Skeleton";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
@@ -1093,7 +1094,7 @@ function CRMContent() {
     setToastMessage(`Deposit request ${result.depositRequestNumber} sent to ${lead.email}.`);
   };
 
-  if (loading) return <LoadingState label="Loading CRM..." />;
+  if (loading) return <CrmSkeleton />;
 
   return (
     <div className="min-h-screen min-w-0 space-y-6 text-sm md:text-base">

@@ -3,7 +3,8 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Plus, Search, Trash2, Users, Zap } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
-import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import { ErrorBanner, FieldError } from "@/components/AppState";
+import { TasksSkeleton } from "@/components/Skeleton";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO, dateToBusinessISO } from "@/lib/businessDate";
@@ -362,7 +363,7 @@ export default function TasksPage() {
     );
   };
 
-  if (loading) return <LoadingState label="Loading tasks..." />;
+  if (loading) return <TasksSkeleton />;
 
   return (
     <div className="space-y-6 text-sm md:text-base">

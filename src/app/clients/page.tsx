@@ -6,7 +6,8 @@ import { Check, Clock, Search, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
-import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
+import { ErrorBanner, FieldError } from "@/components/AppState";
+import { ClientsSkeleton } from "@/components/Skeleton";
 import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -367,7 +368,7 @@ export default function ClientsPage() {
     void deleteItem(id).finally(() => setDeletingId(""));
   };
 
-  if (loading) return <LoadingState label="Loading clients..." />;
+  if (loading) return <ClientsSkeleton />;
 
   return (
     <div className="space-y-6 text-sm md:text-base">

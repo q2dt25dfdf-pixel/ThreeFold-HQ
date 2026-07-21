@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { ErrorBanner, LoadingState } from "@/components/AppState";
+import { ErrorBanner } from "@/components/AppState";
+import { DashboardSkeleton } from "@/components/Skeleton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { addDaysToISODate, businessTodayISO, businessTodayLabel } from "@/lib/businessDate";
 import GlobalSearch from "@/components/GlobalSearch";
@@ -30,7 +31,11 @@ export default function Home() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (loading) return <LoadingState label="Loading dashboard..." />;
+  if (loading) return (
+    <main className="min-h-screen w-full overflow-x-hidden text-sm text-[#0f172a] md:text-base">
+      <DashboardSkeleton />
+    </main>
+  );
 
   return (
     <main className="min-h-screen w-full overflow-x-hidden text-sm text-[#0f172a] md:text-base">
