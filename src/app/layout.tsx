@@ -27,9 +27,9 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Threefold HQ" />
-        <meta name="theme-color" content="#0f172a" />
+        <meta name="theme-color" content="#f4f4f5" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-zinc-100 antialiased`}

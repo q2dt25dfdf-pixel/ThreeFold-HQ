@@ -29,6 +29,16 @@ export default function ModalShell({
   useEffect(() => { setMounted(true); }, []);
   useScrollLock();
 
+  // Play a short exit animation before actually closing, so dismissal is not abrupt. The X
+  // and any close routed through this handler animate out, then the real onClose fires (which
+  // unmounts the modal). Purely presentational; does not change what closing does.
+  const [closing, setClosing] = useState(false);
+  const requestClose = () => {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 150);
+  };
+
   const header = (
     <div className="flex shrink-0 items-start justify-between gap-4">
       <div className="min-w-0">
@@ -39,7 +49,7 @@ export default function ModalShell({
         type="button"
         aria-label="Close"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-        onClick={onClose}
+        onClick={requestClose}
       >
         <X className="h-4 w-4" />
       </button>
@@ -52,7 +62,7 @@ export default function ModalShell({
     <>
       {/* Mobile: full-screen sheet — portal ensures fixed positioning is never trapped by parent transforms */}
       <div
-        className="md:hidden"
+        className={`md:hidden ${closing ? "modal-exit" : ""}`}
         style={{
           position: "fixed",
           inset: 0,
@@ -93,7 +103,7 @@ export default function ModalShell({
         style={{ position: "fixed", inset: 0, zIndex: 100000 }}
       >
         <div
-          className={`modal-enter ${maxHeight} w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 text-sm shadow-2xl md:text-base`}
+          className={`${closing ? "modal-exit" : "modal-enter"} ${maxHeight} w-full ${maxWidth} overflow-x-hidden overflow-y-auto rounded-[2rem] bg-white p-8 text-sm shadow-2xl md:text-base`}
         >
           <div className="mb-6">{header}</div>
           {children}
