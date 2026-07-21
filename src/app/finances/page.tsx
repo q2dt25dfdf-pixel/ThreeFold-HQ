@@ -1642,7 +1642,7 @@ function FinancesContent() {
           </div>
 
           {/* Money summary strip */}
-          <div className="grid grid-cols-3 gap-2 md:gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:gap-3">
             <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 md:p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Order total</p>
               <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currency.format(calcTotal(data))}</p>
