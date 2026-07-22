@@ -28,6 +28,7 @@ import { parseAmount } from "@/lib/invoiceCalc";
 import { businessTodayISO } from "@/lib/businessDate";
 import { getClientPortalBaseUrl } from "@/lib/publicUrl";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
+import { buildGmailComposeUrl } from "@/lib/gmail";
 
 type IntakeSnapshot = {
   contact_title?: string;
@@ -161,7 +162,9 @@ type Invoice = {
 type CommButton = {
   key: string;
   label: string;
-  message: string;
+  subject: string;
+  emailBody: string; // full body incl. the signature (for Gmail compose)
+  textBody: string;  // signature stripped, ends "- Threefold" (for Copy)
   disabled: boolean;
   disabledReason: string;
 };
@@ -328,27 +331,41 @@ function buildCommButtons(order: Order): CommButton[] {
   const items = order.items?.join(", ") || "";
   const due = order.estimatedDeliveryDate || "TBD";
 
+  // emailBody keeps the full signature (Gmail); textBody strips it and ends "- Threefold" (Copy).
+  const emailBody = (content: string) => `Hi ${client},\n\n${content}\n\n${TF_PLAIN_CLOSING}`;
+  const textBody = (content: string) => `Hi ${client},\n\n${content}\n\n- Threefold`;
+
   // Note: the pre-order messages (Quote Follow-Up, Deposit Reminder, Design Approval Request)
   // now live on the CRM lead detail modal, stage-gated, since they happen before an order exists.
+  const productionContent = `Great news - your ${name} order${qty ? ` (${qty}${items ? " " + items : ""})` : ""} is currently in production. Estimated delivery: ${due}. We'll keep you posted!`;
+  const deliveryContent = `Your ${name} order has been delivered! We hope everything looks great. Please reach out if there's anything we can help with.\n\nThank you for working with us!`;
+  const reorderContent = `We loved working on ${name} with you! Whenever you're ready for your next project, just let us know and we'll get a quote over right away.`;
+
   return [
     {
       key: "production-update",
-      label: "Copy Production Update",
-      message: `Hi ${client},\n\nGreat news — your ${name} order${qty ? ` (${qty}${items ? " " + items : ""})` : ""} is currently in production. Estimated delivery: ${due}. We'll keep you posted!\n\n${TF_PLAIN_CLOSING}`,
+      label: "Production Update",
+      subject: `Production update on your ${name} order`,
+      emailBody: emailBody(productionContent),
+      textBody: textBody(productionContent),
       disabled: !hasBase || !hasItems,
       disabledReason: !hasBase ? "Missing client or order name" : "Missing quantity or items",
     },
     {
       key: "delivery-confirm",
-      label: "Copy Delivery Confirmation",
-      message: `Hi ${client},\n\nYour ${name} order has been delivered! We hope everything looks great. Please reach out if there's anything we can help with.\n\nThank you for working with us!\n\n${TF_PLAIN_CLOSING}`,
+      label: "Delivery Confirmation",
+      subject: `Your ${name} order has been delivered`,
+      emailBody: emailBody(deliveryContent),
+      textBody: textBody(deliveryContent),
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
     {
       key: "reorder-checkin",
-      label: "Copy Reorder Check-In",
-      message: `Hi ${client},\n\nWe loved working on ${name} with you! Whenever you're ready for your next project, just let us know and we'll get a quote over right away.\n\n${TF_PLAIN_CLOSING}`,
+      label: "Reorder Check-In",
+      subject: `Ready for your next project?`,
+      emailBody: emailBody(reorderContent),
+      textBody: textBody(reorderContent),
       disabled: !hasBase,
       disabledReason: "Missing client or order name",
     },
@@ -833,12 +850,19 @@ export default function OrderDetailPage() {
   const handleCopy = async (btn: CommButton) => {
     if (btn.disabled) return;
     try {
-      await navigator.clipboard.writeText(btn.message);
+      await navigator.clipboard.writeText(btn.textBody);
       setCopiedKey(btn.key);
       window.setTimeout(() => setCopiedKey(null), 2000);
     } catch {
       // clipboard unavailable
     }
+  };
+
+  const handleOpenGmail = (btn: CommButton) => {
+    if (btn.disabled) return;
+    const to = (invoice?.client_email ?? "").trim();
+    if (!to) return;
+    window.open(buildGmailComposeUrl({ to, subject: btn.subject, body: btn.emailBody }), "_blank");
   };
 
   const handleDesignImageUpload = async (versionId: string, file: File) => {
@@ -2394,28 +2418,46 @@ export default function OrderDetailPage() {
       <div className="flex flex-col divide-y divide-slate-100">
         {commButtons.map((btn) => {
           const copied = copiedKey === btn.key;
+          const noEmail = !(invoice?.client_email ?? "").trim();
+          const gmailDisabled = btn.disabled || noEmail;
           return (
-            <div key={btn.key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+            <div key={btn.key} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className={`break-words text-xs font-medium ${btn.disabled ? "text-slate-400" : "text-slate-700"}`}>{btn.label}</p>
-                {btn.disabled && <p className="mt-0.5 text-[10px] text-slate-400">Missing order data</p>}
+                {btn.disabled && <p className="mt-0.5 text-[10px] text-slate-400">{btn.disabledReason}</p>}
               </div>
-              <button
-                type="button"
-                disabled={btn.disabled}
-                title={btn.disabled ? btn.disabledReason : undefined}
-                onClick={() => handleCopy(btn)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
-                  btn.disabled
-                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
-                    : copied
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                }`}
-              >
-                {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                {copied ? "Copied" : "Copy"}
-              </button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={gmailDisabled}
+                  title={btn.disabled ? btn.disabledReason : noEmail ? "No email on file - use Copy" : undefined}
+                  onClick={() => handleOpenGmail(btn)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${
+                    gmailDisabled
+                      ? "cursor-not-allowed bg-slate-100 text-slate-300"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  }`}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open in Gmail
+                </button>
+                <button
+                  type="button"
+                  disabled={btn.disabled}
+                  title={btn.disabled ? btn.disabledReason : undefined}
+                  onClick={() => handleCopy(btn)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                    btn.disabled
+                      ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                      : copied
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
             </div>
           );
         })}
