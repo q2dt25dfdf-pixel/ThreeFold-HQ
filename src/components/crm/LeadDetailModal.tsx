@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Pin, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ClipboardCopy, Pin, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { businessTodayISO } from "@/lib/businessDate";
+import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
 import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch, NoteEntry } from "./types";
 import { pipelineStages, LOST_REASONS, flattenNotes } from "./types";
 
@@ -237,6 +238,9 @@ function NoteCard({ note, onTogglePin, onDelete }: { note: NoteEntry; onTogglePi
 export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete, matchingClientId, duplicateMatch, onViewClient, onQuestionnaire, onSendDesign, onSendQuote, onSendDepositRequest, onCompleteFollowUp, canCompleteFollowUp = false, onArchive, onUnarchive }: Props) {
   const [data, setData] = useState<Lead | null>(null);
   const { saveState, resetSaveState, runSave } = useSaveState();
+
+  // Quick Communications: copy-to-clipboard state (which button most recently copied).
+  const [copiedCommKey, setCopiedCommKey] = useState<string | null>(null);
 
   // Activity log form state
   const [logType, setLogType] = useState<CommunicationEntry["type"]>("Call");
@@ -468,6 +472,47 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   } else if (current.stage === "Quote Approved" && onSendDepositRequest) {
     nextStep = { title: "Send the deposit request.", button: "Send Deposit Request", onClick: () => onSendDepositRequest(current), reason: showReason ? `Quote approved ${phrase}. Nothing has gone out since.` : null };
   }
+
+  // ── Quick Communications ─────────────────────────────────────────────────────
+  // Pre-order copy-to-clipboard messages, one per pipeline stage (they happen before an
+  // order exists, so they read from the LEAD, not an order). {client} greets the contact
+  // (falls back to the company); {name} references the company/project.
+  const commClientRaw = (current.contact || current.company || "").trim();
+  const commNameRaw = (current.company || "").trim();
+  const commHasBase = Boolean(commClientRaw && commNameRaw);
+  const commClient = commClientRaw || "[client]";
+  const commName = commNameRaw || "[project]";
+  const commButtons: { key: string; label: string; message: string }[] =
+    current.stage === "Client Review"
+      ? [{
+          key: "design-approval",
+          label: "Design Approval Request",
+          message: `Hi ${commClient},\n\nYour design for ${commName} is ready for review! Please take a look and let us know if you'd like any changes, or reply with your approval and we'll move into production.\n\n${TF_PLAIN_CLOSING}`,
+        }]
+      : current.stage === "Quote Sent"
+      ? [{
+          key: "quote-followup",
+          label: "Quote Follow-Up",
+          message: `Hi ${commClient},\n\nJust following up on the quote we sent for ${commName}. Please let us know if you have any questions or are ready to move forward - we'd love to get this started for you!\n\n${TF_PLAIN_CLOSING}`,
+        }]
+      : current.stage === "Quote Approved"
+      ? [{
+          key: "deposit-reminder",
+          label: "Deposit Reminder",
+          message: `Hi ${commClient},\n\nA quick reminder that the deposit for your ${commName} order is due to lock in your production slot. Once received, we'll get started right away!\n\n${TF_PLAIN_CLOSING}`,
+        }]
+      : [];
+
+  const handleCommCopy = async (key: string, message: string) => {
+    if (!commHasBase) return;
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopiedCommKey(key);
+      window.setTimeout(() => setCopiedCommKey(null), 2000);
+    } catch {
+      // clipboard unavailable
+    }
+  };
 
   // Exception / secondary actions kept in the footer exactly as today.
   const showSendRevisedQuote = current.stage === "Quote Sent" && onSendQuote;
@@ -792,6 +837,43 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
             {!hasEmail && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
                 No email on file. You can&apos;t send a design or quote to this lead until one is added.
+              </div>
+            )}
+
+            {/* Quick Communications - stage-gated copy-to-clipboard messages. Hidden entirely
+                when the current stage has no message (only Client Review / Quote Sent / Quote Approved). */}
+            {commButtons.length > 0 && (
+              <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4">
+                <h3 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Quick Communications</h3>
+                <div className="flex flex-col divide-y divide-slate-100">
+                  {commButtons.map((btn) => {
+                    const copied = copiedCommKey === btn.key;
+                    return (
+                      <div key={btn.key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className={`break-words text-xs font-medium ${!commHasBase ? "text-slate-400" : "text-slate-700"}`}>{btn.label}</p>
+                          {!commHasBase && <p className="mt-0.5 text-[10px] text-slate-400">Missing client or project name</p>}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!commHasBase}
+                          title={!commHasBase ? "Missing client or project name" : undefined}
+                          onClick={() => void handleCommCopy(btn.key, btn.message)}
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
+                            !commHasBase
+                              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                              : copied
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
