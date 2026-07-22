@@ -328,28 +328,9 @@ function buildCommButtons(order: Order): CommButton[] {
   const items = order.items?.join(", ") || "";
   const due = order.estimatedDeliveryDate || "TBD";
 
+  // Note: the pre-order messages (Quote Follow-Up, Deposit Reminder, Design Approval Request)
+  // now live on the CRM lead detail modal, stage-gated, since they happen before an order exists.
   return [
-    {
-      key: "quote-followup",
-      label: "Copy Quote Follow-Up",
-      message: `Hi ${client},\n\nJust following up on the quote we sent for ${name}. Please let us know if you have any questions or are ready to move forward — we'd love to get this started for you!\n\n${TF_PLAIN_CLOSING}`,
-      disabled: !hasBase,
-      disabledReason: "Missing client or order name",
-    },
-    {
-      key: "deposit-reminder",
-      label: "Copy Deposit Reminder",
-      message: `Hi ${client},\n\nA quick reminder that the deposit for your ${name} order is due to lock in your production slot. Once received, we'll get started right away!\n\n${TF_PLAIN_CLOSING}`,
-      disabled: !hasBase,
-      disabledReason: "Missing client or order name",
-    },
-    {
-      key: "design-approval",
-      label: "Copy Design Approval Request",
-      message: `Hi ${client},\n\nYour design for ${name} is ready for review! Please take a look and let us know if you'd like any changes, or reply with your approval and we'll move to production.\n\n${TF_PLAIN_CLOSING}`,
-      disabled: !hasBase,
-      disabledReason: "Missing client or order name",
-    },
     {
       key: "production-update",
       label: "Copy Production Update",
