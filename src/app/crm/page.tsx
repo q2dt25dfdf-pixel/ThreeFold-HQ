@@ -1387,6 +1387,9 @@ function CRMContent() {
           if (quoteLead) void handleQuoteSent(quoteLead, result, sender);
           setQuoteLead(null);
         }}
+        onAddressSave={(lead, address) =>
+          void saveLead({ ...lead, companyProfile: { ...lead.companyProfile, address } })
+        }
       />
 
       <SendDepositModal
