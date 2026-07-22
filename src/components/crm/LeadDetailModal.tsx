@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, ClipboardCopy, Pin, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ClipboardCopy, ExternalLink, Pin, Trash2 } from "lucide-react";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { FieldError } from "@/components/AppState";
 import InlineEditTitle from "@/components/InlineEditTitle";
@@ -9,6 +9,7 @@ import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { businessTodayISO } from "@/lib/businessDate";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
+import { buildGmailComposeUrl } from "@/lib/gmail";
 import type { Lead, PipelineStage, CommunicationEntry, DuplicateMatch, NoteEntry } from "./types";
 import { pipelineStages, LOST_REASONS, flattenNotes } from "./types";
 
@@ -482,36 +483,54 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const commHasBase = Boolean(commClientRaw && commNameRaw);
   const commClient = commClientRaw || "[client]";
   const commName = commNameRaw || "[project]";
-  const commButtons: { key: string; label: string; message: string }[] =
+  const commNoEmail = !hasEmail;
+  // emailBody keeps the full signature (Gmail); textBody strips it and ends "- Threefold" (Copy).
+  const commEmailBody = (content: string) => `Hi ${commClient},\n\n${content}\n\n${TF_PLAIN_CLOSING}`;
+  const commTextBody = (content: string) => `Hi ${commClient},\n\n${content}\n\n- Threefold`;
+  const designContent = `Your design for ${commName} is ready for review! Please take a look and let us know if you'd like any changes, or reply with your approval and we'll move into production.`;
+  const quoteContent = `Just following up on the quote we sent for ${commName}. Please let us know if you have any questions or are ready to move forward - we'd love to get this started for you!`;
+  const depositContent = `A quick reminder that the deposit for your ${commName} order is due to lock in your production slot. Once received, we'll get started right away!`;
+  const commButtons: { key: string; label: string; subject: string; emailBody: string; textBody: string }[] =
     current.stage === "Client Review"
       ? [{
           key: "design-approval",
           label: "Design Approval Request",
-          message: `Hi ${commClient},\n\nYour design for ${commName} is ready for review! Please take a look and let us know if you'd like any changes, or reply with your approval and we'll move into production.\n\n${TF_PLAIN_CLOSING}`,
+          subject: `Your ${commName} design is ready for review`,
+          emailBody: commEmailBody(designContent),
+          textBody: commTextBody(designContent),
         }]
       : current.stage === "Quote Sent"
       ? [{
           key: "quote-followup",
           label: "Quote Follow-Up",
-          message: `Hi ${commClient},\n\nJust following up on the quote we sent for ${commName}. Please let us know if you have any questions or are ready to move forward - we'd love to get this started for you!\n\n${TF_PLAIN_CLOSING}`,
+          subject: `Following up on your ${commName} quote`,
+          emailBody: commEmailBody(quoteContent),
+          textBody: commTextBody(quoteContent),
         }]
       : current.stage === "Quote Approved"
       ? [{
           key: "deposit-reminder",
           label: "Deposit Reminder",
-          message: `Hi ${commClient},\n\nA quick reminder that the deposit for your ${commName} order is due to lock in your production slot. Once received, we'll get started right away!\n\n${TF_PLAIN_CLOSING}`,
+          subject: `Deposit reminder for your ${commName} order`,
+          emailBody: commEmailBody(depositContent),
+          textBody: commTextBody(depositContent),
         }]
       : [];
 
-  const handleCommCopy = async (key: string, message: string) => {
+  const handleCommCopy = async (key: string, textBody: string) => {
     if (!commHasBase) return;
     try {
-      await navigator.clipboard.writeText(message);
+      await navigator.clipboard.writeText(textBody);
       setCopiedCommKey(key);
       window.setTimeout(() => setCopiedCommKey(null), 2000);
     } catch {
       // clipboard unavailable
     }
+  };
+
+  const handleCommGmail = (subject: string, emailBody: string) => {
+    if (!commHasBase || commNoEmail) return;
+    window.open(buildGmailComposeUrl({ to: (current.email ?? "").trim(), subject, body: emailBody }), "_blank");
   };
 
   // Exception / secondary actions kept in the footer exactly as today.
@@ -848,28 +867,45 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
                 <div className="flex flex-col divide-y divide-slate-100">
                   {commButtons.map((btn) => {
                     const copied = copiedCommKey === btn.key;
+                    const gmailDisabled = !commHasBase || commNoEmail;
                     return (
-                      <div key={btn.key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div key={btn.key} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className={`break-words text-xs font-medium ${!commHasBase ? "text-slate-400" : "text-slate-700"}`}>{btn.label}</p>
                           {!commHasBase && <p className="mt-0.5 text-[10px] text-slate-400">Missing client or project name</p>}
                         </div>
-                        <button
-                          type="button"
-                          disabled={!commHasBase}
-                          title={!commHasBase ? "Missing client or project name" : undefined}
-                          onClick={() => void handleCommCopy(btn.key, btn.message)}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
-                            !commHasBase
-                              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
-                              : copied
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                          }`}
-                        >
-                          {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                          {copied ? "Copied" : "Copy"}
-                        </button>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={gmailDisabled}
+                            title={!commHasBase ? "Missing client or project name" : commNoEmail ? "No email on file - use Copy" : undefined}
+                            onClick={() => handleCommGmail(btn.subject, btn.emailBody)}
+                            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${
+                              gmailDisabled
+                                ? "cursor-not-allowed bg-slate-100 text-slate-300"
+                                : "bg-slate-900 text-white hover:bg-slate-800"
+                            }`}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Open in Gmail
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!commHasBase}
+                            title={!commHasBase ? "Missing client or project name" : undefined}
+                            onClick={() => void handleCommCopy(btn.key, btn.textBody)}
+                            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                              !commHasBase
+                                ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                                : copied
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                            }`}
+                          >
+                            {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
