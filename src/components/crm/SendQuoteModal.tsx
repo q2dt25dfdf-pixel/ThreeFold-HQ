@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, Loader2, Plus, Send, X } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import SenderPicker, { type Sender } from "@/components/SenderPicker";
 import { openGmailDraftOrFallback } from "@/lib/emailCompose";
 import { TF_PLAIN_CLOSING } from "@/lib/emailSignature";
@@ -37,6 +38,9 @@ interface Props {
   lead: Lead | null;
   onClose: () => void;
   onSent: (result: QuoteResult, sender: string) => void;
+  // Persist an inline-edited delivery address back to the lead (single source of truth).
+  // Reuses the parent's existing lead-save path; fired on blur / autocomplete select only.
+  onAddressSave?: (lead: Lead, address: string) => void;
 }
 
 type Step = "details" | "generating" | "preview" | "sending" | "sent" | "error";
@@ -62,8 +66,11 @@ function fmtDate(iso: string) {
   });
 }
 
-export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
+export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressSave }: Props) {
   const [step, setStep] = useState<Step>("details");
+  // Delivery address, inline-editable; seeded from the lead and re-seeded when the modal
+  // opens / the lead changes. Drives the tax preview, the send gate, and the generate payload.
+  const [addressText, setAddressText] = useState(lead?.companyProfile?.address ?? "");
   const [lineItems, setLineItems] = useState<QuoteItem[]>([newItem()]);
   const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
   const [emailTo, setEmailTo] = useState("");
@@ -97,6 +104,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
     setDepositMinPct(50);
     setDepositCustom(false);
     setEmailTo(lead.email ?? "");
+    setAddressText(lead.companyProfile?.address ?? "");
   }, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateItem = (idx: number, field: keyof QuoteItem, value: string | number) => {
@@ -166,7 +174,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   // modal already sends to /api/quote/generate. This is display-only; the server remains the
   // source of truth and still computes/stores the rate itself. getSalesTaxRateForAddress
   // handles the fallback to the 0.09375 default (with a warning) when no ZIP resolves.
-  const taxLookup = getSalesTaxRateForAddress({ clientAddressText: lead?.companyProfile?.address ?? "" });
+  const taxLookup = getSalesTaxRateForAddress({ clientAddressText: addressText });
   const taxRate = taxLookup.rate;
 
   // Discount (client-side, using the shared lib helpers — no local math).
@@ -193,8 +201,18 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
   // (lead.companyProfile.address) - the SAME clientAddressText passed to /api/quote/generate -
   // and the business ships there. "Valid" == the tax calc will resolve a ZIP, checked with the
   // EXACT parser the tax lookup uses (zipFromText). Block the quote until that address has a ZIP.
-  const addressHasZip = Boolean(zipFromText(lead?.companyProfile?.address ?? ""));
+  const addressHasZip = Boolean(zipFromText(addressText));
   const canPreview = hasValidItems && !discountLabelMissing && !discountZeroesTotal && addressHasZip;
+
+  // Persist an inline address edit back to the lead (single source of truth) via the parent's
+  // existing save path. Fired on blur / autocomplete select only (not per keystroke). No-ops when
+  // unchanged. The generate payload uses addressText directly, so tax stays correct regardless.
+  const saveAddress = (value: string) => {
+    if (!lead) return;
+    const next = value.trim();
+    if (next === (lead.companyProfile?.address ?? "").trim()) return;
+    onAddressSave?.(lead, next);
+  };
 
   const handlePreviewEmail = async () => {
     if (!lead || !canPreview) return;
@@ -247,7 +265,7 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
         leadId: lead.id,
         clientName: lead.company,
         clientEmail: lead.email,
-        clientAddressText: lead.companyProfile?.address ?? "",
+        clientAddressText: addressText,
         subtotal: computedSubtotal,
         discount,
         depositMinimum: depositMinPct / 100,
@@ -728,6 +746,22 @@ export default function SendQuoteModal({ open, lead, onClose, onSent }: Props) {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Total</span>
               <span className="text-xl font-bold text-slate-950">{fmtCurrency(grandTotal)}</span>
             </div>
+          </div>
+
+          {/* Delivery address - inline editable; drives the sales-tax calc + the send gate.
+              Saved back to the lead on blur / autocomplete select. */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Delivery address (used for sales tax)
+            </label>
+            <AddressAutocomplete
+              value={addressText}
+              onChange={setAddressText}
+              onBlur={() => saveAddress(addressText)}
+              onSelect={(value) => { setAddressText(value); saveAddress(value); }}
+              placeholder="Street, city, state ZIP"
+              className="w-full min-w-0 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
+            />
           </div>
 
           {/* Minimum deposit — the least the client may pay when they approve */}
