@@ -107,7 +107,7 @@ export async function POST(request: Request) {
 
       const { error: orderError } = await supabase
         .from('orders')
-        .insert({ id: orderId, data: orderData, updated_at: now })
+        .insert({ id: orderId, data: orderData })
 
       if (orderError) {
         console.error('Supabase order insert error:', orderError)
