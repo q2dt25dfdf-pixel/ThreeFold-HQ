@@ -55,7 +55,6 @@ interface IntakeSummary {
   meaning: string
   style: string
   colors: string
-  notes: string
   submitted_at: string
   files: IntakeFile[]
 }
@@ -255,6 +254,7 @@ export default function PortalPage() {
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [briefOpen, setBriefOpen] = useState(false)
 
   useEffect(() => {
     const t = window.location.pathname.split('/').pop() || ''
@@ -268,6 +268,14 @@ export default function PortalPage() {
       .catch(() => setError('Failed to load portal'))
       .finally(() => setLoading(false))
   }, [])
+
+  // Close the brief popup on Escape (only bound while the popup is open)
+  useEffect(() => {
+    if (!briefOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setBriefOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [briefOpen])
 
   if (loading) return (
     <div style={s.page}>
@@ -691,77 +699,88 @@ export default function PortalPage() {
             ['STYLE DIRECTION', snap.style],
             ['COLOR PREFERENCES', snap.colors],
           ].filter(([, v]) => !!v) as [string, string][]
-          const hasContent = snap.company_description || orderFields.length > 0 || designFields.length > 0 || snap.notes || snap.files.length > 0
+          const hasContent = snap.company_description || orderFields.length > 0 || designFields.length > 0 || snap.files.length > 0
           if (!hasContent) return null
           return (
             <>
               <div style={s.rule} />
               <div style={{ marginBottom: '4px' }}>
                 <div style={s.eyebrow}>YOUR SUBMITTED BRIEF</div>
-                {snap.submitted_at && (
-                  <div style={{ fontSize: '12px', color: C.textMuted, letterSpacing: '0.06em', marginBottom: '32px' }}>
-                    Submitted {new Date(snap.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </div>
-                )}
-                {snap.company_description && (
-                  <div style={{ marginBottom: '36px' }}>
-                    <div style={s.intakeSubLabel}>COMPANY OVERVIEW</div>
-                    <div style={{ fontSize: '15px', color: C.textSecondary, lineHeight: 1.75 }}>{snap.company_description}</div>
-                  </div>
-                )}
-                {orderFields.length > 0 && (
-                  <div style={{ marginBottom: '36px' }}>
-                    <div style={s.intakeSubLabel}>ORDER NEEDS</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                      {orderFields.map(([k, v]) => (
-                        <div key={k} className="po-brief-group">
-                          <div className="po-brief-label">{k}</div>
-                          <div style={{ fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 }}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {designFields.length > 0 && (
-                  <div style={{ marginBottom: '36px' }}>
-                    <div style={s.intakeSubLabel}>DESIGN DIRECTION</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                      {designFields.map(([k, v]) => (
-                        <div key={k} className="po-brief-group">
-                          <div className="po-brief-label">{k}</div>
-                          <div style={{ fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 }}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {snap.notes && (
-                  <div style={{ marginBottom: '36px' }}>
-                    <div style={s.intakeSubLabel}>NOTES &amp; INSPIRATION</div>
-                    <div style={s.notesBlock}>{snap.notes}</div>
-                  </div>
-                )}
-                {snap.files.length > 0 && (
-                  <div style={{ marginBottom: '36px' }}>
-                    <div style={s.intakeSubLabel}>SUBMITTED FILES</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {snap.files.map(f => (
-                        <div key={f.id} style={s.intakeFileRow}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: C.textPrimary, letterSpacing: '0.02em', marginBottom: '2px' }}>{f.name}</div>
-                            <div style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em' }}>{f.category.toUpperCase()} · {fmtBytes(f.size)}</div>
-                          </div>
-                          {f.signed_url ? (
-                            <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewFullLink}>VIEW →</a>
-                          ) : (
-                            <span style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em', flexShrink: 0 }}>Unavailable</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <button type="button" onClick={() => setBriefOpen(true)} style={s.btnOutline}>
+                  View your submitted brief →
+                </button>
               </div>
+              {briefOpen && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Your submitted brief"
+                  onClick={() => setBriefOpen(false)}
+                  style={s.modalBackdrop}
+                >
+                  <div onClick={(e) => e.stopPropagation()} style={s.modalCard}>
+                    <button type="button" onClick={() => setBriefOpen(false)} aria-label="Close" style={s.modalClose}>&times;</button>
+                    <div style={s.eyebrow}>YOUR SUBMITTED BRIEF</div>
+                    {snap.submitted_at && (
+                      <div style={{ fontSize: '12px', color: C.textMuted, letterSpacing: '0.06em', marginBottom: '32px' }}>
+                        Submitted {new Date(snap.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    )}
+                    {snap.company_description && (
+                      <div style={{ marginBottom: '36px' }}>
+                        <div style={s.intakeSubLabel}>COMPANY OVERVIEW</div>
+                        <div style={{ fontSize: '15px', color: C.textSecondary, lineHeight: 1.75 }}>{snap.company_description}</div>
+                      </div>
+                    )}
+                    {orderFields.length > 0 && (
+                      <div style={{ marginBottom: '36px' }}>
+                        <div style={s.intakeSubLabel}>ORDER NEEDS</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                          {orderFields.map(([k, v]) => (
+                            <div key={k} className="po-brief-group">
+                              <div className="po-brief-label">{k}</div>
+                              <div style={{ fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {designFields.length > 0 && (
+                      <div style={{ marginBottom: '36px' }}>
+                        <div style={s.intakeSubLabel}>DESIGN DIRECTION</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                          {designFields.map(([k, v]) => (
+                            <div key={k} className="po-brief-group">
+                              <div className="po-brief-label">{k}</div>
+                              <div style={{ fontSize: '15px', fontWeight: 500, color: C.textSecondary, lineHeight: 1.65 }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {snap.files.length > 0 && (
+                      <div>
+                        <div style={s.intakeSubLabel}>SUBMITTED FILES</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {snap.files.map(f => (
+                            <div key={f.id} style={s.intakeFileRow}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: '13px', fontWeight: 600, color: C.textPrimary, letterSpacing: '0.02em', marginBottom: '2px' }}>{f.name}</div>
+                                <div style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em' }}>{f.category.toUpperCase()} · {fmtBytes(f.size)}</div>
+                              </div>
+                              {f.signed_url ? (
+                                <a href={f.signed_url} target="_blank" rel="noreferrer" style={s.viewFullLink}>VIEW →</a>
+                              ) : (
+                                <span style={{ fontSize: '10px', color: C.textMuted, letterSpacing: '0.12em', flexShrink: 0 }}>Unavailable</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )
         })()}
@@ -867,6 +886,27 @@ const s: Record<string, React.CSSProperties> = {
     padding: '13px 24px', textDecoration: 'none', borderRadius: '999px',
     flexShrink: 1, whiteSpace: 'normal',
     maxWidth: '100%', boxSizing: 'border-box', textAlign: 'center',
+  },
+
+  // ── Brief popup ────────────────────────────────────────────────────────────
+  modalBackdrop: {
+    position: 'fixed', inset: 0, zIndex: 1000,
+    background: 'rgba(20, 24, 20, 0.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: '20px',
+  },
+  modalCard: {
+    position: 'relative', boxSizing: 'border-box',
+    width: '100%', maxWidth: '640px', maxHeight: '85vh', overflowY: 'auto',
+    background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: '12px',
+    boxShadow: C.shadow, padding: '44px 32px 36px',
+  },
+  modalClose: {
+    position: 'absolute', top: '14px', right: '16px',
+    width: '36px', height: '36px', borderRadius: '50%', padding: 0,
+    border: `1px solid ${C.border}`, background: C.bg, color: C.textSecondary,
+    fontSize: '22px', lineHeight: 1, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
 
   // ── Questions card ─────────────────────────────────────────────────────────
