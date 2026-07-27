@@ -83,6 +83,24 @@ const INV_CSS = `
     .dr-stack .portal-col-side { order: -1; margin-top: 0; }
     .dr-stack .portal-col-main { margin-top: 48px; }
   }
+  @media print {
+    /* Clean white document, no screen chrome */
+    html, body { background: #ffffff !important; }
+    .portal-outer { max-width: 100% !important; padding: 0 !important; }
+    /* Stack to a single readable column */
+    .portal-columns { display: block !important; }
+    .portal-col-side { margin-top: 28px !important; }
+    /* Flatten cards for ink economy; keep each card intact across pages */
+    .dk-card, .dk-card-elevated {
+      box-shadow: none !important;
+      border: 1px solid rgba(0,0,0,0.2) !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    /* Hide interactive / non-document controls (Download button, pay panel, toggle) */
+    .no-print { display: none !important; }
+    @page { margin: 16mm; }
+  }
 `;
 
 export default function InvoicePage() {
@@ -122,6 +140,19 @@ export default function InvoicePage() {
       .catch(() => setError("Failed to load invoice"))
       .finally(() => setLoading(false));
   }, []);
+
+  // Set a clean document title so browser "Save as PDF" pre-fills a nice filename.
+  useEffect(() => {
+    if (!data) return;
+    const safe = (v: string) => (v || "").trim().replace(/\s+/g, "-").replace(/[^A-Za-z0-9-]/g, "");
+    const client = safe(data.client_name || data.contact_name || "Client") || "Client";
+    const date = new Date().toISOString().slice(0, 10);
+    const isDepReceipt = data.doc_kind === "receipt";
+    const paidFull = data.final_paid || (data.deposit_paid && data.balance_remaining <= 0);
+    const num = safe((isDepReceipt ? data.deposit_request_number : data.invoice_number) || "NA") || "NA";
+    const prefix = isDepReceipt ? "Deposit-Receipt" : paidFull ? "Receipt" : "Invoice";
+    document.title = `${prefix}_${num}_${client}_${date}`;
+  }, [data]);
 
   const handlePay = async (method: "card" | "bank") => {
     if (!invoiceToken || checkoutLoading) return;
@@ -252,6 +283,28 @@ export default function InvoicePage() {
   return (
     <PortalShell>
       <style>{INV_CSS}</style>
+
+      {/* Download PDF — founder records; hidden when printing */}
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          style={{
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: C.textSecondary,
+            background: "none",
+            border: `1px solid ${C.border}`,
+            borderRadius: "999px",
+            padding: "8px 16px",
+            cursor: "pointer",
+          }}
+        >
+          Download PDF
+        </button>
+      </div>
 
       {/* Header */}
       <div style={s.headerBlock}>
@@ -430,6 +483,7 @@ export default function InvoicePage() {
                 <>
                   <button
                     onClick={() => setShowBreakdown((v) => !v)}
+                    className="no-print"
                     style={s.breakdownToggle}
                   >
                     {isDepositReceipt ? "" : showBreakdown ? "▾ " : "▸ "}VIEW FULL PRICING BREAKDOWN
@@ -567,7 +621,7 @@ export default function InvoicePage() {
               </div>
             </div>
           ) : (
-            <div className="dk-card">
+            <div className="dk-card no-print">
               <PaymentOptionsPanel
                 amount={data.balance_remaining}
                 label="BALANCE NOW DUE"
