@@ -735,12 +735,6 @@ export default function PortalPage() {
                     </div>
                   </div>
                 )}
-                {snap.notes && (
-                  <div style={{ marginBottom: '36px' }}>
-                    <div style={s.intakeSubLabel}>NOTES &amp; INSPIRATION</div>
-                    <div style={s.notesBlock}>{snap.notes}</div>
-                  </div>
-                )}
                 {snap.files.length > 0 && (
                   <div style={{ marginBottom: '36px' }}>
                     <div style={s.intakeSubLabel}>SUBMITTED FILES</div>
