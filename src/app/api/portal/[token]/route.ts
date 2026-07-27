@@ -217,7 +217,6 @@ export async function GET(
       meaning: snap.meaning || '',
       style: snap.style || '',
       colors: snap.colors || '',
-      notes: snap.notes || '',
       submitted_at: String(d.created_at || ''),
       files,
     }
