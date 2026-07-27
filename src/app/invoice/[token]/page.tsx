@@ -99,6 +99,9 @@ const INV_CSS = `
     }
     /* Hide interactive / non-document controls (Download button, pay panel, toggle) */
     .no-print { display: none !important; }
+    /* Always show the full pricing breakdown (subtotal/discount/SALES TAX/total) on the
+       saved PDF, even when it is collapsed on screen. Overrides the inline display:none. */
+    .breakdown-print { display: block !important; }
     @page { margin: 16mm; }
   }
 `;
@@ -488,8 +491,10 @@ export default function InvoicePage() {
                   >
                     {isDepositReceipt ? "" : showBreakdown ? "▾ " : "▸ "}VIEW FULL PRICING BREAKDOWN
                   </button>
-                  {showBreakdown && (
-                    <div style={s.breakdownExpanded}>
+                  <div
+                    className="breakdown-print"
+                    style={{ ...s.breakdownExpanded, display: showBreakdown ? "block" : "none" }}
+                  >
                       {hasSubtotal && (
                         <div style={s.detailRow}>
                           <span style={s.detailKey}>SUBTOTAL</span>
@@ -514,8 +519,7 @@ export default function InvoicePage() {
                         <span style={{ ...s.detailKey, fontWeight: 700 }}>TOTAL</span>
                         <span style={{ ...s.detailVal, fontWeight: 700 }}>{fmt(grandTotalDisplay)}</span>
                       </div>
-                    </div>
-                  )}
+                  </div>
                 </>
               )}
             </div>
