@@ -84,25 +84,33 @@ const INV_CSS = `
     .dr-stack .portal-col-main { margin-top: 48px; }
   }
   @media print {
-    /* Clean white document, no screen chrome */
-    html, body { background: #ffffff !important; }
+    /* Clean white document, no screen chrome. Also drop any forced full-viewport height so
+       the page collapses to content and does not spill onto blank sheets. */
+    html, body { background: #ffffff !important; min-height: 0 !important; height: auto !important; }
+    /* The PortalShell wrapper sets an inline min-height:100vh (fine on screen, but it reserves
+       a whole blank page in print). Neutralize it via its inline style, no component change. */
+    [style*="100vh"] { min-height: 0 !important; height: auto !important; }
     .portal-outer { max-width: 100% !important; padding: 0 !important; }
-    /* Stack to a single readable column */
+    /* Stack to one column; no leftover gap where the hidden side column / pay panel used to be. */
     .portal-columns { display: block !important; }
-    .portal-col-side { margin-top: 28px !important; }
-    /* Flatten cards for ink economy; keep each card intact across pages */
+    .portal-col-side { margin-top: 0 !important; }
+    /* Flatten cards for ink economy. Do NOT avoid-break whole cards: that pushed large sections
+       onto fresh pages and left the prior page half-empty. Let them flow and break naturally. */
     .dk-card, .dk-card-elevated {
       box-shadow: none !important;
       border: 1px solid rgba(0,0,0,0.2) !important;
-      break-inside: avoid;
-      page-break-inside: avoid;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+      margin-bottom: 16px !important;
     }
+    /* Keep small atomic rows (line items / summary rows) from splitting across a page break. */
+    .print-keep { break-inside: avoid; page-break-inside: avoid; }
     /* Hide interactive / non-document controls (Download button, pay panel, toggle) */
     .no-print { display: none !important; }
     /* Always show the full pricing breakdown (subtotal/discount/SALES TAX/total) on the
        saved PDF, even when it is collapsed on screen. Overrides the inline display:none. */
     .breakdown-print { display: block !important; }
-    @page { margin: 16mm; }
+    @page { margin: 12mm; }
   }
 `;
 
@@ -369,7 +377,7 @@ export default function InvoicePage() {
               </div>
               <div style={s.detailList}>
                 {data.line_items.map((item, i) => (
-                  <div key={i} style={s.detailRow}>
+                  <div key={i} className="print-keep" style={s.detailRow}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={s.detailKey}>{item.name.toUpperCase()}</div>
                       {item.description && (
