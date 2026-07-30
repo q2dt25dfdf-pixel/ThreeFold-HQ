@@ -25,7 +25,7 @@ export const PRODUCT_CATALOG: ProductCatalogEntry[] = [
     name: "Custom Performance Dri-Fit Tee",
     description:
       "Premium moisture-wicking performance apparel custom designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
-    unitPrice: 40,
+    unitPrice: 35,
     blank: "DSG Movement Tee",
     colors: ["Black", "White", "Navy", "Red", "Royal", "Charcoal", "Grey"],
   },
@@ -33,7 +33,7 @@ export const PRODUCT_CATALOG: ProductCatalogEntry[] = [
     name: "Custom Shirt",
     description:
       "Premium custom apparel designed around your company's identity, culture, and team. Includes original artwork, mockups, revisions, and production-ready graphics.",
-    unitPrice: 40,
+    unitPrice: 35,
     blank: "",
     colors: ["Black", "White", "Navy", "Red", "Royal", "Charcoal", "Grey"],
   },
