@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Copy, Loader2, Plus, Send, X } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
@@ -20,6 +20,11 @@ import { getSalesTaxRateForAddress, zipFromText } from "@/lib/tax-rates";
 import type { Lead, QuoteItem } from "./types";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { CurrencyInput } from "@/components/orders/OrderFormShared";
+import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { buildBlankSuggestions } from "@/lib/blankSuggestions";
+
+// Minimal row shape for reading historical blanks off past records.
+type BlankHistoryRow = { id: string; line_items?: { blank?: unknown }[] | null };
 
 interface QuoteResult {
   quoteId: string;
@@ -87,6 +92,20 @@ export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressS
   // Minimum deposit the client must pay at approval (percent of total). Default 50%.
   const [depositMinPct, setDepositMinPct] = useState(50);
   const [depositCustom, setDepositCustom] = useState(false);
+
+  // Blank-field suggestions: seed list + distinct blanks used on past quotes/orders/
+  // deposits. Free-text is unaffected; these only populate each row's <datalist>.
+  const { data: quoteHistory } = useSupabaseTable<BlankHistoryRow>("quotes", []);
+  const { data: orderHistory } = useSupabaseTable<BlankHistoryRow>("orders", []);
+  const { data: depositHistory } = useSupabaseTable<BlankHistoryRow>("deposit_requests", []);
+  const blankSuggestions = useMemo(
+    () =>
+      buildBlankSuggestions(
+        [quoteHistory, orderHistory, depositHistory],
+        PRODUCT_CATALOG.map((p) => p.blank),
+      ),
+    [quoteHistory, orderHistory, depositHistory],
+  );
 
   useEffect(() => {
     if (!open || !lead) return;
@@ -561,11 +580,11 @@ export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressS
                       className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
                       placeholder="e.g. Comfort Colors 1717"
                     />
-                    {product?.blank && (
-                      <datalist id={`blanks-${idx}`}>
-                        <option value={product.blank} />
-                      </datalist>
-                    )}
+                    <datalist id={`blanks-${idx}`}>
+                      {blankSuggestions.map((b) => (
+                        <option key={b} value={b} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Color breakdown</label>
