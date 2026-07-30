@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Archive, ArrowLeft, Check, ChevronRight, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, Plus, RotateCcw, Send, Trash2, User, X } from "lucide-react";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
+import { buildBlankSuggestions } from "@/lib/blankSuggestions";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
@@ -400,6 +401,19 @@ export default function OrderDetailPage() {
   // Loaded so the final-invoice greeting resolves from the SAME source as the Finances page
   // (shared resolveInvoiceContact: client contact, then lead contact).
   const { data: leads } = useSupabaseTable<{ id: string; contact?: string }>("crm_leads", []);
+
+  // Blank-field suggestions: seed list + distinct blanks used on past quotes/orders/
+  // deposits. Free-text is unaffected; these only populate each row's <datalist>.
+  const { data: quoteHistory } = useSupabaseTable<{ id: string; line_items?: { blank?: unknown }[] | null }>("quotes", []);
+  const { data: depositHistory } = useSupabaseTable<{ id: string; line_items?: { blank?: unknown }[] | null }>("deposit_requests", []);
+  const blankSuggestions = useMemo(
+    () =>
+      buildBlankSuggestions(
+        [quoteHistory, orders, depositHistory],
+        PRODUCT_CATALOG.map((p) => p.blank),
+      ),
+    [quoteHistory, orders, depositHistory],
+  );
 
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
   const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
@@ -1830,7 +1844,7 @@ export default function OrderDetailPage() {
                 <div className="mt-2">
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Blank</label>
                   <input type="text" list={`ord-blanks-${idx}`} value={li.blank ?? ""} onChange={(e) => updateLineItem(idx, { blank: e.target.value })} placeholder="e.g. DSG Movement Tee" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
-                  {product?.blank && <datalist id={`ord-blanks-${idx}`}><option value={product.blank} /></datalist>}
+                  <datalist id={`ord-blanks-${idx}`}>{blankSuggestions.map((b) => <option key={b} value={b} />)}</datalist>
                 </div>
                 <div className="mt-2">
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Color breakdown</label>
