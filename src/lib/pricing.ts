@@ -1,5 +1,5 @@
 export const INTERNAL_PRODUCT_PRICING = {
-  shirts: 40,
+  shirts: 35,
   hoodies: 65,
   jackets: 65,
   hats: 30,
