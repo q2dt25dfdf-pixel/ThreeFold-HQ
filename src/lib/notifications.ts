@@ -5,6 +5,7 @@ export type NotificationType =
   | 'deposit_received'
   | 'final_invoice_paid'
   | 'new_order'
+  | 'shop_order_created'
   | 'new_client'
   | 'new_lead'
   | 'quote_sent'

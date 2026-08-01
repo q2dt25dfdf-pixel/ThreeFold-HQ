@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ChevronLeft } from "lucide-react";
 
@@ -9,6 +10,7 @@ const sections = [
   { label: "Dashboard", href: "/" },
   { label: "CRM", href: "/crm" },
   { label: "Orders", href: "/orders" },
+  { label: "Shop Orders", href: "/shop-orders" },
   { label: "Clients", href: "/clients" },
   { label: "Vendors", href: "/vendors" },
   { label: "Finances", href: "/finances" },
@@ -31,6 +33,24 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // SHARED "new" badges (Shop Orders / Orders). One cheap fetch on mount; refetch only when a
+  // badged page marks itself seen (dispatches "tf-badges-refresh") — not on every navigation.
+  const [badges, setBadges] = useState<{ shopOrders: number; orders: number }>({ shopOrders: 0, orders: 0 });
+  const loadBadges = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const res = await fetch("/api/badges", { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
+      if (res.ok) setBadges(await res.json());
+    } catch { /* non-fatal */ }
+  }, []);
+  useEffect(() => {
+    loadBadges();
+    const onRefresh = () => loadBadges();
+    window.addEventListener("tf-badges-refresh", onRefresh);
+    return () => window.removeEventListener("tf-badges-refresh", onRefresh);
+  }, [loadBadges]);
+  const badgeFor = (href: string) => (href === "/shop-orders" ? badges.shopOrders : href === "/orders" ? badges.orders : 0);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -64,13 +84,18 @@ export default function Sidebar({
                   key={section.href}
                   href={section.href}
                   onClick={onNavigate}
-                  className={`block rounded-3xl px-4 py-3 text-sm font-semibold transition active:bg-white/10 ${
+                  className={`flex items-center justify-between rounded-3xl px-4 py-3 text-sm font-semibold transition active:bg-white/10 ${
                     active
                       ? "bg-slate-100 text-slate-950 shadow-md"
                       : "text-slate-300 hover:bg-white/5 hover:text-slate-50"
                   }`}
                 >
-                  {section.label}
+                  <span>{section.label}</span>
+                  {badgeFor(section.href) > 0 && (
+                    <span className="ml-2 inline-flex min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                      {badgeFor(section.href)}
+                    </span>
+                  )}
                 </Link>
               );
             })}
