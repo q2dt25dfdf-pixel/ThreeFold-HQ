@@ -26,10 +26,12 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
+        {/* iOS Add-to-Home-Screen uses THIS, not the manifest icons — the one that matters most on iPhone. */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Threefold HQ" />
-        <meta name="theme-color" content="#f4f4f5" />
+        <meta name="apple-mobile-web-app-title" content="HQ" />
+        <meta name="theme-color" content="#000000" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-zinc-100 antialiased`}
