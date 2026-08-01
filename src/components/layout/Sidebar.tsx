@@ -71,7 +71,7 @@ export default function Sidebar({
       <div className="flex min-h-full flex-col justify-between gap-8 px-6 py-8">
         <div>
           <div className="pb-6">
-            <img src="/logo.png" alt="Threefold Supply Co." width={1240} height={894} className="block h-auto w-full max-w-[210px]" />
+            <img src="/brand/threefold-logo.png" alt="Threefold Supply Co." width={1240} height={894} className="block h-auto w-full max-w-[210px]" />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white">Threefold HQ</h1>
             <p className="mt-3 text-sm text-slate-300">Made by three, worn by all.</p>
           </div>

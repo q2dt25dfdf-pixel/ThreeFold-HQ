@@ -7,21 +7,14 @@ import {
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
-  CircleDollarSign,
   ClipboardList,
   GitBranch,
-  Receipt,
   Users,
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,18 +23,13 @@ import {
 import { formatCurrency } from "@/lib/format";
 import type {
   AttentionItem,
-  AttentionSummary,
   ChartDatum,
   DashboardRecord,
   FollowUpLoadDatum,
-  RevenueProgressMetric,
   TaskLoadDatum,
 } from "@/lib/dashboardMetrics";
 import {
-  attentionSummary,
   followUpLoad,
-  invoiceHealth,
-  monthlyRevenueProgress,
   needsAttention,
   ordersByStatus,
   pipelineOverview,
@@ -58,29 +46,14 @@ type Props = {
 };
 
 const blue = "#2563eb";
-const blueSoft = "#60a5fa";
-const success = "#16a34a";
-const amber = "#f59e0b";
-const red = "#ef4444";
-const muted = "#64748b";
-
-const invoicePalette: Record<string, string> = {
-  Paid: success,
-  "Deposit Due": amber,
-  "Final Balance Due": blue,
-  Overdue: red,
-  Unpaid: muted,
-};
-
-const funnelPalette = ["#2563eb", "#315ee4", "#3f46c5", "#51359f", "#3f247b"];
 const workflowPalette = ["#2563eb", "#4f46e5", "#f59e0b", "#16a34a", "#64748b"];
-const cardShell = "group relative min-w-0 cursor-pointer overflow-hidden rounded-[1.65rem] border p-4 shadow-[0_22px_70px_rgba(15,23,42,0.12)] ring-1 ring-white/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_28px_80px_rgba(15,23,42,0.16)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 md:p-5";
-const lightCardSurface = "border-slate-900/10 bg-[radial-gradient(circle_at_85%_0%,rgba(37,99,235,0.09),transparent_32%),linear-gradient(180deg,#ffffff,#f8fafc)]";
-const chartFrameClass = "rounded-3xl border border-slate-200/70 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_10px_30px_rgba(15,23,42,0.06)]";
-const metricPanelClass = "rounded-3xl border border-slate-200/70 bg-white/75 px-4 py-3 shadow-sm";
-const labelClass = "text-xs font-semibold uppercase tracking-[0.18em] text-slate-400";
-const metricClass = "text-3xl font-bold tracking-[-0.05em] text-slate-950";
-const rowClass = "rounded-3xl border border-slate-200/70 bg-white/80 p-3 shadow-sm";
+// Match the revamped top section's flat, dense card style (bg-white, shadow-sm, ring-slate-100).
+const cardShell = "group relative min-w-0 cursor-pointer overflow-hidden rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 transition hover:ring-blue-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50";
+const chartFrameClass = "rounded-2xl border border-slate-200/70 bg-white/80 p-3";
+const metricPanelClass = "rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-2.5";
+const labelClass = "text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400";
+const metricClass = "text-2xl font-bold tracking-[-0.04em] text-slate-950";
+const rowClass = "rounded-2xl border border-slate-200/70 bg-slate-50 p-3";
 
 const toneStyles: Record<AttentionItem["tone"], string> = {
   red: "border-red-200 bg-red-50 text-red-700",
@@ -98,14 +71,13 @@ const toneLabels: Record<AttentionItem["tone"], string> = {
 function Card({
   title,
   href,
-  icon,
   children,
   className = "",
   actionLabel = "View",
 }: {
   title: string;
   href: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode; // accepted for call-site compatibility; header is icon-free now
   children: React.ReactNode;
   className?: string;
   actionLabel?: string;
@@ -124,29 +96,22 @@ function Card({
           openCard();
         }
       }}
-      className={`${cardShell} ${lightCardSurface} ${className}`}
+      className={`${cardShell} ${className}`}
     >
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-blue-300/70 to-transparent" />
-      <div className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
-      <div className="relative mb-4 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_22px_rgba(15,23,42,0.08)]">
-            {icon}
-          </span>
-          <h2 className="min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-slate-950 md:text-base">{title}</h2>
-        </div>
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.13em] text-slate-400">{title}</h2>
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             openCard();
           }}
-          className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white/90 px-3 text-xs font-semibold text-slate-500 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          className="ml-auto flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-blue-600 transition-colors hover:text-blue-700"
         >
-          {actionLabel} <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+          {actionLabel} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
         </button>
       </div>
-      <div className="relative">{children}</div>
+      <div>{children}</div>
     </section>
   );
 }
@@ -165,77 +130,9 @@ function StatusChip({ tone, children }: { tone: AttentionItem["tone"]; children:
 
 function EmptyState({ label, className = "" }: { label: string; className?: string }) {
   return (
-    <div className={`flex min-h-[180px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-4 text-center text-sm font-medium text-slate-500 ${className}`}>
+    <div className={`flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5 text-center text-[13px] font-medium text-slate-500 ${className}`}>
       {label}
     </div>
-  );
-}
-
-function RevenueProgressCard({ metric }: { metric: RevenueProgressMetric }) {
-  const deltaPositive = metric.delta >= 0;
-  const canShowTrend = metric.paymentDays >= 2 && metric.trend.some((point) => point.collected > 0);
-
-  return (
-    <Card
-      title="Monthly Revenue"
-      href="/finances"
-      icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
-      actionLabel="Finances"
-      className="sm:col-span-2 xl:col-span-1"
-    >
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className={labelClass}>Collected this month</p>
-            <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
-              <p className="text-4xl font-bold tracking-[-0.05em] text-slate-950 md:text-5xl">{formatCurrency(metric.collected)}</p>
-              <p className="pb-1 text-sm font-medium text-slate-500">of {formatCurrency(metric.goal)} goal</p>
-            </div>
-          </div>
-          <div className={`${metricPanelClass} text-right`}>
-            <p className="text-2xl font-bold tracking-[-0.04em] text-slate-950">{metric.percent}%</p>
-            <p className="text-xs font-medium text-slate-500">of goal</p>
-          </div>
-        </div>
-
-        <div className={`inline-flex max-w-full items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${deltaPositive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
-          {deltaPositive ? "+" : "-"}{formatCurrency(Math.abs(metric.delta))} vs last month
-        </div>
-
-        {canShowTrend ? (
-          <ChartFrame className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={metric.trend} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={blueSoft} stopOpacity={0.55} />
-                    <stop offset="100%" stopColor={blueSoft} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="rgba(148,163,184,0.14)" vertical={false} />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={22} tick={{ fontSize: 11, fill: "#94a3b8" }} />
-                <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${Number(value) / 1000}k`} tick={{ fontSize: 11, fill: "#94a3b8" }} width={42} />
-                <Tooltip
-                  cursor={{ stroke: "rgba(96,165,250,0.45)" }}
-                  contentStyle={{ borderRadius: 16, border: "1px solid rgba(148,163,184,0.24)", background: "#ffffff", color: "#0f172a" }}
-                  formatter={(value) => [formatCurrency(Number(value)), "Collected"]}
-                  labelFormatter={(label) => String(label)}
-                />
-                <Area type="monotone" dataKey="collected" stroke={blueSoft} strokeWidth={3} fill="url(#revenueGradient)" dot={false} activeDot={{ r: 5, fill: "#dbeafe", stroke: blue }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        ) : (
-          <ChartFrame className="flex min-h-[208px] flex-col justify-center p-5">
-            <p className="text-sm font-semibold text-slate-950">Revenue trend needs more payment history.</p>
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              The card is showing the real collected total, but there are not enough distinct paid dates this month to draw a trustworthy trend chart yet.
-            </p>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{formatCurrency(Math.max(metric.goal - metric.collected, 0))} remaining</p>
-          </ChartFrame>
-        )}
-      </div>
-    </Card>
   );
 }
 
@@ -335,71 +232,22 @@ function PipelineOverviewCard({ data }: { data: ChartDatum[] }) {
   );
 }
 
-function InvoiceHealthCard({ data }: { data: ChartDatum[] }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  const overdue = data.find((item) => item.name === "Overdue")?.value ?? 0;
-  return (
-    <Card title="Invoice Health" href="/finances" icon={<Receipt className="h-4 w-4" aria-hidden="true" />} actionLabel="Finances">
-      {total === 0 ? <EmptyState label="No invoice records yet." /> : (
-        <div className="grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center">
-          <ChartFrame className="relative h-44 p-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data} dataKey="value" nameKey="name" innerRadius="64%" outerRadius="86%" paddingAngle={5}>
-                  {data.map((item) => <Cell key={item.name} fill={invoicePalette[item.name] ?? muted} />)}
-                </Pie>
-                <Tooltip formatter={(value) => [value, "Invoices"]} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold tracking-[-0.05em] text-slate-950">{total}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Total</span>
-            </div>
-          </ChartFrame>
-          <div className="space-y-2">
-            {data.map((item) => (
-              <div key={item.name} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-3 py-2 text-xs shadow-sm">
-                <span className="flex min-w-0 items-center gap-2 text-slate-600">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: invoicePalette[item.name] ?? muted }} />
-                  <span className="truncate">{item.name}</span>
-                </span>
-                <span className="font-bold text-slate-950">{item.value}</span>
-              </div>
-            ))}
-            <StatusChip tone={overdue > 0 ? "red" : "slate"}>{overdue > 0 ? `${overdue} overdue` : "No overdue invoices"}</StatusChip>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 function OrdersPipelineCard({ data }: { data: ChartDatum[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   return (
-    <Card title="Production Pipeline" href="/orders" icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />} actionLabel="Orders" className="sm:col-span-2 xl:col-span-1">
+    <Card title="Production Pipeline" href="/orders" icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />} actionLabel="Orders">
       {total === 0 ? <EmptyState label="No orders yet." /> : (
-        <div className="space-y-5">
-          <ChartFrame className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+        <div className="space-y-3">
+          <ChartFrame className="grid grid-cols-2 gap-2">
             {data.map((item, index) => (
-              <div key={item.name} className="relative min-w-0 overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-sm">
+              <div key={item.name} className="relative min-w-0 overflow-hidden rounded-xl border border-slate-200/70 bg-white/80 p-3">
                 <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: workflowPalette[index % workflowPalette.length] }} />
-                <p className="truncate text-sm font-semibold text-slate-800">{item.name}</p>
-                <p className="mt-3 text-3xl font-bold tracking-[-0.05em] text-slate-950">{item.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">orders</p>
+                <p className="truncate text-xs font-semibold text-slate-700">{item.name}</p>
+                <p className="mt-1 text-2xl font-bold tracking-[-0.04em] text-slate-950">{item.value}</p>
               </div>
             ))}
           </ChartFrame>
-          <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-slate-200/70 bg-white/70 p-3 shadow-sm">
-            {data.map((item, index) => (
-              <div key={item.name} className="flex min-w-0 items-center gap-2">
-                <span className="flex h-8 min-w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm" style={{ backgroundColor: workflowPalette[index % workflowPalette.length] }}>{item.value}</span>
-                <span className="max-w-[92px] truncate text-xs font-semibold text-slate-600">{item.name}</span>
-                {index < data.length - 1 && <ArrowRight className="h-3.5 w-3.5 text-slate-300" aria-hidden="true" />}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs font-medium text-slate-500">{total} total orders across active workflow stages.</p>
+          <p className="text-[11px] font-medium text-slate-500">{total} total orders across active workflow stages.</p>
         </div>
       )}
     </Card>
@@ -418,7 +266,7 @@ function FollowUpLoadCard({ data }: { data: FollowUpLoadDatum[] }) {
               <p className="text-xs font-medium text-slate-500">scheduled over the next 7 days</p>
             </div>
           </div>
-          <ChartFrame className="h-52">
+          <ChartFrame className="h-40">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 8, right: 6, left: -26, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(148,163,184,0.16)" vertical={false} />
@@ -442,18 +290,18 @@ function TaskLoadCard({ data }: { data: TaskLoadDatum[] }) {
   return (
     <Card title="Task Load by Founder" href="/tasks" icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />} actionLabel="Tasks">
       {total === 0 ? <EmptyState label="No open tasks." /> : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className={metricPanelClass}>
               <p className={metricClass}>{total}</p>
-              <p className="text-xs font-medium text-slate-500">Total open</p>
+              <p className="text-[11px] font-medium text-slate-500">Total open</p>
             </div>
-            <div className={`${metricPanelClass} ${overdue > 0 ? "border-red-100 bg-red-50/80" : "border-slate-200/70 bg-white/75"}`}>
-              <p className={`text-3xl font-bold tracking-[-0.05em] ${overdue > 0 ? "text-red-600" : "text-emerald-700"}`}>{overdue}</p>
-              <p className={`text-xs font-medium ${overdue > 0 ? "text-red-500" : "text-emerald-700"}`}>Overdue</p>
+            <div className={`${metricPanelClass} ${overdue > 0 ? "border-red-100 bg-red-50/80" : ""}`}>
+              <p className={`text-2xl font-bold tracking-[-0.04em] ${overdue > 0 ? "text-red-600" : "text-emerald-700"}`}>{overdue}</p>
+              <p className={`text-[11px] font-medium ${overdue > 0 ? "text-red-500" : "text-emerald-700"}`}>Overdue</p>
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {data.map((item) => (
               <div key={item.name} className={rowClass}>
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -475,14 +323,14 @@ function TaskLoadCard({ data }: { data: TaskLoadDatum[] }) {
 function NeedsAttentionCard({ items }: { items: AttentionItem[] }) {
   const router = useRouter();
   return (
-    <Card title="Needs Attention" href="/tasks" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} actionLabel="View All" className="xl:col-span-3">
+    <Card title="Needs Attention" href="/tasks" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} actionLabel="View All" className="md:col-span-2 xl:col-span-2">
       {items.length === 0 ? (
-        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
-          <CheckCircle2 className="mb-2 h-6 w-6 text-emerald-600" aria-hidden="true" />
-          <p className="text-sm font-medium text-slate-500">No urgent items right now.</p>
+        <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+          <p className="text-[13px] font-semibold text-emerald-800">No urgent items right now.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80">
           {items.map((item) => (
             <button
               key={item.id}
@@ -509,100 +357,6 @@ function NeedsAttentionCard({ items }: { items: AttentionItem[] }) {
   );
 }
 
-function AttentionBanner({ summary }: { summary: AttentionSummary }) {
-  const router = useRouter();
-
-  const allClear =
-    summary.overdueTasks === 0 &&
-    summary.unpaidInvoices === 0 &&
-    summary.staleLeads === 0 &&
-    summary.ordersDueSoon === 0;
-
-  if (allClear) {
-    return (
-      <div className="flex items-center gap-3 rounded-[2rem] border border-emerald-200 bg-emerald-50 px-5 py-4">
-        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-        <p className="text-sm font-semibold text-emerald-800">Nothing needs attention right now.</p>
-      </div>
-    );
-  }
-
-  const tiles = [
-    {
-      key: "tasks",
-      label: "Overdue Tasks",
-      count: summary.overdueTasks,
-      href: "/tasks",
-      active: summary.overdueTasks > 0,
-      containerActive: "border-red-200 bg-red-50 hover:bg-red-100",
-      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
-      countActive: "text-red-600",
-    },
-    {
-      key: "invoices",
-      label: "Unpaid Invoices",
-      count: summary.unpaidInvoices,
-      href: "/finances?tab=invoices",
-      active: summary.unpaidInvoices > 0,
-      containerActive: "border-amber-200 bg-amber-50 hover:bg-amber-100",
-      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
-      countActive: "text-amber-600",
-    },
-    {
-      key: "leads",
-      label: "Stale Leads",
-      count: summary.staleLeads,
-      href: "/crm",
-      active: summary.staleLeads > 0,
-      containerActive: "border-amber-200 bg-amber-50 hover:bg-amber-100",
-      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
-      countActive: "text-amber-600",
-    },
-    {
-      key: "orders",
-      label: "Orders Due Soon",
-      count: summary.ordersDueSoon,
-      href: "/orders",
-      active: summary.ordersDueSoon > 0,
-      containerActive: "border-blue-200 bg-blue-50 hover:bg-blue-100",
-      containerIdle: "border-slate-200 bg-white hover:bg-slate-50",
-      countActive: "text-blue-600",
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {tiles.map((tile) => (
-        <button
-          key={tile.key}
-          type="button"
-          onClick={() => router.push(tile.href)}
-          className={`group flex min-h-[5.5rem] flex-col rounded-[2rem] border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
-            tile.active ? tile.containerActive : tile.containerIdle
-          }`}
-        >
-          <span
-            className={`text-3xl font-bold tracking-tight ${
-              tile.active ? tile.countActive : "text-slate-400"
-            }`}
-          >
-            {tile.count}
-          </span>
-          <span className="mt-1 flex-1 text-[10px] font-semibold uppercase leading-tight tracking-[0.18em] text-slate-500">
-            {tile.label}
-          </span>
-          <ArrowUpRight
-            className={`mt-2 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 ${
-              tile.active ? tile.countActive : "text-slate-300"
-            }`}
-            aria-hidden="true"
-          />
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function DashboardVisualGrid({ orders, finances, tasks, crmLeads, todayISO, sevenDaysAheadISO }: Props) {
   const metrics = useMemo(() => {
     // Exclude TEST records from every metric. Test-ness is derived from the lead (is_test):
@@ -613,29 +367,27 @@ export default function DashboardVisualGrid({ orders, finances, tasks, crmLeads,
     const rFinances = finances.filter((f) => !isTestRow(f));
     const rOrders = orders.filter((o) => !isTestRow(o));
     return {
-      revenue: monthlyRevenueProgress(rFinances, todayISO),
       pipeline: pipelineOverview(rLeads),
-      invoices: invoiceHealth(rFinances, todayISO),
       orderStatuses: ordersByStatus(rOrders),
       followUps: followUpLoad(rLeads, tasks, todayISO),
       taskLoad: taskLoadByFounder(tasks, todayISO),
       attention: needsAttention(rOrders, rFinances, tasks, rLeads, todayISO, sevenDaysAheadISO),
-      summary: attentionSummary(rOrders, rFinances, tasks, rLeads, todayISO, sevenDaysAheadISO),
     };
   }, [crmLeads, finances, orders, sevenDaysAheadISO, tasks, todayISO]);
 
+  // Revenue, Invoice Health, and the attention banner now live in the revamped dashboard top
+  // section (DashboardTop): brand band, "Needs a founder today" strip, and the Revenue/To
+  // Ship/Invoice Health cards. Everything else stays here below — nothing deleted.
+  // 3-across (2 at md). The four stat/chart cards fill row 1 (3) + row 2 (1); Needs Attention
+  // spans the remaining 2 columns so there's no orphan gap — and at md it becomes a full-width
+  // compact band. gap matches the revamped top section (gap-3.5).
   return (
-    <div className="space-y-5">
-      <AttentionBanner summary={metrics.summary} />
-      <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        <RevenueProgressCard metric={metrics.revenue} />
-        <PipelineOverviewCard data={metrics.pipeline} />
-        <InvoiceHealthCard data={metrics.invoices} />
-        <OrdersPipelineCard data={metrics.orderStatuses} />
-        <FollowUpLoadCard data={metrics.followUps} />
-        <TaskLoadCard data={metrics.taskLoad} />
-        <NeedsAttentionCard items={metrics.attention} />
-      </div>
+    <div className="grid min-w-0 grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+      <PipelineOverviewCard data={metrics.pipeline} />
+      <OrdersPipelineCard data={metrics.orderStatuses} />
+      <FollowUpLoadCard data={metrics.followUps} />
+      <TaskLoadCard data={metrics.taskLoad} />
+      <NeedsAttentionCard items={metrics.attention} />
     </div>
   );
 }
