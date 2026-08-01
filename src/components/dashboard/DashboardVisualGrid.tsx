@@ -47,13 +47,13 @@ type Props = {
 
 const blue = "#2563eb";
 const workflowPalette = ["#2563eb", "#4f46e5", "#f59e0b", "#16a34a", "#64748b"];
-const cardShell = "group relative min-w-0 cursor-pointer overflow-hidden rounded-[1.65rem] border p-4 shadow-[0_22px_70px_rgba(15,23,42,0.12)] ring-1 ring-white/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_28px_80px_rgba(15,23,42,0.16)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 md:p-5";
-const lightCardSurface = "border-slate-900/10 bg-[radial-gradient(circle_at_85%_0%,rgba(37,99,235,0.09),transparent_32%),linear-gradient(180deg,#ffffff,#f8fafc)]";
-const chartFrameClass = "rounded-3xl border border-slate-200/70 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_10px_30px_rgba(15,23,42,0.06)]";
-const metricPanelClass = "rounded-3xl border border-slate-200/70 bg-white/75 px-4 py-3 shadow-sm";
-const labelClass = "text-xs font-semibold uppercase tracking-[0.18em] text-slate-400";
-const metricClass = "text-3xl font-bold tracking-[-0.05em] text-slate-950";
-const rowClass = "rounded-3xl border border-slate-200/70 bg-white/80 p-3 shadow-sm";
+// Match the revamped top section's flat, dense card style (bg-white, shadow-sm, ring-slate-100).
+const cardShell = "group relative min-w-0 cursor-pointer overflow-hidden rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 transition hover:ring-blue-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50";
+const chartFrameClass = "rounded-2xl border border-slate-200/70 bg-white/80 p-3";
+const metricPanelClass = "rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-2.5";
+const labelClass = "text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400";
+const metricClass = "text-2xl font-bold tracking-[-0.04em] text-slate-950";
+const rowClass = "rounded-2xl border border-slate-200/70 bg-slate-50 p-3";
 
 const toneStyles: Record<AttentionItem["tone"], string> = {
   red: "border-red-200 bg-red-50 text-red-700",
@@ -71,14 +71,13 @@ const toneLabels: Record<AttentionItem["tone"], string> = {
 function Card({
   title,
   href,
-  icon,
   children,
   className = "",
   actionLabel = "View",
 }: {
   title: string;
   href: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode; // accepted for call-site compatibility; header is icon-free now
   children: React.ReactNode;
   className?: string;
   actionLabel?: string;
@@ -97,29 +96,22 @@ function Card({
           openCard();
         }
       }}
-      className={`${cardShell} ${lightCardSurface} ${className}`}
+      className={`${cardShell} ${className}`}
     >
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-blue-300/70 to-transparent" />
-      <div className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
-      <div className="relative mb-4 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_22px_rgba(15,23,42,0.08)]">
-            {icon}
-          </span>
-          <h2 className="min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-slate-950 md:text-base">{title}</h2>
-        </div>
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.13em] text-slate-400">{title}</h2>
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             openCard();
           }}
-          className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white/90 px-3 text-xs font-semibold text-slate-500 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          className="ml-auto flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-blue-600 transition-colors hover:text-blue-700"
         >
-          {actionLabel} <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+          {actionLabel} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
         </button>
       </div>
-      <div className="relative">{children}</div>
+      <div>{children}</div>
     </section>
   );
 }
@@ -138,7 +130,7 @@ function StatusChip({ tone, children }: { tone: AttentionItem["tone"]; children:
 
 function EmptyState({ label, className = "" }: { label: string; className?: string }) {
   return (
-    <div className={`flex min-h-[180px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-4 text-center text-sm font-medium text-slate-500 ${className}`}>
+    <div className={`flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5 text-center text-[13px] font-medium text-slate-500 ${className}`}>
       {label}
     </div>
   );
@@ -243,29 +235,19 @@ function PipelineOverviewCard({ data }: { data: ChartDatum[] }) {
 function OrdersPipelineCard({ data }: { data: ChartDatum[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   return (
-    <Card title="Production Pipeline" href="/orders" icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />} actionLabel="Orders" className="sm:col-span-2 xl:col-span-1">
+    <Card title="Production Pipeline" href="/orders" icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />} actionLabel="Orders">
       {total === 0 ? <EmptyState label="No orders yet." /> : (
-        <div className="space-y-5">
-          <ChartFrame className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+        <div className="space-y-3">
+          <ChartFrame className="grid grid-cols-2 gap-2">
             {data.map((item, index) => (
-              <div key={item.name} className="relative min-w-0 overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-sm">
+              <div key={item.name} className="relative min-w-0 overflow-hidden rounded-xl border border-slate-200/70 bg-white/80 p-3">
                 <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: workflowPalette[index % workflowPalette.length] }} />
-                <p className="truncate text-sm font-semibold text-slate-800">{item.name}</p>
-                <p className="mt-3 text-3xl font-bold tracking-[-0.05em] text-slate-950">{item.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">orders</p>
+                <p className="truncate text-xs font-semibold text-slate-700">{item.name}</p>
+                <p className="mt-1 text-2xl font-bold tracking-[-0.04em] text-slate-950">{item.value}</p>
               </div>
             ))}
           </ChartFrame>
-          <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-slate-200/70 bg-white/70 p-3 shadow-sm">
-            {data.map((item, index) => (
-              <div key={item.name} className="flex min-w-0 items-center gap-2">
-                <span className="flex h-8 min-w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm" style={{ backgroundColor: workflowPalette[index % workflowPalette.length] }}>{item.value}</span>
-                <span className="max-w-[92px] truncate text-xs font-semibold text-slate-600">{item.name}</span>
-                {index < data.length - 1 && <ArrowRight className="h-3.5 w-3.5 text-slate-300" aria-hidden="true" />}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs font-medium text-slate-500">{total} total orders across active workflow stages.</p>
+          <p className="text-[11px] font-medium text-slate-500">{total} total orders across active workflow stages.</p>
         </div>
       )}
     </Card>
@@ -284,7 +266,7 @@ function FollowUpLoadCard({ data }: { data: FollowUpLoadDatum[] }) {
               <p className="text-xs font-medium text-slate-500">scheduled over the next 7 days</p>
             </div>
           </div>
-          <ChartFrame className="h-52">
+          <ChartFrame className="h-40">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 8, right: 6, left: -26, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(148,163,184,0.16)" vertical={false} />
@@ -308,18 +290,18 @@ function TaskLoadCard({ data }: { data: TaskLoadDatum[] }) {
   return (
     <Card title="Task Load by Founder" href="/tasks" icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />} actionLabel="Tasks">
       {total === 0 ? <EmptyState label="No open tasks." /> : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className={metricPanelClass}>
               <p className={metricClass}>{total}</p>
-              <p className="text-xs font-medium text-slate-500">Total open</p>
+              <p className="text-[11px] font-medium text-slate-500">Total open</p>
             </div>
-            <div className={`${metricPanelClass} ${overdue > 0 ? "border-red-100 bg-red-50/80" : "border-slate-200/70 bg-white/75"}`}>
-              <p className={`text-3xl font-bold tracking-[-0.05em] ${overdue > 0 ? "text-red-600" : "text-emerald-700"}`}>{overdue}</p>
-              <p className={`text-xs font-medium ${overdue > 0 ? "text-red-500" : "text-emerald-700"}`}>Overdue</p>
+            <div className={`${metricPanelClass} ${overdue > 0 ? "border-red-100 bg-red-50/80" : ""}`}>
+              <p className={`text-2xl font-bold tracking-[-0.04em] ${overdue > 0 ? "text-red-600" : "text-emerald-700"}`}>{overdue}</p>
+              <p className={`text-[11px] font-medium ${overdue > 0 ? "text-red-500" : "text-emerald-700"}`}>Overdue</p>
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {data.map((item) => (
               <div key={item.name} className={rowClass}>
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -341,14 +323,14 @@ function TaskLoadCard({ data }: { data: TaskLoadDatum[] }) {
 function NeedsAttentionCard({ items }: { items: AttentionItem[] }) {
   const router = useRouter();
   return (
-    <Card title="Needs Attention" href="/tasks" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} actionLabel="View All" className="xl:col-span-3">
+    <Card title="Needs Attention" href="/tasks" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} actionLabel="View All" className="md:col-span-2 xl:col-span-2">
       {items.length === 0 ? (
-        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
-          <CheckCircle2 className="mb-2 h-6 w-6 text-emerald-600" aria-hidden="true" />
-          <p className="text-sm font-medium text-slate-500">No urgent items right now.</p>
+        <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+          <p className="text-[13px] font-semibold text-emerald-800">No urgent items right now.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80">
           {items.map((item) => (
             <button
               key={item.id}
@@ -396,8 +378,11 @@ export default function DashboardVisualGrid({ orders, finances, tasks, crmLeads,
   // Revenue, Invoice Health, and the attention banner now live in the revamped dashboard top
   // section (DashboardTop): brand band, "Needs a founder today" strip, and the Revenue/To
   // Ship/Invoice Health cards. Everything else stays here below — nothing deleted.
+  // 3-across (2 at md). The four stat/chart cards fill row 1 (3) + row 2 (1); Needs Attention
+  // spans the remaining 2 columns so there's no orphan gap — and at md it becomes a full-width
+  // compact band. gap matches the revamped top section (gap-3.5).
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid min-w-0 grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-3">
       <PipelineOverviewCard data={metrics.pipeline} />
       <OrdersPipelineCard data={metrics.orderStatuses} />
       <FollowUpLoadCard data={metrics.followUps} />
