@@ -70,7 +70,7 @@ export default function ShopOrdersPage() {
   const lbl = "text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400";
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8 md:px-8">
+    <div>
       <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Shop · ThreeFold Originals</div>
       <div className="mt-1 flex flex-wrap items-center gap-3">
         <h1 className="text-3xl font-extrabold text-slate-900">Shop Orders</h1>

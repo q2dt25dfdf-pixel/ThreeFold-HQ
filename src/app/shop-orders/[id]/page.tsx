@@ -57,9 +57,9 @@ export default function ShopOrderDetail() {
     try { await navigator.clipboard.writeText(fullAddress(data)); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {}
   }
 
-  if (loading) return <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 text-sm text-slate-400">Loading…</div>;
+  if (loading) return <div className="text-sm text-slate-400">Loading…</div>;
   if (!data) return (
-    <div className="mx-auto max-w-6xl px-5 py-8 md:px-8">
+    <div>
       <Link href="/shop-orders" className="text-sm font-semibold text-blue-600">← Back to Shop Orders</Link>
       <div className="mt-6 rounded-2xl bg-white p-8 text-center text-sm text-slate-400">Order not found.</div>
     </div>
@@ -70,7 +70,7 @@ export default function ShopOrderDetail() {
   const a = data.shipping_address || {};
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8 md:px-8">
+    <div>
       <Link href="/shop-orders" className="text-[13px] font-semibold text-blue-600">← Back to Shop Orders</Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <h1 className="text-3xl font-extrabold text-slate-900">{data.customer_name || "—"}</h1>
