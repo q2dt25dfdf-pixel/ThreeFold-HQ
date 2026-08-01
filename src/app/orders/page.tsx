@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
@@ -108,6 +108,20 @@ const FILTERS: { label: string; value: OrderStatus | "All" | "Active" }[] = [
 function OrdersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Clear the sidebar "Orders" new-badge on view (SHARED). Fire-and-forget; nudges the sidebar.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        await fetch("/api/badges", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+          body: JSON.stringify({ section: "orders" }),
+        });
+        window.dispatchEvent(new Event("tf-badges-refresh"));
+      } catch { /* non-fatal */ }
+    })();
+  }, []);
   const { data: orders, deleteItem, loading, error, reload } = useSupabaseTable<Order>("orders", []);
   const [deletingId, setDeletingId] = useState("");
   const [filter, setFilter] = useState<OrderStatus | "All" | "Active">(() => {

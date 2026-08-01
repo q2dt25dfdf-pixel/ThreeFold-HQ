@@ -19,6 +19,7 @@ import { CurrencyInput } from "@/components/orders/OrderFormShared";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import { supabase } from "@/lib/supabase";
+import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
 import {
   Area,
   AreaChart,
@@ -754,6 +755,25 @@ function FinancesContent() {
   const taxSave = useSaveState();
   const normalizedInvoices = useMemo(() => invoices.map((invoice) => normalizeInvoice(invoice)), [invoices]);
 
+  // ── Shop slice ────────────────────────────────────────────────────────────────
+  // shop_orders is RLS-on (anon can't read), so unlike every other table on this page it can't
+  // ride the anon browser client — it threads in via /api/finances/shop-summary (server-side,
+  // service role, session-gated). Fetched once on mount. Aggregation is net-of-tax with a refund
+  // guard; see @/lib/financesShop. Empty until it loads → all shop figures start at 0.
+  const [shopRows, setShopRows] = useState<ShopFinanceRow[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const res = await fetch("/api/finances/shop-summary", {
+          headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+        });
+        if (res.ok) { const d = await res.json(); setShopRows(d.rows ?? []); }
+      } catch { /* leave shop figures at 0 on failure — never blocks the custom side */ }
+    })();
+  }, []);
+  const shopAgg = useMemo(() => aggregateShopFinances(shopRows, currentYear), [shopRows, currentYear]);
+
   const updateTab = (next: FinanceTab) => {
     setActiveTab(next);
     const p = new URLSearchParams(searchParams.toString());
@@ -790,7 +810,12 @@ function FinancesContent() {
     })
     .filter((invoice) => Object.values(invoice).join(" ").toLowerCase().includes(query.toLowerCase()));
 
-  const revenueCollected = normalizedInvoices.reduce((sum, invoice) => sum + invoiceCollected(invoice), 0);
+  // Custom (print) revenue — currently tax-INCLUSIVE (see BACKLOG.md item to net it out).
+  const customRevenueCollected = normalizedInvoices.reduce((sum, invoice) => sum + invoiceCollected(invoice), 0);
+  // Shop revenue — NET OF TAX (WO decision A/Option 1). Combined headline used everywhere the
+  // page shows total collected / net position / goal; the split stays visible via captions.
+  const shopRevenueNet = shopAgg.netRevenueAll;
+  const revenueCollected = customRevenueCollected + shopRevenueNet;
   // Owed-now = final invoice SENT and not yet paid. A deposit-paid invoice whose final
   // invoice hasn't gone out is upcoming, so its balance is NOT summed into Outstanding.
   const outstandingBalance = normalizedInvoices
@@ -816,7 +841,7 @@ function FinancesContent() {
   // ── Sales tax metrics ────────────────────────────────────────────────────────
   const configuredTaxRate = salesTaxRate();
 
-  const taxCollectedYTD = useMemo(() => {
+  const customTaxCollectedYTD = useMemo(() => {
     return normalizedInvoices.reduce((sum, inv) => {
       const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
       if (taxAmt <= 0) return sum;
@@ -834,6 +859,18 @@ function FinancesContent() {
       return sum;
     }, 0);
   }, [normalizedInvoices, currentYear]);
+
+  // Shop sales tax collected this year (net of refunded orders) MUST be remitted too — fold it
+  // into the YTD "to remit" figure. The detailed per-quarter breakdown below stays custom-only
+  // (footnoted), so shop tax shows up in the headline What's Owed / Needs Attention numbers.
+  const shopTaxCollectedYTD = shopAgg.taxCollectedYTD;
+  const taxCollectedYTD = customTaxCollectedYTD + shopTaxCollectedYTD;
+  // Shop tax for the year selected in the detailed Tax tab (may differ from currentYear). Shown
+  // there as a footnote only — the per-quarter reconciliation stays custom-only.
+  const shopTaxForSelectedYear = useMemo(
+    () => aggregateShopFinances(shopRows, selectedTaxYear).taxCollectedYTD,
+    [shopRows, selectedTaxYear],
+  );
 
   const taxPaidYTD = useMemo(() => {
     return taxPayments
@@ -1109,7 +1146,9 @@ function FinancesContent() {
   };
 
   const monthlyRevenue = useMemo(() => {
-    const monthlyTotals = monthLabels.map((month) => ({ month, collected: 0, outstanding: 0 }));
+    const monthlyTotals = monthLabels.map((month, i) => ({
+      month, collected: 0, outstanding: 0, shop: shopAgg.byMonth[i] ?? 0,
+    }));
 
     normalizedInvoices.forEach((invoice) => {
       const month = invoiceMonthIndex(invoice);
@@ -1120,7 +1159,7 @@ function FinancesContent() {
     });
 
     return monthlyTotals;
-  }, [normalizedInvoices]);
+  }, [normalizedInvoices, shopAgg]);
 
   const goal = 50000;
   const goalPercent = Math.min(100, Math.round((revenueCollected / goal) * 100));
@@ -2251,6 +2290,10 @@ function FinancesContent() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Collected</p>
           <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(revenueCollected)}</p>
           <p className="mt-1.5 text-[11px] text-slate-500">of {currency.format(goal)} goal · {goalPercent}%</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Custom {currency.format(customRevenueCollected)} · Shop {currency.format(shopRevenueNet)}
+            <span className="text-slate-300"> (net of tax)</span>
+          </p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${goalPercent}%` }} />
           </div>
@@ -2336,8 +2379,12 @@ function FinancesContent() {
             <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Money In &amp; Out</h3>
             <dl className="space-y-2.5">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-slate-600">Revenue collected</dt>
-                <dd className="text-sm font-semibold text-emerald-600">{currency.format(revenueCollected)}</dd>
+                <dt className="text-xs text-slate-600">Custom revenue collected</dt>
+                <dd className="text-sm font-semibold text-emerald-600">{currency.format(customRevenueCollected)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">Shop revenue <span className="text-slate-400">(net of tax)</span></dt>
+                <dd className="text-sm font-semibold text-emerald-600">{currency.format(shopRevenueNet)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Production costs paid</dt>
@@ -2362,7 +2409,12 @@ function FinancesContent() {
                 <dd className={`text-sm font-semibold ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-slate-600">Sales tax to remit</dt>
+                <dt className="text-xs text-slate-600">
+                  Sales tax to remit
+                  {shopTaxCollectedYTD > 0 && (
+                    <span className="block text-[10px] text-slate-400">incl. {currency.format(shopTaxCollectedYTD)} shop tax</span>
+                  )}
+                </dt>
                 <dd className={`text-sm font-semibold ${taxDue > 0 ? "text-rose-600" : "text-slate-400"}`}>{currency.format(taxDue)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -2383,7 +2435,7 @@ function FinancesContent() {
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-base md:text-lg font-semibold text-slate-950">Revenue over time</h2>
-            <p className="mt-1 text-xs md:text-sm text-slate-600">Monthly collected revenue and projected outstanding balance.</p>
+            <p className="mt-1 text-xs md:text-sm text-slate-600">Monthly custom revenue, shop revenue (net of tax), and projected outstanding balance.</p>
           </div>
         </div>
         <div className="h-80">
@@ -2398,11 +2450,16 @@ function FinancesContent() {
                   <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.24} />
                   <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
                 </linearGradient>
+                <linearGradient id="shopFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.26} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+                </linearGradient>
               </defs>
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(value) => `$${Number(value) / 1000}k`} width={44} />
               <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} contentStyle={{ borderRadius: 16, borderColor: "#e2e8f0" }} />
-              <Area type="monotone" dataKey="collected" name="Collected" stroke="#10b981" strokeWidth={3} fill="url(#collectedFill)" dot={false} activeDot={false} />
+              <Area type="monotone" dataKey="collected" name="Custom collected" stroke="#10b981" strokeWidth={3} fill="url(#collectedFill)" dot={false} activeDot={false} />
+              <Area type="monotone" dataKey="shop" name="Shop (net of tax)" stroke="#6366f1" strokeWidth={3} fill="url(#shopFill)" dot={false} activeDot={false} />
               <Area type="monotone" dataKey="outstanding" name="Outstanding" stroke="#f59e0b" strokeWidth={3} fill="url(#outstandingFill)" dot={false} activeDot={false} />
             </AreaChart>
           </ResponsiveContainer>
@@ -2867,7 +2924,10 @@ function FinancesContent() {
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Collected</p>
             <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 md:text-3xl">{currency.format(taxCollectedForYear)}</p>
-            <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear} · custom invoices</p>
+            {shopTaxForSelectedYear > 0 && (
+              <p className="mt-1 text-[10px] text-slate-400">+ {currency.format(shopTaxForSelectedYear)} shop tax — in the Overview remit total, not itemized by quarter here.</p>
+            )}
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Remitted</p>
