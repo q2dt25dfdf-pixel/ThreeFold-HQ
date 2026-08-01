@@ -31,6 +31,8 @@ export type ShopOrderData = {
   shipped?: boolean;
   shipped_at?: string | null;
   line_items?: { name: string; size: string; qty: number; unit_cents?: number }[];
+  // Founder notes, appended newest-first order handled in UI. `at` is server-set on save.
+  notes?: { text: string; author: string; at: string }[];
   // Refund awareness (nothing sets these yet — see financesShop.ts guard). A future manual
   // flag or a refund webhook can set either to drop the order from revenue + tax honestly.
   refunded?: boolean;

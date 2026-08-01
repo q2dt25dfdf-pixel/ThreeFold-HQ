@@ -17,6 +17,11 @@ function fmtStamp(iso?: string) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
+function fmtNoteStamp(iso: string) {
+  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+const FOUNDERS = ["Alliyah", "Hannah", "Jordan"] as const;
+const AUTHOR_KEY = "threefold-hq:note-author";
 
 const panel = "rounded-2xl bg-white p-5 md:p-6";
 const h3 = "text-[11.5px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-3.5";
@@ -123,6 +128,10 @@ export default function ShopOrderDetail() {
               {copied ? "Copied ✓" : "Copy address"}
             </button>
           </div>
+
+          <div className={`${panel} mt-3`}>
+            <NotesPanel id={id} notes={data.notes ?? []} onAdded={load} />
+          </div>
         </div>
 
         {/* RIGHT */}
@@ -146,6 +155,82 @@ export default function ShopOrderDetail() {
             <Row k="" v={<a href={stripePaymentUrl(data.payment_intent_id)} target="_blank" rel="noopener" className="text-[12.5px] font-semibold text-blue-600">Open in Stripe →</a>} last />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function NotesPanel({ id, notes, onAdded }: { id: string; notes: NonNullable<ShopOrderData["notes"]>; onAdded: () => Promise<void>; }) {
+  const [text, setText] = useState("");
+  const [author, setAuthor] = useState<string>(FOUNDERS[0]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(AUTHOR_KEY);
+      if (stored && (FOUNDERS as readonly string[]).includes(stored)) setAuthor(stored);
+    } catch {}
+  }, []);
+
+  function pickAuthor(name: string) {
+    setAuthor(name);
+    try { localStorage.setItem(AUTHOR_KEY, name); } catch {}
+  }
+
+  async function addNote() {
+    const t = text.trim();
+    if (!t || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/shop-orders/${id}`, {
+        method: "PATCH", headers: await authHeaders(),
+        body: JSON.stringify({ addNote: { text: t, author } }),
+      });
+      if (res.ok) { setText(""); await onAdded(); }
+    } finally { setSaving(false); }
+  }
+
+  const ordered = [...notes].reverse(); // newest-first
+
+  return (
+    <div>
+      <h3 className={h3}>Notes</h3>
+
+      {ordered.length === 0 ? (
+        <div className="text-[13.5px] text-slate-400">No notes yet.</div>
+      ) : (
+        <div className="space-y-3">
+          {ordered.map((n, i) => (
+            <div key={i} className={`${i < ordered.length - 1 ? "border-b border-slate-100 pb-3" : ""}`}>
+              <div className="whitespace-pre-line text-[14px] leading-[1.5] text-slate-800">{n.text}</div>
+              <div className="mt-1 text-[12px] text-slate-400">{n.author} · {fmtNoteStamp(n.at)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } }}
+          placeholder="Add a note…"
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-[13.5px] text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+        />
+        <select
+          value={author}
+          onChange={(e) => pickAuthor(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13.5px] font-semibold text-slate-900 focus:border-slate-400 focus:outline-none"
+        >
+          {FOUNDERS.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <button
+          onClick={addNote}
+          disabled={saving || !text.trim()}
+          className="rounded-xl bg-slate-900 px-4 py-2.5 text-[13.5px] font-bold text-white disabled:opacity-40"
+        >
+          {saving ? "Adding…" : "Add note"}
+        </button>
       </div>
     </div>
   );
