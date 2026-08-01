@@ -31,6 +31,10 @@ export type ShopOrderData = {
   shipped?: boolean;
   shipped_at?: string | null;
   line_items?: { name: string; size: string; qty: number; unit_cents?: number }[];
+  // Refund awareness (nothing sets these yet — see financesShop.ts guard). A future manual
+  // flag or a refund webhook can set either to drop the order from revenue + tax honestly.
+  refunded?: boolean;
+  status?: string;
 };
 
 export function money(dollars: number | null | undefined): string {
