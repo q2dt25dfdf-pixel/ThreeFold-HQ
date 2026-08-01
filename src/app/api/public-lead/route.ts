@@ -29,7 +29,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true }, { headers })
     }
 
-    const required = ['company_name', 'company_type', 'contact_name', 'contact_email', 'contact_phone', 'meaning']
+    // Lightweight drop-list signup (shop "Get Notified"): email only, no phone required.
+    const required = body.company_type === 'Drop Signup'
+      ? ['company_name', 'company_type', 'contact_name', 'contact_email', 'meaning']
+      : ['company_name', 'company_type', 'contact_name', 'contact_email', 'contact_phone', 'meaning']
     const missing = required.filter(f => !body[f]?.toString().trim())
     if (missing.length > 0) {
       return NextResponse.json({ error: 'Missing required fields', fields: missing }, { status: 400, headers })
