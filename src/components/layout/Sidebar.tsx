@@ -36,7 +36,7 @@ export default function Sidebar({
 
   // SHARED "new" badges (Shop Orders / Orders). One cheap fetch on mount; refetch only when a
   // badged page marks itself seen (dispatches "tf-badges-refresh") — not on every navigation.
-  const [badges, setBadges] = useState<{ shopOrders: number; orders: number }>({ shopOrders: 0, orders: 0 });
+  const [badges, setBadges] = useState<{ shopOrders: number; orders: number; finances: number }>({ shopOrders: 0, orders: 0, finances: 0 });
   const loadBadges = useCallback(async () => {
     try {
       const { data } = await supabase.auth.getSession();
@@ -50,7 +50,7 @@ export default function Sidebar({
     window.addEventListener("tf-badges-refresh", onRefresh);
     return () => window.removeEventListener("tf-badges-refresh", onRefresh);
   }, [loadBadges]);
-  const badgeFor = (href: string) => (href === "/shop-orders" ? badges.shopOrders : href === "/orders" ? badges.orders : 0);
+  const badgeFor = (href: string) => (href === "/shop-orders" ? badges.shopOrders : href === "/orders" ? badges.orders : href === "/finances" ? badges.finances : 0);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
