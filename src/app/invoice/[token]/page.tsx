@@ -8,6 +8,8 @@ import { C, dk } from "@/lib/clientTheme";
 import { calcDiscountAmount, type QuoteDiscount } from "@/lib/salesTax";
 import { DiscountBand, SavingsNote, SaveChip } from "@/components/DiscountUI";
 import { resolveReceipt, receiptPaidPhrase, paymentMethodLabel } from "@/lib/receipt";
+import { type SizeQty } from "@/lib/sizeBreakdown";
+import SizeTable from "@/components/SizeTable";
 
 interface LineItem {
   name: string;
@@ -16,6 +18,7 @@ interface LineItem {
   unitPrice: number;
   lineTotal: number;
   originalUnitPrice?: number;
+  sizes?: SizeQty[];
 }
 
 interface InvoiceData {
@@ -105,6 +108,9 @@ const INV_CSS = `
     }
     /* Keep small atomic rows (line items / summary rows) from splitting across a page break. */
     .print-keep { break-inside: avoid; page-break-inside: avoid; }
+    /* Payment summary is a compact, self-contained block — keep it whole on one page.
+       Declared AFTER .dk-card so it overrides that rule's break-inside:auto. */
+    .print-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
     /* Hide interactive / non-document controls (Download button, pay panel, toggle) */
     .no-print { display: none !important; }
     /* Always show the full pricing breakdown (subtotal/discount/SALES TAX/total) on the
@@ -295,7 +301,7 @@ export default function InvoicePage() {
     <PortalShell>
       <style>{INV_CSS}</style>
 
-      {/* Download PDF — founder records; hidden when printing */}
+      {/* Print / Save PDF — client & founder records; hidden when printing */}
       <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
         <button
           type="button"
@@ -313,7 +319,7 @@ export default function InvoicePage() {
             cursor: "pointer",
           }}
         >
-          Download PDF
+          Print / Save PDF
         </button>
       </div>
 
@@ -401,6 +407,7 @@ export default function InvoicePage() {
                       {item.originalUnitPrice != null && item.originalUnitPrice > item.unitPrice && (
                         <SaveChip perUnit={item.originalUnitPrice - item.unitPrice} />
                       )}
+                      <SizeTable sizes={item.sizes} />
                     </div>
                     <span style={{ ...s.detailVal, flexShrink: 0, marginLeft: "16px" }}>
                       {fmt(item.lineTotal)}
@@ -411,7 +418,7 @@ export default function InvoicePage() {
             </div>
           )}
 
-          <div className="dk-card">
+          <div className="dk-card print-avoid-break">
             <div style={s.cardEyebrow}>
               {!isDepositReceipt && (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -585,7 +592,7 @@ export default function InvoicePage() {
               {/* Paid in full is an INITIAL payment (production about to start), so point the
                   client to their portal. Not shown on the 50/50 final leg (order complete). */}
               {singleFullPayment && data.portal_url && (
-                <div style={s.portalRow}>
+                <div className="no-print" style={s.portalRow}>
                   <div style={s.portalRowText}>
                     <div style={s.portalLabel}>YOUR CLIENT PORTAL</div>
                     <div style={s.portalDesc}>Track your order, designs, and payments anytime.</div>
@@ -609,7 +616,7 @@ export default function InvoicePage() {
               <div style={s.handoffHeading}>{thanksHeading}</div>
               <div style={s.handoffSub}>{thanksSub}</div>
               {data.portal_url && (
-                <div style={s.portalRow}>
+                <div className="no-print" style={s.portalRow}>
                   <div style={s.portalRowText}>
                     <div style={s.portalLabel}>YOUR CLIENT PORTAL</div>
                     <div style={s.portalDesc}>Track your order, designs, and payments anytime.</div>
@@ -658,9 +665,9 @@ export default function InvoicePage() {
         </div>
       </div>
 
-      {/* Questions */}
-      <div style={s.rule} />
-      <div className="dk-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "20px" }}>
+      {/* Questions — screen-only; a printed invoice/receipt doesn't need the contact CTA */}
+      <div className="no-print" style={s.rule} />
+      <div className="dk-card no-print" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
           {!isDepositReceipt && (
             <div style={s.questionsIcon}>

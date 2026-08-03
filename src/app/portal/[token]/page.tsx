@@ -5,6 +5,8 @@ import { BUSINESS_EMAIL } from '@/lib/config'
 import { C } from '@/lib/clientTheme'
 import { calcDiscountAmount, type QuoteDiscount } from '@/lib/salesTax'
 import { DiscountBand, SavingsNote, SaveChip } from '@/components/DiscountUI'
+import { type SizeQty } from '@/lib/sizeBreakdown'
+import SizeTable from '@/components/SizeTable'
 
 function fmtBytes(b: number): string {
   if (b < 1024) return `${b} B`
@@ -84,6 +86,7 @@ interface LineItem {
   unitPrice: number
   lineTotal: number
   originalUnitPrice?: number
+  sizes?: SizeQty[]
 }
 
 interface PortalData {
@@ -558,6 +561,7 @@ export default function PortalPage() {
                         {li.originalUnitPrice != null && li.originalUnitPrice > li.unitPrice && (
                           <SaveChip perUnit={li.originalUnitPrice - li.unitPrice} />
                         )}
+                        <SizeTable sizes={li.sizes} />
                       </div>
                       <span style={{ ...s.cardRowValue, flexShrink: 0, marginLeft: '16px' }}>
                         {fmtCurrency(li.lineTotal)}
