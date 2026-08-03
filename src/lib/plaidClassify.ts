@@ -23,7 +23,11 @@ export type StagedTxn = {
   status: StagedStatus;
   auto_dismissed: boolean;
   dismiss_reason?: string;
+  // Filing target — a staged txn becomes either a general expense OR an order cost line.
   filed_expense_id?: string;
+  filed_order_id?: string;
+  filed_cost_line_id?: string;
+  filed_label?: string;
   reviewed_by?: string;
   reviewed_at?: string;
   created_at: string;

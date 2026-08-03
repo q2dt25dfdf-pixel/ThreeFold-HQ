@@ -42,9 +42,19 @@ type StagedTxn = {
   auto_dismissed: boolean;
   dismiss_reason?: string;
   filed_expense_id?: string;
+  filed_order_id?: string;
+  filed_label?: string;
   reviewed_by?: string;
-  possible_duplicate?: { id: string; vendor_name: string; expense_date: string } | null;
+  possible_duplicate?: { kind: string; label: string } | null;
 };
+
+// A duplicate match returned by the review route when filing (either kind).
+type DupMatch =
+  | { kind: "expense"; vendor_name: string; expense_date: string; amount_cents: number }
+  | { kind: "order_cost"; order_id: string; order_name: string; label: string; amount_cents: number };
+
+// Lightweight active-order option for the order-cost picker.
+export type OrderOption = { id: string; name: string; client: string };
 
 type Filter = "unreviewed" | "filed" | "dismissed";
 
@@ -64,7 +74,7 @@ async function authHeaders() {
   return { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` };
 }
 
-export default function PlaidReview() {
+export default function PlaidReview({ orders = [] }: { orders?: OrderOption[] }) {
   const [conn, setConn] = useState<Conn | null>(null);
   const [txns, setTxns] = useState<StagedTxn[]>([]);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
@@ -142,7 +152,7 @@ export default function PlaidReview() {
           </p>
         ) : (
           txns.map((t) => (
-            <TxnRow key={t.id} txn={t} filter={filter} onDone={() => { load(filter); refreshBadges(); }} />
+            <TxnRow key={t.id} txn={t} filter={filter} orders={orders} onDone={() => { load(filter); refreshBadges(); }} />
           ))
         )}
       </div>
@@ -219,11 +229,11 @@ function ConnActions({ conn, onChanged, onSync, syncing, setNotice }: {
   );
 }
 
-function TxnRow({ txn, filter, onDone }: { txn: StagedTxn; filter: Filter; onDone: () => void }) {
+function TxnRow({ txn, filter, orders, onDone }: { txn: StagedTxn; filter: Filter; orders: OrderOption[]; onDone: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function act(body: Record<string, unknown>): Promise<{ needsConfirm?: boolean; duplicate?: { vendor_name: string; expense_date: string }; ok?: boolean } | null> {
+  async function act(body: Record<string, unknown>): Promise<{ needsConfirm?: boolean; duplicate?: DupMatch; ok?: boolean } | null> {
     setBusy(true);
     try {
       const res = await fetch("/api/plaid/review", { method: "POST", headers: await authHeaders(), body: JSON.stringify(body) });
@@ -245,7 +255,7 @@ function TxnRow({ txn, filter, onDone }: { txn: StagedTxn; filter: Filter; onDon
           <div className="mt-0.5 text-[12px] text-slate-500">
             {fmtDate(txn.txn_date)} · {txn.account_name} ••{txn.account_mask}
             {txn.status === "dismissed" && txn.dismiss_reason ? <span className="text-slate-400"> · {txn.auto_dismissed ? "auto: " : ""}{txn.dismiss_reason}</span> : null}
-            {txn.status === "filed" ? <span className="text-emerald-600"> · filed{txn.reviewed_by ? ` by ${txn.reviewed_by}` : ""}</span> : null}
+            {txn.status === "filed" ? <span className="text-emerald-600"> · {txn.filed_order_id ? `order cost${txn.filed_label ? ` (${txn.filed_label})` : ""}` : "filed"}{txn.reviewed_by ? ` by ${txn.reviewed_by}` : ""}</span> : null}
           </div>
         </div>
         <div className={`shrink-0 text-[15px] font-bold ${isInflow ? "text-emerald-600" : "text-slate-900"}`}>
@@ -258,7 +268,7 @@ function TxnRow({ txn, filter, onDone }: { txn: StagedTxn; filter: Filter; onDon
         <div className="mt-2 flex gap-2">
           {!isInflow && (
             <button onClick={() => setExpanded((v) => !v)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-slate-800">
-              {expanded ? "Cancel" : "File as expense"}
+              {expanded ? "Cancel" : "File"}
             </button>
           )}
           <DismissButton busy={busy} onDismiss={async (reason) => { await act({ action: "dismiss", id: txn.id, reason, reviewed_by: storedReviewer() }); onDone(); }} />
@@ -273,7 +283,7 @@ function TxnRow({ txn, filter, onDone }: { txn: StagedTxn; filter: Filter; onDon
       )}
 
       {expanded && !isInflow && (
-        <FileForm txn={txn} busy={busy} onFile={act} onDone={onDone} onCancel={() => setExpanded(false)} />
+        <FileForm txn={txn} orders={orders} busy={busy} onFile={act} onDone={onDone} onCancel={() => setExpanded(false)} />
       )}
     </div>
   );
@@ -302,66 +312,141 @@ function DismissButton({ busy, onDismiss }: { busy: boolean; onDismiss: (reason:
   );
 }
 
-function FileForm({ txn, busy, onFile, onDone, onCancel }: {
-  txn: StagedTxn; busy: boolean;
-  onFile: (body: Record<string, unknown>) => Promise<{ needsConfirm?: boolean; duplicate?: { vendor_name: string; expense_date: string }; ok?: boolean } | null>;
+function dupLabel(d: DupMatch): string {
+  return d.kind === "expense"
+    ? `existing expense: ${d.vendor_name} on ${fmtDate(d.expense_date)}`
+    : `an order cost already on ${d.order_name} (${d.label})`;
+}
+
+function FileForm({ txn, orders, busy, onFile, onDone, onCancel }: {
+  txn: StagedTxn; orders: OrderOption[]; busy: boolean;
+  onFile: (body: Record<string, unknown>) => Promise<{ needsConfirm?: boolean; duplicate?: DupMatch; ok?: boolean } | null>;
   onDone: () => void; onCancel: () => void;
 }) {
-  const [category, setCategory] = useState("");
+  const [mode, setMode] = useState<"expense" | "order_cost">("expense");
+  // Shared
   const [paidBy, setPaidBy] = useState<string>("Company Account");
+  const [error, setError] = useState("");
+  const [confirmDup, setConfirmDup] = useState<DupMatch | null>(null);
+  // Expense mode
+  const [category, setCategory] = useState("");
   const [reimbursement, setReimbursement] = useState("not_needed");
   const [notes, setNotes] = useState("");
-  const [error, setError] = useState("");
-  const [confirmDup, setConfirmDup] = useState<null | { vendor_name: string; expense_date: string }>(null);
+  // Order-cost mode
+  const [orderId, setOrderId] = useState("");
+  const [orderSearch, setOrderSearch] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [supplier, setSupplier] = useState(txn.merchant_name);
 
   const needsReimbursementOptions = paidBy !== "Company Account";
+  const selectedOrder = orders.find((o) => o.id === orderId) || null;
+  const filteredOrders = orderSearch.trim()
+    ? orders.filter((o) => `${o.name} ${o.client}`.toLowerCase().includes(orderSearch.trim().toLowerCase())).slice(0, 8)
+    : orders.slice(0, 8);
+
+  function switchMode(m: "expense" | "order_cost") { setMode(m); setError(""); setConfirmDup(null); }
 
   async function submit(confirm: boolean) {
     setError("");
-    if (!category) { setError("Pick a category."); return; }
-    const res = await onFile({
-      action: "file", id: txn.id, category, paid_by: paidBy,
-      reimbursement_status: needsReimbursementOptions ? reimbursement : "not_needed",
-      notes, reviewed_by: storedReviewer(), confirm_duplicate: confirm,
-    });
+    let payload: Record<string, unknown>;
+    if (mode === "order_cost") {
+      if (!orderId) { setError("Pick an order."); return; }
+      if (!label.trim()) { setError("Add a label (e.g. Blanks)."); return; }
+      payload = { action: "file", target: "order_cost", id: txn.id, order_id: orderId, label: label.trim(), supplier: supplier.trim(), paid_by: paidBy, reviewed_by: storedReviewer(), confirm_duplicate: confirm };
+    } else {
+      if (!category) { setError("Pick a category."); return; }
+      payload = { action: "file", target: "expense", id: txn.id, category, paid_by: paidBy, reimbursement_status: needsReimbursementOptions ? reimbursement : "not_needed", notes, reviewed_by: storedReviewer(), confirm_duplicate: confirm };
+    }
+    const res = await onFile(payload);
     if (res?.needsConfirm && res.duplicate) { setConfirmDup(res.duplicate); return; }
     if (res?.ok) onDone();
     else if (!res) setError("Could not file.");
   }
 
+  const inputCls = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none";
+
   return (
     <div className="mt-3 rounded-xl bg-slate-50 p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className="text-[12px] font-semibold text-slate-600">
-          Category
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none">
-            <option value="">Select…</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </label>
-        <label className="text-[12px] font-semibold text-slate-600">
-          Paid by
-          <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none">
-            {PAID_BY.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
-        {needsReimbursementOptions && (
+      {/* Mode toggle */}
+      <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[12px] font-semibold">
+        <button onClick={() => switchMode("expense")} className={`rounded-md px-3 py-1 ${mode === "expense" ? "bg-slate-900 text-white" : "text-slate-600"}`}>General expense</button>
+        <button onClick={() => switchMode("order_cost")} className={`rounded-md px-3 py-1 ${mode === "order_cost" ? "bg-slate-900 text-white" : "text-slate-600"}`}>Order cost</button>
+      </div>
+
+      {mode === "expense" ? (
+        <div className="grid gap-2 sm:grid-cols-2">
           <label className="text-[12px] font-semibold text-slate-600">
-            Reimbursement
-            <select value={reimbursement} onChange={(e) => setReimbursement(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none">
-              {Object.entries(REIMBURSEMENT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            Category
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+              <option value="">Select…</option>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-        )}
-        <label className="text-[12px] font-semibold text-slate-600 sm:col-span-2">
-          Notes
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={`Relay ••${txn.account_mask}`} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none" />
-        </label>
-      </div>
+          <label className="text-[12px] font-semibold text-slate-600">
+            Paid by
+            <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} className={inputCls}>
+              {PAID_BY.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          {needsReimbursementOptions && (
+            <label className="text-[12px] font-semibold text-slate-600">
+              Reimbursement
+              <select value={reimbursement} onChange={(e) => setReimbursement(e.target.value)} className={inputCls}>
+                {Object.entries(REIMBURSEMENT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="text-[12px] font-semibold text-slate-600 sm:col-span-2">
+            Notes
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={`Relay ••${txn.account_mask}`} className={inputCls} />
+          </label>
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {/* Order picker (searchable) */}
+          <div className="relative text-[12px] font-semibold text-slate-600 sm:col-span-2">
+            Order
+            <input
+              value={selectedOrder && !pickerOpen ? `${selectedOrder.name} · ${selectedOrder.client}` : orderSearch}
+              onChange={(e) => { setOrderSearch(e.target.value); setPickerOpen(true); if (orderId) setOrderId(""); }}
+              onFocus={() => setPickerOpen(true)}
+              placeholder="Search active custom orders…"
+              className={inputCls}
+            />
+            {pickerOpen && (
+              <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                {filteredOrders.length === 0 ? (
+                  <div className="px-3 py-2 text-[12px] font-normal text-slate-400">No matching orders.</div>
+                ) : filteredOrders.map((o) => (
+                  <button key={o.id} onClick={() => { setOrderId(o.id); setOrderSearch(""); setPickerOpen(false); }} className="block w-full px-3 py-1.5 text-left text-[13px] font-normal hover:bg-slate-50">
+                    <span className="font-semibold text-slate-800">{o.name}</span> <span className="text-slate-400">· {o.client}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <label className="text-[12px] font-semibold text-slate-600">
+            Label
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Blanks, Design Transfers" className={inputCls} />
+          </label>
+          <label className="text-[12px] font-semibold text-slate-600">
+            Vendor
+            <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputCls} />
+          </label>
+          <label className="text-[12px] font-semibold text-slate-600">
+            Paid by
+            <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} className={inputCls}>
+              {PAID_BY.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <p className="self-end pb-1.5 text-[11px] font-normal text-slate-400">Files as a <b>paid</b> production cost on the order.</p>
+        </div>
+      )}
 
       {confirmDup && (
         <div className="mt-2 rounded-lg bg-amber-50 p-2 text-[12px] text-amber-800 ring-1 ring-amber-100">
-          Possible duplicate of an existing expense: <b>{confirmDup.vendor_name}</b> on {fmtDate(confirmDup.expense_date)}. File anyway?
+          Possible duplicate of {dupLabel(confirmDup)}. File anyway?
         </div>
       )}
       {error && <p className="mt-2 text-[12px] text-rose-600">{error}</p>}
@@ -370,7 +455,7 @@ function FileForm({ txn, busy, onFile, onDone, onCancel }: {
         {confirmDup ? (
           <button disabled={busy} onClick={() => submit(true)} className="rounded-lg bg-amber-500 px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50">File anyway</button>
         ) : (
-          <button disabled={busy} onClick={() => submit(false)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50">{busy ? "Filing…" : "File expense"}</button>
+          <button disabled={busy} onClick={() => submit(false)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50">{busy ? "Filing…" : mode === "order_cost" ? "File order cost" : "File expense"}</button>
         )}
         <button onClick={onCancel} className="text-[12px] text-slate-400">Cancel</button>
       </div>
