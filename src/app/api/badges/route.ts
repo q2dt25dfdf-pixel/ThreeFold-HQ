@@ -5,8 +5,12 @@ import { validateSessionRequest } from "@/lib/sessionAuth";
 // Sidebar "new" badges (SHARED across founders). Backed by hq_section_views(section,
 // last_viewed_at). shop_orders is RLS-on so this must be server-side (service role).
 //
-// GET  /api/badges          -> { shopOrders, orders }  (counts of rows created since seen)
+// GET  /api/badges          -> { shopOrders, orders, finances }  (see below)
 // POST /api/badges {section} -> mark a section viewed now (clears its badge for everyone)
+//
+// shopOrders / orders : counts of rows created since last seen (hq_section_views).
+// finances            : LIVE count of unreviewed Plaid staged transactions — a work-
+//                       queue count, not a since-seen count, so no view row is needed.
 const SECTIONS = ["shop-orders", "orders"] as const;
 type Section = (typeof SECTIONS)[number];
 
@@ -23,6 +27,13 @@ async function countSince(db: ReturnType<typeof getSupabaseAdmin>, table: string
     .gt("data->>created_at", since);
   return count ?? 0;
 }
+async function unreviewedPlaidCount(db: ReturnType<typeof getSupabaseAdmin>) {
+  const { count } = await db
+    .from("plaid_transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("data->>status", "unreviewed");
+  return count ?? 0;
+}
 
 export async function GET(request: Request) {
   const auth = await validateSessionRequest(request);
@@ -30,11 +41,12 @@ export async function GET(request: Request) {
   const db = getSupabaseAdmin();
   const seen = await lastViewedMap(db);
   const epoch = "1970-01-01T00:00:00Z";
-  const [shopOrders, orders] = await Promise.all([
+  const [shopOrders, orders, finances] = await Promise.all([
     countSince(db, "shop_orders", seen["shop-orders"] || epoch),
     countSince(db, "orders", seen["orders"] || epoch),
+    unreviewedPlaidCount(db),
   ]);
-  return NextResponse.json({ shopOrders, orders }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ shopOrders, orders, finances }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {

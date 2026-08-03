@@ -9,6 +9,7 @@ import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import SendReceiptModal from "@/components/SendReceiptModal";
 import SendFinalInvoiceModal from "@/components/SendFinalInvoiceModal";
+import PlaidReview from "@/components/finances/PlaidReview";
 import { resolveInvoiceContact } from "@/lib/greeting";
 import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel, resolveReceipt, fmtReceiptDate } from "@/lib/receipt";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -2494,6 +2495,9 @@ function FinancesContent() {
       {/* ── Expenses tab ─────────────────────────────────────────────────────── */}
       {activeTab === "expenses" && (
       <div className="space-y-5">
+        {/* ── Relay bank feed: connect + review staged transactions before they become expenses ── */}
+        <PlaidReview />
+
         {/* ── Hero row: Reimbursements owed (amber on >0) + Total spent + Unpaid ────── */}
         <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
           <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${reimbursementsOwed > 0 ? "bg-amber-50 ring-1 ring-amber-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
