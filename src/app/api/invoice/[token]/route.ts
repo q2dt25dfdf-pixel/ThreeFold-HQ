@@ -4,6 +4,7 @@ import { calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 import { getPortalBaseUrl } from "@/lib/publicUrl";
 import { normalizeSizes, type SizeQty } from "@/lib/sizeBreakdown";
+import { fmtDeliveryDate } from "@/lib/estDelivery";
 
 export async function GET(
   request: NextRequest,
@@ -120,6 +121,8 @@ export async function GET(
     // /api/portal/generate: <portal base>/portal/<token>. Null when no active token,
     // so the page can hide the portal row rather than render a dead button.
     let portalUrl: string | null = null;
+    // Formatted smart est. delivery, read-only from the order. Null when unset (page hides it).
+    let estDelivery: string | null = null;
     const orderIdForPortal = (raw.order_id ?? "") as string;
     if (orderIdForPortal) {
       const { data: orderRows } = await getSupabaseAdmin()
@@ -132,6 +135,7 @@ export async function GET(
       if (ptoken && od?.portal_enabled !== false) {
         portalUrl = `${getPortalBaseUrl(request.nextUrl.origin)}/portal/${ptoken}`;
       }
+      if (od?.estDelivery) estDelivery = fmtDeliveryDate(od.estDelivery as string) || null;
 
       // Merge size breakdowns from the order — the authoritative single source for sizes
       // (the internal editor writes them onto orders.line_items). Only fill in items that
@@ -183,6 +187,7 @@ export async function GET(
       final_payment_method: (raw.final_payment_method ?? null) as string | null,
       status: (raw.status ?? "Draft") as string,
       doc_kind: docKind,
+      est_delivery: estDelivery,
       line_items: lineItems,
     };
 

@@ -7,6 +7,7 @@ import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { buildBlankSuggestions } from "@/lib/blankSuggestions";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { PRESET_SIZES, normalizeSizes, sizesSummary, sizesTotal, type SizeQty } from "@/lib/sizeBreakdown";
+import { computeSuggestedDelivery, fmtDeliveryDate, resolveEstDeliveryDisplay, toDateOnly } from "@/lib/estDelivery";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -93,6 +94,9 @@ type Order = {
   amount: number;
   status: string;
   estimatedDeliveryDate: string;
+  // Smart delivery estimate (new authoritative fields; estimatedDeliveryDate is a legacy fallback).
+  estDelivery?: string | null;
+  estDeliverySource?: "suggested" | "manual" | null;
   notes: string;
   owner?: string;
   nextAction?: string;
@@ -153,6 +157,7 @@ type Invoice = {
   total_amount: string | number;
   deposit_amount: string | number;
   deposit_paid: boolean;
+  deposit_paid_date?: string;
   balance_remaining: string | number;
   final_paid: boolean;
   final_due_date?: string;
@@ -333,7 +338,7 @@ function buildCommButtons(order: Order): CommButton[] {
   const name = order.orderName || "[order]";
   const qty = order.quantity ? String(order.quantity) : "";
   const items = order.items?.join(", ") || "";
-  const due = order.estimatedDeliveryDate || "TBD";
+  const due = order.estDelivery ? (fmtDeliveryDate(order.estDelivery) || order.estDelivery) : (order.estimatedDeliveryDate || "TBD");
 
   // emailBody keeps the full signature (Gmail); textBody strips it and ends "- Threefold" (Copy).
   const emailBody = (content: string) => `Hi ${client},\n\n${content}\n\n${TF_PLAIN_CLOSING}`;
@@ -519,6 +524,11 @@ export default function OrderDetailPage() {
   const [editingSizesIdx, setEditingSizesIdx] = useState<number | null>(null);
   const [sizesDraft, setSizesDraft] = useState<SizeQty[]>([]);
   const sizesSave = useSaveState();
+
+  // Inline Est. delivery editor (order.estDelivery / estDeliverySource)
+  const [editingEstDelivery, setEditingEstDelivery] = useState(false);
+  const [estDeliveryDraft, setEstDeliveryDraft] = useState("");
+  const estDeliverySave = useSaveState();
 
   // Read-first: each editable section defaults to a read view; these gate edit mode.
   const [editingItems, setEditingItems] = useState(false);
@@ -766,6 +776,21 @@ export default function OrderDetailPage() {
       () => upsertItem({ ...order, line_items: nextLineItems }),
       () => setEditingSizesIdx(null),
     );
+  };
+
+  // ── Inline Est. delivery editor ────────────────────────────────────────────
+  const persistEstDelivery = (rawDate: string, source: "manual" | "suggested") => {
+    if (!order) return;
+    const date = toDateOnly(rawDate);
+    estDeliverySave.runSave(
+      () => upsertItem({ ...order, estDelivery: date, estDeliverySource: date ? source : null }),
+      () => setEditingEstDelivery(false),
+    );
+  };
+  const saveEstDelivery = () => persistEstDelivery(estDeliveryDraft, "manual");
+  const resetEstDeliveryToSuggested = (suggested: string) => {
+    setEstDeliveryDraft(suggested);
+    persistEstDelivery(suggested, "suggested");
   };
 
   // Re-hydrate a section's draft state from the saved order (used by Cancel).
@@ -1984,13 +2009,60 @@ export default function OrderDetailPage() {
         {([
           { label: "Quantity", value: String(order.quantity || 0) },
           { label: "Amount", value: formatCurrency(order.amount) },
-          { label: "Est. delivery", value: order.estimatedDeliveryDate || "TBD" },
         ] as { label: string; value: string }[]).map(({ label, value }) => (
           <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
             <span className="shrink-0 text-xs text-slate-500">{label}</span>
             <span className="min-w-0 break-words text-right text-xs font-medium text-slate-950">{value}</span>
           </div>
         ))}
+
+        {/* Est. delivery — editable, with smart suggestion (21 days after deposit paid) */}
+        {(() => {
+          const depositPaid = invoice?.deposit_paid === true;
+          const depositPaidDate = invoice?.deposit_paid_date;
+          const ctx = { depositPaid, createdAt: order.created_at, depositPaidDate };
+          const disp = resolveEstDeliveryDisplay(order, ctx);
+          const suggestion = computeSuggestedDelivery(ctx);
+          const displayDate = disp.date ? (fmtDeliveryDate(disp.date) || disp.date) : "TBD";
+          return (
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              {!editingEstDelivery ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="shrink-0 text-xs text-slate-500">Est. delivery</span>
+                  <span className="flex min-w-0 items-center justify-end gap-2">
+                    <span className="break-words text-right text-xs font-medium text-slate-950">{displayDate}</span>
+                    {disp.source === "suggested" && disp.date && (
+                      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Suggested</span>
+                    )}
+                    <button type="button" onClick={() => { setEstDeliveryDraft(toDateOnly(disp.date) ?? suggestion ?? ""); setEditingEstDelivery(true); }} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                      <Edit2 className="h-3 w-3" /> Edit
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-500">Est. delivery</span>
+                    {suggestion && (
+                      <button type="button" onClick={() => resetEstDeliveryToSuggested(suggestion)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800">Reset to suggested</button>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={toDateOnly(estDeliveryDraft) ?? ""}
+                    onChange={(e) => setEstDeliveryDraft(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button type="button" onClick={() => setEditingEstDelivery(false)} className="rounded-xl border border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <SaveButton state={estDeliverySave.saveState} onClick={saveEstDelivery} mode="edit" />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {order.notes && (
           <div className="rounded-xl bg-slate-50 px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Design notes</p>
@@ -2613,9 +2685,9 @@ export default function OrderDetailPage() {
                     {order.owner}
                   </span>
                 )}
-                {order.estimatedDeliveryDate && (
+                {(order.estDelivery || order.estimatedDeliveryDate) && (
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
-                    Due {order.estimatedDeliveryDate}
+                    Due {order.estDelivery ? (fmtDeliveryDate(order.estDelivery) || order.estDelivery) : order.estimatedDeliveryDate}
                   </span>
                 )}
                 {order.source && (

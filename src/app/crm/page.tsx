@@ -20,6 +20,7 @@ import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
+import { computeSuggestedDelivery } from "@/lib/estDelivery";
 import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
 import {
   autoFollowUpTaskId,
@@ -99,6 +100,8 @@ type Order = {
   amount: number;
   status: string;
   estimatedDeliveryDate: string;
+  estDelivery?: string | null;
+  estDeliverySource?: "suggested" | "manual" | null;
   notes: string;
   source?: string;
   lead_id?: string;
@@ -662,6 +665,17 @@ function CRMContent() {
     const { items: derivedItems, quantity: derivedQuantity } = deriveItemsAndQuantity(orderLineItems);
     const nowIso = new Date().toISOString();
     const existingOrder = orders.find((o) => o.id === orderId);
+    // Smart est. delivery: deposit is paid at this point, so suggest anchor + 21 days.
+    // Preserve a hand-set (manual) date on a re-run; otherwise (re)apply the suggestion.
+    const keepManualDelivery = existingOrder?.estDeliverySource === "manual" && !!existingOrder?.estDelivery;
+    const suggestedDelivery = keepManualDelivery
+      ? null
+      : computeSuggestedDelivery({ depositPaid: true, createdAt: existingOrder?.created_at ?? nowIso, depositPaidDate: today });
+    const estDeliveryFields = keepManualDelivery
+      ? { estDelivery: existingOrder!.estDelivery, estDeliverySource: "manual" as const }
+      : suggestedDelivery
+        ? { estDelivery: suggestedDelivery, estDeliverySource: "suggested" as const }
+        : {};
     await upsertOrder({
       id: orderId,
       orderName,
@@ -679,6 +693,7 @@ function CRMContent() {
       created_at: existingOrder?.created_at ?? nowIso,
       status_changed_at: existingOrder?.status === "Production" ? (existingOrder?.status_changed_at ?? nowIso) : nowIso,
       estimatedDeliveryDate: "",
+      ...estDeliveryFields,
       notes: "",
       source: lead.source === "Website" ? "Website Lead" : "CRM Lead",
       lead_id: lead.id,

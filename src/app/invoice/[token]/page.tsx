@@ -48,6 +48,7 @@ interface InvoiceData {
   final_payment_method?: string | null;
   status: string;
   doc_kind?: "receipt" | "invoice";
+  est_delivery?: string | null;
   line_items: LineItem[];
 }
 
@@ -362,6 +363,12 @@ export default function InvoicePage() {
           <div style={s.chipLabel}>STATUS</div>
           <div style={{ ...s.chipValue, color: statusColor }}>{statusLabel}</div>
         </div>
+        {data.est_delivery && (
+          <div style={s.chip}>
+            <div style={s.chipLabel}>EST. DELIVERY</div>
+            <div style={s.chipValue}>{data.est_delivery}</div>
+          </div>
+        )}
       </div>
 
       <div style={s.rule} />
