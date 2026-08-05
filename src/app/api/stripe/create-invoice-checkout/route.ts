@@ -81,6 +81,16 @@ export async function POST(request: NextRequest) {
         processing_fee: String(surcharge),
         total_charged: String(chargeAmount),
       },
+      // Session metadata does NOT propagate to the PaymentIntent. Stamp the PI too so the
+      // website Stripe webhook (which sees payment_intent.succeeded) can recognize this as a
+      // custom-order payment, skip creating a shop order, and match it back to the finance row.
+      payment_intent_data: {
+        metadata: {
+          payment_type: "final_invoice",
+          finance_id: row.id,
+          order_id: (raw.order_id as string) ?? "",
+        },
+      },
       success_url: `${origin}/invoice/${invoiceToken}?payment=success`,
       cancel_url: `${origin}/invoice/${invoiceToken}?payment=cancelled`,
     });

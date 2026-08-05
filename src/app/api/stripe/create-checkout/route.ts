@@ -92,6 +92,15 @@ export async function POST(request: NextRequest) {
         processing_fee: String(surcharge),
         total_charged: String(chargeAmount),
       },
+      // Stamp the PaymentIntent too (session metadata doesn't reach the PI) so the website
+      // Stripe webhook recognizes this deposit payment and skips creating a shop order.
+      payment_intent_data: {
+        metadata: {
+          payment_type: "deposit",
+          deposit_request_id: row.id,
+          lead_id: (raw.lead_id as string) ?? "",
+        },
+      },
       success_url: `${origin}/deposit/${depositToken}?payment=success`,
       cancel_url: `${origin}/deposit/${depositToken}?payment=cancelled`,
     });

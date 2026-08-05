@@ -150,6 +150,7 @@ type Invoice = {
   deposit_paid_date?: string;
   balance_remaining: string | number;
   final_paid: boolean;
+  paid_in_full?: boolean;
   final_due_date?: string;
   final_invoice_sent_at?: string;
   status: string;
@@ -2650,6 +2651,11 @@ export default function OrderDetailPage() {
                 <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClass(order.status)}`}>
                   {order.status}
                 </span>
+                {(invoice?.paid_in_full === true || invoice?.final_paid === true) && (
+                  <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-300 ring-1 ring-emerald-400/30">
+                    Paid
+                  </span>
+                )}
                 {order.quantity ? (
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
                     {order.quantity} units

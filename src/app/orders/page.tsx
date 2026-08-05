@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
@@ -123,6 +123,16 @@ function OrdersContent() {
     })();
   }, []);
   const { data: orders, deleteItem, loading, error, reload } = useSupabaseTable<Order>("orders", []);
+  // Read-only payment state — derived from the linked finances row (order_id → invoice).
+  // All payment EDITING stays in the Finances modal; this only surfaces a "Paid" badge.
+  const { data: invoicesForPaid } = useSupabaseTable<{ id: string; order_id?: string; final_paid?: boolean; paid_in_full?: boolean }>("finances", []);
+  const paidOrderIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const inv of invoicesForPaid) {
+      if ((inv.paid_in_full === true || inv.final_paid === true) && inv.order_id) set.add(inv.order_id);
+    }
+    return set;
+  }, [invoicesForPaid]);
   const [deletingId, setDeletingId] = useState("");
   const [filter, setFilter] = useState<OrderStatus | "All" | "Active">(() => {
     const p = searchParams.get("filter") ?? searchParams.get("status") ?? "";
@@ -209,9 +219,16 @@ function OrdersContent() {
               <h3 className="truncate text-base font-semibold text-slate-950 md:text-lg">{order.orderName}</h3>
               <p className="mt-1 text-[11px] text-slate-500 md:text-xs">{order.client || "No client selected"}</p>
             </div>
-            <span className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusColors[order.status]}`}>
-              {order.status}
-            </span>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              {paidOrderIds.has(order.id) && (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-700 ring-1 ring-emerald-100">
+                  Paid
+                </span>
+              )}
+              <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusColors[order.status]}`}>
+                {order.status}
+              </span>
+            </div>
           </div>
           <div className="mt-4 space-y-1.5 text-[11px] text-slate-500 md:text-xs">
             <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-2">
