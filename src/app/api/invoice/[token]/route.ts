@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { normalizeDiscount, type QuoteDiscount } from "@/lib/salesTax";
 import { getPortalBaseUrl } from "@/lib/publicUrl";
+import { normalizeSizes, type SizeQty } from "@/lib/sizeBreakdown";
+import { fmtDeliveryDate } from "@/lib/estDelivery";
 
 export async function GET(
   request: NextRequest,
@@ -39,8 +41,20 @@ export async function GET(
     // Use deposit request as authoritative source for amounts and line items when available
     let totalAmount = calcTotal(raw);
     let depositAmount = calcDeposit(raw);
-    type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; originalUnitPrice?: unknown };
-    let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number; originalUnitPrice?: number }[] = [];
+    type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; originalUnitPrice?: unknown; sizes?: unknown };
+    let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number; originalUnitPrice?: number; sizes?: SizeQty[] }[] = [];
+    const mapLineItem = (li: RawLineItem) => {
+      const sizes = normalizeSizes(li.sizes);
+      return {
+        name: String(li.name ?? ""),
+        description: String(li.description ?? ""),
+        quantity: Number(li.quantity ?? 0),
+        unitPrice: Number(li.unitPrice ?? 0),
+        lineTotal: Number(li.lineTotal ?? 0),
+        ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
+        ...(sizes.length > 0 ? { sizes } : {}),
+      };
+    };
 
     let subtotalVal: number | null = null;
     let salesTaxRateVal: number | null = null;
@@ -68,14 +82,7 @@ export async function GET(
         if (dep.discount != null) discountVal = normalizeDiscount(dep.discount);
         if (dep.deposit_request_number != null) depositNumberVal = String(dep.deposit_request_number);
         if (Array.isArray(dep.line_items)) {
-          lineItems = (dep.line_items as RawLineItem[]).map((li) => ({
-            name: String(li.name ?? ""),
-            description: String(li.description ?? ""),
-            quantity: Number(li.quantity ?? 0),
-            unitPrice: Number(li.unitPrice ?? 0),
-            lineTotal: Number(li.lineTotal ?? 0),
-            ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
-          }));
+          lineItems = (dep.line_items as RawLineItem[]).map(mapLineItem);
         }
       }
     }
@@ -90,14 +97,7 @@ export async function GET(
 
     // Fall back to line items stored directly on the finance record
     if (lineItems.length === 0 && Array.isArray(raw.line_items)) {
-      lineItems = (raw.line_items as RawLineItem[]).map((li) => ({
-        name: String(li.name ?? ""),
-        description: String(li.description ?? ""),
-        quantity: Number(li.quantity ?? 0),
-        unitPrice: Number(li.unitPrice ?? 0),
-        lineTotal: Number(li.lineTotal ?? 0),
-        ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
-      }));
+      lineItems = (raw.line_items as RawLineItem[]).map(mapLineItem);
     }
 
     const balanceRemaining = Math.max(totalAmount - depositAmount, 0);
@@ -121,6 +121,8 @@ export async function GET(
     // /api/portal/generate: <portal base>/portal/<token>. Null when no active token,
     // so the page can hide the portal row rather than render a dead button.
     let portalUrl: string | null = null;
+    // Formatted smart est. delivery, read-only from the order. Null when unset (page hides it).
+    let estDelivery: string | null = null;
     const orderIdForPortal = (raw.order_id ?? "") as string;
     if (orderIdForPortal) {
       const { data: orderRows } = await getSupabaseAdmin()
@@ -132,6 +134,27 @@ export async function GET(
       const ptoken = ((od?.portal_token ?? "") as string).trim();
       if (ptoken && od?.portal_enabled !== false) {
         portalUrl = `${getPortalBaseUrl(request.nextUrl.origin)}/portal/${ptoken}`;
+      }
+      if (od?.estDelivery) estDelivery = fmtDeliveryDate(od.estDelivery as string) || null;
+
+      // Merge size breakdowns from the order — the authoritative single source for sizes
+      // (the internal editor writes them onto orders.line_items). Only fill in items that
+      // don't already carry sizes, matching by name first then falling back to index.
+      const orderLineItems = (Array.isArray(od?.line_items) ? od.line_items : []) as RawLineItem[];
+      if (orderLineItems.length > 0) {
+        const sizesByName = new Map<string, SizeQty[]>();
+        orderLineItems.forEach((oli) => {
+          const s = normalizeSizes(oli?.sizes);
+          const key = String(oli?.name ?? "").trim().toLowerCase();
+          if (s.length > 0 && key && !sizesByName.has(key)) sizesByName.set(key, s);
+        });
+        lineItems = lineItems.map((li, i) => {
+          if (li.sizes && li.sizes.length > 0) return li;
+          const byName = sizesByName.get(li.name.trim().toLowerCase());
+          const byIndex = normalizeSizes(orderLineItems[i]?.sizes);
+          const sizes = byName ?? (byIndex.length > 0 ? byIndex : undefined);
+          return sizes && sizes.length > 0 ? { ...li, sizes } : li;
+        });
       }
     }
 
@@ -164,6 +187,7 @@ export async function GET(
       final_payment_method: (raw.final_payment_method ?? null) as string | null,
       status: (raw.status ?? "Draft") as string,
       doc_kind: docKind,
+      est_delivery: estDelivery,
       line_items: lineItems,
     };
 

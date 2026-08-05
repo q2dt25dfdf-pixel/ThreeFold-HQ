@@ -7,6 +7,8 @@ import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { buildBlankSuggestions } from "@/lib/blankSuggestions";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { deriveCostRollup, type CostLine } from "@/lib/orderCosts";
+import { PRESET_SIZES, normalizeSizes, sizesSummary, sizesTotal, type SizeQty } from "@/lib/sizeBreakdown";
+import { computeSuggestedDelivery, fmtDeliveryDate, resolveEstDeliveryDisplay, toDateOnly } from "@/lib/estDelivery";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
@@ -61,6 +63,8 @@ type OrderLineItem = {
   blank?: string;
   colors?: { color: string; qty: number }[];
   print_detail?: string;
+  // Size breakdown (client-facing). Additive detail — does not drive `quantity`.
+  sizes?: SizeQty[];
 };
 
 // CostLine + deriveCostRollup now live in @/lib/orderCosts so the order page and the
@@ -80,6 +84,9 @@ type Order = {
   amount: number;
   status: string;
   estimatedDeliveryDate: string;
+  // Smart delivery estimate (new authoritative fields; estimatedDeliveryDate is a legacy fallback).
+  estDelivery?: string | null;
+  estDeliverySource?: "suggested" | "manual" | null;
   notes: string;
   owner?: string;
   nextAction?: string;
@@ -140,6 +147,7 @@ type Invoice = {
   total_amount: string | number;
   deposit_amount: string | number;
   deposit_paid: boolean;
+  deposit_paid_date?: string;
   balance_remaining: string | number;
   final_paid: boolean;
   final_due_date?: string;
@@ -305,7 +313,7 @@ function buildCommButtons(order: Order): CommButton[] {
   const name = order.orderName || "[order]";
   const qty = order.quantity ? String(order.quantity) : "";
   const items = order.items?.join(", ") || "";
-  const due = order.estimatedDeliveryDate || "TBD";
+  const due = order.estDelivery ? (fmtDeliveryDate(order.estDelivery) || order.estDelivery) : (order.estimatedDeliveryDate || "TBD");
 
   // emailBody keeps the full signature (Gmail); textBody strips it and ends "- Threefold" (Copy).
   const emailBody = (content: string) => `Hi ${client},\n\n${content}\n\n${TF_PLAIN_CLOSING}`;
@@ -485,6 +493,17 @@ export default function OrderDetailPage() {
   // Manual line-item editor (order.line_items)
   const [lineItemsDraft, setLineItemsDraft] = useState<OrderLineItem[]>([]);
   const lineItemsSave = useSaveState();
+
+  // Per-line-item size breakdown editor. Independent of the main line-item editor:
+  // opens inline from the read view of a single item and writes that item's sizes directly.
+  const [editingSizesIdx, setEditingSizesIdx] = useState<number | null>(null);
+  const [sizesDraft, setSizesDraft] = useState<SizeQty[]>([]);
+  const sizesSave = useSaveState();
+
+  // Inline Est. delivery editor (order.estDelivery / estDeliverySource)
+  const [editingEstDelivery, setEditingEstDelivery] = useState(false);
+  const [estDeliveryDraft, setEstDeliveryDraft] = useState("");
+  const estDeliverySave = useSaveState();
 
   // Read-first: each editable section defaults to a read view; these gate edit mode.
   const [editingItems, setEditingItems] = useState(false);
@@ -700,6 +719,53 @@ export default function OrderDetailPage() {
     // Re-derive items[] + quantity from the edited lines (shared helper), keep them in sync.
     const { items, quantity } = deriveItemsAndQuantity(lineItemsDraft);
     lineItemsSave.runSave(() => upsertItem({ ...order, line_items: lineItemsDraft, items, quantity }));
+  };
+
+  // ── Per-item size breakdown editor (order.line_items[idx].sizes) ────────────
+  // Seed the draft with all adult presets (so they render as a fixed grid) plus any
+  // already-saved custom codes (youth/other). Zero-qty presets show as empty inputs.
+  const openSizeEditor = (idx: number) => {
+    const li = order?.line_items?.[idx];
+    const existing = normalizeSizes(li?.sizes);
+    const byCode = new Map(existing.map((s) => [s.size, s.qty]));
+    const presetRows: SizeQty[] = PRESET_SIZES.map((s) => ({ size: s, qty: byCode.get(s) ?? 0 }));
+    const customRows = existing.filter((s) => !(PRESET_SIZES as readonly string[]).includes(s.size));
+    setSizesDraft([...presetRows, ...customRows]);
+    setEditingSizesIdx(idx);
+    sizesSave.resetSaveState();
+  };
+  const updateSizeQty = (i: number, qty: number) =>
+    setSizesDraft((prev) => prev.map((s, j) => (j === i ? { ...s, qty: Math.max(0, Math.round(qty || 0)) } : s)));
+  const updateSizeCode = (i: number, size: string) =>
+    setSizesDraft((prev) => prev.map((s, j) => (j === i ? { ...s, size } : s)));
+  const addCustomSize = () => setSizesDraft((prev) => [...prev, { size: "", qty: 0 }]);
+  const removeSize = (i: number) => setSizesDraft((prev) => prev.filter((_, j) => j !== i));
+  const saveSizes = (idx: number) => {
+    if (!order) return;
+    // Persist only non-empty, positive rows (drops zeroed presets / removed rows).
+    const cleaned = normalizeSizes(sizesDraft);
+    const nextLineItems = (order.line_items ?? []).map((li, i) =>
+      i === idx ? { ...li, sizes: cleaned.length ? cleaned : undefined } : li,
+    );
+    sizesSave.runSave(
+      () => upsertItem({ ...order, line_items: nextLineItems }),
+      () => setEditingSizesIdx(null),
+    );
+  };
+
+  // ── Inline Est. delivery editor ────────────────────────────────────────────
+  const persistEstDelivery = (rawDate: string, source: "manual" | "suggested") => {
+    if (!order) return;
+    const date = toDateOnly(rawDate);
+    estDeliverySave.runSave(
+      () => upsertItem({ ...order, estDelivery: date, estDeliverySource: date ? source : null }),
+      () => setEditingEstDelivery(false),
+    );
+  };
+  const saveEstDelivery = () => persistEstDelivery(estDeliveryDraft, "manual");
+  const resetEstDeliveryToSuggested = (suggested: string) => {
+    setEstDeliveryDraft(suggested);
+    persistEstDelivery(suggested, "suggested");
   };
 
   // Re-hydrate a section's draft state from the saved order (used by Cancel).
@@ -1766,6 +1832,59 @@ export default function OrderDetailPage() {
                         ))}
                       </div>
                     )}
+                    {/* Size breakdown — collapsed summary / empty CTA / inline editor */}
+                    {(() => {
+                      const savedSizes = normalizeSizes(li.sizes);
+                      const lineQty = Number(li.quantity) || 0;
+                      if (editingSizesIdx === i) {
+                        const total = sizesTotal(sizesDraft);
+                        const matches = total === lineQty;
+                        return (
+                          <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2.5">
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Size breakdown</p>
+                            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+                              {sizesDraft.map((s, si) =>
+                                (PRESET_SIZES as readonly string[]).includes(s.size) ? (
+                                  <div key={si} className="flex flex-col">
+                                    <label className="mb-0.5 text-center text-[10px] font-semibold text-slate-500">{s.size}</label>
+                                    <input type="number" min={0} value={s.qty === 0 ? "" : s.qty} onChange={(e) => updateSizeQty(si, Number(e.target.value) || 0)} placeholder="0" className="w-full rounded-lg border border-slate-300 bg-white px-1.5 py-1.5 text-center text-xs text-slate-900 outline-none focus:border-slate-400" />
+                                  </div>
+                                ) : null,
+                              )}
+                            </div>
+                            {sizesDraft.some((s) => !(PRESET_SIZES as readonly string[]).includes(s.size)) && (
+                              <div className="mt-2 space-y-1.5">
+                                {sizesDraft.map((s, si) =>
+                                  !(PRESET_SIZES as readonly string[]).includes(s.size) ? (
+                                    <div key={si} className="flex items-center gap-2">
+                                      <input type="text" value={s.size} onChange={(e) => updateSizeCode(si, e.target.value)} placeholder="Size (e.g. YM, OS)" className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                                      <input type="number" min={0} value={s.qty === 0 ? "" : s.qty} onChange={(e) => updateSizeQty(si, Number(e.target.value) || 0)} placeholder="Qty" className="w-16 shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400" />
+                                      <button type="button" onClick={() => removeSize(si)} aria-label="Remove size" className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
+                                    </div>
+                                  ) : null,
+                                )}
+                              </div>
+                            )}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <button type="button" onClick={addCustomSize} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700">+ Add size</button>
+                              <span className={`text-[11px] font-semibold ${matches ? "text-emerald-600" : "text-amber-600"}`}>{total} / {lineQty} assigned</span>
+                            </div>
+                            <div className="mt-2 flex items-center justify-end gap-2">
+                              <button type="button" onClick={() => setEditingSizesIdx(null)} className="rounded-xl border border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                              <SaveButton state={sizesSave.saveState} onClick={() => saveSizes(i)} mode="edit" />
+                            </div>
+                          </div>
+                        );
+                      }
+                      return savedSizes.length > 0 ? (
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="min-w-0 break-words text-[11px] font-medium text-slate-500">{sizesSummary(savedSizes)}</span>
+                          <button type="button" onClick={() => openSizeEditor(i)} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700"><Edit2 className="h-3 w-3" /> Edit</button>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => openSizeEditor(i)} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700"><Plus className="h-3 w-3" /> Add size breakdown</button>
+                      );
+                    })()}
                   </div>
                 );
               })
@@ -1865,13 +1984,60 @@ export default function OrderDetailPage() {
         {([
           { label: "Quantity", value: String(order.quantity || 0) },
           { label: "Amount", value: formatCurrency(order.amount) },
-          { label: "Est. delivery", value: order.estimatedDeliveryDate || "TBD" },
         ] as { label: string; value: string }[]).map(({ label, value }) => (
           <div key={label} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
             <span className="shrink-0 text-xs text-slate-500">{label}</span>
             <span className="min-w-0 break-words text-right text-xs font-medium text-slate-950">{value}</span>
           </div>
         ))}
+
+        {/* Est. delivery — editable, with smart suggestion (21 days after deposit paid) */}
+        {(() => {
+          const depositPaid = invoice?.deposit_paid === true;
+          const depositPaidDate = invoice?.deposit_paid_date;
+          const ctx = { depositPaid, createdAt: order.created_at, depositPaidDate };
+          const disp = resolveEstDeliveryDisplay(order, ctx);
+          const suggestion = computeSuggestedDelivery(ctx);
+          const displayDate = disp.date ? (fmtDeliveryDate(disp.date) || disp.date) : "TBD";
+          return (
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              {!editingEstDelivery ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="shrink-0 text-xs text-slate-500">Est. delivery</span>
+                  <span className="flex min-w-0 items-center justify-end gap-2">
+                    <span className="break-words text-right text-xs font-medium text-slate-950">{displayDate}</span>
+                    {disp.source === "suggested" && disp.date && (
+                      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Suggested</span>
+                    )}
+                    <button type="button" onClick={() => { setEstDeliveryDraft(toDateOnly(disp.date) ?? suggestion ?? ""); setEditingEstDelivery(true); }} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                      <Edit2 className="h-3 w-3" /> Edit
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-500">Est. delivery</span>
+                    {suggestion && (
+                      <button type="button" onClick={() => resetEstDeliveryToSuggested(suggestion)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800">Reset to suggested</button>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={toDateOnly(estDeliveryDraft) ?? ""}
+                    onChange={(e) => setEstDeliveryDraft(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button type="button" onClick={() => setEditingEstDelivery(false)} className="rounded-xl border border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <SaveButton state={estDeliverySave.saveState} onClick={saveEstDelivery} mode="edit" />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {order.notes && (
           <div className="rounded-xl bg-slate-50 px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Design notes</p>
@@ -2494,9 +2660,9 @@ export default function OrderDetailPage() {
                     {order.owner}
                   </span>
                 )}
-                {order.estimatedDeliveryDate && (
+                {(order.estDelivery || order.estimatedDeliveryDate) && (
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
-                    Due {order.estimatedDeliveryDate}
+                    Due {order.estDelivery ? (fmtDeliveryDate(order.estDelivery) || order.estDelivery) : order.estimatedDeliveryDate}
                   </span>
                 )}
                 {order.source && (

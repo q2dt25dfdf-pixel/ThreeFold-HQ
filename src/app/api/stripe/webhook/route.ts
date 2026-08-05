@@ -8,6 +8,7 @@ import { createNotification } from "@/lib/notifications";
 import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
 import { autoSendReceipt } from "@/lib/autoSendReceipt";
 import { getInvoiceBaseUrl } from "@/lib/publicUrl";
+import { computeSuggestedDelivery, estDeliverySuggestionUpdate } from "@/lib/estDelivery";
 
 // Disable body parsing — Stripe signature verification requires the raw body
 export const config = { api: { bodyParser: false } };
@@ -448,6 +449,10 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
         line_items: bootLineItems,
         quantity: bootQuantity,
         estimatedDeliveryDate: "",
+        // Smart est. delivery: deposit paid now → anchor (created = paid = now) + 21 days.
+        ...(computeSuggestedDelivery({ depositPaid: true, createdAt: paidAt, depositPaidDate: today })
+          ? { estDelivery: computeSuggestedDelivery({ depositPaid: true, createdAt: paidAt, depositPaidDate: today }), estDeliverySource: "suggested" }
+          : {}),
         notes: "",
         lead_id: leadId,
         deposit_request_id: depositRequestId,
@@ -502,6 +507,16 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     const existing = existingOrders[0].data as Record<string, unknown>;
     orderName = (existing.order_name ?? existing.orderName ?? clientName) as string;
     console.log(`[webhook] order ${orderId} already exists — reusing`);
+    // Deposit is being paid now for a pre-existing order → apply the est. delivery
+    // suggestion, but never clobber a manually set date.
+    const estUpdate = estDeliverySuggestionUpdate(
+      { estDelivery: existing.estDelivery as string | null | undefined, estDeliverySource: existing.estDeliverySource as "suggested" | "manual" | null | undefined },
+      { depositPaid: true, createdAt: (existing.created_at as string) ?? paidAt, depositPaidDate: today },
+    );
+    if (estUpdate) {
+      await db.from("orders").update({ data: { ...existing, ...estUpdate } }).eq("id", orderId);
+      console.log(`[webhook] order ${orderId} est. delivery → ${estUpdate.estDelivery} (suggested)`);
+    }
   }
 
   // Deterministic finance ID — same formula as handleApproveLead in crm/page.tsx

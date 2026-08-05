@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSignedUrls, getDesignSignedUrls } from '@/lib/getSignedUrl'
 import { normalizeDiscount, type QuoteDiscount } from '@/lib/salesTax'
+import { normalizeSizes, type SizeQty } from '@/lib/sizeBreakdown'
+import { fmtDeliveryDate } from '@/lib/estDelivery'
 
 export async function GET(
   _request: Request,
@@ -108,19 +110,27 @@ export async function GET(
     .map((u) => ({ id: String(u.id ?? crypto.randomUUID()), date: String(u.date), text: String(u.text) }))
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  // Line items: prefer order-level data, then fall back to related quote
-  type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; originalUnitPrice?: unknown }
-  let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number; originalUnitPrice?: number }[] = []
+  // Line items: prefer order-level data, then fall back to related quote.
+  // `sizes` is the only production-spec field allowed through to the client (blank/
+  // colors/print_detail stay internal); it's whitelisted explicitly like the others.
+  type RawLineItem = { name?: unknown; description?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; originalUnitPrice?: unknown; sizes?: unknown }
+  let lineItems: { name: string; description: string; quantity: number; unitPrice: number; lineTotal: number; originalUnitPrice?: number; sizes?: SizeQty[] }[] = []
 
-  if (Array.isArray(d.line_items) && (d.line_items as RawLineItem[]).length > 0) {
-    lineItems = (d.line_items as RawLineItem[]).map((li) => ({
+  const mapLineItem = (li: RawLineItem) => {
+    const sizes = normalizeSizes(li.sizes)
+    return {
       name: String(li.name ?? ''),
       description: String(li.description ?? ''),
       quantity: Number(li.quantity ?? 0),
       unitPrice: Number(li.unitPrice ?? 0),
       lineTotal: Number(li.lineTotal ?? 0),
       ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
-    }))
+      ...(sizes.length > 0 ? { sizes } : {}),
+    }
+  }
+
+  if (Array.isArray(d.line_items) && (d.line_items as RawLineItem[]).length > 0) {
+    lineItems = (d.line_items as RawLineItem[]).map(mapLineItem)
   } else if (d.quote_id) {
     const { data: quoteRows } = await db
       .from('quotes')
@@ -131,14 +141,7 @@ export async function GET(
       const qd = quoteRows[0].data as Record<string, unknown>
       if (discountVal === null && qd.discount != null) discountVal = normalizeDiscount(qd.discount)
       if (Array.isArray(qd.line_items)) {
-        lineItems = (qd.line_items as RawLineItem[]).map((li) => ({
-          name: String(li.name ?? ''),
-          description: String(li.description ?? ''),
-          quantity: Number(li.quantity ?? 0),
-          unitPrice: Number(li.unitPrice ?? 0),
-          lineTotal: Number(li.lineTotal ?? 0),
-          ...(li.originalUnitPrice != null ? { originalUnitPrice: Number(li.originalUnitPrice) } : {}),
-        }))
+        lineItems = (qd.line_items as RawLineItem[]).map(mapLineItem)
       }
     }
   }
@@ -150,7 +153,8 @@ export async function GET(
     collectionName: d.collection_name || d.orderName || d.order_name || '',
     status: d.status || d.current_status || '',
     currentPhase: d.current_phase || d.phase || d.status || '',
-    estimatedDelivery: d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
+    // Prefer the smart estDelivery (formatted); fall back to legacy free-text fields.
+    estimatedDelivery: (d.estDelivery ? fmtDeliveryDate(d.estDelivery as string) : '') || d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
     quantity: d.quantity || '',
     items: Array.isArray(d.items) ? d.items.join(', ') : d.items || '',
     invoiceTotal: (grandTotalVal ?? totalAmount) > 0 ? (grandTotalVal ?? totalAmount) : '',
