@@ -6,6 +6,7 @@ import { Archive, ArrowLeft, Check, ChevronRight, ClipboardCopy, Edit2, External
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { buildBlankSuggestions } from "@/lib/blankSuggestions";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
+import { deriveCostRollup, type CostLine } from "@/lib/orderCosts";
 import { PRESET_SIZES, normalizeSizes, sizesSummary, sizesTotal, type SizeQty } from "@/lib/sizeBreakdown";
 import { computeSuggestedDelivery, fmtDeliveryDate, resolveEstDeliveryDisplay, toDateOnly } from "@/lib/estDelivery";
 import { ErrorBanner, FieldError, LoadingState } from "@/components/AppState";
@@ -66,19 +67,8 @@ type OrderLineItem = {
   sizes?: SizeQty[];
 };
 
-// Model-A production cost line. HQ-only — never sent to any client route. The
-// order-level vendor_cost_cents / vendor_payment_status / vendor_invoice_status keys
-// are DERIVED from these lines on save so downstream money math keeps working.
-type CostLine = {
-  id: string;                 // stable crypto id (used as the receipt key in Step 2)
-  label: string;              // "Blanks", "Transfers", "Shipping"
-  amount_cents: number;       // integer cents, never floats
-  status: "not_ordered" | "ordered" | "paid";
-  paid_by: "" | "Alliyah" | "Hannah" | "Jordan" | "Company Account";
-  supplier?: string;          // free text; vendors list is autocomplete-only, no vendor_id
-  receipt_url?: string;       // pasted link (Drive, etc.) — HQ-only, never client-facing
-  receipt_path?: string;      // uploaded file in the private order-receipts bucket
-};
+// CostLine + deriveCostRollup now live in @/lib/orderCosts so the order page and the
+// Plaid review route derive the roll-up identically.
 
 type Order = {
   id: string;
@@ -211,21 +201,6 @@ function costStatusPill(s: string): string {
     : "bg-slate-100 text-slate-500";
 }
 
-// Derive the order-level roll-up keys from the cost lines. These existing keys are what
-// the 5 downstream consumers (finances/page, ai/finances, ai/order, ai/openapi) read —
-// we only change how the order page WRITES them, never how they're read.
-function deriveCostRollup(lines: CostLine[]): {
-  vendor_cost_cents: number;
-  vendor_payment_status: string;
-  vendor_invoice_status: string;
-} {
-  const vendor_cost_cents = lines.reduce((s, l) => s + (Number(l.amount_cents) || 0), 0);
-  const vendor_payment_status =
-    lines.length > 0 && lines.every((l) => l.status === "paid") ? "paid" : "unpaid";
-  const vendor_invoice_status =
-    lines.some((l) => l.status === "ordered" || l.status === "paid") ? "received" : "not_received";
-  return { vendor_cost_cents, vendor_payment_status, vendor_invoice_status };
-}
 
 function statusToStageIndex(status: string): number {
   const s = status?.trim().toLowerCase();

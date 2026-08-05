@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateSessionRequest } from "@/lib/sessionAuth";
 import { loadConnection, publicStatus } from "@/lib/plaid";
 import { findDuplicateExpense, type StagedTxn } from "@/lib/plaidClassify";
+import { findDuplicateOrderCost, type OrderForDedupe } from "@/lib/orderCosts";
 
 // GET /api/plaid/status  (session-gated)
 // Returns the browser-safe connection status + the staged transactions for the
@@ -20,10 +21,11 @@ export async function GET(request: Request) {
   const filter = url.searchParams.get("filter") ?? "unreviewed";
   const db = getSupabaseAdmin();
 
-  const [conn, txnRows, expenseRows] = await Promise.all([
+  const [conn, txnRows, expenseRows, orderRows] = await Promise.all([
     loadConnection(),
     db.from("plaid_transactions").select("id, data"),
     db.from("expenses").select("id, data"),
+    db.from("orders").select("id, data"),
   ]);
 
   const all = ((txnRows.data ?? []) as { id: string; data: StagedTxn }[])
@@ -34,6 +36,10 @@ export async function GET(request: Request) {
     .map((r) => r.data)
     .filter((e) => e && typeof e.amount_cents === "number");
 
+  const orders: OrderForDedupe[] = ((orderRows.data ?? []) as { id: string; data: OrderForDedupe }[])
+    .map((r) => ({ ...r.data, id: r.data?.id ?? "" }))
+    .filter((o) => o.id);
+
   const unreviewedCount = all.filter((t) => t.status === "unreviewed").length;
 
   const visible = all
@@ -41,13 +47,16 @@ export async function GET(request: Request) {
     // Newest first by transaction date, then first-seen.
     .sort((a, b) => (b.txn_date || "").localeCompare(a.txn_date || "") || (b.created_at || "").localeCompare(a.created_at || ""))
     .map((t) => {
-      const dup = t.status === "unreviewed" && t.direction === "out"
-        ? findDuplicateExpense(t, expenses)
-        : null;
-      return {
-        ...t,
-        possible_duplicate: dup ? { id: dup.id, vendor_name: dup.vendor_name, expense_date: dup.expense_date } : null,
-      };
+      let possible_duplicate: { kind: string; label: string } | null = null;
+      if (t.status === "unreviewed" && t.direction === "out") {
+        const expDup = findDuplicateExpense(t, expenses);
+        if (expDup) possible_duplicate = { kind: "expense", label: expDup.vendor_name };
+        else {
+          const costDup = findDuplicateOrderCost(t, orders);
+          if (costDup) possible_duplicate = { kind: "order_cost", label: `${costDup.order_name} · ${costDup.label}` };
+        }
+      }
+      return { ...t, possible_duplicate };
     });
 
   return NextResponse.json(

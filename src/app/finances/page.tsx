@@ -2508,7 +2508,7 @@ function FinancesContent() {
       {activeTab === "expenses" && (
       <div className="space-y-5">
         {/* ── Relay bank feed: connect + review staged transactions before they become expenses ── */}
-        <PlaidReview />
+        <PlaidReview orders={activeOrders.map((o) => ({ id: o.id, name: o.orderName || o.order_name || o.id, client: o.client || "" }))} />
 
         {/* ── Hero row: Reimbursements owed (amber on >0) + Total spent + Unpaid ────── */}
         <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
