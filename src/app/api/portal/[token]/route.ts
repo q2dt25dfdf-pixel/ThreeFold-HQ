@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSignedUrls, getDesignSignedUrls } from '@/lib/getSignedUrl'
 import { normalizeDiscount, type QuoteDiscount } from '@/lib/salesTax'
 import { normalizeSizes, type SizeQty } from '@/lib/sizeBreakdown'
+import { fmtDeliveryDate } from '@/lib/estDelivery'
 
 export async function GET(
   _request: Request,
@@ -152,7 +153,8 @@ export async function GET(
     collectionName: d.collection_name || d.orderName || d.order_name || '',
     status: d.status || d.current_status || '',
     currentPhase: d.current_phase || d.phase || d.status || '',
-    estimatedDelivery: d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
+    // Prefer the smart estDelivery (formatted); fall back to legacy free-text fields.
+    estimatedDelivery: (d.estDelivery ? fmtDeliveryDate(d.estDelivery as string) : '') || d.estimated_delivery || d.estimatedDeliveryDate || d.est_delivery || '',
     quantity: d.quantity || '',
     items: Array.isArray(d.items) ? d.items.join(', ') : d.items || '',
     invoiceTotal: (grandTotalVal ?? totalAmount) > 0 ? (grandTotalVal ?? totalAmount) : '',

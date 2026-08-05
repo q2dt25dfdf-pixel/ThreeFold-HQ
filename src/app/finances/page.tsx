@@ -21,6 +21,7 @@ import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import { supabase } from "@/lib/supabase";
 import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
+import { estDeliverySuggestionUpdate } from "@/lib/estDelivery";
 import {
   Area,
   AreaChart,
@@ -152,6 +153,9 @@ type Order = {
   amount: string | number;
   status: "Draft" | "In Production" | "Quality Control" | "Fulfilled";
   estimatedDeliveryDate: string;
+  estDelivery?: string | null;
+  estDeliverySource?: "suggested" | "manual" | null;
+  created_at?: string;
   notes: string;
   invoice_total?: number;
   deposit_paid?: boolean;
@@ -794,12 +798,20 @@ function FinancesContent() {
     if (!orderId) return;
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
+    // When the deposit is (now) paid, apply the smart est. delivery suggestion — but never
+    // overwrite a hand-set date. Returns null (no change) if unpaid or already correct/manual.
+    const estUpdate = estDeliverySuggestionUpdate(order, {
+      depositPaid: Boolean(invoice.deposit_paid),
+      createdAt: order.created_at,
+      depositPaidDate: invoice.deposit_paid_date,
+    });
     await upsertOrder({
       ...order,
       invoice_total: calcTotal(invoice),
       deposit_paid: Boolean(invoice.deposit_paid),
       balance_due: calcBalance(invoice),
       stripe_invoice_url: invoice.stripe_invoice_url ?? order.stripe_invoice_url ?? "",
+      ...(estUpdate ?? {}),
     });
   };
 
