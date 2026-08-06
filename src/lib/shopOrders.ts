@@ -30,6 +30,15 @@ export type ShopOrderData = {
   created_at?: string;
   shipped?: boolean;
   shipped_at?: string | null;
+  // Optional tracking number, pasted by a founder at mark-shipped (Pirate Ship USPS/UPS —
+  // stored and emailed BARE, no carrier link). Blank = shipped email omits the line.
+  tracking?: string;
+  // Customer-email dedupe stamps (E1 confirmation via website webhook → internal endpoint;
+  // E2 shipped notice via the mark-shipped PATCH). Same pattern as invoice receipt stamps.
+  confirmation_email_sent_at?: string;
+  confirmation_email_status?: string;
+  shipped_email_sent_at?: string;
+  shipped_email_status?: string;
   line_items?: { name: string; size: string; qty: number; unit_cents?: number }[];
   // Founder notes, appended newest-first order handled in UI. `at` is server-set on save.
   notes?: { text: string; author: string; at: string }[];

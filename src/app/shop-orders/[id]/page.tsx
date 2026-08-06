@@ -33,6 +33,7 @@ export default function ShopOrderDetail() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tracking, setTracking] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,7 +48,12 @@ export default function ShopOrderDetail() {
   async function markShipped() {
     setBusy(true);
     try {
-      const res = await fetch(`/api/shop-orders/${id}`, { method: "PATCH", headers: await authHeaders(), body: JSON.stringify({ shipped: true }) });
+      const res = await fetch(`/api/shop-orders/${id}`, {
+        method: "PATCH",
+        headers: await authHeaders(),
+        // tracking is optional — blank means the shipped email goes out without a tracking line
+        body: JSON.stringify({ shipped: true, ...(tracking.trim() ? { tracking: tracking.trim() } : {}) }),
+      });
       if (res.ok) await load();
     } finally { setBusy(false); }
   }
@@ -118,6 +124,20 @@ export default function ShopOrderDetail() {
             </div>
           </div>
 
+          {!data.shipped && (
+            <input
+              type="text"
+              value={tracking}
+              onChange={(e) => setTracking(e.target.value)}
+              placeholder="Tracking number (optional — from Pirate Ship; emailed to the customer)"
+              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
+            />
+          )}
+          {data.shipped && data.tracking && (
+            <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-[13px] text-slate-600">
+              Tracking: <span className="font-semibold text-slate-900">{data.tracking}</span>
+            </div>
+          )}
           <div className="mt-3 flex gap-2.5">
             {!data.shipped && (
               <button onClick={markShipped} disabled={busy} className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
