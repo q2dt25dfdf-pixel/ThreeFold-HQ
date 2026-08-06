@@ -1,7 +1,7 @@
 -- hq_section_views — SHARED "last viewed" timestamps that drive the sidebar "new" badges
 -- (Shop Orders, Orders). Shared across founders per the approved decision: any founder
 -- viewing a section clears its badge for everyone. Run once in the Supabase SQL editor
--- (project twubgrjxnengnyotjjxd). Safe to re-run.
+-- (project frfpmsjfjsiffkuhgvri — the live HQ project). Safe to re-run.
 --
 -- Only HQ server routes (service role) touch this table; keep RLS on so the anon key can't
 -- write it. Service role bypasses RLS.
