@@ -6,6 +6,7 @@ import {
   loadConnection,
   PLAID_COUNTRY_CODES,
   PLAID_PRODUCTS,
+  PLAID_ENV,
 } from "@/lib/plaid";
 
 // POST /api/plaid/create-link-token  (session-gated)
@@ -42,6 +43,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No connection to update." }, { status: 400 });
       }
       const res = await client.linkTokenCreate({ ...base, access_token: conn.access_token });
+      // OBSERVABILITY (feat/plaid-link-debug): log the request_id so a link_token
+      // can be correlated with Plaid's dashboard logs.
+      console.log("[plaid/create-link-token] ok", { mode: "update", env: PLAID_ENV, request_id: res.data.request_id });
       return NextResponse.json({ link_token: res.data.link_token }, { headers: { "Cache-Control": "no-store" } });
     }
 
@@ -49,8 +53,22 @@ export async function POST(request: Request) {
       ...base,
       products: PLAID_PRODUCTS.map((p) => p as Products),
     });
+    console.log("[plaid/create-link-token] ok", { mode: "connect", env: PLAID_ENV, request_id: res.data.request_id });
     return NextResponse.json({ link_token: res.data.link_token }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
+    // Plaid SDK errors are Axios errors: the useful detail is in err.response.data
+    // (error_type / error_code / error_message / display_message / request_id).
+    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
+    const plaid = e?.response?.data as
+      | { error_type?: string; error_code?: string; error_message?: string; display_message?: string; request_id?: string }
+      | undefined;
+    console.error("[plaid/create-link-token] FAILED", {
+      mode: update ? "update" : "connect",
+      env: PLAID_ENV,
+      http_status: e?.response?.status ?? null,
+      request_id: plaid?.request_id ?? null,
+      plaid: plaid ?? e?.message ?? String(err),
+    });
     const msg = err instanceof Error ? err.message : "Plaid error";
     return NextResponse.json({ error: msg }, { status: 502 });
   }
