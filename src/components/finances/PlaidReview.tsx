@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePlaidLink } from "react-plaid-link";
+import {
+  usePlaidLink,
+  type PlaidLinkOnExit,
+  type PlaidLinkOnEvent,
+} from "react-plaid-link";
 import { supabase } from "@/lib/supabase";
 
 // ── Relay bank feed — connection strip + staged transaction review ────────────
@@ -187,7 +191,13 @@ function ConnActions({ conn, onChanged, onSync, syncing, setNotice }: {
 }) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [mode, setMode] = useState<"connect" | "update">("connect");
+  const [linkError, setLinkError] = useState<string>("");
   const openRef = useRef(false);
+  const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearReadyTimer = useCallback(() => {
+    if (readyTimerRef.current) { clearTimeout(readyTimerRef.current); readyTimerRef.current = null; }
+  }, []);
 
   const onSuccess = useCallback(async (public_token: string | null) => {
     // Update mode re-auths the same item and returns no new public_token worth exchanging.
@@ -197,34 +207,73 @@ function ConnActions({ conn, onChanged, onSync, syncing, setNotice }: {
     else { const d = await res.json().catch(() => ({})); setNotice(d.error || "Could not connect."); }
   }, [mode, onChanged, setNotice]);
 
-  const { open, ready } = usePlaidLink({ token: linkToken, onSuccess });
+  // OBSERVABILITY (feat/plaid-link-debug): Link previously exited/failed silently.
+  // Log the full error + metadata and surface the error in the UI.
+  const onExit = useCallback<PlaidLinkOnExit>((error, metadata) => {
+    console.error("[plaid-link] onExit", { error, metadata });
+    clearReadyTimer();
+    openRef.current = false;
+    if (error) {
+      const parts = [error.error_code, error.display_message || error.error_message].filter(Boolean);
+      setLinkError(parts.length ? `Plaid Link error — ${parts.join(": ")}` : "Plaid Link exited with an error.");
+    }
+  }, [clearReadyTimer]);
+
+  const onEvent = useCallback<PlaidLinkOnEvent>((eventName, metadata) => {
+    console.log("[plaid-link] onEvent", eventName, metadata);
+    if (eventName === "ERROR") {
+      const parts = [metadata.error_code, metadata.error_message].filter(Boolean);
+      setLinkError(parts.length ? `Plaid Link error — ${parts.join(": ")}` : "Plaid Link reported an error.");
+    }
+  }, []);
+
+  const { open, ready } = usePlaidLink({ token: linkToken, onSuccess, onExit, onEvent });
 
   useEffect(() => {
     if (linkToken && ready && openRef.current) { openRef.current = false; open(); }
   }, [linkToken, ready, open]);
 
+  // Watchdog: if `ready` never turns true after a token is issued, Link is hung.
+  // Log it and surface a message instead of hanging forever silently.
+  useEffect(() => {
+    if (!linkToken) return;
+    if (ready) { clearReadyTimer(); return; }
+    clearReadyTimer();
+    readyTimerRef.current = setTimeout(() => {
+      console.error("[plaid-link] timeout: `ready` did not turn true within 10s of receiving a link token", { mode });
+      setLinkError("Plaid Link didn't finish loading (10s). Check the console for details, then try again.");
+    }, 10_000);
+    return clearReadyTimer;
+  }, [linkToken, ready, mode, clearReadyTimer]);
+
   async function start(nextMode: "connect" | "update") {
     setMode(nextMode);
     setNotice("");
+    setLinkError("");
     const res = await fetch("/api/plaid/create-link-token", { method: "POST", headers: await authHeaders(), body: JSON.stringify({ mode: nextMode }) });
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.link_token) { openRef.current = true; setLinkToken(d.link_token); }
-    else setNotice(d.error || "Could not start Plaid Link.");
+    else { console.error("[plaid-link] create-link-token failed", { status: res.status, body: d }); setLinkError(d.error || "Could not start Plaid Link."); setNotice(d.error || "Could not start Plaid Link."); }
   }
 
   const status = conn?.status ?? "not_connected";
   return (
-    <div className="flex items-center gap-2">
-      {conn?.connected && (
-        <button onClick={onSync} disabled={syncing} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">
-          {syncing ? "Syncing…" : "Sync now"}
-        </button>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        {conn?.connected && (
+          <button onClick={onSync} disabled={syncing} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">
+            {syncing ? "Syncing…" : "Sync now"}
+          </button>
+        )}
+        {status === "login_required" ? (
+          <button onClick={() => start("update")} className="rounded-xl bg-amber-500 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-amber-600">Reconnect</button>
+        ) : !conn?.connected ? (
+          <button onClick={() => start("connect")} className="rounded-xl bg-slate-900 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-slate-800">Connect Relay</button>
+        ) : null}
+      </div>
+      {linkError && (
+        <p className="max-w-xs text-right text-[11px] font-semibold text-rose-600">{linkError}</p>
       )}
-      {status === "login_required" ? (
-        <button onClick={() => start("update")} className="rounded-xl bg-amber-500 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-amber-600">Reconnect</button>
-      ) : !conn?.connected ? (
-        <button onClick={() => start("connect")} className="rounded-xl bg-slate-900 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-slate-800">Connect Relay</button>
-      ) : null}
     </div>
   );
 }
