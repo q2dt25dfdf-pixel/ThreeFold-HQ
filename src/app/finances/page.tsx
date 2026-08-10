@@ -21,6 +21,7 @@ import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import { supabase } from "@/lib/supabase";
 import { EXPENSE_CATEGORIES, expenseCategoryBadgeClass } from "@/lib/expenseCategories";
+import { expenseGeneralCents, type ExpenseAllocation } from "@/lib/expenseAllocations";
 import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
 import { estDeliverySuggestionUpdate } from "@/lib/estDelivery";
 import {
@@ -181,7 +182,7 @@ type Expense = {
   payment_status: ExpensePaymentStatus;
   reimbursement_status: ExpenseReimbursementStatus;
   notes?: string;
-  related_order_id?: string;
+  allocations?: ExpenseAllocation[];
   receipt_url?: string;
   created_at?: string;
   updated_at?: string;
@@ -195,6 +196,15 @@ const EXPENSE_REIMBURSEMENT_LABELS: Record<ExpenseReimbursementStatus, string> =
   reimbursed: "Reimbursed",
 };
 
+// A form allocation row. orderId "" means the "General business" destination.
+type ExpenseAllocRow = { amountStr: string; orderId: string };
+
+// Session-token headers for the server-side expense write route.
+async function expenseAuthHeaders() {
+  const { data } = await supabase.auth.getSession();
+  return { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` };
+}
+
 const emptyExpenseForm = {
   expense_date: "",
   vendor_name: "",
@@ -205,7 +215,8 @@ const emptyExpenseForm = {
   reimbursement_status: "not_needed" as ExpenseReimbursementStatus,
   notes: "",
   receipt_url: "",
-  related_order_id: "",
+  isSplit: false,
+  allocRows: [] as ExpenseAllocRow[],
 };
 
 function formatExpenseDate(dateStr: string): string {
@@ -662,9 +673,9 @@ function FinancesContent() {
   const searchParams = useSearchParams();
   const { data: invoices, upsertItem, deleteItem, loading, error, reload: reloadInvoices } = useSupabaseTable<Invoice>("finances", []);
   const { data: clients, reload: reloadClients } = useSupabaseTable<Client>("clients", []);
-  const { data: orders, upsertItem: upsertOrder } = useSupabaseTable<Order>("orders", []);
+  const { data: orders, upsertItem: upsertOrder, reload: reloadOrders } = useSupabaseTable<Order>("orders", []);
   const { data: taxPayments, upsertItem: upsertTaxPayment, deleteItem: deleteTaxPayment } = useSupabaseTable<SalesTaxPayment>("sales_tax_payments", []);
-  const { data: expenses, upsertItem: upsertExpense, deleteItem: deleteExpense, error: expensesError } = useSupabaseTable<Expense>("expenses", []);
+  const { data: expenses, error: expensesError, reload: reloadExpenses } = useSupabaseTable<Expense>("expenses", []);
   // Read-only: used to resolve a lead email fallback for receipts (same source /api/invoice/generate uses)
   // and to detect stale (superseded-quote) deposit requests below.
   const { data: leads } = useSupabaseTable<{ id: string; email?: string; quote_id?: string; contact?: string }>("crm_leads", []);
@@ -958,12 +969,16 @@ function FinancesContent() {
   // ── Expense metrics ────────────────────────────────────────────────────────
   // Paid = payment_status "paid". Missing fields default safely.
   // Reimbursed personal expenses are NOT double-counted — each expense is one record.
+  // Total Spent = GENERAL business costs. A split expense's order-allocated
+  // portion is reclassified into that order's vendor costs (via generated
+  // cost_lines), so here we count only the general portion. Unsplit expenses
+  // count in full — expenseGeneralCents() returns the whole amount for them.
   const paidExpenses = expenses
     .filter((e) => e.payment_status === "paid")
-    .reduce((sum, e) => sum + Math.round(e.amount_cents ?? 0) / 100, 0);
+    .reduce((sum, e) => sum + Math.round(expenseGeneralCents(e)) / 100, 0);
   const unpaidExpenses = expenses
     .filter((e) => e.payment_status !== "paid")
-    .reduce((sum, e) => sum + Math.round(e.amount_cents ?? 0) / 100, 0);
+    .reduce((sum, e) => sum + Math.round(expenseGeneralCents(e)) / 100, 0);
   // Net Position = what's actually in the business after covering paid vendor costs + paid expenses
   const netPosition = revenueCollected - paidVendorCosts - paidExpenses;
 
@@ -976,6 +991,14 @@ function FinancesContent() {
       return true;
     })
     .sort((a, b) => (b.expense_date ?? "").localeCompare(a.expense_date ?? ""));
+
+  // Split-expense form derived values (used by the allocation editor in the modal).
+  const expenseAmountCents = Math.round((parseFloat(expenseForm.amountStr) || 0) * 100);
+  const allocSumCents = expenseForm.allocRows.reduce((s, r) => s + Math.round((parseFloat(r.amountStr) || 0) * 100), 0);
+  const allocSumOk = expenseAmountCents > 0 && allocSumCents === expenseAmountCents;
+  const activeOrderOptions = orders
+    .filter((o) => (o.status as string).toLowerCase() !== "cancelled")
+    .map((o) => ({ id: o.id, label: `${orderDisplayName(o)}${o.client ? ` · ${o.client}` : ""}` }));
 
   const openAddTaxModal = () => {
     setEditingTaxPayment(null);
@@ -1066,7 +1089,11 @@ function FinancesContent() {
       reimbursement_status: expense.reimbursement_status ?? "not_needed",
       notes: expense.notes ?? "",
       receipt_url: expense.receipt_url ?? "",
-      related_order_id: expense.related_order_id ?? "",
+      isSplit: Boolean(expense.allocations && expense.allocations.length),
+      allocRows: (expense.allocations ?? []).map((a) => ({
+        amountStr: ((a.amount_cents ?? 0) / 100).toFixed(2),
+        orderId: a.destination.type === "order" ? a.destination.order_id : "",
+      })),
     });
     setExpenseFormError("");
     expenseSave.resetSaveState();
@@ -1080,6 +1107,30 @@ function FinancesContent() {
     expenseSave.resetSaveState();
   };
 
+  // Split allocations must sum to exactly the expense total. Returns the built
+  // allocations or an error string — the SAME rule the server enforces.
+  const buildAllocations = (totalCents: number): { allocations?: ExpenseAllocation[]; error?: string } => {
+    if (!expenseForm.isSplit) return {};
+    const rows = expenseForm.allocRows;
+    if (rows.length < 2) return { error: "A split needs at least two allocations." };
+    const allocations: ExpenseAllocation[] = [];
+    let sum = 0;
+    for (const r of rows) {
+      const cents = Math.round((parseFloat(r.amountStr) || 0) * 100);
+      if (!Number.isInteger(cents) || cents <= 0) return { error: "Each allocation must be greater than $0." };
+      sum += cents;
+      allocations.push(
+        r.orderId
+          ? { amount_cents: cents, destination: { type: "order", order_id: r.orderId, order_name: orderDisplayName(orders.find((o) => o.id === r.orderId) as Order) } }
+          : { amount_cents: cents, destination: { type: "general" } },
+      );
+    }
+    if (sum !== totalCents) {
+      return { error: `Allocations must sum to $${(totalCents / 100).toFixed(2)} — they currently sum to $${(sum / 100).toFixed(2)}.` };
+    }
+    return { allocations };
+  };
+
   const handleSaveExpense = async () => {
     if (!expenseForm.expense_date) { setExpenseFormError("Date is required."); return; }
     if (!expenseForm.vendor_name.trim()) { setExpenseFormError("Vendor / source is required."); return; }
@@ -1087,51 +1138,60 @@ function FinancesContent() {
     const parsed = parseFloat(expenseForm.amountStr);
     if (!expenseForm.amountStr || isNaN(parsed) || parsed <= 0) { setExpenseFormError("Amount must be greater than $0."); return; }
     if (!expenseForm.paid_by) { setExpenseFormError("Paid by is required."); return; }
-    setExpenseFormError("");
     const cents = Math.round(parsed * 100);
-    const now = new Date().toISOString();
-    if (editingExpense) {
-      const updated: Expense = {
-        ...editingExpense,
-        expense_date: expenseForm.expense_date,
-        vendor_name: expenseForm.vendor_name.trim(),
-        category: expenseForm.category,
-        amount_cents: cents,
-        paid_by: expenseForm.paid_by,
-        payment_status: expenseForm.payment_status,
-        reimbursement_status: expenseForm.reimbursement_status,
-        notes: expenseForm.notes,
-        receipt_url: expenseForm.receipt_url,
-        related_order_id: expenseForm.related_order_id,
-        updated_at: now,
-      };
-      await expenseSave.runSave(() => upsertExpense(updated), closeExpenseModal);
-    } else {
-      const newExp: Expense = {
-        id: `expense-${Date.now()}`,
-        expense_date: expenseForm.expense_date,
-        vendor_name: expenseForm.vendor_name.trim(),
-        category: expenseForm.category,
-        amount_cents: cents,
-        paid_by: expenseForm.paid_by,
-        payment_status: expenseForm.payment_status,
-        reimbursement_status: expenseForm.reimbursement_status,
-        notes: expenseForm.notes,
-        receipt_url: expenseForm.receipt_url,
-        related_order_id: expenseForm.related_order_id,
-        created_at: now,
-        updated_at: now,
-      };
-      await expenseSave.runSave(() => upsertExpense(newExp), closeExpenseModal);
-    }
+    const { allocations, error: allocError } = buildAllocations(cents);
+    if (allocError) { setExpenseFormError(allocError); return; }
+    setExpenseFormError("");
+
+    const payload = {
+      id: editingExpense?.id,
+      expense_date: expenseForm.expense_date,
+      vendor_name: expenseForm.vendor_name.trim(),
+      category: expenseForm.category,
+      amount_cents: cents,
+      paid_by: expenseForm.paid_by,
+      payment_status: expenseForm.payment_status,
+      reimbursement_status: expenseForm.reimbursement_status,
+      notes: expenseForm.notes,
+      receipt_url: expenseForm.receipt_url,
+      allocations,
+      created_at: editingExpense?.created_at,
+    };
+
+    await expenseSave.runSave(async () => {
+      const res = await fetch("/api/expenses/save", {
+        method: "POST",
+        headers: await expenseAuthHeaders(),
+        body: JSON.stringify({ action: "save", expense: payload }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setExpenseFormError(d.error || "Could not save expense.");
+        throw new Error(d.error || "save failed");
+      }
+      await Promise.all([reloadExpenses(), reloadOrders()]);
+    }, closeExpenseModal);
   };
 
   const handleDeleteExpense = async (id: string) => {
     if (!window.confirm("Delete this expense? This cannot be undone.")) return;
     setDeletingExpenseId(id);
-    await deleteExpense(id);
-    setDeletingExpenseId("");
-    if (editingExpense?.id === id) closeExpenseModal();
+    try {
+      const res = await fetch("/api/expenses/save", {
+        method: "POST",
+        headers: await expenseAuthHeaders(),
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setExpenseFormError(d.error || "Could not delete expense.");
+        return;
+      }
+      await Promise.all([reloadExpenses(), reloadOrders()]);
+      if (editingExpense?.id === id) closeExpenseModal();
+    } finally {
+      setDeletingExpenseId("");
+    }
   };
 
   const monthlyRevenue = useMemo(() => {
@@ -2626,9 +2686,19 @@ function FinancesContent() {
                           {EXPENSE_REIMBURSEMENT_LABELS[expense.reimbursement_status] ?? expense.reimbursement_status}
                         </span>
                       )}
+                      {expense.allocations && expense.allocations.length > 0 && (
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Split</span>
+                      )}
                     </div>
                     <p className="mt-1 text-sm font-semibold text-slate-900">{expense.vendor_name || "—"}</p>
                     <p className="mt-0.5 text-base font-bold text-slate-950">{currency.format((expense.amount_cents ?? 0) / 100)}</p>
+                    {expense.allocations && expense.allocations.length > 0 && (
+                      <p className="mt-0.5 text-[10px] text-slate-500">
+                        {expense.allocations.map((a, i) => (
+                          <span key={i}>{i > 0 ? " · " : ""}{currency.format((a.amount_cents ?? 0) / 100)} {a.destination.type === "order" ? (a.destination.order_name || "order") : "general"}</span>
+                        ))}
+                      </p>
+                    )}
                     {expense.paid_by && (
                       <p className="mt-0.5 text-[10px] text-slate-400">Paid by {expense.paid_by}</p>
                     )}
@@ -3297,6 +3367,70 @@ function FinancesContent() {
                 <option value="">Select category...</option>
                 {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+            {/* Split across orders / general business */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <label className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-700 md:text-sm">Split this expense</span>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={expenseForm.isSplit}
+                  onChange={(e) => setExpenseForm((f) => ({
+                    ...f,
+                    isSplit: e.target.checked,
+                    allocRows: e.target.checked && f.allocRows.length === 0
+                      ? [{ amountStr: f.amountStr || "", orderId: "" }, { amountStr: "", orderId: "" }]
+                      : f.allocRows,
+                  }))}
+                />
+              </label>
+              {expenseForm.isSplit && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[11px] text-slate-500">Divide the total between specific orders and general business. Order portions become that order&apos;s cost; general stays in Total Spent. Allocations must add up to the amount.</p>
+                  {expenseForm.allocRows.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-28 shrink-0">
+                        <CurrencyInput
+                          valueDollars={Number(row.amountStr) || 0}
+                          onChangeDollars={(d) => setExpenseForm((f) => ({ ...f, allocRows: f.allocRows.map((r, j) => j === i ? { ...r, amountStr: d ? String(d) : "" } : r) }))}
+                          ariaLabel={`Allocation ${i + 1} amount`}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
+                        />
+                      </div>
+                      <select
+                        value={row.orderId}
+                        onChange={(e) => setExpenseForm((f) => ({ ...f, allocRows: f.allocRows.map((r, j) => j === i ? { ...r, orderId: e.target.value } : r) }))}
+                        className="min-w-0 flex-1 rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
+                      >
+                        <option value="">General business</option>
+                        {activeOrderOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        aria-label="Remove allocation"
+                        className="shrink-0 px-1.5 text-lg leading-none text-slate-400 hover:text-rose-500"
+                        onClick={() => setExpenseForm((f) => ({ ...f, allocRows: f.allocRows.filter((_, j) => j !== i) }))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      className="text-[12px] font-semibold text-slate-700 hover:text-slate-900"
+                      onClick={() => setExpenseForm((f) => ({ ...f, allocRows: [...f.allocRows, { amountStr: "", orderId: "" }] }))}
+                    >
+                      + Add allocation
+                    </button>
+                    <span className={`text-[11px] font-semibold ${allocSumOk ? "text-emerald-600" : "text-rose-600"}`}>
+                      Allocated {currency.format(allocSumCents / 100)} of {currency.format(expenseAmountCents / 100)}
+                      {allocSumOk ? " ✓" : ` · ${currency.format((expenseAmountCents - allocSumCents) / 100)} left`}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

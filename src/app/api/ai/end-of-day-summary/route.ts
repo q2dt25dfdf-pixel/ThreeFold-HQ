@@ -296,10 +296,19 @@ export async function GET(request: Request): Promise<Response> {
       .filter((e) => stringField(e, "expense_date") === todayISO)
       .map((e) => {
         const cents = e.amount_cents;
+        const full = typeof cents === "number" ? cents / 100 : parseAmount(e.amount ?? 0);
+        // Split expenses: general-business portion only (order portions are
+        // vendor costs). Unsplit → full amount.
+        const allocs = Array.isArray((e as { allocations?: unknown }).allocations)
+          ? ((e as { allocations?: Array<{ amount_cents?: number; destination?: { type?: string } }> }).allocations ?? [])
+          : [];
+        const amount = allocs.length
+          ? allocs.filter((a) => a?.destination?.type === "general").reduce((s, a) => s + (Number(a.amount_cents) || 0), 0) / 100
+          : full;
         return {
           id:     e.id,
           name:   stringField(e, "vendor_name") || stringField(e, "category") || "Expense",
-          amount: typeof cents === "number" ? cents / 100 : parseAmount(e.amount ?? 0),
+          amount,
         };
       })
       .slice(0, 10);

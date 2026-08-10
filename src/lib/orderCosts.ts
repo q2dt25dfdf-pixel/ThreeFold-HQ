@@ -12,6 +12,8 @@ export type CostLine = {
   supplier?: string;          // free text; vendors list is autocomplete-only, no vendor_id
   receipt_url?: string;       // pasted link (Drive, etc.) — HQ-only, never client-facing
   receipt_path?: string;      // uploaded file in the private order-receipts bucket
+  source_expense_id?: string; // set when this line is generated from a split expense
+                              // allocation; edited on the expense, read-only on the order.
 };
 
 // Derive the order-level roll-up keys from the cost lines. These existing keys are what
