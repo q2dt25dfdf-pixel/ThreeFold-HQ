@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
 import { INACTIVE_ORDER_STATUSES } from "@/lib/constants";
 import { statusText, stringField } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import {
   attentionSummary,
   formatShortDate,
@@ -66,7 +67,7 @@ function daysBetween(fromISO: string, toISO: string): number {
 
 function orderEstDelivery(order: DashboardRecord): string {
   return (
-    stringField(order, "estimatedDeliveryDate") ||
+    orderEstDeliveryDate(order) ||
     stringField(order, "dueDate") ||
     stringField(order, "final_due_date")
   );

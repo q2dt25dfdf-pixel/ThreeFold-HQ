@@ -13,6 +13,7 @@ import {
   type VendorProductCategory,
   type VendorSampleStatus,
 } from "@/lib/constants";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 
@@ -409,7 +410,7 @@ export default function VendorDetailPage() {
                   <div className="min-w-0">
                     <p className="break-words font-semibold text-slate-950">{order.orderName}</p>
                     <p className="mt-1 text-xs text-slate-500 md:text-sm">
-                      {order.client || "No client"} · {order.estimatedDeliveryDate || "TBD"} · {formatCurrency(order.amount)}
+                      {order.client || "No client"} · {orderEstDeliveryDate(order) || "TBD"} · {formatCurrency(order.amount)}
                     </p>
                   </div>
                   <span className="w-fit shrink-0 rounded-full bg-blue-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-blue-800">{order.status}</span>

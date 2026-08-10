@@ -4,6 +4,7 @@ import { addDaysToISODate, dateOnlyToDate } from "@/lib/businessDate";
 import { calcBalance, calcDeposit, calcTotal, parseAmount } from "@/lib/invoiceCalc";
 import { hasActiveFollowUpTask, hasFollowUpDate, isCrmTask, isLeadFollowUpDueWithin, leadFollowUpDate } from "@/lib/followUps";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 
 export type DashboardRecord = Record<string, unknown> & { id: string };
 
@@ -317,7 +318,7 @@ export function needsAttention(
   for (const order of orders) {
     if (INACTIVE_ORDER_STATUSES.has(statusText(order))) continue;
     const status = statusText(order);
-    const dueDate = stringField(order, "dueDate") || stringField(order, "estimatedDeliveryDate") || stringField(order, "final_due_date");
+    const dueDate = stringField(order, "dueDate") || orderEstDeliveryDate(order) || stringField(order, "final_due_date");
     const orderName = stringField(order, "orderName", stringField(order, "order_name", "Order"));
     if (status.includes("review") || status.includes("approval")) {
       items.push({ id: `approval-${order.id}`, label: orderName, detail: "Client approval pending", href: `/orders/${order.id}`, tone: "amber" });
@@ -385,7 +386,7 @@ export function attentionSummary(
   const ordersDueSoon = orders.filter((order) => {
     if (INACTIVE_ORDER_STATUSES.has(statusText(order))) return false;
     const dueDate =
-      stringField(order, "estimatedDeliveryDate") ||
+      orderEstDeliveryDate(order) ||
       stringField(order, "dueDate") ||
       stringField(order, "final_due_date");
     return Boolean(dueDate && dueDate >= todayISO && dueDate <= sevenDaysAheadISO);

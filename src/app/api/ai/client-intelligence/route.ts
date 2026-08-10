@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { readField, stringField, statusText } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { normalizeCRMStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import { INACTIVE_FINANCE_STATUSES } from "@/lib/constants";
@@ -253,7 +254,7 @@ function buildIntelligence(
       orderName: stringField(o, "orderName") || stringField(o, "order_name") || "Order",
       status:    stringField(o, "status") || "Unknown",
       estimatedDeliveryDate:
-        stringField(o, "estimatedDeliveryDate") ||
+        orderEstDeliveryDate(o) ||
         stringField(o, "dueDate") ||
         stringField(o, "final_due_date") ||
         null,

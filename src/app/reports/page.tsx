@@ -14,6 +14,7 @@ import {
   TASK_DONE_STATUSES,
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { hasActiveFollowUpTask, hasFollowUpDate, isCrmTask } from "@/lib/followUps";
 import { normalizeCRMStage, isInactiveLeadStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
@@ -130,7 +131,7 @@ function computeBriefing(
   const ordersDueSoon = orders.filter((order) => {
     if (INACTIVE_ORDER_STATUSES.has(statusText(order))) return false;
     const dueDate =
-      stringField(order, "estimatedDeliveryDate") ||
+      orderEstDeliveryDate(order) ||
       stringField(order, "dueDate") ||
       stringField(order, "final_due_date");
     return Boolean(dueDate && dueDate >= todayISO && dueDate <= sevenDaysAheadISO);
@@ -194,7 +195,7 @@ function computeBriefing(
       count: ordersDueSoon.length,
       items: ordersDueSoon.slice(0, 5).map((order) => {
         const dueDate =
-          stringField(order, "estimatedDeliveryDate") ||
+          orderEstDeliveryDate(order) ||
           stringField(order, "dueDate") ||
           stringField(order, "final_due_date");
         return {
@@ -266,7 +267,7 @@ function computeAudit(
   }
 
   const ordersNoDueDate = activeOrders.filter((o) => {
-    const date = stringField(o, "estimatedDeliveryDate") || stringField(o, "dueDate");
+    const date = orderEstDeliveryDate(o) || stringField(o, "dueDate");
     return !date || date === "TBD";
   });
   if (ordersNoDueDate.length > 0) {

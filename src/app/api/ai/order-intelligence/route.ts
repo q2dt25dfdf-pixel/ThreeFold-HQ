@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { stringField, statusText } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { normalizeCRMStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcBalance, calcTotal } from "@/lib/invoiceCalc";
 import { INACTIVE_ORDER_STATUSES, INACTIVE_FINANCE_STATUSES } from "@/lib/constants";
@@ -133,7 +134,7 @@ function computeIntelligence(
 
   // Delivery date
   const dueDate =
-    stringField(order, "estimatedDeliveryDate") ||
+    orderEstDeliveryDate(order) ||
     stringField(order, "dueDate") ||
     stringField(order, "final_due_date") ||
     null;

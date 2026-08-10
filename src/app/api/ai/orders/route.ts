@@ -4,6 +4,7 @@ import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO, addDaysToISODate } from "@/lib/businessDate";
 import { INACTIVE_ORDER_STATUSES } from "@/lib/constants";
 import { stringField, statusText } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { normalizeOrderStatus } from "@/lib/dashboardMetrics";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
@@ -15,7 +16,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function orderDueDate(order: DashboardRecord): string {
   return (
-    stringField(order, "estimatedDeliveryDate") ||
+    orderEstDeliveryDate(order) ||
     stringField(order, "dueDate") ||
     stringField(order, "final_due_date")
   );
