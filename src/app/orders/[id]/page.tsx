@@ -616,7 +616,9 @@ export default function OrderDetailPage() {
 
   const openOrderEditor = () => {
     if (!order) return;
-    setOrderDraft({ ...order, items: [...order.items] });
+    // Seed the date input from the RESOLVED value (estDelivery, else legacy) so an
+    // order whose date lives in estDelivery still shows it — and saving can't wipe it.
+    setOrderDraft({ ...order, items: [...order.items], estimatedDeliveryDate: toDateOnly(resolveEstDeliveryDisplay(order, { depositPaid: false }).date) ?? "" });
     setEditAmountCents(order.amount > 0 ? String(Math.round(order.amount * 100)) : "");
     setEditQuantityStr(order.quantity > 0 ? String(order.quantity) : "");
     setFormError("");
@@ -643,8 +645,19 @@ export default function OrderDetailPage() {
     const qty = Number(editQuantityStr);
     if (!editQuantityStr.trim() || qty <= 0) { setFormError("Quantity must be greater than 0."); return; }
     setFormError("");
+    // The edit form's date is authoritative + manual (empty → cleared). Stop
+    // populating the legacy field so the two can't diverge.
+    const editedDate = orderDraft.estimatedDeliveryDate;
     await orderSave.runSave(
-      () => upsertItem(normalizeOrder({ ...orderDraft, order_name: orderDraft.orderName, quantity: qty, amount: Number(editAmountCents || "0") / 100 })),
+      () => upsertItem(normalizeOrder({
+        ...orderDraft,
+        order_name: orderDraft.orderName,
+        quantity: qty,
+        amount: Number(editAmountCents || "0") / 100,
+        estDelivery: editedDate || null,
+        estDeliverySource: editedDate ? "manual" : null,
+        estimatedDeliveryDate: "",
+      })),
       closeOrderEditor,
     );
   };
