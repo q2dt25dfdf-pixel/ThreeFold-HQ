@@ -5,6 +5,7 @@ import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { ErrorBanner } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
 import BlankMappingModal from "@/components/inventory/BlankMappingModal";
+import { PageShell, PageStats, StatTile, PageActionButton } from "@/components/layout/PageShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import {
   INVENTORY_CATEGORIES,
@@ -210,25 +211,23 @@ export default function InventoryPage() {
   const showEmpty = !loading && visible.length === 0;
 
   return (
-    <div className="space-y-6 text-sm md:text-base">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Stock on hand</p>
-          <h1 className="text-3xl font-extrabold text-slate-900">Inventory</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowMapping(true)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-800 hover:bg-slate-50">Blank mapping</button>
-          <button onClick={openAdd} className="rounded-2xl bg-slate-900 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-slate-800">Add item</button>
-        </div>
-      </div>
-
+    <PageShell
+      kicker="Stock on hand"
+      title="Inventory"
+      actions={
+        <>
+          <PageActionButton variant="secondary" onClick={() => setShowMapping(true)}>Blank mapping</PageActionButton>
+          <PageActionButton onClick={openAdd}>Add item</PageActionButton>
+        </>
+      }
+    >
       {error && <ErrorBanner message={error} />}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Stat label="Items" value={String(items.length)} sub="stock items" />
-        <Stat label="Low stock" value={String(lowCount)} sub="at or below threshold" tone={lowCount > 0 ? "amber" : "slate"} />
-        <Stat label="Total units" value={String(totalUnits)} sub="on hand across items" />
-      </div>
+      <PageStats>
+        <StatTile label="Items" value={String(items.length)} sub="stock items" />
+        <StatTile label="Low stock" value={String(lowCount)} sub="at or below threshold" tone={lowCount > 0 ? "amber" : undefined} />
+        <StatTile label="Total units" value={String(totalUnits)} sub="on hand across items" />
+      </PageStats>
 
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setFilterCategory("")} className={`${catChip} ${filterCategory === "" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
@@ -420,19 +419,10 @@ export default function InventoryPage() {
           </div>
         </ModalShell>
       )}
-    </div>
+    </PageShell>
   );
 }
 
-function Stat({ label, value, sub, tone = "slate" }: { label: string; value: string; sub: string; tone?: "slate" | "amber" }) {
-  return (
-    <div className="rounded-2xl bg-white p-5 md:p-6">
-      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-4xl font-extrabold ${tone === "amber" ? "text-amber-600" : "text-slate-900"}`}>{value}</div>
-      <div className="mt-1 text-[13px] text-slate-500">{sub}</div>
-    </div>
-  );
-}
 
 function Field({ label, value, onChange, placeholder, required, type = "text", options }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; required?: boolean; type?: string; options?: string[];
