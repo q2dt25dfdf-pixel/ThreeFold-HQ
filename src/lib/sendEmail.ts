@@ -2,16 +2,23 @@ import { TF_FROM_ADDRESS, wrapInEmailTemplate } from "@/lib/emailSignature";
 import { sendViaGmail, isGmailConfigured } from "@/lib/gmailSend";
 
 // Single email-send path used by BOTH /api/send-email (manual) and server-side auto-send.
-// Gmail first, Resend fallback. Wraps the plain-text body in the branded HTML template.
-// Returns a result object; never throws for a delivery failure (callers decide what to do).
+// Gmail first, Resend fallback. Returns a result object; never throws for a delivery
+// failure (callers decide what to do).
+//
+// Two body modes:
+//   { body }  — plain text, wrapped in the branded HTML template (the default; every
+//               existing caller uses this and MUST keep working unchanged).
+//   { html }  — a fully-formed HTML document sent as-is (bypasses wrapInEmailTemplate).
+//               Used by the redesigned shop-order emails, which own their whole layout.
+// If both are given, html wins.
 
 export type SendEmailResult =
   | { sent: true; messageId: string | null; sentVia: "gmail" | "resend"; gmailError?: string }
   | { sent: false; error: string; status: number };
 
-export async function sendEmail(params: { to: string; subject: string; body: string }): Promise<SendEmailResult> {
-  const { to, subject, body } = params;
-  const html = wrapInEmailTemplate(body);
+export async function sendEmail(params: { to: string; subject: string; body?: string; html?: string }): Promise<SendEmailResult> {
+  const { to, subject, body, html: rawHtml } = params;
+  const html = rawHtml ?? wrapInEmailTemplate(body ?? "");
 
   // ── Gmail first ──────────────────────────────────────────────────────────────
   let gmailError: string | undefined;

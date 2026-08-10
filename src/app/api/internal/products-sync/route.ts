@@ -9,8 +9,10 @@ import { validateInternalRequest } from "@/lib/internalAuth";
 // product row whose slug is no longer present is DELETED — so a removed product stops
 // showing in HQ's Blank-Mapping picker instead of drifting stale.
 //
-// Body: { products: [{ slug, name, collection }] }
-type IncomingProduct = { slug?: string; name?: string; collection?: string };
+// Body: { products: [{ slug, name, collection, image? }] }
+// image = absolute URL of the back-print thumbnail (generated at sync time), used by
+// the redesigned shop-order emails to show a per-line product image.
+type IncomingProduct = { slug?: string; name?: string; collection?: string; image?: string };
 
 export async function POST(request: Request) {
   const auth = validateInternalRequest(request);
@@ -23,12 +25,12 @@ export async function POST(request: Request) {
   }
 
   // Normalize + de-dupe by slug (last write wins), dropping rows with no slug/name.
-  const bySlug = new Map<string, { id: string; slug: string; name: string; collection: string }>();
+  const bySlug = new Map<string, { id: string; slug: string; name: string; collection: string; image: string }>();
   for (const p of body.products) {
     const slug = (p.slug ?? "").trim();
     const name = (p.name ?? "").trim();
     if (!slug || !name) continue;
-    bySlug.set(slug, { id: slug, slug, name, collection: (p.collection ?? "").trim() });
+    bySlug.set(slug, { id: slug, slug, name, collection: (p.collection ?? "").trim(), image: (p.image ?? "").trim() });
   }
   const clean = [...bySlug.values()];
   if (clean.length === 0) {
