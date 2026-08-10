@@ -12,3 +12,4 @@ alter publication supabase_realtime add table calendar_events;
 alter publication supabase_realtime add table notes;
 alter publication supabase_realtime add table sales_tax_payments;
 alter publication supabase_realtime add table expenses;
+alter publication supabase_realtime add table inventory;
