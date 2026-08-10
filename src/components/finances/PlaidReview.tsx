@@ -7,12 +7,12 @@ import {
   type PlaidLinkOnEvent,
 } from "react-plaid-link";
 import { supabase } from "@/lib/supabase";
+import { EXPENSE_CATEGORIES as CATEGORIES } from "@/lib/expenseCategories";
 
 // ── Relay bank feed — connection strip + staged transaction review ────────────
 // Lives on the Finances → Expenses sub-tab. All bank data comes through the
 // session-gated /api/plaid/* routes; this component never sees tokens.
 
-const CATEGORIES = ["Materials", "Packaging", "Tools", "Software", "Samples", "Supplies", "Shipping", "Other"] as const;
 const PAID_BY = ["Company Account", "Alliyah", "Hannah", "Jordan"] as const; // Relay defaults to Company Account
 const FOUNDERS = ["Alliyah", "Hannah", "Jordan"] as const;
 const REVIEWER_KEY = "threefold-hq:note-author"; // shared with the notes composer

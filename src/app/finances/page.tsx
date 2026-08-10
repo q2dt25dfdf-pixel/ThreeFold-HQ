@@ -20,6 +20,7 @@ import { CurrencyInput } from "@/components/orders/OrderFormShared";
 import { calcDepositTax, fmtTaxRate, salesTaxRate } from "@/lib/salesTax";
 import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivityRpc, type InvoiceActivityEntry } from "@/lib/invoiceActivity";
 import { supabase } from "@/lib/supabase";
+import { EXPENSE_CATEGORIES, expenseCategoryBadgeClass } from "@/lib/expenseCategories";
 import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
 import { estDeliverySuggestionUpdate } from "@/lib/estDelivery";
 import {
@@ -186,17 +187,6 @@ type Expense = {
   updated_at?: string;
 };
 
-const EXPENSE_CATEGORIES = [
-  "Materials",
-  "Packaging",
-  "Tools",
-  "Software",
-  "Samples",
-  "Supplies",
-  "Shipping",
-  "Other",
-] as const;
-
 const EXPENSE_PAID_BY_OPTIONS = ["Alliyah", "Hannah", "Jordan", "Company Account"] as const;
 
 const EXPENSE_REIMBURSEMENT_LABELS: Record<ExpenseReimbursementStatus, string> = {
@@ -222,20 +212,6 @@ function formatExpenseDate(dateStr: string): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr + "T12:00:00");
   return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function expenseCategoryBadgeClass(category: string): string {
-  const map: Record<string, string> = {
-    Materials: "bg-blue-100 text-blue-700",
-    Packaging: "bg-purple-100 text-purple-700",
-    Tools: "bg-orange-100 text-orange-700",
-    Software: "bg-indigo-100 text-indigo-700",
-    Samples: "bg-teal-100 text-teal-700",
-    Supplies: "bg-amber-100 text-amber-700",
-    Shipping: "bg-cyan-100 text-cyan-700",
-    Other: "bg-slate-100 text-slate-600",
-  };
-  return map[category] ?? "bg-slate-100 text-slate-600";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
