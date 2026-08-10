@@ -102,6 +102,57 @@ export function suggestBlankValues(
   return [...new Set(pool.map((x) => (x[field] ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
+// ── Grouped view for the desktop layout ──────────────────────────────────────
+// Blanks nest brand+style → colour → size (keying the top on brand+style keeps two
+// styles of one brand from colliding). Non-blanks group flat by category. Totals on
+// each level are the sum of their children. Derived purely from existing rows.
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL"];
+export function sizeRank(size?: string): number {
+  const i = SIZE_ORDER.indexOf((size ?? "").trim().toUpperCase());
+  return i === -1 ? SIZE_ORDER.length : i;
+}
+function sumUnits(rows: InventoryItem[]): number {
+  return rows.reduce((s, it) => s + (Number(it.qty_on_hand) || 0), 0);
+}
+
+export type InventoryColorGroup = { color: string; sizes: InventoryItem[]; units: number; low: number };
+export type InventoryBrandGroup = { key: string; brand: string; style: string; colors: InventoryColorGroup[]; colorCount: number; units: number; low: number };
+export type InventoryCategoryGroup = { category: string; rows: InventoryItem[] };
+
+export function groupInventory(items: InventoryItem[]): { blankGroups: InventoryBrandGroup[]; nonBlankGroups: InventoryCategoryGroup[] } {
+  const blanks = items.filter((it) => isBlank(it.category));
+  const others = items.filter((it) => !isBlank(it.category));
+
+  const brandMap = new Map<string, { brand: string; style: string; colors: Map<string, InventoryItem[]> }>();
+  for (const it of blanks) {
+    const key = `${it.brand ?? ""}||${it.style ?? ""}`;
+    let g = brandMap.get(key);
+    if (!g) { g = { brand: it.brand ?? "", style: it.style ?? "", colors: new Map() }; brandMap.set(key, g); }
+    const color = it.color ?? "";
+    const arr = g.colors.get(color) ?? [];
+    arr.push(it);
+    g.colors.set(color, arr);
+  }
+  const blankGroups: InventoryBrandGroup[] = [...brandMap.entries()].map(([key, g]) => {
+    const colors = [...g.colors.entries()].map(([color, sizes]) => {
+      const sorted = [...sizes].sort((a, b) => sizeRank(a.size) - sizeRank(b.size) || (a.size ?? "").localeCompare(b.size ?? ""));
+      return { color, sizes: sorted, units: sumUnits(sorted), low: sorted.filter(isLowStock).length };
+    }).sort((a, b) => a.color.localeCompare(b.color));
+    return {
+      key, brand: g.brand, style: g.style, colors,
+      colorCount: colors.length, units: colors.reduce((s, c) => s + c.units, 0), low: colors.reduce((s, c) => s + c.low, 0),
+    };
+  }).sort((a, b) => a.brand.localeCompare(b.brand) || a.style.localeCompare(b.style));
+
+  const catMap = new Map<string, InventoryItem[]>();
+  for (const it of others) { const arr = catMap.get(it.category) ?? []; arr.push(it); catMap.set(it.category, arr); }
+  const nonBlankGroups: InventoryCategoryGroup[] = [...catMap.entries()]
+    .map(([category, rows]) => ({ category, rows: [...rows].sort((a, b) => (a.name || "").localeCompare(b.name || "")) }))
+    .sort((a, b) => a.category.localeCompare(b.category));
+
+  return { blankGroups, nonBlankGroups };
+}
+
 // Find an existing Blank with the same identity (case-insensitive), excluding a
 // given id (used when editing). Returns the duplicate item, or null.
 export function findDuplicateBlank(
