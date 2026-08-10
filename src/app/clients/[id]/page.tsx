@@ -22,6 +22,7 @@ import InlineEditTitle from "@/components/InlineEditTitle";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { businessTodayISO } from "@/lib/businessDate";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 
@@ -270,7 +271,7 @@ export default function ClientDetailPage() {
   );
 
   const overdueClientOrders = clientOrders.filter(
-    (order) => order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(order.estimatedDeliveryDate),
+    (order) => order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(orderEstDeliveryDate(order)),
   );
 
   const matchingLead = useMemo(() => {
@@ -664,13 +665,13 @@ export default function ClientDetailPage() {
             <div className="mt-5 space-y-3">
               {clientOrders.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-xs text-slate-500 md:p-5 md:text-sm">No orders added yet.</p>}
               {clientOrders.map((order) => {
-                const overdue = order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(order.estimatedDeliveryDate);
+                const overdue = order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(orderEstDeliveryDate(order));
                 return (
                   <div key={order.id} className="flex flex-col gap-3 rounded-2xl bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-950">{order.orderName}</p>
                       <p className={`mt-1 text-xs md:text-sm ${overdue ? "font-semibold text-rose-600" : "text-slate-500"}`}>
-                        {order.estimatedDeliveryDate || "TBD"}{overdue ? " · overdue" : ""} · {order.vendor || "No vendor"} · {formatCurrency(order.amount)}
+                        {orderEstDeliveryDate(order) || "TBD"}{overdue ? " · overdue" : ""} · {order.vendor || "No vendor"} · {formatCurrency(order.amount)}
                       </p>
                     </div>
                     <span className="w-fit rounded-full bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-600 ring-1 ring-slate-200">{order.status}</span>

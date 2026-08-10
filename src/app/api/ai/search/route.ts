@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { stringField } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
 export const dynamic = "force-dynamic";
@@ -95,7 +96,7 @@ export async function GET(request: Request): Promise<Response> {
       const status    = stringField(o, "status");
       const vendor    = stringField(o, "vendor") || stringField(o, "vendor_name");
       const dueDate   =
-        stringField(o, "estimatedDeliveryDate") ||
+        orderEstDeliveryDate(o) ||
         stringField(o, "dueDate") ||
         stringField(o, "final_due_date");
       if (

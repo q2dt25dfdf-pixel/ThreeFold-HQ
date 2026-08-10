@@ -8,6 +8,7 @@ import {
   TASK_DONE_STATUSES,
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import {
   hasActiveFollowUpTask,
   hasFollowUpDate,
@@ -108,7 +109,7 @@ function taskOwner(task: Row): string {
 
 function orderDueDate(order: Row): string {
   return (
-    stringField(order, "estimatedDeliveryDate") ||
+    orderEstDeliveryDate(order) ||
     stringField(order, "dueDate") ||
     stringField(order, "final_due_date")
   );

@@ -8,6 +8,7 @@ import {
   TASK_DONE_STATUSES,
 } from "@/lib/constants";
 import { readField, statusText, stringField } from "@/lib/recordUtils";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import { hasActiveFollowUpTask, hasFollowUpDate, isCrmTask, leadFollowUpDate } from "@/lib/followUps";
 import { normalizeCRMStage, isInactiveLeadStage } from "@/lib/dashboardMetrics";
 import { parseAmount, calcDeposit, calcBalance, calcTotal } from "@/lib/invoiceCalc";
@@ -268,7 +269,7 @@ export async function GET(request: Request): Promise<Response> {
     const ordersDueToday = activeOrders
       .filter((o) => {
         const due =
-          stringField(o, "estimatedDeliveryDate") ||
+          orderEstDeliveryDate(o) ||
           stringField(o, "dueDate") ||
           stringField(o, "final_due_date");
         return due === todayISO;
@@ -368,14 +369,14 @@ export async function GET(request: Request): Promise<Response> {
     const stalledOrders = activeOrders
       .filter((o) => {
         const due =
-          stringField(o, "estimatedDeliveryDate") ||
+          orderEstDeliveryDate(o) ||
           stringField(o, "dueDate") ||
           stringField(o, "final_due_date");
         return Boolean(due && due < todayISO);
       })
       .map((o) => {
         const due =
-          stringField(o, "estimatedDeliveryDate") ||
+          orderEstDeliveryDate(o) ||
           stringField(o, "dueDate") ||
           stringField(o, "final_due_date");
         const daysPastDue = due ? daysBetween(due, todayISO) : 0;
@@ -442,7 +443,7 @@ export async function GET(request: Request): Promise<Response> {
     const ordersDueTomorrow = activeOrders
       .filter((o) => {
         const due =
-          stringField(o, "estimatedDeliveryDate") ||
+          orderEstDeliveryDate(o) ||
           stringField(o, "dueDate") ||
           stringField(o, "final_due_date");
         return due === tomorrowISO;

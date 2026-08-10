@@ -23,7 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { EXPENSE_CATEGORIES, expenseCategoryBadgeClass } from "@/lib/expenseCategories";
 import { expenseGeneralCents, type ExpenseAllocation } from "@/lib/expenseAllocations";
 import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
-import { estDeliverySuggestionUpdate } from "@/lib/estDelivery";
+import { estDeliverySuggestionUpdate, orderEstDeliveryDate } from "@/lib/estDelivery";
 import {
   Area,
   AreaChart,
@@ -662,8 +662,8 @@ function applyOrderToInvoice<T extends InvoiceFields>(invoice: T, order: Order):
     order_name: orderName,
     amount: total,
     total_amount: total,
-    final_due_date: invoice.final_due_date || order.estimatedDeliveryDate || "",
-    dueDate: invoice.dueDate || order.estimatedDeliveryDate || "",
+    final_due_date: invoice.final_due_date || orderEstDeliveryDate(order) || "",
+    dueDate: invoice.dueDate || orderEstDeliveryDate(order) || "",
   } as T);
 }
 

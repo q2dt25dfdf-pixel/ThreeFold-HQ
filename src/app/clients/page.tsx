@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Clock, Search, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
 import { formatPhoneNumber } from "@/lib/formatPhone";
+import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { ErrorBanner, FieldError } from "@/components/AppState";
 import { ClientsSkeleton } from "@/components/Skeleton";
@@ -327,7 +328,7 @@ export default function ClientsPage() {
   const revenueForClient = (client: Client) =>
     ordersForClient(client).reduce((sum, order) => sum + orderAmount(order.amount), 0);
   const hasOverdueOrder = (client: Client) =>
-    ordersForClient(client).some((order) => order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(order.estimatedDeliveryDate));
+    ordersForClient(client).some((order) => order.status !== "Delivered" && order.status !== "Cancelled" && isOverdue(orderEstDeliveryDate(order)));
 
   const visible = clients
     .filter((client) =>

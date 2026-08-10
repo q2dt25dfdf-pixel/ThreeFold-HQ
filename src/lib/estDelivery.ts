@@ -101,3 +101,20 @@ export function resolveEstDeliveryDisplay(
   if (legacy) return { date: legacy, source: "manual", suggestion };
   return { date: null, source: null, suggestion };
 }
+
+// Read-time est-delivery for lists/metrics/AI: the authoritative estDelivery, else
+// the legacy estimatedDeliveryDate. "" when neither is set. Accepts any record
+// (typed Order objects or raw JSONB) — the one helper every reader should use so
+// pages/routes don't read the legacy field directly. depositPaid:false → no invented
+// live suggestion; callers that need one build their own ctx and call resolve directly.
+export function orderEstDeliveryDate(order: Record<string, unknown>): string {
+  const str = (v: unknown) => (typeof v === "string" ? v : null);
+  return resolveEstDeliveryDisplay(
+    {
+      estDelivery: str(order.estDelivery),
+      estDeliverySource: str(order.estDeliverySource) as EstDeliverySource | null,
+      estimatedDeliveryDate: str(order.estimatedDeliveryDate),
+    },
+    { depositPaid: false },
+  ).date ?? "";
+}
