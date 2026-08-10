@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { ErrorBanner } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
@@ -15,6 +15,7 @@ import {
   findDuplicateBlank,
   blankDisplayName,
   suggestBlankValues,
+  groupInventory,
   type InventoryItem,
   type InventoryAdjustment,
 } from "@/lib/inventory";
@@ -79,6 +80,21 @@ export default function InventoryPage() {
       .filter((it) => (q ? `${it.name} ${it.brand ?? ""} ${it.style ?? ""} ${it.color ?? ""} ${it.vendor ?? ""}`.toLowerCase().includes(q) : true))
       .sort((a, b) => Number(isLowStock(b)) - Number(isLowStock(a)) || a.category.localeCompare(b.category) || (a.name || "").localeCompare(b.name || ""));
   }, [items, filterCategory, lowOnly, search]);
+
+  // Grouped view for the desktop layout — derived from `visible`, no new fields.
+  const { blankGroups, nonBlankGroups } = useMemo(() => groupInventory(visible), [visible]);
+
+  const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
+  const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
+  const seededExpand = useRef(false);
+  // Default: first brand expanded, the rest collapsed (seed once when data lands).
+  useEffect(() => {
+    if (seededExpand.current || blankGroups.length === 0) return;
+    setExpandedBrands(new Set([blankGroups[0].key]));
+    seededExpand.current = true;
+  }, [blankGroups]);
+  const toggleBrand = (k: string) => setExpandedBrands((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const toggleColor = (k: string) => setExpandedColors((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // ── Cascading suggestions — from existing Blanks rows only, no catalogue ────
   const brandOptions = useMemo(() => suggestBlankValues(items, "brand", {}), [items]);
@@ -229,48 +245,84 @@ export default function InventoryPage() {
         <p className="py-10 text-center text-[13px] text-slate-400">{items.length === 0 ? "No stock yet — add your first item." : "Nothing matches these filters."}</p>
       ) : (
         <>
-          {/* Desktop: table */}
-          <div className="mt-4 hidden overflow-hidden rounded-2xl ring-1 ring-slate-100 md:block">
-            <table className="w-full text-left text-[13px]">
-              <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                <tr>
-                  <th className="px-4 py-2.5">Item</th>
-                  <th className="px-4 py-2.5">Category</th>
-                  <th className="px-4 py-2.5 text-right">On hand</th>
-                  <th className="px-4 py-2.5 text-right">Low at</th>
-                  <th className="px-4 py-2.5">Vendor</th>
-                  <th className="px-4 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((it) => {
+          {/* Desktop: grouped (brand+style → colour → size); non-blanks flat by category */}
+          <div className="mt-4 hidden overflow-hidden rounded-2xl text-[13px] ring-1 ring-slate-100 md:block">
+            {blankGroups.map((bg) => {
+              const bopen = expandedBrands.has(bg.key);
+              return (
+                <div key={bg.key} className="border-t border-slate-100 first:border-t-0">
+                  {/* Brand row */}
+                  <button onClick={() => toggleBrand(bg.key)} className="flex w-full items-center gap-2 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100">
+                    <span className="w-3 shrink-0 text-slate-400">{bopen ? "▾" : "▸"}</span>
+                    <span className="font-bold text-slate-900">{bg.brand || "—"}</span>
+                    <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{bg.style || "—"}</span>
+                    {bg.low > 0 && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">{bg.low} low</span>}
+                    <span className="ml-auto text-[12px] text-slate-500">{bg.colorCount} colour{bg.colorCount !== 1 ? "s" : ""} · {bg.units} units</span>
+                  </button>
+
+                  {bopen && bg.colors.map((cg) => {
+                    const ckey = `${bg.key}||${cg.color}`;
+                    const copen = expandedColors.has(ckey);
+                    return (
+                      <div key={ckey}>
+                        {/* Colour row */}
+                        <button onClick={() => toggleColor(ckey)} className="flex w-full items-center gap-2 border-t border-slate-100 py-2 pl-10 pr-4 text-left hover:bg-slate-50">
+                          <span className="w-3 shrink-0 text-slate-400">{copen ? "▾" : "▸"}</span>
+                          <span className="font-semibold text-slate-800">{cg.color || "—"}</span>
+                          {cg.low > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{cg.low} low</span>}
+                          <span className="ml-auto text-[12px] text-slate-500">{cg.sizes.length} size{cg.sizes.length !== 1 ? "s" : ""} · {cg.units} units</span>
+                        </button>
+
+                        {copen && cg.sizes.map((it) => {
+                          const low = isLowStock(it);
+                          return (
+                            <Fragment key={it.id}>
+                              {/* Size row */}
+                              <div className={`flex items-center gap-3 border-t border-slate-100 py-2 pl-16 pr-4 ${low ? "bg-amber-50" : ""}`}>
+                                <span className="w-14 font-semibold text-slate-900">{it.size || "—"}</span>
+                                <span className="text-[12px] text-slate-500">On hand <b className="text-slate-800">{it.qty_on_hand}</b></span>
+                                <span className="text-[12px] text-slate-400">low at {it.low_stock_threshold}</span>
+                                {low && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Low</span>}
+                                <span className="ml-auto flex items-center gap-1">
+                                  <button onClick={() => (adjustId === it.id ? setAdjustId("") : openAdjust(it))} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">Adjust</button>
+                                  <button onClick={() => openEdit(it)} className="rounded-lg px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:text-slate-800">Edit</button>
+                                </span>
+                              </div>
+                              {adjustId === it.id && <div className={`border-t border-slate-100 px-4 pb-3 pl-16 ${low ? "bg-amber-50" : ""}`}>{adjustPanel(it)}</div>}
+                            </Fragment>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            {/* Non-blank categories — flat rows, grouped at the bottom */}
+            {nonBlankGroups.map((cat) => (
+              <div key={cat.category} className="border-t border-slate-100">
+                <div className="bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{cat.category}</div>
+                {cat.rows.map((it) => {
                   const low = isLowStock(it);
                   return (
                     <Fragment key={it.id}>
-                      <tr className={`border-t border-slate-100 ${low ? "bg-amber-50" : "bg-white"}`}>
-                        <td className="px-4 py-2.5">
-                          <span className="font-semibold text-slate-900">{it.name || "—"}</span>
-                          {low && <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Low</span>}
-                        </td>
-                        <td className="px-4 py-2.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{it.category}</span></td>
-                        <td className="px-4 py-2.5 text-right font-bold text-slate-900">{it.qty_on_hand}</td>
-                        <td className="px-4 py-2.5 text-right text-slate-500">{it.low_stock_threshold}</td>
-                        <td className="px-4 py-2.5 text-slate-500">{it.vendor || "—"}</td>
-                        <td className="px-4 py-2.5 text-right">
+                      <div className={`flex items-center gap-3 border-t border-slate-100 px-4 py-2 ${low ? "bg-amber-50" : ""}`}>
+                        <span className="font-semibold text-slate-900">{it.name || "—"}</span>
+                        {low && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Low</span>}
+                        <span className="ml-auto flex items-center gap-3">
+                          <span className="text-[12px] text-slate-500">On hand <b className="text-slate-800">{it.qty_on_hand}</b></span>
+                          <span className="text-[12px] text-slate-400">low at {it.low_stock_threshold}</span>
                           <button onClick={() => (adjustId === it.id ? setAdjustId("") : openAdjust(it))} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">Adjust</button>
-                          <button onClick={() => openEdit(it)} className="ml-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:text-slate-800">Edit</button>
-                        </td>
-                      </tr>
-                      {adjustId === it.id && (
-                        <tr className={low ? "bg-amber-50" : "bg-white"}>
-                          <td colSpan={6} className="px-4 pb-3">{adjustPanel(it)}</td>
-                        </tr>
-                      )}
+                          <button onClick={() => openEdit(it)} className="rounded-lg px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:text-slate-800">Edit</button>
+                        </span>
+                      </div>
+                      {adjustId === it.id && <div className={`border-t border-slate-100 px-4 pb-3 ${low ? "bg-amber-50" : ""}`}>{adjustPanel(it)}</div>}
                     </Fragment>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            ))}
           </div>
 
           {/* Mobile: cards */}
