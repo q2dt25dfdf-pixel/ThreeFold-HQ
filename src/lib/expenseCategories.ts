@@ -9,6 +9,8 @@
 //   Software   — subscriptions and tools
 //   Marketing  — samples, giveaways, shirts for ourselves, ads, content
 //   Shipping   — postage and carrier costs
+//   Supplies   — consumables and small production tools (heat tape, rulers,
+//                lint rollers, storage, folding boards, cutters)
 //   Other      — anything that does not fit
 
 export const EXPENSE_CATEGORIES = [
@@ -19,6 +21,7 @@ export const EXPENSE_CATEGORIES = [
   "Software",
   "Marketing",
   "Shipping",
+  "Supplies",
   "Other",
 ] as const;
 
@@ -35,6 +38,7 @@ export function expenseCategoryBadgeClass(category: string): string {
     Software: "bg-indigo-100 text-indigo-700",
     Marketing: "bg-pink-100 text-pink-700",
     Shipping: "bg-cyan-100 text-cyan-700",
+    Supplies: "bg-teal-100 text-teal-700",
     Other: "bg-slate-100 text-slate-600",
   };
   return map[category] ?? "bg-slate-100 text-slate-600";
