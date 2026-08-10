@@ -9,6 +9,7 @@ const HQ_PREFIXES: string[] = [
   '/calendar',
   '/notes',
   '/vendors',
+  '/inventory',
   '/reports',
   '/login',
 ]
