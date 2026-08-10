@@ -3,6 +3,10 @@
     {
       "path": "/api/plaid/sync",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/recurrence/extend",
+      "schedule": "0 8 * * *"
     }
   ]
 }

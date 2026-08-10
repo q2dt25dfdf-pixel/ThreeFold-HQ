@@ -9,6 +9,8 @@ import SaveButton, { type SaveState, useSaveState } from "@/components/SaveButto
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { businessTodayISO, dateToBusinessISO } from "@/lib/businessDate";
 import { isCrmTask } from "@/lib/followUps";
+import RecurrencePicker from "@/components/RecurrencePicker";
+import { nextOccurrenceAfter, type RecurrenceRule } from "@/lib/recurrence";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
 type TaskAssignee = TaskOwner | "All" | "";
@@ -31,6 +33,12 @@ type Task = {
   leadId?: string;
   crm_lead_id?: string;
   lead_id?: string;
+  // Recurrence (on-completion generation: only the current open occurrence exists).
+  series_id?: string;
+  recurrence?: RecurrenceRule;
+  series_start?: string;
+  occurrence_index?: number;
+  detached?: boolean;
 };
 
 const defaultTasks: Task[] = [
@@ -156,6 +164,7 @@ export default function TasksPage() {
   const addSave = useSaveState();
   const editSave = useSaveState();
   const [form, setForm] = useState(emptyForm);
+  const [addRecurrence, setAddRecurrence] = useState<RecurrenceRule | null>(null);
   const [formError, setFormError] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
@@ -163,21 +172,42 @@ export default function TasksPage() {
 
   const toggle = (id: string) => {
     const task = tasks.find((current) => current.id === id);
-    if (task) {
-      const completed = !task.completed;
-      const completedAt = completed ? new Date().toISOString() : undefined;
-      upsertItem({
-        ...task,
-        completed,
-        status: completed ? "Done" : "Open",
-        completedAt,
-        completed_at: completedAt,
-      });
+    if (!task) return;
+    const completed = !task.completed;
+    const completedAt = completed ? new Date().toISOString() : undefined;
+    upsertItem({ ...task, completed, status: completed ? "Done" : "Open", completedAt, completed_at: completedAt });
+
+    // Completing a recurring board task spawns the next occurrence. NEVER for CRM
+    // follow-up tasks (they're auto-managed by the CRM) or detached occurrences.
+    if (completed && task.recurrence && !task.detached && !isCrmTask(task) && !task.id.startsWith("crm-followup-")) {
+      const start = task.series_start ?? task.dueDate;
+      const idx = task.occurrence_index ?? 1;
+      const withinCount = !task.recurrence.count || idx < task.recurrence.count;
+      const next = withinCount ? nextOccurrenceAfter(task.recurrence, start, task.dueDate) : null;
+      if (next) {
+        const sid = task.series_id ?? task.id;
+        upsertItem({
+          id: `${sid}::${next}`,
+          title: task.title,
+          dueDate: next,
+          assignedTo: task.assignedTo,
+          owner: task.owner,
+          priority: task.priority,
+          notes: task.notes,
+          completed: false,
+          status: "Open",
+          series_id: sid,
+          recurrence: task.recurrence,
+          series_start: start,
+          occurrence_index: idx + 1,
+        });
+      }
     }
   };
 
   const openAddForFounder = (founder: TaskColumn) => {
     setForm({ ...emptyForm, assignedTo: founder });
+    setAddRecurrence(null);
     setFormError("");
     addSave.resetSaveState();
     setShowAdd(true);
@@ -185,6 +215,7 @@ export default function TasksPage() {
 
   const openAddForTeam = () => {
     setForm({ ...emptyForm, assignedTo: "All" });
+    setAddRecurrence(null);
     setFormError("");
     addSave.resetSaveState();
     setShowAdd(true);
@@ -195,11 +226,19 @@ export default function TasksPage() {
       setFormError("Task title is required.");
       return;
     }
+    if (addRecurrence && !/^\d{4}-\d{2}-\d{2}$/.test(form.dueDate)) {
+      setFormError("A recurring task needs a due date.");
+      return;
+    }
     setFormError("");
-    const newTask = { id: `task-${Date.now()}`, ...form };
+    // Recurring → the first occurrence carries the series (next spawns on completion).
+    const seriesFields = addRecurrence
+      ? (() => { const sid = `taskseries-${Date.now()}`; return { series_id: sid, recurrence: addRecurrence, series_start: form.dueDate, occurrence_index: 1 }; })()
+      : {};
+    const newTask = { id: `task-${Date.now()}`, ...form, ...seriesFields };
     await addSave.runSave(async () => {
       const response = await upsertItem(newTask);
-      if (!response.error) setForm(emptyForm);
+      if (!response.error) { setForm(emptyForm); setAddRecurrence(null); }
       return response;
     }, () => { setShowAdd(false); setFormError(""); });
   };
@@ -627,6 +666,10 @@ export default function TasksPage() {
       {showAdd && (
         <Modal title="Add task" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} mode="add" error={formError}>
           <FormFields data={form} onChange={(next) => { setForm(next); if (formError) setFormError(""); }} />
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Repeat</label>
+            <RecurrencePicker value={addRecurrence} startDate={/^\d{4}-\d{2}-\d{2}$/.test(form.dueDate) ? form.dueDate : ""} onChange={setAddRecurrence} />
+          </div>
         </Modal>
       )}
       {editTask && (
