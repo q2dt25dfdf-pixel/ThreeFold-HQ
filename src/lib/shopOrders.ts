@@ -42,9 +42,13 @@ export type ShopOrderData = {
   line_items?: { name: string; size: string; qty: number; unit_cents?: number }[];
   // Founder notes, appended newest-first order handled in UI. `at` is server-set on save.
   notes?: { text: string; author: string; at: string }[];
-  // Refund awareness (nothing sets these yet — see financesShop.ts guard). A future manual
-  // flag or a refund webhook can set either to drop the order from revenue + tax honestly.
+  // Refund awareness — set by the founder's manual "Mark refunded" toggle (v1: no
+  // Stripe refund webhook). A refunded order drops out of revenue + tax (financesShop.ts).
   refunded?: boolean;
+  refunded_at?: string;
+  // Refund does NOT auto-restock. When set, the recorded decrement has been reversed
+  // (units added back to inventory) via the one-click restock. Idempotency marker.
+  restocked_at?: string;
   status?: string;
 };
 

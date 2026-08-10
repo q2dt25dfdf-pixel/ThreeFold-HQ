@@ -115,3 +115,49 @@ export function planDecrement(
   const status = outcomes.some((o) => o.status !== "applied") ? "issues" : "applied";
   return { lines: outcomes, updates, status };
 }
+
+// Refund restock — reverse a recorded decrement. Given the lines stamped on the
+// order (each carrying inventory_id + applied units), add those units back to the
+// exact rows they came from. Pure: never mutates inputs. Rows that no longer exist
+// are skipped (reported via `missing`). Sums per row so a design spanning multiple
+// lines restocks once.
+export type RecordedDecrementLine = { inventory_id?: string; applied?: number; design?: string; size?: string };
+export type RestockPlan = {
+  updates: { id: string; newQty: number; adjustment: InventoryAdjustment }[];
+  restocked: number;          // total units added back
+  missing: string[];          // inventory_ids that were recorded but no longer exist
+};
+
+export function planRestock(
+  recorded: RecordedDecrementLine[],
+  items: InventoryItem[],
+  orderId: string,
+  nowIso: string,
+): RestockPlan {
+  const addByRow = new Map<string, number>();
+  for (const l of recorded) {
+    const id = (l.inventory_id ?? "").trim();
+    const applied = Math.max(0, Math.floor(Number(l.applied) || 0));
+    if (!id || applied <= 0) continue;
+    addByRow.set(id, (addByRow.get(id) ?? 0) + applied);
+  }
+
+  const updates: RestockPlan["updates"] = [];
+  const missing: string[] = [];
+  for (const [id, add] of addByRow) {
+    const it = items.find((x) => x.id === id);
+    if (!it) { missing.push(id); continue; }
+    const adjustment: InventoryAdjustment = {
+      delta: add,
+      reason: "Refund restock",
+      order_id: orderId,
+      source: "shop_order_refund",
+      by: "system",
+      at: nowIso,
+    };
+    updates.push({ id, newQty: (Number(it.qty_on_hand) || 0) + add, adjustment });
+  }
+
+  const restocked = updates.reduce((s, u) => s + u.adjustment.delta, 0);
+  return { updates, restocked, missing };
+}

@@ -11,7 +11,7 @@ export type InventoryAdjustment = {
   by?: string;          // founder name, or "system" for auto-decrements
   at: string;           // ISO timestamp
   order_id?: string;    // set for shop-order auto-decrements (provenance + reversal)
-  source?: "shop_order" | "manual";
+  source?: "shop_order" | "shop_order_refund" | "manual";
 };
 
 export type InventoryItem = {

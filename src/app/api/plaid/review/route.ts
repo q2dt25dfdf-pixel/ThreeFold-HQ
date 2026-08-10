@@ -43,19 +43,64 @@ async function findDuplicate(
     db.from("orders").select("id, data"),
   ]);
 
+  // Exclude this txn's OWN prior filings so re-filing never flags itself.
+  const selfCostLineId = `cost-plaid-${staged.id}`;
   const expenses: DupExpense[] = ((expenseRows.data ?? []) as { id: string; data: DupExpense }[])
     .map((r) => r.data)
-    .filter((e) => e && typeof e.amount_cents === "number");
+    .filter((e) => e && typeof e.amount_cents === "number" && e.id !== staged.filed_expense_id);
   const expDup = findDuplicateExpense(staged, expenses);
   if (expDup) return { kind: "expense", vendor_name: expDup.vendor_name, expense_date: expDup.expense_date, amount_cents: expDup.amount_cents };
 
   const orders: OrderForDedupe[] = ((orderRows.data ?? []) as { id: string; data: OrderForDedupe }[])
-    .map((r) => ({ ...r.data, id: r.data?.id ?? "" }))
+    .map((r) => {
+      const o = { ...r.data, id: r.data?.id ?? "" };
+      if (Array.isArray(o.cost_lines)) o.cost_lines = o.cost_lines.filter((l) => l.id !== selfCostLineId);
+      return o;
+    })
     .filter((o) => o.id);
   const costDup = findDuplicateOrderCost(staged, orders);
   if (costDup) return { kind: "order_cost", ...costDup };
 
   return null;
+}
+
+// Move-not-duplicate: reverse whatever this staged txn was previously filed as,
+// so a re-file (or a dismiss after filing) can never leave a stale ledger entry.
+// Idempotent — safe to call when nothing was filed.
+async function unfilePrior(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  staged: StagedTxn,
+): Promise<{ error?: string }> {
+  // Prior EXPENSE filing → delete the expenses row.
+  if (staged.filed_expense_id) {
+    const { error } = await db.from("expenses").delete().eq("id", staged.filed_expense_id);
+    if (error) return { error: error.message };
+  }
+
+  // Prior ORDER-COST filing → strip the generated cost_line and recompute rollup.
+  if (staged.filed_order_id && staged.filed_cost_line_id) {
+    const { data: orderRows } = await db.from("orders").select("id, data").eq("id", staged.filed_order_id).limit(1);
+    if (orderRows && orderRows.length) {
+      const order = orderRows[0].data as { cost_lines?: CostLine[] } & Record<string, unknown>;
+      const existing = Array.isArray(order.cost_lines) ? order.cost_lines : [];
+      const lines = existing.filter((l) => l.id !== staged.filed_cost_line_id);
+      if (lines.length !== existing.length) {
+        const rollup = deriveCostRollup(lines);
+        const updatedOrder = {
+          ...order,
+          cost_lines: lines,
+          vendor_cost_cents: rollup.vendor_cost_cents,
+          vendor_invoice_status: rollup.vendor_invoice_status,
+          vendor_payment_status: rollup.vendor_payment_status,
+          vendor_paid_by: lines.find((l) => l.paid_by)?.paid_by ?? "",
+        };
+        const { error } = await db.from("orders").update({ data: updatedOrder }).eq("id", staged.filed_order_id);
+        if (error) return { error: error.message };
+      }
+    }
+  }
+
+  return {};
 }
 
 export async function POST(request: Request) {
@@ -89,6 +134,11 @@ export async function POST(request: Request) {
       const dup = await findDuplicate(db, staged);
       if (dup) return NextResponse.json({ needsConfirm: true, duplicate: dup });
     }
+
+    // Move-not-duplicate: undo any prior filing of THIS txn before filing anew, so
+    // re-filing (incl. switching expense↔order) never leaves two ledger entries.
+    const unfiled = await unfilePrior(db, staged);
+    if (unfiled.error) return NextResponse.json({ error: unfiled.error }, { status: 500 });
 
     // ── File as an ORDER COST (append a cost_line; never an expenses row) ──────
     if (target === "order_cost") {
@@ -151,14 +201,17 @@ export async function POST(request: Request) {
     const { error: expErr } = await db.from("expenses").upsert({ id: expenseId, data: expense });
     if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });
 
-    const updated: StagedTxn = { ...staged, status: "filed", auto_dismissed: false, dismiss_reason: undefined, filed_expense_id: expenseId, reviewed_by: body.reviewed_by, reviewed_at: now, updated_at: now };
+    const updated: StagedTxn = { ...staged, status: "filed", auto_dismissed: false, dismiss_reason: undefined, filed_expense_id: expenseId, filed_order_id: undefined, filed_cost_line_id: undefined, filed_label: undefined, reviewed_by: body.reviewed_by, reviewed_at: now, updated_at: now };
     const { error } = await db.from("plaid_transactions").update({ data: updated }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, filed_expense_id: expenseId });
   }
 
   if (action === "dismiss") {
-    const updated: StagedTxn = { ...staged, status: "dismissed", auto_dismissed: false, dismiss_reason: body.reason?.trim() || "Not an expense", reviewed_by: body.reviewed_by, reviewed_at: now, updated_at: now };
+    // Dismissing a previously-filed txn must also unwind its ledger entry.
+    const unfiled = await unfilePrior(db, staged);
+    if (unfiled.error) return NextResponse.json({ error: unfiled.error }, { status: 500 });
+    const updated: StagedTxn = { ...staged, status: "dismissed", auto_dismissed: false, dismiss_reason: body.reason?.trim() || "Not an expense", filed_expense_id: undefined, filed_order_id: undefined, filed_cost_line_id: undefined, filed_label: undefined, reviewed_by: body.reviewed_by, reviewed_at: now, updated_at: now };
     const { error } = await db.from("plaid_transactions").update({ data: updated }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

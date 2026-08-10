@@ -23,8 +23,10 @@ export function calcBalance(invoice: Record<string, unknown>): number {
   return explicit > 0 ? explicit : Math.max(calcTotal(invoice) - calcDeposit(invoice), 0);
 }
 
-/** Amount collected so far (deposit when partially paid; total when fully paid). */
+/** Amount collected so far (deposit when partially paid; total when fully paid).
+ *  A refunded invoice (manual v1 flag) collects nothing — the money went back. */
 export function calcCollected(invoice: Record<string, unknown>): number {
+  if (invoice.refunded === true) return 0;
   if (invoice.final_paid === true) return calcTotal(invoice);
   if (invoice.deposit_paid === true) return calcDeposit(invoice);
   return 0;

@@ -78,6 +78,10 @@ type Invoice = {
   tax_collected_amount?: number;
   // Newest-first activity timeline (Pass 1: storage only; nothing appends yet).
   activity_log?: InvoiceActivityEntry[];
+  // Manual refund flag (v1 — no partial, no line-level). A refunded invoice collects
+  // nothing (calcCollected returns 0) and is excluded from tax collected.
+  refunded?: boolean;
+  refunded_at?: string;
 };
 
 type SalesTaxPayment = {
@@ -228,7 +232,7 @@ function formatExpenseDate(dateStr: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const invoiceStatusOptions = INVOICE_STATUS_OPTIONS;
-const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", deposit_payment_method: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", final_payment_method: "", paid_in_full: false, dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "" };
+const emptyForm = { client: "", orderName: "", client_id: "", client_name: "", client_email: "", client_company: "", order_id: "", order_name: "", amount: 0, total_amount: 0, deposit_amount: 0, deposit_paid: false, deposit_paid_date: "", deposit_payment_method: "", balance_remaining: 0, final_due_date: "", final_paid: false, final_paid_date: "", final_payment_method: "", paid_in_full: false, dueDate: "", status: "Draft" as InvoiceStatus, notes: "", stripe_invoice_url: "", refunded: false, refunded_at: "" };
 type InvoiceFields = Invoice | typeof emptyForm;
 
 type FinanceTab = "overview" | "invoices" | "expenses" | "sales-tax";
@@ -843,6 +847,7 @@ function FinancesContent() {
 
   const customTaxCollectedYTD = useMemo(() => {
     return normalizedInvoices.reduce((sum, inv) => {
+      if (inv.refunded === true) return sum; // refunded → tax returned, don't remit
       const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
       if (taxAmt <= 0) return sum;
       const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
@@ -888,6 +893,7 @@ function FinancesContent() {
   // ── Per-year / quarterly tax metrics (driven by selectedTaxYear) ─────────
   const taxCollectedForYear = useMemo(() => {
     return normalizedInvoices.reduce((sum, inv) => {
+      if (inv.refunded === true) return sum; // refunded → tax returned, don't remit
       const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
       if (taxAmt <= 0) return sum;
       const grandTotalAmt = parseAmount(inv.grand_total ?? inv.total_amount);
@@ -1706,6 +1712,19 @@ function FinancesContent() {
           </select>
         </div>
       );
+      const refundBlock = (
+        <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-xs font-semibold text-rose-700 md:text-sm">
+          <input
+            type="checkbox"
+            checked={Boolean(data.refunded)}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              onChange({ ...data, refunded: checked, refunded_at: checked ? (data.refunded_at || todayDate()) : "" });
+            }}
+          />
+          Refunded — exclude from revenue &amp; sales tax
+        </label>
+      );
       const linkBlock = (
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Invoice / Payment Link <span className="font-normal text-slate-400">(optional)</span></label>
@@ -1913,6 +1932,7 @@ function FinancesContent() {
               {orderBlock}
               {orderTotalBlock}
               {statusBlock}
+              {refundBlock}
               {linkBlock}
               {notesBlock}
             </div>
