@@ -11,6 +11,7 @@ import { businessTodayISO, dateToBusinessISO } from "@/lib/businessDate";
 import { isCrmTask } from "@/lib/followUps";
 import RecurrencePicker from "@/components/RecurrencePicker";
 import { nextOccurrenceAfter, type RecurrenceRule } from "@/lib/recurrence";
+import { PageShell, PageActionButton } from "@/components/layout/PageShell";
 
 type TaskOwner = "Alliyah" | "Hannah" | "Jordan";
 type TaskAssignee = TaskOwner | "All" | "";
@@ -405,26 +406,23 @@ export default function TasksPage() {
   if (loading) return <TasksSkeleton />;
 
   return (
-    <div className="space-y-6 text-sm md:text-base">
-      <ErrorBanner message={error} />
-
-      {/* ── Compact header: title + inline urgency line + search + add ─────────── */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-950 md:text-3xl">Tasks</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs md:text-sm">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
-              {overdueTasks.length} overdue
-            </span>
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
-              {dueTodayTasks.length} due today
-            </span>
-            <span className="text-slate-400">· {openTasks.length} open</span>
-          </div>
+    <PageShell
+      title="Tasks"
+      subtitle={
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="flex items-center gap-1.5 text-slate-600">
+            <span className="h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
+            {overdueTasks.length} overdue
+          </span>
+          <span className="flex items-center gap-1.5 text-slate-600">
+            <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+            {dueTodayTasks.length} due today
+          </span>
+          <span className="text-slate-400">· {openTasks.length} open</span>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+      }
+      actions={
+        <>
           <label className="relative w-full md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
@@ -434,12 +432,7 @@ export default function TasksPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <button
-            className="min-h-11 rounded-3xl bg-slate-950 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
-            onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}
-          >
-            Add task
-          </button>
+          <PageActionButton onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add task</PageActionButton>
           <select
             className="min-h-11 rounded-3xl border border-slate-300 bg-white px-4 py-3 text-xs text-slate-900 md:text-sm"
             value={filterOwner}
@@ -447,8 +440,10 @@ export default function TasksPage() {
           >
             <option>All</option><option>Alliyah</option><option>Hannah</option><option>Jordan</option>
           </select>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <ErrorBanner message={error} />
 
       {/* ── Needs action now — light red-tinted band (overdue + due-today) ──────── */}
       <section className={`rounded-[2rem] p-5 shadow-sm ring-1 md:p-6 ${urgentTasks.length === 0 ? "bg-white ring-slate-200" : "bg-rose-50 ring-rose-200"}`}>
@@ -677,6 +672,6 @@ export default function TasksPage() {
           <FormFields data={editTask} onChange={(next) => { setEditTask(next); if (formError) setFormError(""); }} />
         </Modal>
       )}
-    </div>
+    </PageShell>
   );
 }

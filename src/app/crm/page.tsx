@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, DollarSign, Users, CircleCheck } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { CrmSkeleton } from "@/components/Skeleton";
+import { PageShell, PageActionButton } from "@/components/layout/PageShell";
 import LeadDetailModal from "../../components/crm/LeadDetailModal";
 import LeadCard from "../../components/crm/LeadCard";
 import LeadFormModal from "../../components/crm/LeadFormModal";
@@ -1112,24 +1113,11 @@ function CRMContent() {
   if (loading) return <CrmSkeleton />;
 
   return (
-    <div className="min-h-screen min-w-0 space-y-6 text-sm md:text-base">
-      <ErrorBanner message={error} />
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:overflow-x-visible">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">CRM Pipeline</p>
-          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Manage leads across every stage</h1>
-          <p className="text-slate-600 text-xs md:text-sm mt-2">
-            Track prospects, follow-ups, approvals, and production handoffs with operational accuracy.
-          </p>
-          <button
-            type="button"
-            onClick={() => openAddLeadModal()}
-            className="mt-4 hidden min-h-11 items-center gap-2 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 md:inline-flex"
-          >
-            <Plus size={16} />
-            Add lead
-          </button>
-        </div>
+    <PageShell
+      kicker="CRM Pipeline"
+      title="Manage leads across every stage"
+      subtitle="Track prospects, follow-ups, approvals, and production handoffs with operational accuracy."
+      actions={
         <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto md:flex-row md:items-center">
           {viewMode && (
             <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5">
@@ -1176,16 +1164,13 @@ function CRMContent() {
               Delete all test records ({testLeadCount})
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => openAddLeadModal()}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:hidden"
-          >
-            <Plus size={16} />
-            Add lead
-          </button>
+          <PageActionButton className="flex w-full items-center justify-center gap-1.5 md:w-auto" onClick={() => openAddLeadModal()}>
+            <Plus size={16} /> Add lead
+          </PageActionButton>
         </div>
-      </div>
+      }
+    >
+      <ErrorBanner message={error} />
 
       {/* Hero stats V3: one box - emerald pipeline-value hero on the left, total leads +
           deposit paid stacked on the right. Values are unchanged (display only). */}
@@ -1439,7 +1424,7 @@ function CRMContent() {
           {toastMessage}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }
 

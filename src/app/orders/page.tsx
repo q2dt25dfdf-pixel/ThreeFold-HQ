@@ -6,6 +6,7 @@ import { Check, ChevronDown, Clock, Search, Trash2 } from "lucide-react";
 import { ErrorBanner, LoadingState } from "@/components/AppState";
 import { OrdersSkeleton } from "@/components/Skeleton";
 import AddOrderModal from "@/components/orders/AddOrderModal";
+import { PageShell, PageActionButton } from "@/components/layout/PageShell";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
 import { resolveEstDeliveryDisplay, fmtDeliveryDate } from "@/lib/estDelivery";
@@ -293,16 +294,11 @@ function OrdersContent() {
   if (loading) return <OrdersSkeleton />;
 
   return (
-    <div className="space-y-6 text-sm md:text-base">
-      <ErrorBanner message={error} />
-
-      {/* ── Header + search + add ─────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Orders system</p>
-          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Orders queue</h1>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
+    <PageShell
+      kicker="Orders system"
+      title="Orders queue"
+      actions={
+        <>
           <label className="relative w-full sm:w-64 md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input
@@ -312,14 +308,11 @@ function OrdersContent() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <button
-            className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 md:w-auto md:text-sm"
-            onClick={() => setShowAddOrder(true)}
-          >
-            Add order
-          </button>
-        </div>
-      </div>
+          <PageActionButton className="w-full md:w-auto" onClick={() => setShowAddOrder(true)}>Add order</PageActionButton>
+        </>
+      }
+    >
+      <ErrorBanner message={error} />
 
       {/* ── Hero row: In Production (count-led) + Need Attention + Delivered ────── */}
       <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
@@ -448,7 +441,7 @@ function OrdersContent() {
         onClose={() => setShowAddOrder(false)}
         onSaved={() => reload()}
       />
-    </div>
+    </PageShell>
   );
 }
 

@@ -15,7 +15,7 @@ export function PageShell({
 }: {
   kicker?: string;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -25,7 +25,7 @@ export function PageShell({
         <div className="min-w-0">
           {kicker && <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">{kicker}</p>}
           <h1 className={`${kicker ? "mt-3 " : ""}text-base font-semibold text-slate-950 md:text-3xl`}>{title}</h1>
-          {subtitle && <p className="mt-2 text-xs text-slate-600 md:text-sm">{subtitle}</p>}
+          {subtitle && <div className="mt-2 text-xs text-slate-600 md:text-sm">{subtitle}</div>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>

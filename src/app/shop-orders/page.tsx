@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { money } from "@/lib/shopOrders";
+import { PageShell, PageActionButton } from "@/components/layout/PageShell";
 
 type Row = {
   id: string; name: string; email: string; created_at: string | null;
@@ -70,17 +71,13 @@ export default function ShopOrdersPage() {
   const lbl = "text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400";
 
   return (
-    <div>
-      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Shop · ThreeFold Originals</div>
-      <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-extrabold text-slate-900">Shop Orders</h1>
-        <button onClick={exportCsv} className="ml-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50">
-          Export Pirate Ship CSV ↓
-        </button>
-      </div>
-
-      {/* stat tiles */}
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+    <PageShell
+      kicker="Shop · ThreeFold Originals"
+      title="Shop Orders"
+      actions={<PageActionButton variant="secondary" onClick={exportCsv}>Export Pirate Ship CSV ↓</PageActionButton>}
+    >
+      {/* stat tiles (bespoke — "collected" pill; left as-is per Option 1) */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className={tile}>
           <div className={lbl}>To Ship</div>
           <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats?.toShipCount ?? "—"}</div>
@@ -100,7 +97,7 @@ export default function ShopOrdersPage() {
       </div>
 
       {/* filters */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(["to-ship", "shipped", "all"] as Filter[]).map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             className={`rounded-full px-4 py-2 text-sm ${filter === f ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
@@ -112,11 +109,11 @@ export default function ShopOrdersPage() {
 
       {/* cards */}
       {loading ? (
-        <div className="mt-6 text-sm text-slate-400">Loading…</div>
+        <div className="text-sm text-slate-400">Loading…</div>
       ) : orders.length === 0 ? (
-        <div className="mt-6 rounded-2xl bg-white p-8 text-center text-sm text-slate-400">No orders in this view.</div>
+        <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-400">No orders in this view.</div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {orders.map((o) => (
             <div key={o.id} className="rounded-2xl border-2 border-transparent bg-white p-5 md:p-6 transition hover:border-blue-500">
               <div className="flex items-center gap-2">
@@ -148,6 +145,6 @@ export default function ShopOrdersPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }
