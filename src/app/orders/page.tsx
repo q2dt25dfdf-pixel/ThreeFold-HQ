@@ -8,6 +8,7 @@ import { OrdersSkeleton } from "@/components/Skeleton";
 import AddOrderModal from "@/components/orders/AddOrderModal";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
+import { resolveEstDeliveryDisplay, fmtDeliveryDate } from "@/lib/estDelivery";
 
 type OrderStatus =
   | "Production"
@@ -25,9 +26,17 @@ type Order = {
   quantity: number;
   amount: number;
   status: OrderStatus;
-  estimatedDeliveryDate: string;
+  estimatedDeliveryDate: string; // legacy free-text fallback
+  estDelivery?: string | null; // authoritative date (set on the order detail page)
+  estDeliverySource?: "suggested" | "manual" | null;
   notes: string;
 };
+
+// Resolved est-delivery for the queue: prefers the authoritative estDelivery, then
+// the legacy estimatedDeliveryDate (same resolver the detail page uses). depositPaid
+// is false here — the queue doesn't load deposit state, so it never invents a live
+// suggestion; it only shows a stored/legacy value. Returns "" when there's none.
+const estOf = (o: Order) => resolveEstDeliveryDisplay(o, { depositPaid: false }).date ?? "";
 
 const statusColors: Record<OrderStatus, string> = {
   Production: "bg-blue-100 text-blue-800",
@@ -157,7 +166,7 @@ function OrdersContent() {
     .filter((order) => Object.values(order).join(" ").toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => {
       if (statusOrder[a.status] !== statusOrder[b.status]) return statusOrder[a.status] - statusOrder[b.status];
-      return a.estimatedDeliveryDate.localeCompare(b.estimatedDeliveryDate);
+      return estOf(a).localeCompare(estOf(b));
     });
 
   const handleDelete = async (id: string) => {
@@ -191,8 +200,8 @@ function OrdersContent() {
   const activeValue    = activeOrders.reduce((sum, o) => sum + o.amount, 0); // NEW reduce over `amount`
   const deliveredCount = allNormalized.filter((o) => o.status === "Delivered").length;
 
-  const overdueOrders = activeOrders.filter((o) => isOverdue(o.estimatedDeliveryDate));
-  const dueSoonOrders = activeOrders.filter((o) => !isOverdue(o.estimatedDeliveryDate) && isDueSoon(o.estimatedDeliveryDate));
+  const overdueOrders = activeOrders.filter((o) => isOverdue(estOf(o)));
+  const dueSoonOrders = activeOrders.filter((o) => !isOverdue(estOf(o)) && isDueSoon(estOf(o)));
   const attentionOrders = [
     ...overdueOrders.map((order) => ({ order, kind: "overdue" as const })),
     ...dueSoonOrders.map((order) => ({ order, kind: "duesoon" as const })),
@@ -204,9 +213,11 @@ function OrdersContent() {
   const visibleDone   = visible.filter((o) => o.status === "Delivered" || o.status === "Cancelled");
 
   const renderOrderCard = (order: Order, muted = false) => {
-    const overdue = isOverdue(order.estimatedDeliveryDate);
-    const dueSoon = isDueSoon(order.estimatedDeliveryDate);
+    const estDate = estOf(order);
+    const overdue = isOverdue(estDate);
+    const dueSoon = isDueSoon(estDate);
     const dateAlert = overdue || dueSoon;
+    const estText = estDate ? (fmtDeliveryDate(estDate) || estDate) : "TBD";
 
     return (
       <article
@@ -251,7 +262,7 @@ function OrdersContent() {
               <span>Est. delivery</span>
               <span className={`inline-flex items-center gap-1 ${dateAlert ? "font-bold text-rose-600" : "font-medium text-slate-800"}`}>
                 {dateAlert && <Clock className="h-3.5 w-3.5" aria-hidden="true" />}
-                {order.estimatedDeliveryDate || "TBD"}
+                {estText}
               </span>
             </div>
             {order.notes && <div className="rounded-2xl bg-slate-50 px-4 py-2 text-[11px] text-slate-500">{order.notes}</div>}
@@ -349,7 +360,8 @@ function OrdersContent() {
         ) : (
           <div className="space-y-2">
             {attentionOrders.map(({ order, kind }) => {
-              const days = daysUntil(order.estimatedDeliveryDate);
+              const estDate = estOf(order);
+              const days = daysUntil(estDate);
               return (
                 <div
                   key={order.id}
@@ -362,7 +374,7 @@ function OrdersContent() {
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${kind === "overdue" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
                       <Clock className="h-3 w-3" aria-hidden="true" />
-                      {kind === "overdue" ? `Overdue ${order.estimatedDeliveryDate}` : `Due in ${days} day${days !== 1 ? "s" : ""}`}
+                      {kind === "overdue" ? `Overdue ${fmtDeliveryDate(estDate) || estDate}` : `Due in ${days} day${days !== 1 ? "s" : ""}`}
                     </span>
                     <button
                       type="button"
