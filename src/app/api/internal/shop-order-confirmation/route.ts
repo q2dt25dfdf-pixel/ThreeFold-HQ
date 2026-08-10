@@ -3,6 +3,7 @@ import { validateInternalRequest } from "@/lib/internalAuth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/sendEmail";
 import { buildShopConfirmationEmail, buildShopShippedEmail } from "@/lib/shopOrderEmails";
+import { loadProductThumbs } from "@/lib/productThumbs";
 import type { ShopOrderData } from "@/lib/shopOrders";
 
 // Fake order used ONLY by test mode ({ test_to }) — never reads or writes shop_orders.
@@ -43,10 +44,11 @@ export async function POST(request: Request) {
   // Zero DB reads/writes — smoke-tests the template + Gmail/Resend path end to end.
   const testTo = (b.test_to || "").toString().trim();
   if (testTo) {
-    const e1 = buildShopConfirmationEmail(TEST_ORDER);
-    const r1 = await sendEmail({ to: testTo, subject: `[TEST] ${e1.subject}`, body: e1.body });
-    const e2 = buildShopShippedEmail(TEST_ORDER);
-    const r2 = await sendEmail({ to: testTo, subject: `[TEST] ${e2.subject}`, body: e2.body });
+    const thumbs = await loadProductThumbs(getSupabaseAdmin());
+    const e1 = buildShopConfirmationEmail(TEST_ORDER, thumbs);
+    const r1 = await sendEmail({ to: testTo, subject: `[TEST] ${e1.subject}`, html: e1.html });
+    const e2 = buildShopShippedEmail(TEST_ORDER, thumbs);
+    const r2 = await sendEmail({ to: testTo, subject: `[TEST] ${e2.subject}`, html: e2.html });
     console.log(`[shop-order-confirmation] TEST send to ${testTo}: E1=${r1.sent ? r1.sentVia : "FAIL " + r1.error} E2=${r2.sent ? r2.sentVia : "FAIL " + r2.error}`);
     return NextResponse.json({
       success: r1.sent && r2.sent,
@@ -81,8 +83,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, ignored: "no customer email" });
   }
 
-  const { subject, body } = buildShopConfirmationEmail(d);
-  const result = await sendEmail({ to, subject, body });
+  const thumbs = await loadProductThumbs(db);
+  const { subject, html } = buildShopConfirmationEmail(d, thumbs);
+  const result = await sendEmail({ to, subject, html });
 
   const stamp = result.sent
     ? { confirmation_email_sent_at: new Date().toISOString(), confirmation_email_status: `sent via ${result.sentVia}` }

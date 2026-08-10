@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateSessionRequest } from "@/lib/sessionAuth";
 import { sendEmail } from "@/lib/sendEmail";
 import { buildShopShippedEmail } from "@/lib/shopOrderEmails";
+import { loadProductThumbs } from "@/lib/productThumbs";
 import { createNotification } from "@/lib/notifications";
 import { planRestock, type RecordedDecrementLine } from "@/lib/inventoryDecrement";
 import type { InventoryItem } from "@/lib/inventory";
@@ -147,8 +148,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   let emailStatus = "skipped: no customer email";
   const to = String(updated.email || "").trim();
   if (to && !updated.shipped_email_sent_at) {
-    const { subject, body: emailBody } = buildShopShippedEmail(updated);
-    const result = await sendEmail({ to, subject, body: emailBody });
+    const thumbs = await loadProductThumbs(db);
+    const { subject, html } = buildShopShippedEmail(updated, thumbs);
+    const result = await sendEmail({ to, subject, html });
     emailStatus = result.sent ? `sent via ${result.sentVia}` : `failed: ${result.error}`;
     const stamp = result.sent
       ? { shipped_email_sent_at: new Date().toISOString(), shipped_email_status: emailStatus }
