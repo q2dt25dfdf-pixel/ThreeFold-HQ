@@ -34,6 +34,9 @@ import { CalendarSkeleton } from "@/components/Skeleton";
 import ModalShell from "@/components/ModalShell";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import RecurrencePicker from "@/components/RecurrencePicker";
+import { callEventSeries } from "@/lib/recurrenceClient";
+import type { RecurrenceRule } from "@/lib/recurrence";
 
 type Assignee = "Alliyah" | "Hannah" | "Jordan";
 type FilterOption = "All Events" | "Alliyah" | "Hannah" | "Jordan" | "Shared";
@@ -50,6 +53,11 @@ type CalendarEvent = {
   type: EventType;
   priority?: Priority;
   notes?: string;
+  // Recurrence (a real row per occurrence; the series is grouped by series_id)
+  series_id?: string;
+  recurrence?: RecurrenceRule;
+  occurrence_date?: string;
+  detached?: boolean;
 };
 
 type CalendarView = "today" | "week" | "month";
@@ -326,8 +334,10 @@ export default function CalendarPage() {
   const [view, setView] = useState<CalendarView>("month");
   const [mobileView, setMobileView] = useState<"agenda" | "grid">("agenda");
   const [filterOwner, setFilterOwner] = useState<FilterOption>("All Events");
-  const { data: rawEvents, upsertItem, deleteItem, loading: eventsLoading, error } = useSupabaseTable<CalendarEvent>("calendar_events", []);
+  const { data: rawEvents, upsertItem, deleteItem, loading: eventsLoading, error, reload: reloadEvents } = useSupabaseTable<CalendarEvent>("calendar_events", []);
+  const [addRecurrence, setAddRecurrence] = useState<RecurrenceRule | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  useEffect(() => { if (showAdd) setAddRecurrence(null); }, [showAdd]);
   const [showTodayDetails, setShowTodayDetails] = useState(false);
   const [form, setForm] = useState(() => ({ ...emptyEvent, date: formatDate(new Date()) }));
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -450,6 +460,18 @@ export default function CalendarPage() {
     if (!form.title.trim()) { setFormError("Event title is required."); return; }
     if (!form.date) { setFormError("Event date is required."); return; }
     setFormError("");
+
+    // Recurring → materialize a series server-side (real rows per occurrence).
+    if (addRecurrence) {
+      await addSave.runSave(async () => {
+        const { title, time, assignedTo, type, notes } = form;
+        const res = await callEventSeries({ action: "create", template: { title, time, assignedTo, type, notes }, rule: addRecurrence, startDate: form.date });
+        if (res.error) { setFormError(res.error); throw new Error(res.error); }
+        await reloadEvents();
+      }, () => { setForm(freshForm()); setAddRecurrence(null); setShowAdd(false); });
+      return;
+    }
+
     const newEvent = { id: `event-${Date.now()}`, ...form };
     await addSave.runSave(async () => {
       const response = await upsertItem(newEvent);
@@ -468,9 +490,23 @@ export default function CalendarPage() {
   };
 
   const handleDeleteEvent = (id: string) => {
-    if (!window.confirm("Delete this item?")) return;
     const event = rawEvents.find(e => e.id === id);
     const title = event?.title ?? 'Calendar event';
+    // Recurring occurrence → let the founder choose this one vs the whole series.
+    if (event?.series_id) {
+      const whole = window.confirm("This is a recurring event.\n\nOK = delete the WHOLE series (this and future).\nCancel = delete only this occurrence.");
+      setDeletingId(id);
+      if (whole) {
+        void callEventSeries({ action: "delete-series", series_id: event.series_id, fromDate: event.occurrence_date ?? event.date })
+          .then(() => reloadEvents())
+          .finally(() => setDeletingId(""));
+      } else {
+        void deleteItem(id).finally(() => setDeletingId(""));
+      }
+      setSelectedEvent(null); setEventDraft(null); setEditingEvent(false);
+      return;
+    }
+    if (!window.confirm("Delete this item?")) return;
     setDeletingId(id);
     void deleteItem(id)
       .then(() => {
@@ -513,6 +549,24 @@ export default function CalendarPage() {
     const dateOrTimeChanged = selectedEvent != null && (
       eventDraft.date !== selectedEvent.date || eventDraft.time !== selectedEvent.time
     );
+
+    // Recurring occurrence → this one (detach) vs the whole series (patch shared fields).
+    if (eventDraft.series_id) {
+      const whole = window.confirm("This is a recurring event.\n\nOK = apply to the WHOLE series (this and future).\nCancel = change only this occurrence.");
+      await eventSave.runSave(async () => {
+        if (whole) {
+          const { title, time, endTime, assignedTo, type, priority, notes } = eventDraft;
+          const res = await callEventSeries({ action: "update-series", series_id: eventDraft.series_id!, fromDate: eventDraft.occurrence_date ?? eventDraft.date, patch: { title, time, endTime, assignedTo, type, priority, notes } });
+          if (res.error) { setFormError(res.error); throw new Error(res.error); }
+          await reloadEvents();
+          return { error: null };
+        }
+        // Just this one — mark detached so a later series edit skips it.
+        return upsertItem({ ...eventDraft, detached: true });
+      }, () => closeEvent());
+      return;
+    }
+
     await eventSave.runSave(async () => {
       const response = await upsertItem(eventDraft);
       if (!response.error) {
@@ -948,6 +1002,10 @@ export default function CalendarPage() {
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date</label>
               <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={form.date} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Repeat</label>
+              <RecurrencePicker value={addRecurrence} startDate={form.date} onChange={setAddRecurrence} />
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Time</label>
