@@ -62,6 +62,7 @@ function entityRoute(entity_type: string, entity_id: string): string | null {
     order: `/orders/${entity_id}`,
     client: `/clients/${entity_id}`,
     finance: `/finances?invoice=${entity_id}`,
+    shop_order: `/shop-orders/${entity_id}`,
   }
   return entity_id ? (routes[entity_type] ?? null) : null
 }

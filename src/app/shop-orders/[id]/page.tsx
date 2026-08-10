@@ -58,6 +58,33 @@ export default function ShopOrderDetail() {
     } finally { setBusy(false); }
   }
 
+  async function toggleRefund(next: boolean) {
+    if (busy) return;
+    if (next && !confirm("Mark this order as refunded? It drops out of revenue and tax. Blanks are NOT restocked automatically — you'll get a one-click restock after.")) return;
+    setBusy(true);
+    try {
+      let actor: string | undefined;
+      try { actor = localStorage.getItem(AUTHOR_KEY) || undefined; } catch {}
+      const res = await fetch(`/api/shop-orders/${id}`, {
+        method: "PATCH", headers: await authHeaders(),
+        body: JSON.stringify({ refunded: next, ...(actor ? { actor } : {}) }),
+      });
+      if (res.ok) await load();
+    } finally { setBusy(false); }
+  }
+
+  async function restockBlanks() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/shop-orders/${id}`, {
+        method: "PATCH", headers: await authHeaders(),
+        body: JSON.stringify({ restock: true }),
+      });
+      if (res.ok) await load();
+    } finally { setBusy(false); }
+  }
+
   function fullAddress(d: ShopOrderData) {
     const a = d.shipping_address || {};
     const cityLine = [a.city, a.state].filter(Boolean).join(", ") + (a.postal_code ? ` ${a.postal_code}` : "");
@@ -79,6 +106,8 @@ export default function ShopOrderDetail() {
   const t = orderTotals(data);
   const items = resolveLineItems(data);
   const a = data.shipping_address || {};
+  const decrement = (data as { stock_decrement?: { lines?: { applied?: number }[] } }).stock_decrement;
+  const restockUnits = (decrement?.lines ?? []).reduce((s, l) => s + Math.max(0, Math.floor(Number(l.applied) || 0)), 0);
 
   return (
     <div>
@@ -88,6 +117,9 @@ export default function ShopOrderDetail() {
         <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold tracking-[0.08em] ${data.shipped ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
           {data.shipped ? "SHIPPED" : "TO SHIP"}
         </span>
+        {data.refunded && (
+          <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[10.5px] font-bold tracking-[0.08em] text-rose-700">REFUNDED</span>
+        )}
       </div>
       <div className="mt-1 text-[13px] text-slate-500">Ordered {fmtStamp(data.created_at)}</div>
 
@@ -147,6 +179,37 @@ export default function ShopOrderDetail() {
             <button onClick={copyAddress} className={`rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 ${data.shipped ? "flex-1" : ""}`}>
               {copied ? "Copied ✓" : "Copy address"}
             </button>
+          </div>
+
+          {/* Refund + restock. Refund is a manual flag (drops the order from revenue/tax);
+              restocking blanks is a deliberate second step, never automatic. */}
+          <div className={`${panel} mt-3`}>
+            <h3 className={h3}>Refund</h3>
+            {data.refunded ? (
+              <div className="space-y-3">
+                <div className="text-[13.5px] text-slate-600">
+                  Marked refunded{data.refunded_at ? ` · ${fmtStamp(data.refunded_at)}` : ""}. Excluded from revenue and tax.
+                </div>
+                {data.restocked_at ? (
+                  <div className="rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">
+                    Blanks restocked · {fmtStamp(data.restocked_at)}
+                  </div>
+                ) : restockUnits > 0 ? (
+                  <button onClick={restockBlanks} disabled={busy} className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
+                    {busy ? "Restocking…" : `Restock this order's blanks (${restockUnits})`}
+                  </button>
+                ) : (
+                  <div className="text-[13px] text-slate-400">No decremented blanks to restock.</div>
+                )}
+                <button onClick={() => toggleRefund(false)} disabled={busy} className="text-[12.5px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50">
+                  Undo refund
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => toggleRefund(true)} disabled={busy} className="w-full rounded-xl border border-rose-200 bg-white py-3 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                Mark refunded
+              </button>
+            )}
           </div>
 
           <div className={`${panel} mt-3`}>
