@@ -210,11 +210,11 @@ export default function InventoryPage() {
   const showEmpty = !loading && visible.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
+    <div className="space-y-6 text-sm md:text-base">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Stock on hand</p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Inventory</h1>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Stock on hand</p>
+          <h1 className="text-3xl font-extrabold text-slate-900">Inventory</h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowMapping(true)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-800 hover:bg-slate-50">Blank mapping</button>
@@ -222,15 +222,15 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {error && <div className="mt-3"><ErrorBanner message={error} /></div>}
+      {error && <ErrorBanner message={error} />}
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <Stat label="Items" value={String(items.length)} />
-        <Stat label="Low stock" value={String(lowCount)} tone={lowCount > 0 ? "amber" : "slate"} />
-        <Stat label="Total units" value={String(totalUnits)} />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Stat label="Items" value={String(items.length)} sub="stock items" />
+        <Stat label="Low stock" value={String(lowCount)} sub="at or below threshold" tone={lowCount > 0 ? "amber" : "slate"} />
+        <Stat label="Total units" value={String(totalUnits)} sub="on hand across items" />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setFilterCategory("")} className={`${catChip} ${filterCategory === "" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
         {INVENTORY_CATEGORIES.map((c) => (
           <button key={c} onClick={() => setFilterCategory(c)} className={`${catChip} ${filterCategory === c ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{c}</button>
@@ -246,7 +246,7 @@ export default function InventoryPage() {
       ) : (
         <>
           {/* Desktop: grouped (brand+style → colour → size); non-blanks flat by category */}
-          <div className="mt-4 hidden overflow-hidden rounded-2xl text-[13px] ring-1 ring-slate-100 md:block">
+          <div className="hidden overflow-hidden rounded-2xl text-[13px] ring-1 ring-slate-100 md:block">
             {blankGroups.map((bg) => {
               const bopen = expandedBrands.has(bg.key);
               return (
@@ -326,7 +326,7 @@ export default function InventoryPage() {
           </div>
 
           {/* Mobile: cards */}
-          <div className="mt-3 space-y-2 md:hidden">
+          <div className="space-y-2 md:hidden">
             {visible.map((it) => {
               const low = isLowStock(it);
               return (
@@ -424,11 +424,12 @@ export default function InventoryPage() {
   );
 }
 
-function Stat({ label, value, tone = "slate" }: { label: string; value: string; tone?: "slate" | "amber" }) {
+function Stat({ label, value, sub, tone = "slate" }: { label: string; value: string; sub: string; tone?: "slate" | "amber" }) {
   return (
-    <div className={`rounded-2xl p-3 ring-1 ${tone === "amber" ? "bg-amber-50 ring-amber-100" : "bg-white ring-slate-100"}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${tone === "amber" ? "text-amber-700" : "text-slate-900"}`}>{value}</p>
+    <div className="rounded-2xl bg-white p-5 md:p-6">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</div>
+      <div className={`mt-2 text-4xl font-extrabold ${tone === "amber" ? "text-amber-600" : "text-slate-900"}`}>{value}</div>
+      <div className="mt-1 text-[13px] text-slate-500">{sub}</div>
     </div>
   );
 }
