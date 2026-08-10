@@ -30,7 +30,9 @@ type Order = {
   quantity: number;
   amount: number;
   status: OrderStatus;
-  estimatedDeliveryDate: string;
+  estimatedDeliveryDate: string; // legacy; written empty now — estDelivery is authoritative
+  estDelivery?: string | null; // authoritative date this modal now writes
+  estDeliverySource?: "suggested" | "manual" | null;
   notes: string;
   created_at?: string;
   status_changed_at?: string;
@@ -113,7 +115,11 @@ function AddOrderModalContent({ onClose, prefilledClient = "", prefilledVendor =
         quantity: qty,
         amount: Number(amountCents || "0") / 100,
         status,
-        estimatedDeliveryDate,
+        // A hand-picked date here is authoritative + manual (empty → cleared). Legacy
+        // field written empty so it can't diverge from estDelivery.
+        estDelivery: estimatedDeliveryDate || null,
+        estDeliverySource: estimatedDeliveryDate ? "manual" : null,
+        estimatedDeliveryDate: "",
         notes: notes.trim(),
         created_at: new Date().toISOString(),
         status_changed_at: new Date().toISOString(),
