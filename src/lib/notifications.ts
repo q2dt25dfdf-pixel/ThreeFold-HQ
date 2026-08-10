@@ -21,6 +21,7 @@ export type NotificationType =
   | 'calendar_event_created'
   | 'calendar_event_rescheduled'
   | 'calendar_event_cancelled'
+  | 'inventory_stock_alert'
 
 export interface NotificationPayload {
   type: NotificationType

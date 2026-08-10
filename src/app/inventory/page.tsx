@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { ErrorBanner } from "@/components/AppState";
 import ModalShell from "@/components/ModalShell";
+import BlankMappingModal from "@/components/inventory/BlankMappingModal";
 import SaveButton, { useSaveState } from "@/components/SaveButton";
 import {
   INVENTORY_CATEGORIES,
@@ -55,6 +56,7 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
 
   const [showModal, setShowModal] = useState(false);
+  const [showMapping, setShowMapping] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [formError, setFormError] = useState("");
@@ -181,7 +183,7 @@ export default function InventoryPage() {
           {[...(it.adjustments ?? [])].reverse().slice(0, 8).map((a, i) => (
             <p key={i} className="text-[11px] text-slate-500">
               <b className={a.delta >= 0 ? "text-emerald-600" : "text-rose-600"}>{a.delta >= 0 ? `+${a.delta}` : a.delta}</b>
-              {a.reason ? ` · ${a.reason}` : ""}{a.reference ? ` · ref ${a.reference}` : ""}{a.by ? ` · ${a.by}` : ""} · {fmtStamp(a.at)}
+              {a.reason ? ` · ${a.reason}` : ""}{a.reference ? ` · ref ${a.reference}` : ""}{a.order_id ? ` · order ${a.order_id}` : ""}{a.by ? ` · ${a.by}` : ""} · {fmtStamp(a.at)}
             </p>
           ))}
         </div>
@@ -198,7 +200,10 @@ export default function InventoryPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Stock on hand</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Inventory</h1>
         </div>
-        <button onClick={openAdd} className="rounded-2xl bg-slate-900 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-slate-800">Add item</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowMapping(true)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-800 hover:bg-slate-50">Blank mapping</button>
+          <button onClick={openAdd} className="rounded-2xl bg-slate-900 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-slate-800">Add item</button>
+        </div>
       </div>
 
       {error && <div className="mt-3"><ErrorBanner message={error} /></div>}
@@ -295,6 +300,8 @@ export default function InventoryPage() {
           </div>
         </>
       )}
+
+      {showMapping && <BlankMappingModal items={items} onClose={() => setShowMapping(false)} />}
 
       {/* Add / edit modal */}
       {showModal && (
