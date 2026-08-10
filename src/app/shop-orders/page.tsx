@@ -67,8 +67,8 @@ export default function ShopOrdersPage() {
     URL.revokeObjectURL(url);
   }
 
-  const tile = "rounded-2xl bg-white p-5 md:p-6";
-  const lbl = "text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400";
+  const tile = "rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6";
+  const lbl = "text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400";
 
   return (
     <PageShell
@@ -80,19 +80,19 @@ export default function ShopOrdersPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className={tile}>
           <div className={lbl}>To Ship</div>
-          <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats?.toShipCount ?? "—"}</div>
-          <div className="mt-1 text-[13px] text-slate-500">unshipped orders</div>
+          <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{stats?.toShipCount ?? "—"}</div>
+          <div className="mt-1.5 text-[11px] text-slate-500">unshipped orders</div>
           {stats && <span className="mt-2 inline-block rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{money(stats.toShipCollected)} collected</span>}
         </div>
         <div className={tile}>
           <div className={lbl}>Shipped</div>
-          <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats?.shippedThisWeek ?? "—"}</div>
-          <div className="mt-1 text-[13px] text-slate-500">this week</div>
+          <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{stats?.shippedThisWeek ?? "—"}</div>
+          <div className="mt-1.5 text-[11px] text-slate-500">this week</div>
         </div>
         <div className={tile}>
           <div className={lbl}>Shop Revenue</div>
-          <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats ? money(stats.revenue30Days) : "—"}</div>
-          <div className="mt-1 text-[13px] text-slate-500">last 30 days · incl. tax &amp; shipping</div>
+          <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{stats ? money(stats.revenue30Days) : "—"}</div>
+          <div className="mt-1.5 text-[11px] text-slate-500">last 30 days · incl. tax &amp; shipping</div>
         </div>
       </div>
 
