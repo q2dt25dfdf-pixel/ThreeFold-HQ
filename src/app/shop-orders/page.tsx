@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { money } from "@/lib/shopOrders";
+import { PageShell, PageActionButton } from "@/components/layout/PageShell";
 
 type Row = {
   id: string; name: string; email: string; created_at: string | null;
@@ -66,41 +67,37 @@ export default function ShopOrdersPage() {
     URL.revokeObjectURL(url);
   }
 
-  const tile = "rounded-2xl bg-white p-5 md:p-6";
-  const lbl = "text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400";
+  const tile = "rounded-[2rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-100 md:p-6";
+  const lbl = "text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400";
 
   return (
-    <div>
-      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Shop · ThreeFold Originals</div>
-      <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-extrabold text-slate-900">Shop Orders</h1>
-        <button onClick={exportCsv} className="ml-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50">
-          Export Pirate Ship CSV ↓
-        </button>
-      </div>
-
-      {/* stat tiles */}
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+    <PageShell
+      kicker="Shop · ThreeFold Originals"
+      title="Shop Orders"
+      actions={<PageActionButton variant="secondary" onClick={exportCsv}>Export Pirate Ship CSV ↓</PageActionButton>}
+    >
+      {/* stat tiles (bespoke — "collected" pill; left as-is per Option 1) */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className={tile}>
           <div className={lbl}>To Ship</div>
-          <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats?.toShipCount ?? "—"}</div>
-          <div className="mt-1 text-[13px] text-slate-500">unshipped orders</div>
+          <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{stats?.toShipCount ?? "—"}</div>
+          <div className="mt-1.5 text-[11px] text-slate-500">unshipped orders</div>
           {stats && <span className="mt-2 inline-block rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{money(stats.toShipCollected)} collected</span>}
         </div>
         <div className={tile}>
           <div className={lbl}>Shipped</div>
-          <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats?.shippedThisWeek ?? "—"}</div>
-          <div className="mt-1 text-[13px] text-slate-500">this week</div>
+          <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{stats?.shippedThisWeek ?? "—"}</div>
+          <div className="mt-1.5 text-[11px] text-slate-500">this week</div>
         </div>
         <div className={tile}>
           <div className={lbl}>Shop Revenue</div>
-          <div className="mt-2 text-4xl font-extrabold text-slate-900">{stats ? money(stats.revenue30Days) : "—"}</div>
-          <div className="mt-1 text-[13px] text-slate-500">last 30 days · incl. tax &amp; shipping</div>
+          <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{stats ? money(stats.revenue30Days) : "—"}</div>
+          <div className="mt-1.5 text-[11px] text-slate-500">last 30 days · incl. tax &amp; shipping</div>
         </div>
       </div>
 
       {/* filters */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(["to-ship", "shipped", "all"] as Filter[]).map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             className={`rounded-full px-4 py-2 text-sm ${filter === f ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
@@ -112,11 +109,11 @@ export default function ShopOrdersPage() {
 
       {/* cards */}
       {loading ? (
-        <div className="mt-6 text-sm text-slate-400">Loading…</div>
+        <div className="text-sm text-slate-400">Loading…</div>
       ) : orders.length === 0 ? (
-        <div className="mt-6 rounded-2xl bg-white p-8 text-center text-sm text-slate-400">No orders in this view.</div>
+        <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-400">No orders in this view.</div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {orders.map((o) => (
             <div key={o.id} className="rounded-2xl border-2 border-transparent bg-white p-5 md:p-6 transition hover:border-blue-500">
               <div className="flex items-center gap-2">
@@ -148,6 +145,6 @@ export default function ShopOrdersPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, ArrowRight, Loader2,
 } from "lucide-react";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
+import { PageShell } from "@/components/layout/PageShell";
 import { businessTodayISO, businessTodayLabel, dateToBusinessISO, addDaysToISODate } from "@/lib/businessDate";
 import {
   INACTIVE_FINANCE_STATUSES,
@@ -975,16 +976,11 @@ export default function ReportsPage() {
   const eodQuiet         = !loading && !endOfDay.hasActivity;
 
   return (
-    <div className="space-y-6 text-sm md:text-base">
-      {/* Header */}
-      <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Reporting</p>
-        <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Reports</h1>
-        <p className="mt-2 text-xs text-slate-600 md:text-sm">
-          Operational reports for reviewing daily activity, system health, and founder briefings.
-        </p>
-      </div>
-
+    <PageShell
+      kicker="Reporting"
+      title="Reports"
+      subtitle="Operational reports for reviewing daily activity, system health, and founder briefings."
+    >
       {/* Report cards */}
       <div className="grid gap-5 md:grid-cols-3">
 
@@ -1131,6 +1127,6 @@ export default function ReportsPage() {
           <AuditorPanel audit={audit} loading={loading} />
         </section>
       )}
-    </div>
+    </PageShell>
   );
 }

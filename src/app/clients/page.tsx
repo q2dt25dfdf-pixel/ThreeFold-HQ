@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Clock, Search, Trash2 } from "lucide-react";
 import ModalShell from "@/components/ModalShell";
+import { PageShell, PageActionButton } from "@/components/layout/PageShell";
 import { formatPhoneNumber } from "@/lib/formatPhone";
 import { orderEstDeliveryDate } from "@/lib/estDelivery";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
@@ -372,24 +373,21 @@ export default function ClientsPage() {
   if (loading) return <ClientsSkeleton />;
 
   return (
-    <div className="space-y-6 text-sm md:text-base">
-      <ErrorBanner message={error} />
-
-      {/* ── Header + search + add ─────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-600 md:text-sm">Client accounts</p>
-          <h1 className="mt-3 text-base font-semibold text-slate-950 md:text-3xl">Client accounts</h1>
-          <p className="mt-2 text-xs text-slate-600 md:text-sm">Manage your client relationships and order history</p>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
+    <PageShell
+      kicker="Client accounts"
+      title="Client accounts"
+      subtitle="Manage your client relationships and order history"
+      actions={
+        <>
           <label className="relative w-full sm:w-64 md:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
             <input className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-xs text-slate-900 outline-none focus:border-slate-400 sm:w-64 md:text-sm" placeholder="Search clients..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <button className="min-h-11 w-full rounded-3xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-800 active:bg-slate-800 md:w-auto md:text-sm" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add client</button>
-        </div>
-      </div>
+          <PageActionButton className="w-full md:w-auto" onClick={() => { setForm(emptyForm); setFormError(""); addSave.resetSaveState(); setShowAdd(true); }}>Add client</PageActionButton>
+        </>
+      }
+    >
+      <ErrorBanner message={error} />
 
       {/* ── Hero row: Active clients (count-led) + Total clients + Need Attention ── */}
       <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
@@ -555,6 +553,6 @@ export default function ClientsPage() {
       </section>
 
       {showAdd && <Modal title="Add client" onSave={handleAdd} onClose={() => { setShowAdd(false); setFormError(""); }} saveState={addSave.saveState} mode="add"><FormFields form={form} setForm={(next) => { setForm(next); if (formError) setFormError(""); }} /><div className="px-6"><FieldError message={formError} /></div></Modal>}
-    </div>
+    </PageShell>
   );
 }
