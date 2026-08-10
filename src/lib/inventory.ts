@@ -78,6 +78,28 @@ export function validateInventoryItem(f: {
   return null;
 }
 
+// Distinct suggestion values for one Blanks field, narrowed by the values already
+// chosen for the fields that come before it (brand → style → color → size). If a
+// constraint matches nothing, it's skipped so the list falls back to the wider set
+// (a brand-new value never blanks the suggestions). Case-insensitive. Pure — reads
+// only existing inventory rows, no hardcoded catalogue.
+export function suggestBlankValues(
+  items: InventoryItem[],
+  field: "brand" | "style" | "color" | "size",
+  constraints: Partial<Record<"brand" | "style" | "color" | "size", string>>,
+): string[] {
+  const n = (s?: string) => (s ?? "").trim().toLowerCase();
+  let pool = items.filter((it) => isBlank(it.category));
+  for (const key of ["brand", "style", "color", "size"] as const) {
+    if (key === field) break; // only narrow by fields BEFORE the target field
+    const v = constraints[key];
+    if (!n(v)) continue;
+    const filtered = pool.filter((x) => n(x[key]) === n(v));
+    if (filtered.length) pool = filtered;
+  }
+  return [...new Set(pool.map((x) => (x[field] ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
 // Find an existing Blank with the same identity (case-insensitive), excluding a
 // given id (used when editing). Returns the duplicate item, or null.
 export function findDuplicateBlank(
