@@ -8,8 +8,10 @@ export type InventoryAdjustment = {
   delta: number;        // signed integer; + received, − consumed/corrected
   reason?: string;      // free text, e.g. "counted", "damaged"
   reference?: string;   // optional free-text link (e.g. an expense id or PO)
-  by?: string;          // founder name
+  by?: string;          // founder name, or "system" for auto-decrements
   at: string;           // ISO timestamp
+  order_id?: string;    // set for shop-order auto-decrements (provenance + reversal)
+  source?: "shop_order" | "manual";
 };
 
 export type InventoryItem = {
