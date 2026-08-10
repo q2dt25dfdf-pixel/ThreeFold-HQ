@@ -144,7 +144,6 @@ export async function POST(request: Request) {
       payment_status: "paid" as const, // already cleared the Relay account
       reimbursement_status: (body.reimbursement_status ?? "not_needed"),
       notes: body.notes?.trim() || `Relay ••${staged.account_mask || "----"}`,
-      related_order_id: "",
       receipt_url: "",
       created_at: now,
       updated_at: now,

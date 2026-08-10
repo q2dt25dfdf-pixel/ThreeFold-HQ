@@ -2173,7 +2173,19 @@ export default function OrderDetailPage() {
         {costLinesDraft.length === 0 && (
           <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-[11px] text-slate-500">No cost lines yet — add the first below.</p>
         )}
-        {costLinesDraft.map((l) => (
+        {costLinesDraft.map((l) => l.source_expense_id ? (
+          // Generated from a split expense — read-only here; edited on the expense
+          // in Finances so the allocation and this line can never diverge.
+          <div key={l.id} className="rounded-2xl border border-slate-200 bg-slate-100 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-xs font-semibold text-slate-800">{l.label || "Expense"}</span>
+              <span className="shrink-0 text-xs font-bold text-slate-900">{formatCurrency((Number(l.amount_cents) || 0) / 100)}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {l.supplier ? `${l.supplier} · ` : ""}{costStatusLabel(l.status)} · from a split expense — edit in Finances
+            </p>
+          </div>
+        ) : (
           <div key={l.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center gap-2">
               <input

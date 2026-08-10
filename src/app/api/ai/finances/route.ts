@@ -160,17 +160,30 @@ export async function GET(request: Request): Promise<Response> {
       return typeof cents === "number" ? cents / 100 : parseAmount(e.amount ?? 0);
     }
 
-    const paidExpenseTotal   = paidExpenses.reduce((s, e) => s + expenseAmount(e), 0);
-    const unpaidExpenseTotal = unpaidExpenses.reduce((s, e) => s + expenseAmount(e), 0);
+    // General-business portion only. A split expense's order-allocated portion is
+    // a vendor cost (reported under order costs), so the expenses ledger counts
+    // only the "general" allocations. Unsplit → the full amount.
+    function generalExpenseAmount(e: DashboardRecord): number {
+      const allocs = Array.isArray((e as { allocations?: unknown }).allocations)
+        ? ((e as { allocations?: Array<{ amount_cents?: number; destination?: { type?: string } }> }).allocations ?? [])
+        : [];
+      if (!allocs.length) return expenseAmount(e);
+      return allocs
+        .filter((a) => a?.destination?.type === "general")
+        .reduce((s, a) => s + (Number(a.amount_cents) || 0), 0) / 100;
+    }
+
+    const paidExpenseTotal   = paidExpenses.reduce((s, e) => s + generalExpenseAmount(e), 0);
+    const unpaidExpenseTotal = unpaidExpenses.reduce((s, e) => s + generalExpenseAmount(e), 0);
     const totalExpenseTotal  = paidExpenseTotal + unpaidExpenseTotal;
 
-    // By category — safe display label, no PII.
+    // By category — safe display label, no PII. General portion only (see above).
     const expenseCategoryCounts = new Map<string, { count: number; total: number }>();
     for (const e of expenses) {
       const cat = stringField(e, "category").trim() || "Other";
       const entry = expenseCategoryCounts.get(cat) ?? { count: 0, total: 0 };
       entry.count++;
-      entry.total += expenseAmount(e);
+      entry.total += generalExpenseAmount(e);
       expenseCategoryCounts.set(cat, entry);
     }
     const byExpenseCategory = Array.from(expenseCategoryCounts, ([category, v]) => ({

@@ -511,10 +511,19 @@ function computeEndOfDay(
     .filter((exp) => stringField(exp, "expense_date") === todayISO)
     .map((exp) => {
       const cents = exp.amount_cents;
+      const full = typeof cents === "number" ? cents / 100 : parseAmount(exp.amount ?? 0);
+      // Split expenses: count only the general-business portion (order portions
+      // are vendor costs). Unsplit → full amount.
+      const allocs = Array.isArray((exp as { allocations?: unknown }).allocations)
+        ? ((exp as { allocations?: Array<{ amount_cents?: number; destination?: { type?: string } }> }).allocations ?? [])
+        : [];
+      const amount = allocs.length
+        ? allocs.filter((a) => a?.destination?.type === "general").reduce((s, a) => s + (Number(a.amount_cents) || 0), 0) / 100
+        : full;
       return {
         id: exp.id,
         name: stringField(exp, "vendor_name") || stringField(exp, "category") || "Expense",
-        amount: typeof cents === "number" ? cents / 100 : parseAmount(exp.amount ?? 0),
+        amount,
       };
     });
 
