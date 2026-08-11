@@ -8,7 +8,11 @@
  *   data jsonb
  * );
  * alter table client_activity enable row level security;
- * create policy "open_access" on client_activity for all using (true) with check (true);
+ * -- Authenticated-only (matches every other HQ table). The browser app runs as the
+ * -- logged-in `authenticated` role; the public anon key gets nothing; server routes
+ * -- use the service role (bypasses RLS). Do NOT use `using (true)` — that's public.
+ * create policy client_activity_rw on client_activity
+ *   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
  */
 
 import { useMemo, useRef, useState } from "react";
