@@ -86,10 +86,10 @@ const orderRef = (d: ShopOrderData) => String(d.payment_intent_id || "").slice(-
 // ── shared HTML fragments ──────────────────────────────────────────────────────
 
 function header(status: string): string {
-  return `<tr><td style="background:#000;padding:34px 32px 30px;text-align:center;">
-    <img src="${LOGO_URL}" width="190" alt="ThreeFold Supply Co." style="display:inline-block;width:190px;max-width:60%;height:auto;border:0;">
+  return `<tr><td style="background:#000;padding:18px 32px 6px;text-align:center;">
+    <img src="${LOGO_URL}" width="140" alt="ThreeFold Supply Co." style="display:inline-block;width:140px;max-width:42%;height:auto;border:0;">
   </td></tr>
-  <tr><td style="background:#000;padding:0 32px 34px;text-align:center;">
+  <tr><td style="background:#000;padding:0 32px 16px;text-align:center;">
     <div style="font-size:11px;font-weight:700;letter-spacing:0.22em;color:#FFCF00;text-transform:uppercase;">${esc(status)}</div>
   </td></tr>`;
 }
