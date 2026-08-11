@@ -9,12 +9,16 @@ create table if not exists products (
   data jsonb not null default '{}'::jsonb
 );
 
--- Read by the Inventory Blank-Mapping modal with the anon/authenticated client,
--- exactly like inventory/orders/finances — which run with RLS OFF. A newly created
--- table can come up with RLS ON and no policies, which silently blocks ALL client
--- reads (the picker would show an empty product list). Disable RLS explicitly so a
--- re-create matches the other client tables.
-alter table products disable row level security;
+-- Read by the Inventory Blank-Mapping modal with the browser client (logged-in
+-- `authenticated` role); written by the website via the HQ internal API (service role,
+-- bypasses RLS). RLS ON + authenticated-only policy keeps the picker working while
+-- shutting out the public anon key. Do NOT DISABLE RLS.
+alter table products enable row level security;
+drop policy if exists products_rw on products;
+create policy products_rw on products
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 -- Expected JSONB fields per record (written by scripts/products-sync.mjs → the HQ
 -- internal endpoint /api/internal/products-sync, which owns the write):

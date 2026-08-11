@@ -7,12 +7,17 @@ create table if not exists inventory (
   data jsonb not null default '{}'::jsonb
 );
 
--- The Inventory page reads/writes this table with the anon/authenticated client,
--- exactly like expenses/orders — which run with RLS OFF. A newly created table can
--- come up with RLS ON and no policies, which silently blocks ALL client reads AND
--- writes (only the service role bypasses; the page then shows empty and "Couldn't
--- save"). Disable RLS explicitly so a re-create matches the other client tables.
-alter table inventory disable row level security;
+-- The Inventory page reads/writes this table with the browser client, which runs as
+-- the logged-in `authenticated` role; server routes use the service role (bypasses
+-- RLS). RLS ON + an authenticated-only policy keeps the page working while shutting
+-- out the public anon key. Do NOT DISABLE RLS — that reopens the table to anyone
+-- holding the bundled anon key.
+alter table inventory enable row level security;
+drop policy if exists inventory_rw on inventory;
+create policy inventory_rw on inventory
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 -- Expected JSONB fields per record:
 -- {

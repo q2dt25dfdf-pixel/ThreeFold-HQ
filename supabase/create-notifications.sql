@@ -7,10 +7,16 @@ create table if not exists notifications (
   data jsonb not null default '{}'::jsonb
 );
 
--- 2. Disable RLS — notifications are HQ-internal only.
---    Service role key (API routes) already bypasses RLS.
---    Anon key (browser client) needs unrestricted read access to show the bell/panel.
-alter table notifications disable row level security;
+-- 2. RLS on, authenticated-only. The bell/panel reads this from the browser, which
+--    runs as the logged-in `authenticated` role (NOT anonymous — the anon key carries
+--    the user's session after login). Server routes write via the service role
+--    (bypasses RLS). Do NOT DISABLE — that reopens the table to the public anon key.
+alter table notifications enable row level security;
+drop policy if exists notifications_rw on notifications;
+create policy notifications_rw on notifications
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 -- 3. Enable realtime so open HQ tabs receive inserts without polling.
 --    Wrapped in a DO block so it is safe to re-run even if the table is already

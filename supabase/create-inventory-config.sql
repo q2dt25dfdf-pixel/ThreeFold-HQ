@@ -1,12 +1,18 @@
 -- Run once in the Supabase SQL Editor. Inventory Part 2 config: the design→blank
 -- mapping used to auto-decrement stock on shop orders. Single JSONB row.
--- Client-written (Inventory page), same model as inventory/expenses → RLS OFF.
+-- Client-written (Inventory page) as the logged-in `authenticated` role; server routes
+-- use the service role. RLS ON + authenticated-only policy. Do NOT DISABLE.
 
 create table if not exists inventory_config (
   id   text primary key,
   data jsonb not null default '{}'::jsonb
 );
-alter table inventory_config disable row level security;
+alter table inventory_config enable row level security;
+drop policy if exists inventory_config_rw on inventory_config;
+create policy inventory_config_rw on inventory_config
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 -- The one config row lives at id='blank-map'. Seeded with the current default
 -- (every product prints on Comfort Colors C1717 Black today). Per-design
