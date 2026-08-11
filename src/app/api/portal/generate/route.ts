@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { validateSessionRequest } from '@/lib/sessionAuth'
 
 export async function POST(request: NextRequest) {
@@ -9,13 +9,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: auth.status })
   }
 
+  const db = getSupabaseAdmin()
+
   try {
     const { orderId } = await request.json()
     if (!orderId) return NextResponse.json({ error: 'Order ID required' }, { status: 400 })
 
     const token = 'tf-' + randomBytes(12).toString('hex')
 
-    const { data: order, error: fetchError } = await supabase
+    const { data: order, error: fetchError } = await db
       .from('orders')
       .select('data')
       .eq('id', orderId)
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
       portal_generated_at: new Date().toISOString()
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('orders')
       .update({ data: updatedData })
       .eq('id', orderId)

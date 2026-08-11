@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { randomUUID } from 'crypto'
 import { createNotification } from '@/lib/notifications'
 
@@ -21,6 +21,8 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   const headers = corsHeaders()
+
+  const db = getSupabaseAdmin()
 
   try {
     const body = await request.json()
@@ -62,8 +64,10 @@ export async function POST(request: Request) {
       files: incomingFiles,
     }
 
-    // Check for exact client match (high confidence only)
-    const { data: clientRows } = await supabase.from('clients').select('id, data')
+    // Check for exact client match (high confidence only). Fuzzy match (exact email OR
+    // normalized company/name) needs the full set, so this is a deliberate scan — now
+    // server-side under the service role, never exposed to the public anon path.
+    const { data: clientRows } = await db.from('clients').select('id, data')
     type ClientRow = { id: string; data: Record<string, unknown> }
     const rows = (clientRows ?? []) as ClientRow[]
 
@@ -108,7 +112,7 @@ export async function POST(request: Request) {
         updated_at: now,
       }
 
-      const { error: orderError } = await supabase
+      const { error: orderError } = await db
         .from('orders')
         .insert({ id: orderId, data: orderData })
 
@@ -166,7 +170,7 @@ export async function POST(request: Request) {
       updated_at: now,
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('crm_leads')
       .insert({ id, data: leadData, updated_at: now })
 

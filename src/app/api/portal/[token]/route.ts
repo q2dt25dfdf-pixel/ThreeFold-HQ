@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSignedUrls, getDesignSignedUrls } from '@/lib/getSignedUrl'
 import { normalizeDiscount, type QuoteDiscount } from '@/lib/salesTax'
@@ -14,7 +13,9 @@ export async function GET(
 
   if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 })
 
-  const { data: orders, error } = await supabase
+  const db = getSupabaseAdmin()
+
+  const { data: orders, error } = await db
     .from('orders')
     .select('id, data')
     .eq('data->>portal_token', token)
@@ -29,7 +30,6 @@ export async function GET(
   if (!d.portal_enabled)
     return NextResponse.json({ error: 'Portal is disabled' }, { status: 403 })
 
-  const db = getSupabaseAdmin()
   const orderId = order.id
 
   // Look up the linked invoice by order_id only — no name matching
