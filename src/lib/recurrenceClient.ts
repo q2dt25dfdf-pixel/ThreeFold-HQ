@@ -4,7 +4,7 @@ import type { RecurrenceRule } from "@/lib/recurrence";
 // Session-authed calls to the recurring calendar_events series route.
 type EventSeriesBody =
   | { action: "create"; template: Record<string, unknown>; rule: RecurrenceRule; startDate: string }
-  | { action: "update-series"; series_id: string; fromDate?: string; patch: Record<string, unknown> }
+  | { action: "update-series"; series_id: string; fromDate?: string; patch: Record<string, unknown>; rule?: RecurrenceRule }
   | { action: "delete-series"; series_id: string; fromDate?: string };
 
 export async function callEventSeries(
