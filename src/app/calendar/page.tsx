@@ -343,6 +343,10 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [eventDraft, setEventDraft] = useState<CalendarEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState(false);
+  // Recurring edit: the pattern being edited (seeded from the occurrence's rule), and the
+  // in-app this-vs-series prompt that replaces the old window.confirm() dialogs.
+  const [editRecurrence, setEditRecurrence] = useState<RecurrenceRule | null>(null);
+  const [seriesPrompt, setSeriesPrompt] = useState<null | { mode: "edit" | "delete" }>(null);
   const addSave = useSaveState();
   const eventSave = useSaveState();
   const [formError, setFormError] = useState("");
@@ -489,21 +493,59 @@ export default function CalendarPage() {
     }, () => setShowAdd(false));
   };
 
+  // Recurring delete: run the chosen scope (this occurrence vs. whole series). Called by
+  // the in-app series prompt, not window.confirm.
+  const applySeriesDelete = (whole: boolean) => {
+    const event = selectedEvent;
+    if (!event?.series_id) return;
+    const id = event.id;
+    setSeriesPrompt(null);
+    setDeletingId(id);
+    if (whole) {
+      void callEventSeries({ action: "delete-series", series_id: event.series_id, fromDate: event.occurrence_date ?? event.date })
+        .then(() => reloadEvents())
+        .finally(() => setDeletingId(""));
+    } else {
+      void deleteItem(id).finally(() => setDeletingId(""));
+    }
+    setSelectedEvent(null); setEventDraft(null); setEditingEvent(false);
+  };
+
+  // Recurring edit: run the chosen scope. "This occurrence" detaches; "whole series" patches
+  // shared fields and, when the pattern was changed, regenerates future occurrences.
+  const applySeriesEdit = async (whole: boolean) => {
+    const draft = eventDraft;
+    if (!draft?.series_id) return;
+    setSeriesPrompt(null);
+    await eventSave.runSave(async () => {
+      if (!whole) {
+        // Just this one — mark detached so a later series edit skips it.
+        return upsertItem({ ...draft, detached: true });
+      }
+      const { title, time, endTime, assignedTo, type, priority, notes } = draft;
+      const patch = { title, time, endTime, assignedTo, type, priority, notes };
+      const origRule = selectedEvent?.recurrence ?? null;
+      const patternChanged = JSON.stringify(editRecurrence ?? null) !== JSON.stringify(origRule);
+      const res = await callEventSeries({
+        action: "update-series",
+        series_id: draft.series_id!,
+        fromDate: draft.occurrence_date ?? draft.date,
+        patch,
+        // Only send a rule when the pattern actually changed (and wasn't cleared to "none").
+        ...(patternChanged && editRecurrence ? { rule: editRecurrence } : {}),
+      });
+      if (res.error) { setFormError(res.error); throw new Error(res.error); }
+      await reloadEvents();
+      return { error: null };
+    }, () => closeEvent());
+  };
+
   const handleDeleteEvent = (id: string) => {
     const event = rawEvents.find(e => e.id === id);
     const title = event?.title ?? 'Calendar event';
-    // Recurring occurrence → let the founder choose this one vs the whole series.
+    // Recurring occurrence → open the in-app this-vs-series prompt (applySeriesDelete runs it).
     if (event?.series_id) {
-      const whole = window.confirm("This is a recurring event.\n\nOK = delete the WHOLE series (this and future).\nCancel = delete only this occurrence.");
-      setDeletingId(id);
-      if (whole) {
-        void callEventSeries({ action: "delete-series", series_id: event.series_id, fromDate: event.occurrence_date ?? event.date })
-          .then(() => reloadEvents())
-          .finally(() => setDeletingId(""));
-      } else {
-        void deleteItem(id).finally(() => setDeletingId(""));
-      }
-      setSelectedEvent(null); setEventDraft(null); setEditingEvent(false);
+      setSeriesPrompt({ mode: "delete" });
       return;
     }
     if (!window.confirm("Delete this item?")) return;
@@ -527,6 +569,7 @@ export default function CalendarPage() {
   const openEvent = (event: CalendarEvent) => {
     setSelectedEvent(event);
     setEventDraft({ ...event, priority: eventPriority(event), notes: event.notes ?? "" });
+    setEditRecurrence(event.recurrence ?? null);
     setEditingEvent(false);
     eventSave.resetSaveState();
     setFormError("");
@@ -550,20 +593,9 @@ export default function CalendarPage() {
       eventDraft.date !== selectedEvent.date || eventDraft.time !== selectedEvent.time
     );
 
-    // Recurring occurrence → this one (detach) vs the whole series (patch shared fields).
+    // Recurring occurrence → open the in-app this-vs-series prompt (applySeriesEdit runs it).
     if (eventDraft.series_id) {
-      const whole = window.confirm("This is a recurring event.\n\nOK = apply to the WHOLE series (this and future).\nCancel = change only this occurrence.");
-      await eventSave.runSave(async () => {
-        if (whole) {
-          const { title, time, endTime, assignedTo, type, priority, notes } = eventDraft;
-          const res = await callEventSeries({ action: "update-series", series_id: eventDraft.series_id!, fromDate: eventDraft.occurrence_date ?? eventDraft.date, patch: { title, time, endTime, assignedTo, type, priority, notes } });
-          if (res.error) { setFormError(res.error); throw new Error(res.error); }
-          await reloadEvents();
-          return { error: null };
-        }
-        // Just this one — mark detached so a later series edit skips it.
-        return upsertItem({ ...eventDraft, detached: true });
-      }, () => closeEvent());
+      setSeriesPrompt({ mode: "edit" });
       return;
     }
 
@@ -1065,6 +1097,13 @@ export default function CalendarPage() {
                   <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Date</label>
                   <input type="date" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.date} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => setEventDraft({ ...eventDraft, date: e.target.value })} />
                 </div>
+                {eventDraft.series_id && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Repeat</label>
+                    <RecurrencePicker value={editRecurrence} startDate={eventDraft.occurrence_date ?? eventDraft.date} onChange={setEditRecurrence} />
+                    <p className="mt-1.5 text-[11px] text-slate-400">Changing the pattern and saving the whole series rebuilds future occurrences from this one forward. Occurrences you&apos;ve edited on their own are kept.</p>
+                  </div>
+                )}
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-700 md:text-sm">Time</label>
                   <input type="time" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-xs text-slate-900 focus:border-slate-500 focus:outline-none md:text-sm" value={eventDraft.time ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, time: e.target.value })} />
@@ -1126,6 +1165,38 @@ export default function CalendarPage() {
                 </div>
               </div>
             )}
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Recurring this-vs-series prompt (replaces the old window.confirm dialogs) */}
+      {seriesPrompt && selectedEvent && (
+        <ModalShell
+          title={seriesPrompt.mode === "delete" ? "Delete recurring event" : "Save recurring event"}
+          onClose={() => setSeriesPrompt(null)}
+          maxWidth="max-w-sm"
+          footer={
+            <button className="min-h-11 w-full rounded-3xl border border-slate-300 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm" type="button" onClick={() => setSeriesPrompt(null)}>Cancel</button>
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 md:text-sm">
+              This is a recurring event. {seriesPrompt.mode === "delete" ? "What would you like to delete?" : "Where should this change apply?"}
+            </p>
+            <button
+              type="button"
+              onClick={() => (seriesPrompt.mode === "delete" ? applySeriesDelete(false) : applySeriesEdit(false))}
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-left text-xs font-semibold text-slate-900 hover:bg-slate-50 md:text-sm"
+            >
+              This occurrence only
+            </button>
+            <button
+              type="button"
+              onClick={() => (seriesPrompt.mode === "delete" ? applySeriesDelete(true) : applySeriesEdit(true))}
+              className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-left text-xs font-semibold text-white hover:bg-slate-800 md:text-sm"
+            >
+              {seriesPrompt.mode === "delete" ? "This and all future" : "Whole series (this and future)"}
+            </button>
           </div>
         </ModalShell>
       )}

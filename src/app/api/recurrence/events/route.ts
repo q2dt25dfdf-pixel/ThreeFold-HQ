@@ -75,9 +75,42 @@ export async function POST(request: Request) {
     const { series_id, patch } = body;
     const fromDate = body.fromDate || todayISO();
     if (!series_id || !patch) return NextResponse.json({ error: "series_id and patch are required." }, { status: 400 });
-    // Patch shared fields on this + future occurrences that were NOT hand-detached.
     const { data: rows, error } = await db.from("calendar_events").select("id, data").eq("data->>series_id", series_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // ── Pattern change: `rule` present → REGENERATE future non-detached occurrences ──
+    // Past occurrences (< fromDate) are history, untouched. Detached occurrences survive
+    // and are never regenerated; if the new pattern lands on a date a detached one already
+    // holds, that date is skipped (no duplicate). Guarded so a rule with zero future
+    // occurrences is rejected BEFORE anything is deleted.
+    if (body.rule) {
+      const rule = body.rule;
+      const detachedDates = new Set<string>();
+      const futureNonDetachedIds: string[] = [];
+      let base: Record<string, unknown> | null = null;
+      for (const r of rows ?? []) {
+        const d = r.data as Record<string, unknown>;
+        const od = String(d.occurrence_date ?? d.date ?? "");
+        if (d.detached === true) { detachedDates.add(od); continue; }
+        if (od === fromDate) base = d;
+        if (od >= fromDate) futureNonDetachedIds.push(r.id);
+      }
+      if (!base) base = ((rows ?? [])[0]?.data as Record<string, unknown>) ?? {};
+      const template = { ...base, ...patch };
+      const dates = occurrenceDates(rule, fromDate, { maxDate: horizonEnd() }).filter((dt) => !detachedDates.has(dt));
+      if (!dates.length) return NextResponse.json({ error: "The new pattern produces no occurrences from this date." }, { status: 400 });
+
+      if (futureNonDetachedIds.length) {
+        const { error: delErr } = await db.from("calendar_events").delete().in("id", futureNonDetachedIds);
+        if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+      }
+      const newRows = buildOccurrenceRows(series_id, template, rule, dates);
+      const { error: upErr } = await db.from("calendar_events").upsert(newRows);
+      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true, regenerated: newRows.length, deleted_future: futureNonDetachedIds.length, detached_kept: detachedDates.size });
+    }
+
+    // ── Field patch (no pattern change): update shared fields on this + future non-detached ──
     let updated = 0;
     for (const r of rows ?? []) {
       const d = r.data as Record<string, unknown>;
