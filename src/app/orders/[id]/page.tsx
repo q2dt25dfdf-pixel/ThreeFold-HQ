@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Archive, ArrowLeft, Check, ChevronRight, ClipboardCopy, Edit2, ExternalLink, Eye, EyeOff, FileText, Plus, RotateCcw, Send, Trash2, User, X } from "lucide-react";
 import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { buildBlankSuggestions } from "@/lib/blankSuggestions";
+import BlankCombobox from "@/components/BlankCombobox";
+import { isBlank, type InventoryItem } from "@/lib/inventory";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
 import { deriveCostRollup, type CostLine } from "@/lib/orderCosts";
 import { PRESET_SIZES, normalizeSizes, sizesSummary, sizesTotal, type SizeQty } from "@/lib/sizeBreakdown";
@@ -386,18 +388,28 @@ export default function OrderDetailPage() {
   // (shared resolveInvoiceContact: client contact, then lead contact).
   const { data: leads } = useSupabaseTable<{ id: string; contact?: string }>("crm_leads", []);
 
-  // Blank-field suggestions: seed list + distinct blanks used on past quotes/orders/
-  // deposits. Free-text is unaffected; these only populate each row's <datalist>.
+  // Blank-field suggestions. Inventory Blanks FIRST (garment level: brand+style+color,
+  // size dropped), then the seed + distinct blanks typed on past quotes/orders/deposits,
+  // unioned & deduped. Free-text is always allowed. Same source as the quote modal.
   const { data: quoteHistory } = useSupabaseTable<{ id: string; line_items?: { blank?: unknown }[] | null }>("quotes", []);
   const { data: depositHistory } = useSupabaseTable<{ id: string; line_items?: { blank?: unknown }[] | null }>("deposit_requests", []);
-  const blankSuggestions = useMemo(
-    () =>
-      buildBlankSuggestions(
-        [quoteHistory, orders, depositHistory],
-        PRODUCT_CATALOG.map((p) => p.blank),
-      ),
-    [quoteHistory, orders, depositHistory],
-  );
+  const { data: inventory } = useSupabaseTable<InventoryItem>("inventory", []);
+
+  const inventoryBlanks = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const it of inventory) {
+      if (!isBlank(it.category)) continue;
+      const label = [it.brand, it.style, it.color].map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
+      if (label && !byKey.has(label.toLowerCase())) byKey.set(label.toLowerCase(), label);
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+  }, [inventory]);
+
+  const blankOptions = useMemo(() => {
+    const seed = buildBlankSuggestions([quoteHistory, orders, depositHistory], PRODUCT_CATALOG.map((p) => p.blank));
+    const seen = new Set(inventoryBlanks.map((b) => b.toLowerCase()));
+    return [...inventoryBlanks, ...seed.filter((b) => !seen.has(b.toLowerCase()))];
+  }, [inventoryBlanks, quoteHistory, orders, depositHistory]);
 
   const order = orders.map(normalizeOrder).find((o) => o.id === params.id);
   const orderDesignVersionsKey = JSON.stringify(order?.design_versions ?? []);
@@ -1951,8 +1963,13 @@ export default function OrderDetailPage() {
                 </div>
                 <div className="mt-2">
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Blank</label>
-                  <input type="text" list={`ord-blanks-${idx}`} value={li.blank ?? ""} onChange={(e) => updateLineItem(idx, { blank: e.target.value })} placeholder="e.g. DSG Movement Tee" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400" />
-                  <datalist id={`ord-blanks-${idx}`}>{blankSuggestions.map((b) => <option key={b} value={b} />)}</datalist>
+                  <BlankCombobox
+                    value={li.blank ?? ""}
+                    onChange={(v) => updateLineItem(idx, { blank: v })}
+                    options={blankOptions}
+                    placeholder="e.g. Comfort Colors C1717 Black"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  />
                 </div>
                 <div className="mt-2">
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Color breakdown</label>

@@ -22,6 +22,8 @@ import { PRODUCT_CATALOG, findProduct } from "@/lib/products";
 import { CurrencyInput } from "@/components/orders/OrderFormShared";
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { buildBlankSuggestions } from "@/lib/blankSuggestions";
+import BlankCombobox from "@/components/BlankCombobox";
+import { isBlank, type InventoryItem } from "@/lib/inventory";
 
 // Minimal row shape for reading historical blanks off past records.
 type BlankHistoryRow = { id: string; line_items?: { blank?: unknown }[] | null };
@@ -93,19 +95,34 @@ export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressS
   const [depositMinPct, setDepositMinPct] = useState(50);
   const [depositCustom, setDepositCustom] = useState(false);
 
-  // Blank-field suggestions: seed list + distinct blanks used on past quotes/orders/
-  // deposits. Free-text is unaffected; these only populate each row's <datalist>.
+  // Blank-field suggestions. Source order: inventory Blanks FIRST (garment level —
+  // brand+style+color, size dropped since the line item has its own sizes), then the
+  // seed + distinct blanks typed on past quotes/orders/deposits so nothing regresses.
+  // Free-text is always allowed (blanks not in inventory still work).
   const { data: quoteHistory } = useSupabaseTable<BlankHistoryRow>("quotes", []);
   const { data: orderHistory } = useSupabaseTable<BlankHistoryRow>("orders", []);
   const { data: depositHistory } = useSupabaseTable<BlankHistoryRow>("deposit_requests", []);
-  const blankSuggestions = useMemo(
-    () =>
-      buildBlankSuggestions(
-        [quoteHistory, orderHistory, depositHistory],
-        PRODUCT_CATALOG.map((p) => p.blank),
-      ),
-    [quoteHistory, orderHistory, depositHistory],
-  );
+  const { data: inventory } = useSupabaseTable<InventoryItem>("inventory", []);
+
+  const inventoryBlanks = useMemo(() => {
+    const byKey = new Map<string, string>(); // lc -> original casing
+    for (const it of inventory) {
+      if (!isBlank(it.category)) continue;
+      const label = [it.brand, it.style, it.color].map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
+      if (label && !byKey.has(label.toLowerCase())) byKey.set(label.toLowerCase(), label);
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+  }, [inventory]);
+
+  const blankOptions = useMemo(() => {
+    const seed = buildBlankSuggestions(
+      [quoteHistory, orderHistory, depositHistory],
+      PRODUCT_CATALOG.map((p) => p.blank),
+    );
+    const seen = new Set(inventoryBlanks.map((b) => b.toLowerCase()));
+    const rest = seed.filter((b) => !seen.has(b.toLowerCase()));
+    return [...inventoryBlanks, ...rest]; // inventory first, then seed + history
+  }, [inventoryBlanks, quoteHistory, orderHistory, depositHistory]);
 
   useEffect(() => {
     if (!open || !lead) return;
@@ -572,19 +589,12 @@ export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressS
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Production spec (internal)</p>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Blank</label>
-                    <input
-                      type="text"
-                      list={`blanks-${idx}`}
+                    <BlankCombobox
                       value={item.blank ?? ""}
-                      onChange={(e) => updateItem(idx, "blank", e.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 md:text-sm"
-                      placeholder="e.g. Comfort Colors 1717"
+                      onChange={(v) => updateItem(idx, "blank", v)}
+                      options={blankOptions}
+                      placeholder="e.g. Comfort Colors C1717 Black"
                     />
-                    <datalist id={`blanks-${idx}`}>
-                      {blankSuggestions.map((b) => (
-                        <option key={b} value={b} />
-                      ))}
-                    </datalist>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Color breakdown</label>

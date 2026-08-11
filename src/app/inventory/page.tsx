@@ -244,12 +244,13 @@ export default function InventoryPage() {
         <p className="py-10 text-center text-[13px] text-slate-400">{items.length === 0 ? "No stock yet — add your first item." : "Nothing matches these filters."}</p>
       ) : (
         <>
-          {/* Desktop: grouped (brand+style → colour → size); non-blanks flat by category */}
-          <div className="hidden overflow-hidden rounded-2xl text-[13px] ring-1 ring-slate-100 md:block">
+          {/* Desktop: grouped (brand+style → colour → size); non-blanks flat by category.
+              Each group is its own white card so rows read as contained, not floating. */}
+          <div className="hidden space-y-3 text-[13px] md:block">
             {blankGroups.map((bg) => {
               const bopen = expandedBrands.has(bg.key);
               return (
-                <div key={bg.key} className="border-t border-slate-100 first:border-t-0">
+                <div key={bg.key} className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100">
                   {/* Brand row */}
                   <button onClick={() => toggleBrand(bg.key)} className="flex w-full items-center gap-2 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100">
                     <span className="w-3 shrink-0 text-slate-400">{bopen ? "▾" : "▸"}</span>
@@ -277,7 +278,7 @@ export default function InventoryPage() {
                           return (
                             <Fragment key={it.id}>
                               {/* Size row */}
-                              <div className={`flex items-center gap-3 border-t border-slate-100 py-2 pl-16 pr-4 ${low ? "bg-amber-50" : ""}`}>
+                              <div className={`flex items-center gap-3 border-t border-slate-100 py-2 pl-16 pr-4 ${low ? "bg-amber-50 hover:bg-amber-100" : "hover:bg-slate-50"}`}>
                                 <span className="w-14 font-semibold text-slate-900">{it.size || "—"}</span>
                                 <span className="text-[12px] text-slate-500">On hand <b className="text-slate-800">{it.qty_on_hand}</b></span>
                                 <span className="text-[12px] text-slate-400">low at {it.low_stock_threshold}</span>
@@ -298,15 +299,15 @@ export default function InventoryPage() {
               );
             })}
 
-            {/* Non-blank categories — flat rows, grouped at the bottom */}
+            {/* Non-blank categories — flat rows, each category its own card */}
             {nonBlankGroups.map((cat) => (
-              <div key={cat.category} className="border-t border-slate-100">
+              <div key={cat.category} className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100">
                 <div className="bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{cat.category}</div>
                 {cat.rows.map((it) => {
                   const low = isLowStock(it);
                   return (
                     <Fragment key={it.id}>
-                      <div className={`flex items-center gap-3 border-t border-slate-100 px-4 py-2 ${low ? "bg-amber-50" : ""}`}>
+                      <div className={`flex items-center gap-3 border-t border-slate-100 px-4 py-2 ${low ? "bg-amber-50 hover:bg-amber-100" : "hover:bg-slate-50"}`}>
                         <span className="font-semibold text-slate-900">{it.name || "—"}</span>
                         {low && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Low</span>}
                         <span className="ml-auto flex items-center gap-3">
