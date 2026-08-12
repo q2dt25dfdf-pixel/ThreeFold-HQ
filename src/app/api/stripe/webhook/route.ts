@@ -180,12 +180,9 @@ async function fulfillDepositPaid(
   // "Deposit Paid". A normal partial deposit leaves this false and behaves exactly as before.
   const paidInFullDeposit = depositAmount > 0 && depositAmount >= totalAmount;
 
-  // Proportional tax collected with deposit
+  // Tax breakdown from the deposit request — used to backfill finance rows missing it
   const depSalesTaxAmount = Number(depData.sales_tax_amount ?? 0);
   const depGrandTotal = Number(depData.grand_total ?? totalAmount);
-  const depositTaxCollected = depGrandTotal > 0 && depSalesTaxAmount > 0
-    ? Math.round((depositAmount / depGrandTotal) * depSalesTaxAmount * 100) / 100
-    : 0;
 
   // 5. Find existing finance record linked to this deposit
   const { data: finRows } = await db
@@ -199,12 +196,6 @@ async function fulfillDepositPaid(
     const fin = finRows[0];
     const fd = fin.data as Record<string, unknown>;
     const isFinalAlreadyPaid = fd.final_paid === true;
-    const finSalesTaxAmount = Number(fd.sales_tax_amount ?? depSalesTaxAmount);
-    const finGrandTotal = Number(fd.grand_total ?? depGrandTotal);
-    const finDepositTax = finGrandTotal > 0 && finSalesTaxAmount > 0
-      ? Math.round((depositAmount / finGrandTotal) * finSalesTaxAmount * 100) / 100
-      : depositTaxCollected;
-    const updatedTaxCollected = isFinalAlreadyPaid ? finSalesTaxAmount : finDepositTax;
     // Money/status write via the merge RPC — applies these fields and re-preserves the row's
     // own activity_log, so it can never overwrite the payment entry appended below.
     await updateFinancesFields(fin.id as string, {
@@ -212,7 +203,15 @@ async function fulfillDepositPaid(
       deposit_paid_date: today,
       status: (paidInFullDeposit || isFinalAlreadyPaid) ? "Paid in Full" : "Deposit Paid",
       ...(meta.payment_method ? { deposit_payment_method: meta.payment_method } : {}),
-      ...(finSalesTaxAmount > 0 && { tax_collected_amount: updatedTaxCollected, tax_collected_at: today }),
+      // Backfill the tax breakdown from the deposit request when the finance row lacks it —
+      // the Sales Tax tab reads sales_tax_amount off finance rows, and rows created without
+      // it report $0 collected. Never overwrites values already on the row.
+      ...(fd.sales_tax_amount == null && depSalesTaxAmount > 0 ? {
+        sales_tax_amount: depSalesTaxAmount,
+        ...(depData.sales_tax_rate != null ? { sales_tax_rate: Number(depData.sales_tax_rate) } : {}),
+        ...(depData.subtotal != null ? { subtotal: Number(depData.subtotal) } : {}),
+        ...(fd.grand_total == null ? { grand_total: depGrandTotal } : {}),
+      } : {}),
       // Paid in full via the deposit link: promote to fully paid (fixes the stuck "Deposit
       // Paid" bug). Does not change the charged amount.
       ...(paidInFullDeposit ? {
@@ -257,7 +256,6 @@ async function fulfillDepositPaid(
     await bootstrapOrderAndFinance({
       depositRequestId,
       depData,
-      depositTaxCollected,
       depositPaymentMethod: meta.payment_method ?? null,
       leadId: effectiveLeadId,
       clientName,
@@ -385,7 +383,6 @@ type BootstrapOpts = {
   today: string;
   paidAt: string;
   baseUrl: string;
-  depositTaxCollected?: number;
   depositPaymentMethod?: string | null;
 };
 
@@ -393,7 +390,7 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
   const {
     depositRequestId, depData, leadId, clientName,
     totalAmount, depositAmount, balanceRemaining, today, paidAt, baseUrl,
-    depositTaxCollected, depositPaymentMethod,
+    depositPaymentMethod,
   } = opts;
 
   const db = getSupabaseAdmin();
@@ -565,11 +562,6 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     if (salesTaxAmount > 0) {
       financeData.sales_tax_amount = salesTaxAmount;
       financeData.grand_total = depData.grand_total ?? totalAmount;
-      const taxOnDeposit = depositTaxCollected ?? 0;
-      if (taxOnDeposit > 0) {
-        financeData.tax_collected_amount = taxOnDeposit;
-        financeData.tax_collected_at = today;
-      }
     }
     await db.from("finances").upsert({ id: invoiceId, data: financeData });
     console.log(`[webhook] created finance ${invoiceId} for order ${orderId}`);
@@ -669,17 +661,9 @@ async function handleSessionCompleted(session: CheckoutSession, baseUrl: string)
     if (session.payment_status === "paid") {
       // Card: confirmed immediately
       console.log(`[webhook] final invoice ${financeId} → Paid (${meta.payment_method ?? "card"})`);
-      // Compute remaining tax for this final payment
+      // Row read only for the client email used by the receipt below.
       const { data: finRows } = await getSupabaseAdmin().from("finances").select("data").eq("id", financeId).limit(1);
       const finData = (finRows?.[0]?.data ?? {}) as Record<string, unknown>;
-      const finSalesTax = Number(finData.sales_tax_amount ?? 0);
-      const finTaxAlreadyCollected = Number(finData.tax_collected_amount ?? 0);
-      const finalTaxFields: Record<string, unknown> = {};
-      if (finSalesTax > 0) {
-        const remainingTax = Math.max(Math.round((finSalesTax - finTaxAlreadyCollected) * 100) / 100, 0);
-        finalTaxFields.tax_collected_amount = finTaxAlreadyCollected + remainingTax;
-        finalTaxFields.tax_collected_at = paidAt.slice(0, 10);
-      }
       await updateFinancesFields(financeId, {
         final_paid: true,
         final_paid_date: paidAt.slice(0, 10),
@@ -689,7 +673,6 @@ async function handleSessionCompleted(session: CheckoutSession, baseUrl: string)
         stripe_final_payment_intent_id: paymentIntentId,
         final_paid_at: paidAt,
         ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
-        ...finalTaxFields,
       });
       await appendInvoiceActivityRpc(getSupabaseAdmin(), financeId, {
         id: `act-${Date.now()}-payment-final`,
@@ -757,16 +740,9 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession, baseUrl: st
   if (financeId) {
     const paidAt = new Date().toISOString();
     console.log(`[webhook] final invoice ${financeId} → Paid (bank ACH settled)`);
+    // Row read only for the client email used by the receipt below.
     const { data: asyncFinRows } = await getSupabaseAdmin().from("finances").select("data").eq("id", financeId).limit(1);
     const asyncFinData = (asyncFinRows?.[0]?.data ?? {}) as Record<string, unknown>;
-    const asyncFinSalesTax = Number(asyncFinData.sales_tax_amount ?? 0);
-    const asyncFinTaxCollected = Number(asyncFinData.tax_collected_amount ?? 0);
-    const asyncFinalTaxFields: Record<string, unknown> = {};
-    if (asyncFinSalesTax > 0) {
-      const remainingTax = Math.max(Math.round((asyncFinSalesTax - asyncFinTaxCollected) * 100) / 100, 0);
-      asyncFinalTaxFields.tax_collected_amount = asyncFinTaxCollected + remainingTax;
-      asyncFinalTaxFields.tax_collected_at = paidAt.slice(0, 10);
-    }
     await updateFinancesFields(financeId, {
       final_paid: true,
       final_paid_date: paidAt.slice(0, 10),
@@ -775,7 +751,6 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession, baseUrl: st
       stripe_final_payment_intent_id: paymentIntentId,
       final_paid_at: paidAt,
       ...(meta.payment_method ? { final_payment_method: meta.payment_method } : {}),
-      ...asyncFinalTaxFields,
     });
     await appendInvoiceActivityRpc(getSupabaseAdmin(), financeId, {
       id: `act-${Date.now()}-payment-final`,
