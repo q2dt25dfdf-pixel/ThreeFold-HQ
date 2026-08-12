@@ -898,6 +898,27 @@ function FinancesContent() {
 
   const taxDue = Math.max(taxCollectedYTD - taxPaidYTD, 0);
 
+  // CUSTOM tax held across ALL years — the net-position deduction. Net position is
+  // all-time, so a YTD figure would wrongly reset every January while unremitted tax
+  // is still owed. Custom-only by design: shop revenue enters Collected net of tax,
+  // so its tax was never counted in — deducting it here would remove it twice.
+  // Remittance payments aren't split custom/shop, so all payments subtract from this;
+  // the floor keeps a full remittance from driving it below zero.
+  const customTaxHeldAllYears = useMemo(() => {
+    const collected = normalizedInvoices.reduce((sum, inv) => {
+      if (inv.refunded === true) return sum;
+      const taxAmt = parseAmount(inv.sales_tax_amount ?? 0);
+      if (taxAmt <= 0) return sum;
+      if (inv.final_paid) return sum + taxAmt;
+      if (inv.deposit_paid) {
+        return sum + calcDepositTax(taxAmt, parseAmount(inv.deposit_amount), parseAmount(inv.grand_total ?? inv.total_amount));
+      }
+      return sum;
+    }, 0);
+    const remitted = taxPayments.reduce((sum, p) => sum + taxPaymentDollars(p), 0);
+    return Math.max(collected - remitted, 0);
+  }, [normalizedInvoices, taxPayments]);
+
   // Warn if any paid invoices are missing sales_tax_amount — the YTD figure may undercount.
   const hasTaxGap = normalizedInvoices.some(
     (inv) => (inv.deposit_paid || inv.final_paid) && !parseAmount(inv.sales_tax_amount ?? 0),
@@ -1023,8 +1044,10 @@ function FinancesContent() {
   const unpaidExpenses = expenses
     .filter((e) => e.payment_status !== "paid")
     .reduce((sum, e) => sum + Math.round(expenseGeneralCents(e)) / 100, 0);
-  // Net Position = what's actually in the business after covering paid vendor costs + paid expenses
-  const netPosition = revenueCollected - paidVendorCosts - paidExpenses;
+  // Net Position = what's actually the business's after paid vendor costs, paid expenses,
+  // and the custom-invoice sales tax being held for CDTFA (not our money). Shop tax needs
+  // no deduction here — shop revenue is already net of tax.
+  const netPosition = revenueCollected - paidVendorCosts - paidExpenses - customTaxHeldAllYears;
 
   const visibleExpenses = expenses
     .filter((e) => {
@@ -2387,7 +2410,7 @@ function FinancesContent() {
           <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${netPosition < 0 ? "text-rose-600" : "text-slate-900"}`}>
             {currencyCents.format(netPosition)}
           </p>
-          <p className="mt-1.5 text-[11px] text-slate-500">Revenue collected − all paid costs & expenses</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">Revenue collected − paid costs & expenses − sales tax held for CDTFA</p>
           <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${netPosition < 0 ? "bg-rose-100 text-rose-700" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
             {netPosition < 0 ? "In the red — startup costs" : "On track"}
           </span>
@@ -2500,6 +2523,13 @@ function FinancesContent() {
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Business expenses paid</dt>
                 <dd className="text-sm font-semibold text-rose-500">−{currencyCents.format(paidExpenses)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-slate-600">
+                  Sales tax held for CDTFA
+                  <span className="block text-[10px] text-slate-400">collected on custom invoices, not yet remitted</span>
+                </dt>
+                <dd className="text-sm font-semibold text-rose-500">−{currencyCents.format(customTaxHeldAllYears)}</dd>
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
                 <dt className="text-xs font-semibold text-slate-800">Net position</dt>

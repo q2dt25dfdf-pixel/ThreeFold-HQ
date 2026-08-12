@@ -444,10 +444,13 @@ const paths: Record<string, unknown> = {
                       summary: {
                         type: "object",
                         properties: {
-                          revenueCollected: { type: "number" },
+                          revenueCollected: { type: "number", description: "Total revenue collected: custom invoices (tax-inclusive) plus shop revenue net of tax. Matches the Finances page Collected headline." },
+                          customRevenueCollected: { type: "number", description: "Custom-invoice portion of revenueCollected." },
+                          shopRevenueNet:   { type: "number", description: "Shop portion of revenueCollected, net of sales tax." },
                           grossProfit:      { type: "number", description: "Revenue collected minus paid vendor costs." },
-                          netPosition:      { type: "number", description: "Gross profit minus paid operating expenses." },
+                          netPosition:      { type: "number", description: "Gross profit minus paid operating expenses and minus custom-invoice sales tax held for CDTFA (all years, unremitted). Matches the Finances page Net Position." },
                           taxDue:           { type: "number" },
+                          customTaxHeldAllYears: { type: "number", description: "Custom-invoice sales tax collected and not yet remitted, all years — the net-position deduction." },
                         },
                         required: ["revenueCollected", "grossProfit", "netPosition", "taxDue"],
                       },

@@ -2,10 +2,11 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateAIRequest } from "@/lib/aiAuth";
 import { okResponse, errResponse } from "@/lib/aiResponse";
 import { businessTodayISO } from "@/lib/businessDate";
-import { INACTIVE_FINANCE_STATUSES, INACTIVE_ORDER_STATUSES } from "@/lib/constants";
+import { INACTIVE_FINANCE_STATUSES } from "@/lib/constants";
 import { stringField, statusText } from "@/lib/recordUtils";
 import { parseAmount, calcBalance, calcCollected, calcTotal } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
+import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +25,10 @@ async function fetchTable(
     if ((error as { code?: string }).code === "42P01") return [];
     throw new Error(`[ai/finances] read ${table}: ${error.message}`);
   }
+  // Spread the row id in: some tables (shop_orders) don't repeat id inside data,
+  // and filtering on data.id alone would silently drop every row of those tables.
   return ((rows ?? []) as TableRow[])
-    .map((r) => r.data ?? { id: r.id })
+    .map((r) => ({ id: r.id, ...(r.data ?? {}) }))
     .filter((item): item is DashboardRecord => Boolean(item?.id));
 }
 
@@ -81,11 +84,12 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const db = getSupabaseAdmin();
-    const [invoices, expenses, taxPayments, orders] = await Promise.all([
+    const [invoices, expenses, taxPayments, orders, shopOrders] = await Promise.all([
       fetchTable(db, "finances"),
       fetchTable(db, "expenses"),
       fetchTable(db, "sales_tax_payments"),
       fetchTable(db, "orders"),
+      fetchTable(db, "shop_orders"),
     ]);
 
     const todayISO    = businessTodayISO();
@@ -141,7 +145,11 @@ export async function GET(request: Request): Promise<Response> {
 
     // ── Sales tax aggregates ──────────────────────────────────────────────────
 
-    const taxCollectedYTD = calcTaxCollectedYTD(liveInvoices, currentYear);
+    // Shop aggregates — same lib the Finances page uses (net-of-tax revenue + YTD tax).
+    const shopAgg = aggregateShopFinances(shopOrders as ShopFinanceRow[], currentYear);
+    // Mirrors the page's taxCollectedYTD: custom invoice tax PLUS shop tax — both must
+    // be remitted, so the page's remit figure includes both and Jarvis must agree.
+    const taxCollectedYTD = calcTaxCollectedYTD(liveInvoices, currentYear) + shopAgg.taxCollectedYTD;
     const taxPaidYTD = taxPayments
       .filter((p) => String(p.payment_date ?? p.date ?? "").startsWith(currentYear))
       .reduce((sum, p) => {
@@ -149,6 +157,28 @@ export async function GET(request: Request): Promise<Response> {
         return sum + (typeof cents === "number" ? cents / 100 : parseAmount(p.amount ?? 0));
       }, 0);
     const taxDue = Math.max(taxCollectedYTD - taxPaidYTD, 0);
+
+    // CUSTOM tax held across ALL years — mirrors the Finances page's net-position
+    // deduction exactly (see finances/page.tsx customTaxHeldAllYears): all-time
+    // custom tax collected minus ALL remittances, floored at 0. Shop tax excluded —
+    // shop revenue enters the totals net of tax, so its tax was never counted in.
+    const customTaxCollectedAllYears = liveInvoices.reduce((sum, inv) => {
+      const taxAmt = parseAmount(inv.sales_tax_amount);
+      if (taxAmt <= 0 || (inv as { refunded?: boolean }).refunded === true) return sum;
+      if (inv.final_paid === true) return sum + taxAmt;
+      if (inv.deposit_paid === true) {
+        return sum + calcDepositTax(taxAmt, parseAmount(inv.deposit_amount), parseAmount(inv.grand_total ?? inv.total_amount));
+      }
+      return sum;
+    }, 0);
+    const taxRemittedAllYears = taxPayments.reduce((sum, p) => {
+      const cents = p.amount_cents;
+      return sum + (typeof cents === "number" ? cents / 100 : parseAmount(p.amount ?? 0));
+    }, 0);
+    const customTaxHeldAllYears = Math.max(customTaxCollectedAllYears - taxRemittedAllYears, 0);
+
+    // Shop revenue, net of tax — same aggregation the Finances page uses.
+    const shopRevenueNet = shopAgg.netRevenueAll;
 
     // ── Expense aggregates ────────────────────────────────────────────────────
 
@@ -207,18 +237,24 @@ export async function GET(request: Request): Promise<Response> {
 
     // ── Vendor cost / profit summary (from orders) ────────────────────────────
 
-    const activeOrders = orders.filter(
-      (o) => !INACTIVE_ORDER_STATUSES.has(statusText(o)),
-    );
-    const paidVendorCosts = activeOrders
+    // Cost basis mirrors the Finances page: only CANCELLED orders are excluded.
+    // A delivered/fulfilled order's vendor cost is still real spend — the previous
+    // INACTIVE_ORDER_STATUSES filter dropped those and made Jarvis's gross profit
+    // and net position disagree with the screen.
+    const costOrders = orders.filter((o) => statusText(o) !== "cancelled");
+    const paidVendorCosts = costOrders
       .filter((o) => stringField(o, "vendor_payment_status") === "paid")
       .reduce((s, o) => {
         const cents = o.vendor_cost_cents;
         return s + (typeof cents === "number" ? cents / 100 : 0);
       }, 0);
 
-    const grossProfit  = revenueCollected - paidVendorCosts;
-    const netPosition  = revenueCollected - paidVendorCosts - paidExpenseTotal;
+    // Total revenue and net position mirror the Finances page exactly: revenue is
+    // custom + shop (net of tax); net position further deducts paid expenses and the
+    // custom sales tax held for CDTFA. Jarvis must quote the same numbers the page shows.
+    const totalRevenueCollected = revenueCollected + shopRevenueNet;
+    const grossProfit  = totalRevenueCollected - paidVendorCosts;
+    const netPosition  = totalRevenueCollected - paidVendorCosts - paidExpenseTotal - customTaxHeldAllYears;
 
     return okResponse({
       invoices: {
@@ -239,6 +275,7 @@ export async function GET(request: Request): Promise<Response> {
           collectedYTD: Math.round(taxCollectedYTD * 100) / 100,
           paidYTD:      Math.round(taxPaidYTD      * 100) / 100,
           dueYTD:       Math.round(taxDue           * 100) / 100,
+          customHeldAllYears: Math.round(customTaxHeldAllYears * 100) / 100,
         },
         byStatus: byInvoiceStatus,
         invoicesNeedingAttention,
@@ -258,10 +295,13 @@ export async function GET(request: Request): Promise<Response> {
         expensesNeedingAttention,
       },
       summary: {
-        revenueCollected:  Math.round(revenueCollected  * 100) / 100,
+        revenueCollected:  Math.round(totalRevenueCollected * 100) / 100,
+        customRevenueCollected: Math.round(revenueCollected * 100) / 100,
+        shopRevenueNet:    Math.round(shopRevenueNet    * 100) / 100,
         grossProfit:       Math.round(grossProfit        * 100) / 100,
         netPosition:       Math.round(netPosition        * 100) / 100,
         taxDue:            Math.round(taxDue             * 100) / 100,
+        customTaxHeldAllYears: Math.round(customTaxHeldAllYears * 100) / 100,
       },
     });
   } catch (err) {
