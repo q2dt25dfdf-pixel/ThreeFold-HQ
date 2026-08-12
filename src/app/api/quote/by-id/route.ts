@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
       discount: raw.discount ?? null,
       salesTaxRate: raw.sales_tax_rate ?? null,
       salesTaxAmount: raw.sales_tax_amount ?? null,
+      // Founder-facing tax provenance (LeadDetailModal shows the warning).
+      taxRateWarning: raw.tax_rate_warning ?? null,
+      taxJurisdictionLabel: raw.tax_jurisdiction_label ?? null,
       grandTotal: raw.grand_total ?? raw.total_amount,
       totalAmount: raw.grand_total ?? raw.total_amount,
     });

@@ -767,10 +767,12 @@ export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressS
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Sales Tax ({fmtTaxRate(taxRate)})</span>
               <span className="text-sm font-semibold text-slate-500">{fmtCurrency(salesTaxAmount)}</span>
             </div>
-            <div className="text-[11px] text-slate-400">
-              {taxLookup.jurisdictionLabel}
-              {taxLookup.warning && <span className="text-amber-600"> · {taxLookup.warning}</span>}
-            </div>
+            <div className="text-[11px] text-slate-400">{taxLookup.jurisdictionLabel}</div>
+            {taxLookup.warning && (
+              <div className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                ⚠ {taxLookup.warning}
+              </div>
+            )}
             <div className="flex items-center justify-between border-t border-slate-200 pt-2">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Total</span>
               <span className="text-xl font-bold text-slate-950">{fmtCurrency(grandTotal)}</span>
@@ -912,10 +914,12 @@ export default function SendQuoteModal({ open, lead, onClose, onSent, onAddressS
               <span>Tax: {fmtTaxRate(quoteResult.salesTaxRate ?? taxRate)}</span>
               <span className="text-slate-300">·</span>
               <span>{quoteResult.taxJurisdictionLabel ?? "Bay Area, CA (default)"}</span>
-              {quoteResult.taxRateWarning && (
-                <span className="text-amber-600">· {quoteResult.taxRateWarning}</span>
-              )}
             </div>
+            {quoteResult.taxRateWarning && (
+              <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                ⚠ {quoteResult.taxRateWarning} This is the rate stored on the quote.
+              </div>
+            )}
           </div>
 
           {/* Email preview */}

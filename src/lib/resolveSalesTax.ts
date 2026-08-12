@@ -10,12 +10,25 @@
 import { getStripe } from "./stripe";
 import { getSalesTaxRateForAddress, type TaxRateResult } from "./tax-rates";
 
+// One per-jurisdiction line from Stripe's LINE-ITEM tax_breakdown (the top-level
+// calculation breakdown has no jurisdiction object — only the line-item one does).
+// Stored on the quote for audit so a rate discrepancy is answerable after the fact.
+export type TaxBreakdownEntry = {
+  jurisdiction: string;
+  level: string; // "state" | "county" | "city" | "district"
+  percentage_decimal: string | null;
+  amount_cents: number;
+  taxability_reason: string | null;
+};
+
 export type ResolvedTax = {
   rate: number;
   source: string; // "stripe" | "fallback"
   jurisdictionLabel: string;
   zipUsed?: string;
   warning: string | null;
+  calculationId: string | null; // Stripe tax calculation id ("stripe" only)
+  breakdown: TaxBreakdownEntry[] | null; // per-jurisdiction lines ("stripe" only)
 };
 
 // Cap the Stripe call so a slow/hung request can never stall quote creation.
@@ -63,6 +76,8 @@ export async function resolveSalesTax({
       jurisdictionLabel: r.jurisdictionLabel,
       zipUsed: r.zipUsed,
       warning: r.warning ?? null,
+      calculationId: null,
+      breakdown: null,
     };
   };
 
@@ -95,6 +110,9 @@ export async function resolveSalesTax({
             tax_code: "txcd_99999999", // General - Tangible Goods
           },
         ],
+        // Jurisdictions live on the LINE-ITEM breakdown only; the top-level
+        // calculation tax_breakdown carries rates without jurisdiction names.
+        expand: ["line_items.data.tax_breakdown"],
       }),
       STRIPE_TAX_TIMEOUT_MS,
     );
@@ -106,15 +124,33 @@ export async function resolveSalesTax({
     }
 
     const rate = taxCents / taxableAmountCents;
-    const breakdown = (calc.tax_breakdown ?? []) as Array<{ jurisdiction?: { display_name?: string } }>;
-    const jurisdictionName = breakdown[0]?.jurisdiction?.display_name;
+    type LineBreakdown = {
+      amount?: number;
+      jurisdiction?: { display_name?: string; level?: string };
+      tax_rate_details?: { percentage_decimal?: string };
+      taxability_reason?: string;
+    };
+    const rawBreakdown = (calc.line_items?.data?.[0]?.tax_breakdown ?? []) as LineBreakdown[];
+    const breakdown: TaxBreakdownEntry[] = rawBreakdown.map((b) => ({
+      jurisdiction: b.jurisdiction?.display_name ?? "",
+      level: b.jurisdiction?.level ?? "",
+      percentage_decimal: b.tax_rate_details?.percentage_decimal ?? null,
+      amount_cents: Number(b.amount ?? 0),
+      taxability_reason: b.taxability_reason ?? null,
+    }));
+    // Label from the most specific collecting jurisdiction (city > county > state).
+    const byLevel = (level: string) =>
+      breakdown.find((b) => b.level === level && b.jurisdiction)?.jurisdiction;
+    const jurisdictionName = byLevel("city") ?? byLevel("county") ?? byLevel("state");
 
     return {
       rate,
       source: "stripe",
-      jurisdictionLabel: jurisdictionName ? jurisdictionName : `Stripe Tax (${bestZip}, CA)`,
+      jurisdictionLabel: jurisdictionName ? `${jurisdictionName}, CA (Stripe Tax)` : `Stripe Tax (${bestZip}, CA)`,
       zipUsed: bestZip,
       warning: null,
+      calculationId: (calc.id as string | undefined) ?? null,
+      breakdown: breakdown.length > 0 ? breakdown : null,
     };
   } catch {
     // Any Stripe error or the 4s timeout -> never break quote generation.
