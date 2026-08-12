@@ -2878,11 +2878,11 @@ const paths: Record<string, unknown> = {
                 },
                 deliveryZip: {
                   type: "string",
-                  description: "Optional delivery ZIP code for sales tax lookup.",
+                  description: "Delivery ZIP code for sales tax lookup. A ship-to ZIP must resolve from deliveryZip, clientZip, or the lead's stored address — otherwise the request fails with 400 (a sales tax rate is never guessed).",
                 },
                 clientZip: {
                   type: "string",
-                  description: "Optional client ZIP code for sales tax lookup fallback.",
+                  description: "Client ZIP code for sales tax lookup fallback. See deliveryZip: some ZIP source is required or the request fails with 400.",
                 },
                 revisedQuote: {
                   type: "boolean",

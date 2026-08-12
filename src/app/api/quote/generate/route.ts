@@ -11,6 +11,7 @@ import {
   type QuoteDiscount,
 } from "@/lib/salesTax";
 import { resolveSalesTax } from "@/lib/resolveSalesTax";
+import { zipFromText } from "@/lib/tax-rates";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 import { voidDepositOnRevision } from "@/lib/supersede";
 
@@ -129,6 +130,23 @@ export async function POST(request: NextRequest) {
       clientAddressText: clientAddressText ?? "",
       taxableAmountCents: Math.round(discountedSubtotal * 100),
     });
+    // No resolved ZIP means the rate would be the blind 9.375% default — never bake a
+    // guessed rate into a money document. zipUsed is set by BOTH the Stripe path and the
+    // ZIP-table path, so this only rejects the truly unresolvable cases. Distinct
+    // messages: missing address (caller must supply one) vs out-of-table ZIP while
+    // Stripe is unreachable (retryable).
+    if (!taxLookup.zipUsed) {
+      const suppliedZip = deliveryZip || resolvedClientZip || zipFromText(clientAddressText ?? "");
+      return NextResponse.json(
+        {
+          error: suppliedZip
+            ? `Couldn't resolve a sales tax rate for ZIP ${suppliedZip} right now — please try again in a moment.`
+            : "A client address with a ZIP code is required to compute sales tax.",
+        },
+        { status: 400 },
+      );
+    }
+
     const taxRate = taxLookup.rate;
     const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
     const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
@@ -154,6 +172,10 @@ export async function POST(request: NextRequest) {
       tax_zip_used: taxLookup.zipUsed ?? null,
       tax_jurisdiction_label: taxLookup.jurisdictionLabel,
       tax_rate_warning: taxLookup.warning ?? null,
+      // Audit trail: Stripe calculation id + per-jurisdiction breakdown (null on the
+      // ZIP-table path) so a rate discrepancy is answerable after the fact.
+      tax_calculation_id: taxLookup.calculationId,
+      tax_breakdown: taxLookup.breakdown,
       deposit_minimum: depositMinimumFraction,
       expiration_date: expirationDateStr,
       public_token: token,
@@ -192,6 +214,37 @@ export async function POST(request: NextRequest) {
       const result = await voidDepositOnRevision(db, leadData.deposit_request_id as string | undefined);
       if (result.outcome === "voided") voidedDeposit = { number: result.depositNumber };
       else if (result.outcome === "blocked") blockedDeposit = { number: result.depositNumber, status: result.status };
+    }
+
+    // Address write-back: teach the system the location this quote's tax was computed
+    // from, so repeat orders reuse it instead of re-entering it or falling back.
+    // Empty-only — a value someone already set is never overwritten. Failures log and
+    // never block quote creation (the quote row is already committed above).
+    try {
+      if (clientEmail) {
+        const { data: cRows } = await db
+          .from("clients")
+          .select("id,data")
+          .eq("data->>email", clientEmail)
+          .limit(1);
+        const cRow = cRows?.[0];
+        const cData = cRow?.data as Record<string, unknown> | undefined;
+        if (cRow && cData && !String(cData.zip ?? "").trim()) {
+          await db.from("clients").update({ data: { ...cData, zip: taxLookup.zipUsed } }).eq("id", cRow.id);
+        }
+      }
+      const cp = (leadData?.companyProfile ?? {}) as Record<string, unknown>;
+      if (leadData && !String(cp.address ?? "").trim()) {
+        // Prefer the full typed address text (richer than the bare ZIP; it's also what
+        // the send-quote modal pre-fills from, unblocking its ZIP gate next time).
+        const addressValue = (clientAddressText ?? "").trim() || taxLookup.zipUsed;
+        await db
+          .from("crm_leads")
+          .update({ data: { ...leadData, companyProfile: { ...cp, address: addressValue } } })
+          .eq("id", leadId);
+      }
+    } catch (writeBackErr) {
+      console.error("[quote/generate] address write-back failed:", writeBackErr);
     }
 
     return NextResponse.json({

@@ -757,18 +757,16 @@ function CRMContent() {
       lead.deposit_request_number ? `Deposit Request: ${lead.deposit_request_number}.` : "",
     ].filter(Boolean).join(" ");
 
-    // Carry the quote's discount (and its pre-tax subtotal / tax) onto the invoice so
-    // the invoice + portal breakdown matches the quote. Only added when a discount
-    // exists, so no-discount invoices are written exactly as before.
-    const discountFinanceFields: Partial<InvoiceRecord> = inheritedDiscount
-      ? {
-          discount: inheritedDiscount,
-          ...(moneySource.subtotal != null ? { subtotal: Number(moneySource.subtotal) } : {}),
-          ...(moneySource.sales_tax_rate != null ? { sales_tax_rate: Number(moneySource.sales_tax_rate) } : {}),
-          ...(moneySource.sales_tax_amount != null ? { sales_tax_amount: Number(moneySource.sales_tax_amount) } : {}),
-          ...(moneySource.grand_total != null ? { grand_total: Number(moneySource.grand_total) } : {}),
-        }
-      : {};
+    // Always carry the quote's pre-tax subtotal / tax / grand total onto the invoice —
+    // the Sales Tax tab reads sales_tax_amount off finance rows, so these must inherit
+    // even without a discount. The discount itself is still only added when one exists.
+    const discountFinanceFields: Partial<InvoiceRecord> = {
+      ...(moneySource.subtotal != null ? { subtotal: Number(moneySource.subtotal) } : {}),
+      ...(moneySource.sales_tax_rate != null ? { sales_tax_rate: Number(moneySource.sales_tax_rate) } : {}),
+      ...(moneySource.sales_tax_amount != null ? { sales_tax_amount: Number(moneySource.sales_tax_amount) } : {}),
+      ...(moneySource.grand_total != null ? { grand_total: Number(moneySource.grand_total) } : {}),
+      ...(inheritedDiscount ? { discount: inheritedDiscount } : {}),
+    };
 
     await upsertFinance({
       id: invoiceId,

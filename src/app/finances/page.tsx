@@ -70,12 +70,12 @@ type Invoice = {
   public_token?: string;
   public_link?: string;
   invoice_number?: string;
+  quote_id?: string;
   subtotal?: number;
   discount?: unknown;
   sales_tax_rate?: number;
   sales_tax_amount?: number;
   grand_total?: number;
-  tax_collected_amount?: number;
   // Newest-first activity timeline (Pass 1: storage only; nothing appends yet).
   activity_log?: InvoiceActivityEntry[];
   // Manual refund flag (v1 — no partial, no line-level). A refunded invoice collects
@@ -686,7 +686,17 @@ function FinancesContent() {
   // Read-only retro-scan: flags deposit requests left stale by a quote revision that
   // predates the supersede/void feature. Detect only — never auto-voids.
   const { data: depositRequests } = useSupabaseTable<{ id: string; lead_id?: string; quote_id?: string; status?: string; voided_at?: string; grand_total?: number | string; deposit_request_number?: string; client_payment_method_intent?: string }>("deposit_requests", []);
-  const { data: quotesForScan } = useSupabaseTable<{ id: string; grand_total?: number | string }>("quotes", []);
+  const { data: quotesForScan } = useSupabaseTable<{
+    id: string;
+    grand_total?: number | string;
+    quote_number?: string;
+    // Tax audit metadata — tax_zip_used null with a tax source present means the
+    // rate was the blind default, not address-based (see defaultRateTaxInvoices).
+    tax_rate_source?: string;
+    tax_zip_used?: string | null;
+    sales_tax_rate?: number;
+    sales_tax_amount?: number;
+  }>("quotes", []);
   // The audit's stale-deposit query, computed read-only: an unpaid, un-voided deposit
   // whose lead has repointed to a newer quote, or whose stored total no longer matches
   // the lead's current quote total.
@@ -889,6 +899,19 @@ function FinancesContent() {
   const hasTaxGap = normalizedInvoices.some(
     (inv) => (inv.deposit_paid || inv.final_paid) && !parseAmount(inv.sales_tax_amount ?? 0),
   );
+
+  // Paid invoices whose source quote computed tax WITHOUT a resolved ZIP — the rate is
+  // the blind 9.375% default, so the remit figure for these is an estimate at a guessed
+  // rate. tax_zip_used null with a tax source present is the reliable signal (both the
+  // Stripe path and the ZIP-table path set tax_zip_used when the rate is address-based).
+  // Creation now refuses no-ZIP quotes, so this flags legacy rows only.
+  const defaultRateTaxInvoices = useMemo(() => {
+    const quoteById = new Map(quotesForScan.map((q) => [q.id, q]));
+    return normalizedInvoices
+      .filter((inv) => (inv.deposit_paid || inv.final_paid) && inv.refunded !== true && inv.quote_id)
+      .map((inv) => ({ inv, quote: quoteById.get(inv.quote_id!) }))
+      .filter(({ quote }) => quote != null && quote.tax_rate_source != null && quote.tax_zip_used == null);
+  }, [normalizedInvoices, quotesForScan]);
 
   // ── Per-year / quarterly tax metrics (driven by selectedTaxYear) ─────────
   const taxCollectedForYear = useMemo(() => {
@@ -3021,7 +3044,7 @@ function FinancesContent() {
         {/* ── Needs Attention: owed quarters + tax-gap note ───────────────────────── */}
         <section className="rounded-[2rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 md:p-5">
           <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Needs Attention</h2>
-          {(taxDueForYear <= 0 && !hasTaxGap) ? (
+          {(taxDueForYear <= 0 && !hasTaxGap && defaultRateTaxInvoices.length === 0) ? (
             <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><Check className="h-3 w-3" aria-hidden="true" /></span>
               <p className="text-xs font-semibold text-emerald-800">All caught up — no sales tax owed for {selectedTaxYear}.</p>
@@ -3045,6 +3068,16 @@ function FinancesContent() {
                   <p className="text-[11px] font-medium text-amber-700">Sales tax estimate may be incomplete — some paid invoices are missing tax data.</p>
                 </div>
               )}
+              {defaultRateTaxInvoices.map(({ inv, quote }) => (
+                <div key={inv.id} className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                  <p className="text-[11px] font-medium text-amber-700">
+                    {inv.invoice_number ?? inv.id} ({invoiceClientName(inv) || "—"}) — {currency.format(parseAmount(inv.sales_tax_amount ?? 0))} tax
+                    was estimated at the default {fmtTaxRate(quote?.sales_tax_rate)} rate; no address on quote {quote?.quote_number ?? inv.quote_id}.
+                    Confirm the ship-to address before remitting.
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </section>

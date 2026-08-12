@@ -11,6 +11,7 @@ import {
   normalizeDiscount,
 } from "@/lib/salesTax";
 import { resolveSalesTax } from "@/lib/resolveSalesTax";
+import { zipFromText } from "@/lib/tax-rates";
 import { voidDepositOnRevision } from "@/lib/supersede";
 import { getQuoteBaseUrl } from "@/lib/publicUrl";
 import { findProduct } from "@/lib/products";
@@ -290,12 +291,31 @@ export async function POST(request: Request): Promise<Response> {
     }
     // Rate SOURCE only: Stripe Tax as the rate lookup, falling back to the CA ZIP table on
     // any error/timeout. HQ still bakes this rate into its own total; stored shapes unchanged.
+    // The lead's stored address backstops caller-supplied ZIPs so a repeat order works
+    // without Jarvis re-supplying the location.
+    const leadCompanyProfile = (leadData.companyProfile ?? {}) as Record<string, unknown>;
+    const leadAddressText = String(leadCompanyProfile.address ?? "");
     const taxLookup = await resolveSalesTax({
       deliveryZip: typeof deliveryZip === "string" ? deliveryZip : undefined,
       clientZip:   typeof clientZip === "string" ? clientZip : undefined,
-      clientAddressText: "",
+      clientAddressText: leadAddressText,
       taxableAmountCents: Math.round(discountedSubtotal * 100),
     });
+    // No resolved ZIP means the rate would be the blind 9.375% default — refuse to bake
+    // a guessed rate into a money document. Distinct messages: missing location (caller
+    // must supply one) vs out-of-table ZIP while Stripe is unreachable (retryable).
+    if (!taxLookup.zipUsed) {
+      const suppliedZip =
+        (typeof deliveryZip === "string" && deliveryZip) ||
+        (typeof clientZip === "string" && clientZip) ||
+        zipFromText(leadAddressText);
+      return errResponse(
+        suppliedZip
+          ? `Couldn't resolve a sales tax rate for ZIP ${suppliedZip} right now — try again in a moment.`
+          : "A ship-to ZIP code is required to compute sales tax. Provide deliveryZip or clientZip, or add an address to the lead first.",
+        400,
+      );
+    }
     const taxRate = taxLookup.rate;
     const salesTaxAmount = calcSalesTax(discountedSubtotal, taxRate);
     const grandTotal = calcGrandTotal(discountedSubtotal, taxRate);
@@ -330,6 +350,10 @@ export async function POST(request: Request): Promise<Response> {
       tax_zip_used:           taxLookup.zipUsed ?? null,
       tax_jurisdiction_label: taxLookup.jurisdictionLabel,
       tax_rate_warning:       taxLookup.warning ?? null,
+      // Audit trail: Stripe calculation id + per-jurisdiction breakdown (null on the
+      // ZIP-table path) so a rate discrepancy is answerable after the fact.
+      tax_calculation_id:     taxLookup.calculationId,
+      tax_breakdown:          taxLookup.breakdown,
       deposit_minimum:        depositMinimumFraction,
       expiration_date:        expirationDate,
       public_token:           token,  // stored but never returned to Jarvis
@@ -362,6 +386,32 @@ export async function POST(request: Request): Promise<Response> {
     const voidResult = await voidDepositOnRevision(db, leadDataForVoid.deposit_request_id as string | undefined);
     const voidedDeposit = voidResult.outcome === "voided" ? { number: voidResult.depositNumber } : null;
     const blockedDeposit = voidResult.outcome === "blocked" ? { number: voidResult.depositNumber, status: voidResult.status } : null;
+
+    // Address write-back (mirrors /api/quote/generate): persist the resolved ZIP so
+    // repeat orders reuse it. Empty-only; failures log and never block the created quote.
+    try {
+      const leadEmail = String(leadData.email ?? "");
+      if (leadEmail) {
+        const { data: cRows } = await db
+          .from("clients")
+          .select("id,data")
+          .eq("data->>email", leadEmail)
+          .limit(1);
+        const cRow = cRows?.[0];
+        const cData = cRow?.data as Record<string, unknown> | undefined;
+        if (cRow && cData && !String(cData.zip ?? "").trim()) {
+          await db.from("clients").update({ data: { ...cData, zip: taxLookup.zipUsed } }).eq("id", cRow.id);
+        }
+      }
+      if (!leadAddressText.trim()) {
+        await db
+          .from("crm_leads")
+          .update({ data: { ...leadData, companyProfile: { ...leadCompanyProfile, address: taxLookup.zipUsed } } })
+          .eq("id", resolvedLeadId);
+      }
+    } catch (writeBackErr) {
+      console.error("[ai/quote-create POST] address write-back failed:", writeBackErr);
+    }
 
     return okResponse({
       quoteId,

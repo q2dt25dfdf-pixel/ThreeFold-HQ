@@ -267,6 +267,24 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
   const [lostPickerOpen, setLostPickerOpen] = useState(false);
   const [pendingLostReason, setPendingLostReason] = useState<string>(LOST_REASONS[0]);
 
+  // Tax provenance for the lead's current quote — amber note when the stored rate
+  // carries a warning (e.g. computed at the blind default because no address existed).
+  // Keyed by quote id so a stale note from a previously viewed lead never renders
+  // (no synchronous reset needed when the lead changes).
+  const [quoteTaxNote, setQuoteTaxNote] = useState<{ quoteId: string; note: string } | null>(null);
+  useEffect(() => {
+    if (!open || !lead?.quote_id) return;
+    const quoteId = lead.quote_id;
+    let cancelled = false;
+    fetch(`/api/quote/by-id?id=${encodeURIComponent(quoteId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((q: { taxRateWarning?: string | null } | null) => {
+        if (!cancelled && q?.taxRateWarning) setQuoteTaxNote({ quoteId, note: q.taxRateWarning });
+      })
+      .catch(() => { /* provenance note is best-effort; never blocks the modal */ });
+    return () => { cancelled = true; };
+  }, [open, lead?.quote_id]);
+
   useEffect(() => {
     setData(null);
     setLogDate(businessTodayISO());
@@ -650,6 +668,16 @@ export default function LeadDetailModal({ open, lead, onClose, onSave, onDelete,
               <p className="mt-0.5 text-xs opacity-80">
                 {duplicateMatch.clientName} is already in your client list. Review before approving.
               </p>
+            </div>
+          </div>
+        )}
+
+        {quoteTaxNote && quoteTaxNote.quoteId === current.quote_id && (
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">Sales tax note on this lead&apos;s quote</p>
+              <p className="mt-0.5 text-xs opacity-80">{quoteTaxNote.note}</p>
             </div>
           </div>
         )}
