@@ -7,6 +7,7 @@ import { stringField, statusText } from "@/lib/recordUtils";
 import { parseAmount, calcBalance, calcCollected, calcTotal } from "@/lib/invoiceCalc";
 import { calcDepositTax } from "@/lib/salesTax";
 import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
+import { fetchStripeFees } from "@/lib/financesStripe";
 import type { DashboardRecord } from "@/lib/dashboardMetrics";
 
 export const dynamic = "force-dynamic";
@@ -84,12 +85,15 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const db = getSupabaseAdmin();
-    const [invoices, expenses, taxPayments, orders, shopOrders] = await Promise.all([
+    const [invoices, expenses, taxPayments, orders, shopOrders, stripeFees] = await Promise.all([
       fetchTable(db, "finances"),
       fetchTable(db, "expenses"),
       fetchTable(db, "sales_tax_payments"),
       fetchTable(db, "orders"),
       fetchTable(db, "shop_orders"),
+      // Degrades to zeros + available:false without STRIPE_RESTRICTED_KEY (local dev) —
+      // matching the page, which drops the fee term in the same situation.
+      fetchStripeFees().catch(() => ({ processingFees: 0, stripeFees: 0, total: 0, available: false })),
     ]);
 
     const todayISO    = businessTodayISO();
@@ -250,11 +254,13 @@ export async function GET(request: Request): Promise<Response> {
       }, 0);
 
     // Total revenue and net position mirror the Finances page exactly: revenue is
-    // custom + shop (net of tax); net position further deducts paid expenses and the
-    // custom sales tax held for CDTFA. Jarvis must quote the same numbers the page shows.
+    // custom + shop (net of tax); net position further deducts paid expenses, Stripe
+    // fees (when available), and the custom sales tax held for CDTFA. Jarvis must
+    // quote the same numbers the page shows.
+    const stripeFeesDollars = stripeFees.available ? stripeFees.total / 100 : 0;
     const totalRevenueCollected = revenueCollected + shopRevenueNet;
     const grossProfit  = totalRevenueCollected - paidVendorCosts;
-    const netPosition  = totalRevenueCollected - paidVendorCosts - paidExpenseTotal - customTaxHeldAllYears;
+    const netPosition  = totalRevenueCollected - paidVendorCosts - paidExpenseTotal - stripeFeesDollars - customTaxHeldAllYears;
 
     return okResponse({
       invoices: {
@@ -302,6 +308,8 @@ export async function GET(request: Request): Promise<Response> {
         netPosition:       Math.round(netPosition        * 100) / 100,
         taxDue:            Math.round(taxDue             * 100) / 100,
         customTaxHeldAllYears: Math.round(customTaxHeldAllYears * 100) / 100,
+        stripeFees:        Math.round(stripeFeesDollars * 100) / 100,
+        stripeFeesAvailable: stripeFees.available,
       },
     });
   } catch (err) {

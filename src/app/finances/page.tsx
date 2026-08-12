@@ -783,6 +783,25 @@ function FinancesContent() {
   }, []);
   const shopAgg = useMemo(() => aggregateShopFinances(shopRows, currentYear), [shopRows, currentYear]);
 
+  // ── Stripe fees slice ─────────────────────────────────────────────────────────
+  // Same pattern as the shop slice: server route (session-gated) fetched once on
+  // mount, never blocks the page. available:false (no STRIPE_RESTRICTED_KEY, e.g.
+  // local dev) hides the fee row and leaves net position without the fee term.
+  const [stripeFees, setStripeFees] = useState<{ processingFees: number; stripeFees: number; total: number; available: boolean }>(
+    { processingFees: 0, stripeFees: 0, total: 0, available: false },
+  );
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const res = await fetch("/api/finances/stripe-fees", {
+          headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+        });
+        if (res.ok) { const d = await res.json(); if (d && typeof d.total === "number") setStripeFees(d); }
+      } catch { /* fees stay unavailable on failure — never blocks the page */ }
+    })();
+  }, []);
+
   const updateTab = (next: FinanceTab) => {
     setActiveTab(next);
     const p = new URLSearchParams(searchParams.toString());
@@ -1045,9 +1064,11 @@ function FinancesContent() {
     .filter((e) => e.payment_status !== "paid")
     .reduce((sum, e) => sum + Math.round(expenseGeneralCents(e)) / 100, 0);
   // Net Position = what's actually the business's after paid vendor costs, paid expenses,
-  // and the custom-invoice sales tax being held for CDTFA (not our money). Shop tax needs
-  // no deduction here — shop revenue is already net of tax.
-  const netPosition = revenueCollected - paidVendorCosts - paidExpenses - customTaxHeldAllYears;
+  // Stripe fees (money that never arrived), and the custom-invoice sales tax being held
+  // for CDTFA (not our money). Shop tax needs no deduction — shop revenue is already net
+  // of tax. The fee term drops out entirely when the restricted key is unavailable.
+  const stripeFeesDollars = stripeFees.available ? stripeFees.total / 100 : 0;
+  const netPosition = revenueCollected - paidVendorCosts - paidExpenses - stripeFeesDollars - customTaxHeldAllYears;
 
   const visibleExpenses = expenses
     .filter((e) => {
@@ -2410,7 +2431,7 @@ function FinancesContent() {
           <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${netPosition < 0 ? "text-rose-600" : "text-slate-900"}`}>
             {currencyCents.format(netPosition)}
           </p>
-          <p className="mt-1.5 text-[11px] text-slate-500">Revenue collected − paid costs & expenses − sales tax held for CDTFA</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">Revenue collected − paid costs & expenses{stripeFees.available ? " − Stripe fees" : ""} − sales tax held for CDTFA</p>
           <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${netPosition < 0 ? "bg-rose-100 text-rose-700" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
             {netPosition < 0 ? "In the red — startup costs" : "On track"}
           </span>
@@ -2524,6 +2545,15 @@ function FinancesContent() {
                 <dt className="text-xs text-slate-600">Business expenses paid</dt>
                 <dd className="text-sm font-semibold text-rose-500">−{currencyCents.format(paidExpenses)}</dd>
               </div>
+              {stripeFees.available && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-xs text-slate-600">
+                    Stripe fees
+                    <span className="block text-[10px] text-slate-400">processing + Stripe billing</span>
+                  </dt>
+                  <dd className="text-sm font-semibold text-rose-500">−{currencyCents.format(stripeFeesDollars)}</dd>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">
                   Sales tax held for CDTFA
