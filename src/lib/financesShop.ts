@@ -51,6 +51,24 @@ function monthIndex(iso: string | null | undefined): number {
   return Number.isNaN(m) ? -1 : m;
 }
 
+/** Shop tax collected per quarter (index 0–3, Q1–Q4) for orders created in `year`.
+ *  Same refund guard and created_at attribution as taxCollectedYTD, so the four
+ *  quarters sum exactly to that figure. Month is sliced from the ISO string (not
+ *  Date-parsed) to match the startsWith(year) string semantics used above. */
+export function shopTaxByQuarter(rows: ShopFinanceRow[], year: string): [number, number, number, number] {
+  const quarters: [number, number, number, number] = [0, 0, 0, 0];
+  for (const r of rows) {
+    if (isRefunded(r)) continue;
+    const tax = num(r.tax_amount);
+    const iso = String(r.created_at ?? "");
+    if (tax <= 0 || !iso.startsWith(year)) continue;
+    const m = parseInt(iso.slice(5, 7), 10);
+    if (!Number.isFinite(m) || m < 1 || m > 12) continue;
+    quarters[Math.floor((m - 1) / 3)] += tax;
+  }
+  return quarters;
+}
+
 export function aggregateShopFinances(rows: ShopFinanceRow[], year: string): ShopFinanceSummary {
   const byMonth = Array<number>(12).fill(0);
   let netRevenueAll = 0;
