@@ -32,3 +32,16 @@ webhook — when `payment_intent.succeeded` fires, read the PI's `latest_charge`
 `balance_transaction.fee` and store `fee_cents` on the `shop_orders` row (cheap then, one extra
 Stripe call). File: `~/threefold-website/functions/api/stripe-webhook.js` (`buildOrderRow`). Then
 `financesShop.aggregateShopFinances` can subtract fees for a net-of-fees revenue view.
+
+## Shop orders — unify money units on the row (dollars vs cents)
+
+**Why:** `shop_orders.data` mixes conventions on the same row: `amount` and `tax_amount` are
+**dollars-float** while `shipping_cents` is **integer cents**. Everything downstream currently
+reads the right unit, but a mixed-convention row is the kind of foot-gun that produces a 100×
+error the first time someone reads the wrong field. Flagged during the Finances precision sweep
+(Aug 2026); display fix shipped separately — no data change was made.
+
+**How to apply:** Pick cents (matches `expenses.amount_cents` / `orders.vendor_cost_cents`),
+write `amount_cents` + `tax_amount_cents` from the website webhook, backfill the existing rows
+in one migration script, then update `financesShop.ts` readers. Keep the legacy dollar fields
+until the backfill is verified.

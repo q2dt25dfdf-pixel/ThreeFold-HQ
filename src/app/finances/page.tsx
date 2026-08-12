@@ -1409,7 +1409,7 @@ function FinancesContent() {
           id: `act-${Date.now()}-payment`,
           type: "payment",
           title: "Payment received",
-          detail: `${currency.format(fullAmt)}${method ? ` by ${method}` : ""} · paid in full`,
+          detail: `${currencyCents.format(fullAmt)}${method ? ` by ${method}` : ""} · paid in full`,
           at: new Date().toISOString(),
         });
       }
@@ -1421,7 +1421,7 @@ function FinancesContent() {
           id: `act-${Date.now()}-payment`,
           type: "payment",
           title: "Deposit received",
-          detail: `${currency.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`,
+          detail: `${currencyCents.format(parseAmount(linkedInvoice.deposit_amount))}${method ? ` by ${method}` : ""}${statusChanged ? ` · status → ${linkedInvoice.status}` : ""}`,
           at: new Date().toISOString(),
         });
       }
@@ -1433,7 +1433,7 @@ function FinancesContent() {
           id: `act-${Date.now()}-payment-final`,
           type: "payment",
           title: "Final payment received",
-          detail: `${currency.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`,
+          detail: `${currencyCents.format(owed)}${method ? ` by ${method}` : ""} · balance cleared`,
           at: new Date().toISOString(),
         });
       }
@@ -1792,15 +1792,15 @@ function FinancesContent() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:gap-3">
             <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 md:p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Order total</p>
-              <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currency.format(calcTotal(data))}</p>
+              <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currencyCents.format(calcTotal(data))}</p>
             </div>
             <div className="rounded-2xl bg-emerald-50 p-3 ring-1 ring-emerald-100 md:p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Collected</p>
-              <p className="mt-1 text-sm font-bold text-emerald-700 md:text-lg">{currency.format(invoiceCollected(data))}</p>
+              <p className="mt-1 text-sm font-bold text-emerald-700 md:text-lg">{currencyCents.format(invoiceCollected(data))}</p>
             </div>
             <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 md:p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Balance</p>
-              <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currency.format(invoiceBalance(data))}</p>
+              <p className="mt-1 text-sm font-bold text-slate-950 md:text-lg">{currencyCents.format(invoiceBalance(data))}</p>
             </div>
           </div>
 
@@ -1853,7 +1853,7 @@ function FinancesContent() {
               </div>
               {!data.final_paid && (
                 <p className="mb-3 text-[11px] text-slate-500">
-                  {finalSent ? `${currency.format(invoiceBalance(data))} owed` : `${currency.format(invoiceBalance(data))} · not owed until sent`}
+                  {finalSent ? `${currencyCents.format(invoiceBalance(data))} owed` : `${currencyCents.format(invoiceBalance(data))} · not owed until sent`}
                 </p>
               )}
               <div className="space-y-3">
@@ -2385,7 +2385,7 @@ function FinancesContent() {
         <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${netPosition < 0 ? "bg-rose-50 ring-1 ring-rose-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Net Position</p>
           <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${netPosition < 0 ? "text-rose-600" : "text-slate-900"}`}>
-            {currency.format(netPosition)}
+            {currencyCents.format(netPosition)}
           </p>
           <p className="mt-1.5 text-[11px] text-slate-500">Revenue collected − all paid costs & expenses</p>
           <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${netPosition < 0 ? "bg-rose-100 text-rose-700" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
@@ -2395,10 +2395,10 @@ function FinancesContent() {
         {/* Collected */}
         <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Collected</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(revenueCollected)}</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currencyCents.format(revenueCollected)}</p>
           <p className="mt-1.5 text-[11px] text-slate-500">of {currency.format(goal)} goal · {goalPercent}%</p>
           <p className="mt-1 text-[11px] text-slate-400">
-            Custom {currency.format(customRevenueCollected)} · Shop {currency.format(shopRevenueNet)}
+            Custom {currencyCents.format(customRevenueCollected)} · Shop {currencyCents.format(shopRevenueNet)}
             <span className="text-slate-300"> (net of tax)</span>
           </p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -2408,7 +2408,7 @@ function FinancesContent() {
         {/* Outstanding */}
         <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Outstanding</p>
-          <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</p>
+          <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currencyCents.format(outstandingBalance)}</p>
           <p className="mt-1.5 text-[11px] text-slate-500">across {openInvoiceCount} open invoice{openInvoiceCount !== 1 ? "s" : ""}</p>
           {overdueCount > 0 && (
             <span className="mt-3 inline-block rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold text-rose-700">{overdueCount} overdue</span>
@@ -2436,8 +2436,8 @@ function FinancesContent() {
                     <p className="truncate text-[10px] text-slate-400">
                       {invoiceClientName(inv) ? `${invoiceClientName(inv)} · ` : ""}
                       {owedNow
-                        ? `balance ${currency.format(invoiceBalance(inv))}${overdue ? " · overdue" : ""}`
-                        : `${currency.format(invoiceBalance(inv))} · Upcoming · not owed yet`}
+                        ? `balance ${currencyCents.format(invoiceBalance(inv))}${overdue ? " · overdue" : ""}`
+                        : `${currencyCents.format(invoiceBalance(inv))} · Upcoming · not owed yet`}
                     </p>
                   </div>
                   {owedNow ? (
@@ -2467,7 +2467,7 @@ function FinancesContent() {
               <div key={e.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-slate-900">Reimburse {e.vendor_name || e.category || "expense"}</p>
-                  <p className="truncate text-[10px] text-slate-400">{currency.format((e.amount_cents ?? 0) / 100)}{e.paid_by ? ` · paid by ${e.paid_by}` : ""}</p>
+                  <p className="truncate text-[10px] text-slate-400">{currencyCents.format((e.amount_cents ?? 0) / 100)}{e.paid_by ? ` · paid by ${e.paid_by}` : ""}</p>
                 </div>
                 <button type="button" onClick={() => openEditExpenseModal(e)} className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50">
                   Mark reimbursed
@@ -2487,23 +2487,23 @@ function FinancesContent() {
             <dl className="space-y-2.5">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Custom revenue collected</dt>
-                <dd className="text-sm font-semibold text-emerald-600">{currency.format(customRevenueCollected)}</dd>
+                <dd className="text-sm font-semibold text-emerald-600">{currencyCents.format(customRevenueCollected)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Shop revenue <span className="text-slate-400">(net of tax)</span></dt>
-                <dd className="text-sm font-semibold text-emerald-600">{currency.format(shopRevenueNet)}</dd>
+                <dd className="text-sm font-semibold text-emerald-600">{currencyCents.format(shopRevenueNet)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Production costs paid</dt>
-                <dd className="text-sm font-semibold text-rose-500">−{currency.format(paidVendorCosts)}</dd>
+                <dd className="text-sm font-semibold text-rose-500">−{currencyCents.format(paidVendorCosts)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Business expenses paid</dt>
-                <dd className="text-sm font-semibold text-rose-500">−{currency.format(paidExpenses)}</dd>
+                <dd className="text-sm font-semibold text-rose-500">−{currencyCents.format(paidExpenses)}</dd>
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
                 <dt className="text-xs font-semibold text-slate-800">Net position</dt>
-                <dd className={`text-base font-bold ${netPosition < 0 ? "text-rose-600" : "text-slate-900"}`}>{currency.format(netPosition)}</dd>
+                <dd className={`text-base font-bold ${netPosition < 0 ? "text-rose-600" : "text-slate-900"}`}>{currencyCents.format(netPosition)}</dd>
               </div>
             </dl>
           </div>
@@ -2513,7 +2513,7 @@ function FinancesContent() {
             <dl className="space-y-2.5">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Outstanding invoices</dt>
-                <dd className={`text-sm font-semibold ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(outstandingBalance)}</dd>
+                <dd className={`text-sm font-semibold ${outstandingBalance > 0 ? "text-amber-600" : "text-slate-400"}`}>{currencyCents.format(outstandingBalance)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">
@@ -2526,11 +2526,11 @@ function FinancesContent() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Reimbursements owed</dt>
-                <dd className={`text-sm font-semibold ${reimbursementsOwed > 0 ? "text-amber-600" : "text-slate-400"}`}>{currency.format(reimbursementsOwed)}</dd>
+                <dd className={`text-sm font-semibold ${reimbursementsOwed > 0 ? "text-amber-600" : "text-slate-400"}`}>{currencyCents.format(reimbursementsOwed)}</dd>
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
                 <dt className="text-xs font-semibold text-slate-800">Est. gross profit</dt>
-                <dd className={`text-base font-bold ${estimatedGrossProfit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{currency.format(estimatedGrossProfit)}</dd>
+                <dd className={`text-base font-bold ${estimatedGrossProfit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{currencyCents.format(estimatedGrossProfit)}</dd>
               </div>
             </dl>
           </div>
@@ -2564,7 +2564,7 @@ function FinancesContent() {
               </defs>
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(value) => `$${Number(value) / 1000}k`} width={44} />
-              <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} contentStyle={{ borderRadius: 16, borderColor: "#e2e8f0" }} />
+              <Tooltip formatter={(value) => currencyCents.format(Number(value ?? 0))} contentStyle={{ borderRadius: 16, borderColor: "#e2e8f0" }} />
               <Area type="monotone" dataKey="collected" name="Custom collected" stroke="#10b981" strokeWidth={3} fill="url(#collectedFill)" dot={false} activeDot={false} />
               <Area type="monotone" dataKey="shop" name="Shop (net of tax)" stroke="#6366f1" strokeWidth={3} fill="url(#shopFill)" dot={false} activeDot={false} />
               <Area type="monotone" dataKey="outstanding" name="Outstanding" stroke="#f59e0b" strokeWidth={3} fill="url(#outstandingFill)" dot={false} activeDot={false} />
@@ -2578,7 +2578,7 @@ function FinancesContent() {
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Revenue Goal</h2>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(revenueCollected)}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currencyCents.format(revenueCollected)}</p>
           </div>
           <p className="text-xs text-slate-500">{goalPercent}% of {currency.format(goal)}</p>
         </div>
@@ -2608,7 +2608,7 @@ function FinancesContent() {
         <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
           <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${reimbursementsOwed > 0 ? "bg-amber-50 ring-1 ring-amber-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Reimbursements Owed</p>
-            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${reimbursementsOwed > 0 ? "text-amber-700" : "text-slate-900"}`}>{currency.format(reimbursementsOwed)}</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${reimbursementsOwed > 0 ? "text-amber-700" : "text-slate-900"}`}>{currencyCents.format(reimbursementsOwed)}</p>
             <p className="mt-1.5 text-[11px] text-slate-500">owed back to whoever fronted the money</p>
             {reimbursementExpenses.length > 0 && (
               <span className="mt-3 inline-block rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">{reimbursementExpenses.length} to reimburse</span>
@@ -2616,12 +2616,12 @@ function FinancesContent() {
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total Spent</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(paidExpenses + unpaidExpenses)}</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currencyCents.format(paidExpenses + unpaidExpenses)}</p>
             <p className="mt-1.5 text-[11px] text-slate-500">across all expenses</p>
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Unpaid</p>
-            <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${unpaidExpenses > 0 ? "text-rose-600" : "text-slate-400"}`}>{currency.format(unpaidExpenses)}</p>
+            <p className={`mt-2 text-2xl font-bold tracking-tight md:text-3xl ${unpaidExpenses > 0 ? "text-rose-600" : "text-slate-400"}`}>{currencyCents.format(unpaidExpenses)}</p>
             <p className="mt-1.5 text-[11px] text-slate-500">{unpaidExpenses > 0 ? "still to pay" : "all paid"}</p>
           </div>
         </section>
@@ -2639,7 +2639,7 @@ function FinancesContent() {
               {owedByPerson.map(({ person, amount, count, firstOwed }) => (
                 <div key={person} className={`rounded-2xl p-3 ring-1 ${amount > 0 ? "bg-amber-50/70 ring-amber-100" : "bg-slate-50 ring-slate-100"}`}>
                   <p className={`text-xs font-semibold ${amount > 0 ? "text-slate-800" : "text-slate-400"}`}>{person}</p>
-                  <p className={`mt-1 text-lg font-bold ${amount > 0 ? "text-amber-700" : "text-slate-300"}`}>{currency.format(amount)}</p>
+                  <p className={`mt-1 text-lg font-bold ${amount > 0 ? "text-amber-700" : "text-slate-300"}`}>{currencyCents.format(amount)}</p>
                   <p className="mt-0.5 text-[10px] text-slate-400">{count} expense{count !== 1 ? "s" : ""}</p>
                   {amount > 0 && firstOwed && (
                     <button
@@ -2749,11 +2749,11 @@ function FinancesContent() {
                       )}
                     </div>
                     <p className="mt-1 text-sm font-semibold text-slate-900">{expense.vendor_name || "—"}</p>
-                    <p className="mt-0.5 text-base font-bold text-slate-950">{currency.format((expense.amount_cents ?? 0) / 100)}</p>
+                    <p className="mt-0.5 text-base font-bold text-slate-950">{currencyCents.format((expense.amount_cents ?? 0) / 100)}</p>
                     {expense.allocations && expense.allocations.length > 0 && (
                       <p className="mt-0.5 text-[10px] text-slate-500">
                         {expense.allocations.map((a, i) => (
-                          <span key={i}>{i > 0 ? " · " : ""}{currency.format((a.amount_cents ?? 0) / 100)} {a.destination.type === "order" ? (a.destination.order_name || "order") : "general"}</span>
+                          <span key={i}>{i > 0 ? " · " : ""}{currencyCents.format((a.amount_cents ?? 0) / 100)} {a.destination.type === "order" ? (a.destination.order_name || "order") : "general"}</span>
                         ))}
                       </p>
                     )}
@@ -2798,15 +2798,15 @@ function FinancesContent() {
         <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
           <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${anyInvoiceOverdue ? "bg-rose-50 ring-1 ring-rose-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Outstanding</p>
-            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${anyInvoiceOverdue ? "text-rose-600" : "text-slate-900"}`}>{currency.format(outstandingBalance)}</p>
-            <p className="mt-1.5 text-[11px] text-slate-500">of {currency.format(totalInvoiceValue)} invoiced</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${anyInvoiceOverdue ? "text-rose-600" : "text-slate-900"}`}>{currencyCents.format(outstandingBalance)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">of {currencyCents.format(totalInvoiceValue)} invoiced</p>
             {anyInvoiceOverdue && (
               <span className="mt-3 inline-block rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold text-rose-700">{overdueDisplayCount} overdue</span>
             )}
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Collected</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currency.format(revenueCollected)}</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">{currencyCents.format(revenueCollected)}</p>
             <p className="mt-1.5 text-[11px] text-slate-500">received to date</p>
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
@@ -3492,8 +3492,8 @@ function FinancesContent() {
                       + Add allocation
                     </button>
                     <span className={`text-[11px] font-semibold ${allocSumOk ? "text-emerald-600" : "text-rose-600"}`}>
-                      Allocated {currency.format(allocSumCents / 100)} of {currency.format(expenseAmountCents / 100)}
-                      {allocSumOk ? " ✓" : ` · ${currency.format((expenseAmountCents - allocSumCents) / 100)} left`}
+                      Allocated {currencyCents.format(allocSumCents / 100)} of {currencyCents.format(expenseAmountCents / 100)}
+                      {allocSumOk ? " ✓" : ` · ${currencyCents.format((expenseAmountCents - allocSumCents) / 100)} left`}
                     </span>
                   </div>
                 </div>
