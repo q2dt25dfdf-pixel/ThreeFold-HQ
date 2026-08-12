@@ -22,7 +22,7 @@ import { appendInvoiceActivityRpc, deleteInvoiceActivityRpc, editInvoiceActivity
 import { supabase } from "@/lib/supabase";
 import { EXPENSE_CATEGORIES, expenseCategoryBadgeClass } from "@/lib/expenseCategories";
 import { expenseGeneralCents, type ExpenseAllocation } from "@/lib/expenseAllocations";
-import { aggregateShopFinances, type ShopFinanceRow } from "@/lib/financesShop";
+import { aggregateShopFinances, shopTaxByQuarter, type ShopFinanceRow } from "@/lib/financesShop";
 import { estDeliverySuggestionUpdate, orderEstDeliveryDate } from "@/lib/estDelivery";
 import {
   Area,
@@ -273,6 +273,9 @@ const statusPalette: Record<InvoiceStatus, string> = {
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+// Tax figures are filed to the cent — never round them to whole dollars. Revenue and
+// expense figures deliberately keep the whole-dollar formatter above.
+const currencyCents = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function currencyInputValue(amount: unknown) {
   return parseAmount(amount).toLocaleString("en-US", {
@@ -940,7 +943,13 @@ function FinancesContent() {
       .reduce((sum, p) => sum + taxPaymentDollars(p), 0);
   }, [taxPayments, selectedTaxYear]);
 
-  const taxDueForYear = Math.max(taxCollectedForYear - taxPaidForYear, 0);
+  // True total collected for the selected year — custom (paid-date attribution) plus
+  // shop (order created_at attribution); both are the correct filing basis for their
+  // type. This is the number filed on, so Collected and Tax Owed both use it (matching
+  // the Overview remit total, which has always included shop tax).
+  const taxCollectedTotalForYear = taxCollectedForYear + shopTaxForSelectedYear;
+
+  const taxDueForYear = Math.max(taxCollectedTotalForYear - taxPaidForYear, 0);
 
   const quarterlyTax = useMemo(() => {
     const quarters = [1, 2, 3, 4].map((q) => ({
@@ -979,8 +988,14 @@ function FinancesContent() {
       if (q) quarters[q - 1].paid += taxPaymentDollars(p);
     });
 
+    // Fold shop tax in per quarter (order created_at attribution, refund-guarded) so
+    // the four quarters sum exactly to the Collected headline.
+    shopTaxByQuarter(shopRows, selectedTaxYear).forEach((tax, i) => {
+      quarters[i].collected += tax;
+    });
+
     return quarters;
-  }, [normalizedInvoices, taxPayments, selectedTaxYear]);
+  }, [normalizedInvoices, taxPayments, shopRows, selectedTaxYear]);
 
   const taxYearOptions = useMemo(() => {
     const years = new Set<string>([currentYear]);
@@ -2441,7 +2456,7 @@ function FinancesContent() {
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-rose-50 px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-slate-900">Sales tax owed</p>
-                  <p className="truncate text-[10px] text-slate-400">{currency.format(taxDue)} collected but not yet remitted</p>
+                  <p className="truncate text-[10px] text-slate-400">{currencyCents.format(taxDue)} collected but not yet remitted</p>
                 </div>
                 <button type="button" onClick={openAddTaxModal} className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50">
                   Record payment
@@ -2504,10 +2519,10 @@ function FinancesContent() {
                 <dt className="text-xs text-slate-600">
                   Sales tax to remit
                   {shopTaxCollectedYTD > 0 && (
-                    <span className="block text-[10px] text-slate-400">incl. {currency.format(shopTaxCollectedYTD)} shop tax</span>
+                    <span className="block text-[10px] text-slate-400">incl. {currencyCents.format(shopTaxCollectedYTD)} shop tax</span>
                   )}
                 </dt>
-                <dd className={`text-sm font-semibold ${taxDue > 0 ? "text-rose-600" : "text-slate-400"}`}>{currency.format(taxDue)}</dd>
+                <dd className={`text-sm font-semibold ${taxDue > 0 ? "text-rose-600" : "text-slate-400"}`}>{currencyCents.format(taxDue)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-xs text-slate-600">Reimbursements owed</dt>
@@ -3020,7 +3035,7 @@ function FinancesContent() {
         <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr_1fr]">
           <div className={`rounded-[2rem] p-5 shadow-sm md:p-6 ${taxDueForYear > 0 ? "bg-rose-50 ring-1 ring-rose-100" : "bg-slate-50 ring-1 ring-slate-100"}`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Tax Owed</p>
-            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${taxDueForYear > 0 ? "text-rose-600" : "text-slate-900"}`}>{currency.format(taxDueForYear)}</p>
+            <p className={`mt-2 text-3xl font-bold tracking-tight md:text-4xl ${taxDueForYear > 0 ? "text-rose-600" : "text-slate-900"}`}>{currencyCents.format(taxDueForYear)}</p>
             <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear} · collected − remitted</p>
             <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold ${owedTaxQuarters.length > 0 ? "bg-rose-100 text-rose-700" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
               {owedTaxQuarters.length > 0 ? `${owedTaxQuarters.map((qt) => qt.label).join(", ")} owed` : "all settled"}
@@ -3028,15 +3043,14 @@ function FinancesContent() {
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Collected</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 md:text-3xl">{currency.format(taxCollectedForYear)}</p>
-            <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear} · custom invoices</p>
-            {shopTaxForSelectedYear > 0 && (
-              <p className="mt-1 text-[10px] text-slate-400">+ {currency.format(shopTaxForSelectedYear)} shop tax — in the Overview remit total, not itemized by quarter here.</p>
-            )}
+            <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 md:text-3xl">{currencyCents.format(taxCollectedTotalForYear)}</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              {selectedTaxYear} · Custom {currencyCents.format(taxCollectedForYear)} · Shop {currencyCents.format(shopTaxForSelectedYear)}
+            </p>
           </div>
           <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-100 md:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Remitted</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-blue-700 md:text-3xl">{currency.format(taxPaidForYear)}</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-blue-700 md:text-3xl">{currencyCents.format(taxPaidForYear)}</p>
             <p className="mt-1.5 text-[11px] text-slate-500">{selectedTaxYear}</p>
           </div>
         </section>
@@ -3055,7 +3069,7 @@ function FinancesContent() {
                 <div key={qt.q} className="flex items-center justify-between gap-3 rounded-2xl bg-rose-50 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-semibold text-slate-900">{qt.label} {selectedTaxYear} · {qt.months}</p>
-                    <p className="truncate text-[10px] text-slate-400">owed {currency.format(Math.max(qt.collected - qt.paid, 0))} · collected {currency.format(qt.collected)}, remitted {currency.format(qt.paid)}</p>
+                    <p className="truncate text-[10px] text-slate-400">owed {currencyCents.format(Math.max(qt.collected - qt.paid, 0))} · collected {currencyCents.format(qt.collected)}, remitted {currencyCents.format(qt.paid)}</p>
                   </div>
                   <button type="button" onClick={openAddTaxModal} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700">
                     Record payment
@@ -3072,7 +3086,7 @@ function FinancesContent() {
                 <div key={inv.id} className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
                   <p className="text-[11px] font-medium text-amber-700">
-                    {inv.invoice_number ?? inv.id} ({invoiceClientName(inv) || "—"}) — {currency.format(parseAmount(inv.sales_tax_amount ?? 0))} tax
+                    {inv.invoice_number ?? inv.id} ({invoiceClientName(inv) || "—"}) — {currencyCents.format(parseAmount(inv.sales_tax_amount ?? 0))} tax
                     was estimated at the default {fmtTaxRate(quote?.sales_tax_rate)} rate; no address on quote {quote?.quote_number ?? inv.quote_id}.
                     Confirm the ship-to address before remitting.
                   </p>
@@ -3102,17 +3116,17 @@ function FinancesContent() {
                     </div>
                   </div>
                   <p className="mt-1.5 text-[10px] text-slate-400">{qt.months}</p>
-                  <p className="mt-2 text-sm font-bold text-slate-950">{currency.format(qt.collected)}</p>
+                  <p className="mt-2 text-sm font-bold text-slate-950">{currencyCents.format(qt.collected)}</p>
                   <p className="text-[10px] text-slate-500">collected</p>
                   {qt.paid > 0 && (
                     <>
-                      <p className="mt-1 text-sm font-semibold text-blue-700">{currency.format(qt.paid)}</p>
+                      <p className="mt-1 text-sm font-semibold text-blue-700">{currencyCents.format(qt.paid)}</p>
                       <p className="text-[10px] text-slate-500">remitted</p>
                     </>
                   )}
                   {due > 0 && (
                     <>
-                      <p className="mt-1 text-sm font-semibold text-rose-700">{currency.format(due)}</p>
+                      <p className="mt-1 text-sm font-semibold text-rose-700">{currencyCents.format(due)}</p>
                       <p className="text-[10px] text-slate-500">owed</p>
                     </>
                   )}
@@ -3149,7 +3163,7 @@ function FinancesContent() {
                       {p.notes && <p className="mt-0.5 truncate text-[10px] text-slate-400">{p.notes}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="font-semibold text-slate-950">{currency.format(taxPaymentDollars(p))}</span>
+                      <span className="font-semibold text-slate-950">{currencyCents.format(taxPaymentDollars(p))}</span>
                       <button
                         type="button"
                         onClick={() => openEditTaxModal(p)}
