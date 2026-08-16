@@ -57,6 +57,11 @@ export type ShopOrderData = {
   // EasyPost label_url dies after ~180 days, label_path is our permanent copy in
   // the private shipping-labels bucket. tracking (above) gets tracking_code so the
   // E2 email needs no changes.
+  // Written by the WEBSITE webhook when the customer chose a live USPS rate at
+  // checkout (PaymentIntent metadata ship_shipment_id/ship_rate_id/ship_service).
+  // Checkout rates are long expired by label time, so the label flow matches on
+  // SERVICE NAME, never rate_id; ids are kept for audit.
+  easypost_quote?: { shipment_id?: string; rate_id?: string; service?: string };
   easypost?: {
     shipment_id: string;
     status: "quoted" | "purchasing" | "purchased";
