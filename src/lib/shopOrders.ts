@@ -50,6 +50,27 @@ export type ShopOrderData = {
   // (units added back to inventory) via the one-click restock. Idempotency marker.
   restocked_at?: string;
   status?: string;
+  // EasyPost label state (label routes under /api/shop-orders/[id]/label/*).
+  // status choreography: "quoted" (shipment created, no money spent) →
+  // "purchasing" (pre-write BEFORE the buy call — the recovery pointer that makes
+  // double-purchase impossible) → "purchased". postage_cents is an integer; the
+  // EasyPost label_url dies after ~180 days, label_path is our permanent copy in
+  // the private shipping-labels bucket. tracking (above) gets tracking_code so the
+  // E2 email needs no changes.
+  easypost?: {
+    shipment_id: string;
+    status: "quoted" | "purchasing" | "purchased";
+    rate_id?: string;
+    carrier?: string;
+    service?: string;
+    postage_cents?: number;
+    tracking_code?: string;
+    label_url?: string;
+    label_path?: string | null;
+    purchased_at?: string;
+    refund_status?: string | null;
+    refund_requested_at?: string;
+  };
 };
 
 export function money(dollars: number | null | undefined): string {

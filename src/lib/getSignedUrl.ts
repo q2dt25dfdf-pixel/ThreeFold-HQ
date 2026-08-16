@@ -8,6 +8,9 @@ const DESIGNS_BUCKET = "order-designs";
 // (whose URLs reach the client portal) and intake-files (client questionnaire uploads),
 // so receipts can never be surfaced through any client route.
 const RECEIPTS_BUCKET = "order-receipts";
+// Private, HQ-only, same posture as order-receipts. Shipping-label PDFs bought via
+// EasyPost — our permanent copy (EasyPost deletes its label_url after ~180 days).
+const LABELS_BUCKET = "shipping-labels";
 
 async function _getSignedUrl(
   bucket: string,
@@ -100,4 +103,15 @@ export async function getReceiptSignedUrls(
   expiresInSeconds = 3600,
 ): Promise<Record<string, string>> {
   return _getSignedUrls(RECEIPTS_BUCKET, paths, expiresInSeconds, getSupabaseAdmin());
+}
+
+// ── shipping-labels (private, HQ-only) ────────────────────────────────────────
+
+// Service-role only, like receipts — no anon policy exists on the bucket. Callers
+// are the auth-gated label routes under /api/shop-orders/[id]/label/*.
+export async function getLabelSignedUrl(
+  path: string,
+  expiresInSeconds = 3600,
+): Promise<string | null> {
+  return _getSignedUrl(LABELS_BUCKET, path, expiresInSeconds, getSupabaseAdmin());
 }

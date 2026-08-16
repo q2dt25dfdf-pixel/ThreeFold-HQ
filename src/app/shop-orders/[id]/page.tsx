@@ -8,6 +8,7 @@ import {
   money, resolveLineItems, thumbAbbrev, orderTotals, stripePaymentUrl, truncatePi,
   type ShopOrderData,
 } from "@/lib/shopOrders";
+import type { QuotedRate } from "@/lib/easypost";
 
 async function authHeaders() {
   const { data } = await supabase.auth.getSession();
@@ -34,13 +35,17 @@ export default function ShopOrderDetail() {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tracking, setTracking] = useState("");
+  const [epConfigured, setEpConfigured] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/shop-orders/${id}`, { headers: await authHeaders() });
       const d = await res.json();
-      if (res.ok) setData(d.data as ShopOrderData);
+      if (res.ok) {
+        setData(d.data as ShopOrderData);
+        setEpConfigured(!!d.easypost_configured);
+      }
     } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -156,12 +161,20 @@ export default function ShopOrderDetail() {
             </div>
           </div>
 
+          {/* EasyPost label. Hand delivery has no toggle — it's simply the plain
+              "Mark shipped" button below, with the label panel left untouched. */}
+          {(!data.shipped || data.easypost) && (
+            <div className={`${panel} mt-3`}>
+              <LabelPanel id={id} data={data} configured={epConfigured} onChanged={load} />
+            </div>
+          )}
+
           {!data.shipped && (
             <input
               type="text"
               value={tracking}
               onChange={(e) => setTracking(e.target.value)}
-              placeholder="Tracking number (optional — from Pirate Ship; emailed to the customer)"
+              placeholder="Tracking number (optional — auto-filled by a label purchase; emailed to the customer)"
               className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
             />
           )}
@@ -239,6 +252,194 @@ export default function ShopOrderDetail() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// EasyPost label flow: quote USPS rates → pick → buy (real cost confirmed) → print.
+// Degraded states: disabled when the key is absent (local dev default), actionable
+// banner on PAYMENT_REQUIRED, resume button when a buy attempt was ambiguous.
+function LabelPanel({ id, data, configured, onChanged }: {
+  id: string; data: ShopOrderData; configured: boolean; onChanged: () => Promise<void>;
+}) {
+  const [rates, setRates] = useState<QuotedRate[] | null>(null);
+  const [weightOz, setWeightOz] = useState<number | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<{ code?: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const ep = data.easypost;
+  const t = orderTotals(data);
+  const charged = t.freeShip ? "Free" + (t.shipCode ? " · VIP3" : "") : money(t.shipping ?? undefined);
+
+  async function post(path: string, body?: unknown) {
+    const res = await fetch(`/api/shop-orders/${id}/label/${path}`, {
+      method: "POST", headers: await authHeaders(), body: JSON.stringify(body ?? {}),
+    });
+    const d = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, d };
+  }
+
+  async function fetchRates() {
+    if (busy) return;
+    setBusy(true); setErr(null); setNotice(null);
+    try {
+      const { ok, d } = await post("rates");
+      if (!ok) { setErr({ code: d.error_code, message: d.error || "Rate lookup failed" }); return; }
+      setRates((d.rates ?? []) as QuotedRate[]);
+      setWeightOz(typeof d.weight_oz === "number" ? d.weight_oz : null);
+      setWarnings((d.warnings ?? []) as string[]);
+      setSelected("");
+      if (d.error) setErr({ message: d.error }); // shipment created but no USPS rates
+    } finally { setBusy(false); }
+  }
+
+  async function buy(rateId?: string) {
+    if (busy) return;
+    setBusy(true); setErr(null); setNotice(null);
+    try {
+      const { ok, d } = await post("buy", rateId ? { rate_id: rateId } : {});
+      if (!ok) { setErr({ code: d.error_code, message: d.error || "Purchase failed" }); return; }
+      const url = d.label_signed_url || d.label_url;
+      if (url) window.open(url, "_blank", "noopener");
+      if (d.persisted === false) setNotice(d.error || "Label bought — saving to the order is still pending. Click Buy again to finish.");
+      setRates(null);
+      await onChanged();
+    } finally { setBusy(false); }
+  }
+
+  async function confirmBuy() {
+    const r = (rates ?? []).find((x) => x.rate_id === selected);
+    if (!r) return;
+    if (!confirm(`Buy USPS ${r.service} label for ${money(r.postage_cents / 100)}? This charges the EasyPost balance.`)) return;
+    await buy(r.rate_id);
+  }
+
+  async function voidLabel() {
+    if (busy) return;
+    if (!confirm("Void this label and request a USPS refund? Refunds take days to settle and are rejected if the label was scanned.")) return;
+    setBusy(true); setErr(null);
+    try {
+      const { ok, d } = await post("void");
+      if (!ok) { setErr({ code: d.error_code, message: d.error || "Void failed" }); return; }
+      setNotice(`Refund ${d.refund_status || "submitted"}.`);
+      await onChanged();
+    } finally { setBusy(false); }
+  }
+
+  const errorBanner = err && (
+    <div className={`mb-3 rounded-xl px-4 py-3 text-[13px] font-semibold ${err.code === "PAYMENT_REQUIRED" ? "bg-amber-50 text-amber-800" : "bg-rose-50 text-rose-700"}`}>
+      {err.message}
+      {err.code === "PAYMENT_REQUIRED" && selected && (
+        <button onClick={confirmBuy} disabled={busy} className="ml-2 underline">Retry</button>
+      )}
+      {(err.code === "BUY_AMBIGUOUS" || err.code === "PURCHASE_PENDING") && (
+        <button onClick={() => buy()} disabled={busy} className="ml-2 underline">Resume purchase</button>
+      )}
+    </div>
+  );
+
+  // ── Purchased: tracking + reprint + void ───────────────────────────────────
+  if (ep?.status === "purchased") {
+    return (
+      <div>
+        <h3 className={h3}>Shipping label</h3>
+        {errorBanner}
+        {notice && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{notice}</div>}
+        <div className="text-[13.5px] text-slate-600">
+          USPS {ep.service || "—"} · {ep.postage_cents != null ? money(ep.postage_cents / 100) : "—"}
+          {ep.purchased_at ? ` · bought ${fmtStamp(ep.purchased_at)}` : ""}
+        </div>
+        {ep.tracking_code && (
+          <div className="mt-1 text-[13px] text-slate-600">Tracking: <span className="font-semibold text-slate-900">{ep.tracking_code}</span></div>
+        )}
+        {ep.refund_status && (
+          <div className="mt-2 rounded-xl bg-slate-50 px-4 py-2.5 text-[13px] text-slate-600">
+            Refund status: <span className="font-semibold">{ep.refund_status}</span>
+          </div>
+        )}
+        <div className="mt-3 flex gap-2.5">
+          <button onClick={() => buy()} disabled={busy} className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
+            {busy ? "Working…" : "Reprint label"}
+          </button>
+          {!ep.refund_status && (
+            <button onClick={voidLabel} disabled={busy} className="rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+              Void label
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Not configured: disabled button, plain Mark shipped still works ────────
+  if (!configured) {
+    return (
+      <div>
+        <h3 className={h3}>Shipping label</h3>
+        <button disabled className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white opacity-40">
+          Print shipping label
+        </button>
+        <div className="mt-2 text-[12.5px] text-slate-400">EasyPost not configured.</div>
+      </div>
+    );
+  }
+
+  // ── Rate picker ─────────────────────────────────────────────────────────────
+  return (
+    <div>
+      <h3 className={h3}>Shipping label</h3>
+      {errorBanner}
+      {notice && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{notice}</div>}
+
+      {rates === null ? (
+        <button onClick={fetchRates} disabled={busy} className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
+          {busy ? "Getting USPS rates…" : "Print shipping label"}
+        </button>
+      ) : (
+        <div>
+          {/* Margin visibility: what the customer paid sits next to the rate list. */}
+          <div className="mb-2 flex items-center justify-between text-[12.5px] text-slate-500">
+            <span>{weightOz != null ? `Parcel ${weightOz} oz` : ""}</span>
+            <span>Customer paid: <span className="font-bold text-slate-800">{charged}</span></span>
+          </div>
+          {warnings.map((w, i) => (
+            <div key={i} className="mb-2 rounded-xl bg-amber-50 px-4 py-2.5 text-[12.5px] font-semibold text-amber-800">
+              Address warning: {w} (you can still buy)
+            </div>
+          ))}
+          {rates.length === 0 ? (
+            <div className="text-[13px] text-slate-400">No USPS rates for this address.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {rates.map((r) => (
+                <label key={r.rate_id} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 ${selected === r.rate_id ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}>
+                  <input type="radio" name="ep-rate" checked={selected === r.rate_id} onChange={() => setSelected(r.rate_id)} />
+                  <span className="text-[13.5px] font-semibold text-slate-900">USPS {r.service}</span>
+                  <span className="text-[12.5px] text-slate-500">{r.delivery_days != null ? `~${r.delivery_days} day${r.delivery_days === 1 ? "" : "s"}` : "—"}</span>
+                  <span className="ml-auto text-[13.5px] font-bold text-slate-900">{money(r.postage_cents / 100)}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex gap-2.5">
+            <button
+              onClick={confirmBuy}
+              disabled={busy || !selected}
+              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-40"
+            >
+              {busy ? "Buying…" : selected
+                ? `Buy label · ${money(((rates ?? []).find((x) => x.rate_id === selected)?.postage_cents ?? 0) / 100)}`
+                : "Pick a rate"}
+            </button>
+            <button onClick={fetchRates} disabled={busy} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50">
+              Refresh
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
