@@ -34,7 +34,6 @@ export default function ShopOrderDetail() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [tracking, setTracking] = useState("");
   const [epConfigured, setEpConfigured] = useState(true);
 
   const load = useCallback(async () => {
@@ -49,19 +48,6 @@ export default function ShopOrderDetail() {
     } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
-
-  async function markShipped() {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/shop-orders/${id}`, {
-        method: "PATCH",
-        headers: await authHeaders(),
-        // tracking is optional — blank means the shipped email goes out without a tracking line
-        body: JSON.stringify({ shipped: true, ...(tracking.trim() ? { tracking: tracking.trim() } : {}) }),
-      });
-      if (res.ok) await load();
-    } finally { setBusy(false); }
-  }
 
   async function toggleRefund(next: boolean) {
     if (busy) return;
@@ -161,38 +147,18 @@ export default function ShopOrderDetail() {
             </div>
           </div>
 
-          {/* EasyPost label. Hand delivery has no toggle — it's simply the plain
-              "Mark shipped" button below, with the label panel left untouched. */}
-          {(!data.shipped || data.easypost) && (
+          {/* One Shipping card: "Buy a label" / "Hand delivering" tabs. Hand delivery
+              is the plain mark-shipped PATCH — same route, same E2 email, relocated. */}
+          {(!data.shipped || data.easypost?.status === "purchased") && (
             <div className={`${panel} mt-3`}>
-              <LabelPanel id={id} data={data} configured={epConfigured} onChanged={load} />
+              <ShippingCard id={id} data={data} configured={epConfigured} onChanged={load} />
             </div>
-          )}
-
-          {!data.shipped && (
-            <input
-              type="text"
-              value={tracking}
-              onChange={(e) => setTracking(e.target.value)}
-              placeholder="Tracking number (optional — auto-filled by a label purchase; emailed to the customer)"
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
-            />
           )}
           {data.shipped && data.tracking && (
             <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-[13px] text-slate-600">
               Tracking: <span className="font-semibold text-slate-900">{data.tracking}</span>
             </div>
           )}
-          <div className="mt-3 flex gap-2.5">
-            {!data.shipped && (
-              <button onClick={markShipped} disabled={busy} className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
-                {busy ? "Marking…" : "Mark shipped"}
-              </button>
-            )}
-            <button onClick={copyAddress} className={`rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 ${data.shipped ? "flex-1" : ""}`}>
-              {copied ? "Copied ✓" : "Copy address"}
-            </button>
-          </div>
 
           {/* Refund + restock. Refund is a manual flag (drops the order from revenue/tax);
               restocking blanks is a deliberate second step, never automatic. */}
@@ -238,7 +204,12 @@ export default function ShopOrderDetail() {
             <Row k="Email" v={data.email || "—"} last />
           </div>
           <div className={panel}>
-            <h3 className={h3}>Delivery address</h3>
+            <div className="flex items-baseline justify-between">
+              <h3 className={h3}>Delivery address</h3>
+              <button onClick={copyAddress} className="text-[12.5px] font-semibold text-blue-600 hover:text-blue-700">
+                {copied ? "Copied ✓" : "Copy address"}
+              </button>
+            </div>
             <div className="whitespace-pre-line text-[14px] font-semibold leading-[1.55] text-slate-800">{fullAddress(data)}</div>
           </div>
           <div className={panel}>
@@ -256,12 +227,15 @@ export default function ShopOrderDetail() {
   );
 }
 
-// EasyPost label flow: quote USPS rates → pick → buy (real cost confirmed) → print.
-// Degraded states: disabled when the key is absent (local dev default), actionable
-// banner on PAYMENT_REQUIRED, resume button when a buy attempt was ambiguous.
-function LabelPanel({ id, data, configured, onChanged }: {
+// One Shipping card, two tabs: "Buy a label" (EasyPost flow: quote USPS rates →
+// pick → buy with real cost confirmed → print) and "Hand delivering" (the plain
+// mark-shipped PATCH, unchanged behavior). One dark button on screen at a time.
+// Degraded states all live inside the Buy a label tab: disabled when the key is
+// absent, PAYMENT_REQUIRED banner, resume path, purchased state with reprint/void.
+function ShippingCard({ id, data, configured, onChanged }: {
   id: string; data: ShopOrderData; configured: boolean; onChanged: () => Promise<void>;
 }) {
+  const [tab, setTab] = useState<"label" | "hand">("label");
   const [rates, setRates] = useState<QuotedRate[] | null>(null);
   const [weightOz, setWeightOz] = useState<number | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -269,10 +243,14 @@ function LabelPanel({ id, data, configured, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<{ code?: string; message: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tracking, setTracking] = useState("");
 
   const ep = data.easypost;
   const t = orderTotals(data);
   const charged = t.freeShip ? "Free" + (t.shipCode ? " · VIP3" : "") : money(t.shipping ?? undefined);
+  // Margin math stays in integer cents; dollars only at format time.
+  const chargedCents = data.shipping_cents ?? null;
+  const garments = resolveLineItems(data).reduce((s, li) => s + (li.qty || 0), 0);
 
   async function post(path: string, body?: unknown) {
     const res = await fetch(`/api/shop-orders/${id}/label/${path}`, {
@@ -329,6 +307,21 @@ function LabelPanel({ id, data, configured, onChanged }: {
     } finally { setBusy(false); }
   }
 
+  // Hand delivering: the existing plain PATCH — same route, same E2 email.
+  async function handMarkShipped() {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/shop-orders/${id}`, {
+        method: "PATCH",
+        headers: await authHeaders(),
+        // tracking is optional — blank means the shipped email goes out without a tracking line
+        body: JSON.stringify({ shipped: true, ...(tracking.trim() ? { tracking: tracking.trim() } : {}) }),
+      });
+      if (res.ok) await onChanged();
+    } finally { setBusy(false); }
+  }
+
   const errorBanner = err && (
     <div className={`mb-3 rounded-xl px-4 py-3 text-[13px] font-semibold ${err.code === "PAYMENT_REQUIRED" ? "bg-amber-50 text-amber-800" : "bg-rose-50 text-rose-700"}`}>
       {err.message}
@@ -341,11 +334,18 @@ function LabelPanel({ id, data, configured, onChanged }: {
     </div>
   );
 
-  // ── Purchased: tracking + reprint + void ───────────────────────────────────
+  const header = (
+    <div className="flex items-baseline justify-between">
+      <h3 className={h3}>Shipping</h3>
+      <span className="text-[12.5px] text-slate-500">Customer paid <span className="font-bold text-slate-800">{charged}</span></span>
+    </div>
+  );
+
+  // ── Purchased: reprint + void, no tabs ──────────────────────────────────────
   if (ep?.status === "purchased") {
     return (
       <div>
-        <h3 className={h3}>Shipping label</h3>
+        {header}
         {errorBanner}
         {notice && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{notice}</div>}
         <div className="text-[13.5px] text-slate-600">
@@ -374,70 +374,112 @@ function LabelPanel({ id, data, configured, onChanged }: {
     );
   }
 
-  // ── Not configured: disabled button, plain Mark shipped still works ────────
-  if (!configured) {
-    return (
-      <div>
-        <h3 className={h3}>Shipping label</h3>
-        <button disabled className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white opacity-40">
-          Print shipping label
-        </button>
-        <div className="mt-2 text-[12.5px] text-slate-400">EasyPost not configured.</div>
-      </div>
-    );
-  }
+  const tabBtn = (key: "label" | "hand", text: string) => (
+    <button
+      onClick={() => setTab(key)}
+      className={`flex-1 rounded-lg py-2 text-[13px] font-bold transition-colors ${tab === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+    >
+      {text}
+    </button>
+  );
 
-  // ── Rate picker ─────────────────────────────────────────────────────────────
   return (
     <div>
-      <h3 className={h3}>Shipping label</h3>
-      {errorBanner}
-      {notice && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{notice}</div>}
+      {header}
+      <div className="mb-3 flex rounded-xl bg-slate-100 p-1">
+        {tabBtn("label", "Buy a label")}
+        {tabBtn("hand", "Hand delivering")}
+      </div>
 
-      {rates === null ? (
-        <button onClick={fetchRates} disabled={busy} className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
-          {busy ? "Getting USPS rates…" : "Print shipping label"}
-        </button>
-      ) : (
+      {tab === "hand" ? (
+        // ── Hand delivering: the plain mark-shipped path, relocated ────────────
         <div>
-          {/* Margin visibility: what the customer paid sits next to the rate list. */}
-          <div className="mb-2 flex items-center justify-between text-[12.5px] text-slate-500">
-            <span>{weightOz != null ? `Parcel ${weightOz} oz` : ""}</span>
-            <span>Customer paid: <span className="font-bold text-slate-800">{charged}</span></span>
-          </div>
-          {warnings.map((w, i) => (
-            <div key={i} className="mb-2 rounded-xl bg-amber-50 px-4 py-2.5 text-[12.5px] font-semibold text-amber-800">
-              Address warning: {w} (you can still buy)
-            </div>
-          ))}
-          {rates.length === 0 ? (
-            <div className="text-[13px] text-slate-400">No USPS rates for this address.</div>
+          <input
+            type="text"
+            value={tracking}
+            onChange={(e) => setTracking(e.target.value)}
+            placeholder="Tracking number (optional — emailed to the customer)"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
+          />
+          <button onClick={handMarkShipped} disabled={busy} className="mt-3 w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
+            {busy ? "Marking…" : "Mark shipped"}
+          </button>
+        </div>
+      ) : !configured ? (
+        // ── No key: disabled dark button; Hand delivering tab still works ─────
+        <div>
+          <button disabled className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white opacity-40">
+            Print shipping label
+          </button>
+          <div className="mt-2 text-[12.5px] text-slate-400">EasyPost not configured.</div>
+        </div>
+      ) : (
+        // ── Buy a label ─────────────────────────────────────────────────────────
+        <div>
+          {errorBanner}
+          {notice && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{notice}</div>}
+
+          {rates === null ? (
+            <button onClick={fetchRates} disabled={busy} className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-50">
+              {busy ? "Getting USPS rates…" : "Get USPS rates"}
+            </button>
           ) : (
-            <div className="space-y-1.5">
-              {rates.map((r) => (
-                <label key={r.rate_id} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 ${selected === r.rate_id ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}>
-                  <input type="radio" name="ep-rate" checked={selected === r.rate_id} onChange={() => setSelected(r.rate_id)} />
-                  <span className="text-[13.5px] font-semibold text-slate-900">USPS {r.service}</span>
-                  <span className="text-[12.5px] text-slate-500">{r.delivery_days != null ? `~${r.delivery_days} day${r.delivery_days === 1 ? "" : "s"}` : "—"}</span>
-                  <span className="ml-auto text-[13.5px] font-bold text-slate-900">{money(r.postage_cents / 100)}</span>
-                </label>
+            <div>
+              {weightOz != null && (
+                <div className="mb-2 text-[12.5px] text-slate-500">
+                  Parcel {weightOz} oz · {garments} garment{garments === 1 ? "" : "s"}, bags, mailer
+                </div>
+              )}
+              {warnings.map((w, i) => (
+                <div key={i} className="mb-2 rounded-xl bg-amber-50 px-4 py-2.5 text-[12.5px] font-semibold text-amber-800">
+                  Address warning: {w} (you can still buy)
+                </div>
               ))}
+              {rates.length === 0 ? (
+                <div className="text-[13px] text-slate-400">No USPS rates for this address.</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {rates.map((r) => {
+                    const isSel = selected === r.rate_id;
+                    // Integer-cents margin against what the customer was charged.
+                    const margin = chargedCents == null ? null : chargedCents - r.postage_cents;
+                    return (
+                      <label key={r.rate_id} className={`block cursor-pointer rounded-xl border px-4 py-3 ${isSel ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}>
+                        <div className="flex items-center gap-3">
+                          <input type="radio" name="ep-rate" checked={isSel} onChange={() => setSelected(r.rate_id)} />
+                          <span className="text-[13.5px] font-semibold text-slate-900">USPS {r.service}</span>
+                          <span className="text-[12.5px] text-slate-500">{r.delivery_days != null ? `~${r.delivery_days} day${r.delivery_days === 1 ? "" : "s"}` : "—"}</span>
+                          {!isSel && <span className="ml-auto text-[13.5px] font-bold text-slate-900">{money(r.postage_cents / 100)}</span>}
+                        </div>
+                        {isSel && (
+                          <div className="mt-1 flex items-center justify-between pl-7">
+                            {margin != null ? (
+                              <span className={`text-[12.5px] font-bold ${margin >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                {margin >= 0 ? "You keep" : "You lose"} {money(Math.abs(margin) / 100)}
+                              </span>
+                            ) : <span />}
+                            <span className="text-[15px] font-extrabold text-slate-900">{money(r.postage_cents / 100)}</span>
+                          </div>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <button
+                onClick={confirmBuy}
+                disabled={busy || !selected}
+                className="mt-3 w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-40"
+              >
+                {busy ? "Buying…" : selected
+                  ? `Buy label and print · ${money(((rates ?? []).find((x) => x.rate_id === selected)?.postage_cents ?? 0) / 100)}`
+                  : "Pick a rate"}
+              </button>
+              <button onClick={fetchRates} disabled={busy} className="mt-2 text-[12.5px] font-semibold text-slate-400 hover:text-slate-600 disabled:opacity-50">
+                Refresh rates
+              </button>
             </div>
           )}
-          <div className="mt-3 flex gap-2.5">
-            <button
-              onClick={confirmBuy}
-              disabled={busy || !selected}
-              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white disabled:opacity-40"
-            >
-              {busy ? "Buying…" : selected
-                ? `Buy label · ${money(((rates ?? []).find((x) => x.rate_id === selected)?.postage_cents ?? 0) / 100)}`
-                : "Pick a rate"}
-            </button>
-            <button onClick={fetchRates} disabled={busy} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50">
-              Refresh
-            </button>
-          </div>
         </div>
       )}
     </div>
