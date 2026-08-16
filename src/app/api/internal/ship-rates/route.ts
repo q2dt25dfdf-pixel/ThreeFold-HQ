@@ -54,6 +54,9 @@ export async function POST(request: Request) {
     const expiresAt = Math.floor(Date.now() / 1000) + QUOTE_TTL_SEC;
     const rates = filterUspsRates(shipment.rates).map((r) => ({
       ...r,
+      // shipment_id on each rate: the client returns the chosen rate as one unit
+      // and verifySignedRate needs the complete signed tuple.
+      shipment_id: shipment.id,
       expires_at: expiresAt,
       sig: signQuotedRate(shipment.id, r, expiresAt),
     }));

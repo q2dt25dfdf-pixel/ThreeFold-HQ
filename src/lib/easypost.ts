@@ -161,7 +161,9 @@ export function filterUspsRates(rates: EpRate[] | undefined): QuotedRate[] {
 
 import { createHmac } from "crypto";
 
-export type SignedQuotedRate = QuotedRate & { expires_at: number; sig: string };
+// shipment_id rides on EVERY rate (not just the response envelope): the client hands
+// the chosen rate back as one unit and the verifier needs the full signed tuple.
+export type SignedQuotedRate = QuotedRate & { shipment_id: string; expires_at: number; sig: string };
 
 export function signQuotedRate(shipmentId: string, rate: QuotedRate, expiresAtEpochSec: number): string {
   const secret = process.env.INTERNAL_API_SECRET;
