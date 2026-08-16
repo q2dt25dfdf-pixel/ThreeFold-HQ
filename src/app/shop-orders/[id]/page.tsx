@@ -266,10 +266,15 @@ function ShippingCard({ id, data, configured, onChanged }: {
     try {
       const { ok, d } = await post("rates");
       if (!ok) { setErr({ code: d.error_code, message: d.error || "Rate lookup failed" }); return; }
-      setRates((d.rates ?? []) as QuotedRate[]);
+      const rs = (d.rates ?? []) as QuotedRate[];
+      setRates(rs);
       setWeightOz(typeof d.weight_oz === "number" ? d.weight_oz : null);
       setWarnings((d.warnings ?? []) as string[]);
-      setSelected("");
+      // Pre-select the service the customer paid for at checkout (match on service
+      // name — the checkout rate_id is long expired by label time).
+      const paidSvc = data.easypost_quote?.service;
+      const paidMatch = paidSvc ? rs.find((r) => r.service === paidSvc) : undefined;
+      setSelected(paidMatch ? paidMatch.rate_id : "");
       if (d.error) setErr({ message: d.error }); // shipment created but no USPS rates
     } finally { setBusy(false); }
   }
@@ -449,6 +454,9 @@ function ShippingCard({ id, data, configured, onChanged }: {
                           <input type="radio" name="ep-rate" checked={isSel} onChange={() => setSelected(r.rate_id)} />
                           <span className="text-[13.5px] font-semibold text-slate-900">USPS {r.service}</span>
                           <span className="text-[12.5px] text-slate-500">{r.delivery_days != null ? `~${r.delivery_days} day${r.delivery_days === 1 ? "" : "s"}` : "—"}</span>
+                          {data.easypost_quote?.service === r.service && (
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10.5px] font-bold tracking-[0.06em] text-blue-700">CUSTOMER PAID FOR THIS</span>
+                          )}
                           {!isSel && <span className="ml-auto text-[13.5px] font-bold text-slate-900">{money(r.postage_cents / 100)}</span>}
                         </div>
                         {isSel && (

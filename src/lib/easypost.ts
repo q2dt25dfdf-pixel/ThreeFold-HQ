@@ -150,6 +150,28 @@ export function filterUspsRates(rates: EpRate[] | undefined): QuotedRate[] {
     .sort((a, b) => a.postage_cents - b.postage_cents);
 }
 
+// ── Signed rate quotes (checkout) ─────────────────────────────────────────────
+// The website shows customers rates quoted here, then hands the chosen rate back
+// to its create-intent function. A client-supplied price is never trusted: each
+// rate is HMAC-signed over shipment_id|rate_id|postage_cents|expires_at|service
+// with INTERNAL_API_SECRET (already shared by both deployments), and the website
+// verifies the signature server-side before charging that amount. service is in
+// the payload so a tampered service name can't mislead HQ's "customer paid for
+// this" badge into buying a pricier label than was paid for.
+
+import { createHmac } from "crypto";
+
+// shipment_id rides on EVERY rate (not just the response envelope): the client hands
+// the chosen rate back as one unit and the verifier needs the full signed tuple.
+export type SignedQuotedRate = QuotedRate & { shipment_id: string; expires_at: number; sig: string };
+
+export function signQuotedRate(shipmentId: string, rate: QuotedRate, expiresAtEpochSec: number): string {
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret) throw new Error("INTERNAL_API_SECRET is not configured");
+  const payload = `${shipmentId}|${rate.rate_id}|${rate.postage_cents}|${expiresAtEpochSec}|${rate.service}`;
+  return createHmac("sha256", secret).update(payload).digest("hex");
+}
+
 export function verificationWarnings(shipment: EpShipment): string[] {
   const v = shipment.to_address?.verifications?.delivery;
   if (!v || v.success !== false) return [];
