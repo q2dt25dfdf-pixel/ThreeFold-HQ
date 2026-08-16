@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { validateSessionRequest } from "@/lib/sessionAuth";
-import { sendEmail } from "@/lib/sendEmail";
-import { buildShopShippedEmail } from "@/lib/shopOrderEmails";
-import { loadProductThumbs } from "@/lib/productThumbs";
+import { markShipped } from "@/lib/markShipped";
+import { isEasyPostConfigured } from "@/lib/easypost";
 import { createNotification } from "@/lib/notifications";
 import { planRestock, type RecordedDecrementLine } from "@/lib/inventoryDecrement";
 import type { InventoryItem } from "@/lib/inventory";
@@ -26,7 +25,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const row = await loadOrder(id);
   if (!row) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  return NextResponse.json({ id: row.id, data: row.data }, { headers: { "Cache-Control": "no-store" } });
+  // easypost_configured lets the detail page disable the label button up front
+  // (the key lives only in Vercel env — local dev renders the degraded state).
+  return NextResponse.json(
+    { id: row.id, data: row.data, easypost_configured: isEasyPostConfigured() },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -131,36 +135,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true, note });
   }
 
-  if (existing.shipped) return NextResponse.json({ ok: true, alreadyShipped: true }); // idempotent
+  // Shipped write + E2 email live in lib/markShipped.ts — shared with the label-buy
+  // route, which merges its easypost block into the same single update.
   const tracking = (body.tracking ?? "").trim();
-  const updated: ShopOrderData = {
-    ...existing,
-    shipped: true,
-    shipped_at: new Date().toISOString(),
-    ...(tracking ? { tracking } : {}),
-  };
-  const { error } = await db.from("shop_orders").update({ data: updated }).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const result = await markShipped(db, id, existing, { tracking: tracking || undefined });
+  if (result.alreadyShipped) return NextResponse.json({ ok: true, alreadyShipped: true }); // idempotent
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
 
-  // E2 shipped email — AFTER the shipped write, never blocking it. The false→true guard
-  // above plus the shipped_email_sent_at stamp make this single-send. Failures are
-  // recorded on the row and reported in the response, but mark-shipped still succeeds.
-  let emailStatus = "skipped: no customer email";
-  const to = String(updated.email || "").trim();
-  if (to && !updated.shipped_email_sent_at) {
-    const thumbs = await loadProductThumbs(db);
-    const { subject, html } = buildShopShippedEmail(updated, thumbs);
-    const result = await sendEmail({ to, subject, html });
-    emailStatus = result.sent ? `sent via ${result.sentVia}` : `failed: ${result.error}`;
-    const stamp = result.sent
-      ? { shipped_email_sent_at: new Date().toISOString(), shipped_email_status: emailStatus }
-      : { shipped_email_status: emailStatus };
-    await db.from("shop_orders").update({ data: { ...updated, ...stamp } }).eq("id", id);
-    if (!result.sent) console.error(`[shop-orders/${id}] shipped email failed: ${result.error}`);
-  } else if (!to) {
-    await db.from("shop_orders").update({ data: { ...updated, shipped_email_status: emailStatus } }).eq("id", id);
-    console.warn(`[shop-orders/${id}] no customer email — shipped email skipped`);
-  }
-
-  return NextResponse.json({ ok: true, shipped_at: updated.shipped_at, ...(tracking ? { tracking } : {}), email: emailStatus });
+  return NextResponse.json({ ok: true, shipped_at: result.updated.shipped_at, ...(tracking ? { tracking } : {}), email: result.emailStatus });
 }
