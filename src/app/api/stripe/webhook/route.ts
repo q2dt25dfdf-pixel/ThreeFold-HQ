@@ -93,6 +93,27 @@ async function updateFinancesFields(id: string, fields: Record<string, unknown>)
   if (error) console.error(`[webhook] update_finances_fields ${id}:`, error.message);
 }
 
+// Self-heal: a custom-order payment must never also exist as a shop_orders row (the blank
+// phantom bug — a PI that reached the website webhook without its payment_type stamp, e.g.
+// via a stale deploy). Whenever HQ records a deposit / final-invoice payment, delete any
+// shop_orders row keyed on that PaymentIntent id. The website's own webhook may fire after
+// this handler on the same payment, so its fail-closed guard is the primary defence; this
+// catches anything already inserted. Best-effort: never affects payment fulfillment.
+async function deletePhantomShopOrder(paymentIntentId: string | null, context: string): Promise<void> {
+  if (!paymentIntentId) return;
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from("shop_orders").delete().eq("id", paymentIntentId).select("id");
+    if (error) {
+      console.error(`[webhook] phantom shop_orders delete failed (${context}) for ${paymentIntentId}:`, error.message);
+    } else if (data && data.length > 0) {
+      console.warn(`[webhook] SELF-HEAL: deleted phantom shop_orders row ${paymentIntentId} created by a ${context} payment`);
+    }
+  } catch (err) {
+    console.error(`[webhook] phantom shop_orders delete threw (${context}):`, err);
+  }
+}
+
 // ─── Full deposit fulfillment ─────────────────────────────────────────────────
 //
 // Called when a deposit is confirmed paid (card: immediately; bank ACH: on async_payment_succeeded).
@@ -272,6 +293,9 @@ async function fulfillDepositPaid(
       `deposit marked paid but finance/order not created`,
     );
   }
+
+  // Payment is recorded on the custom side — remove any phantom shop_orders twin.
+  await deletePhantomShopOrder(paymentIntentId, "deposit");
 
   // Notify HQ — fire-and-forget so a notification failure never affects payment fulfillment
   const notifOrderId = effectiveLeadId ? `order-lead-${effectiveLeadId}` : "";
@@ -684,6 +708,8 @@ async function handleSessionCompleted(session: CheckoutSession, baseUrl: string)
       });
       // Auto-send the final receipt AFTER the money write. Never throws.
       await autoSendReceipt(getSupabaseAdmin(), financeId, baseUrl, (finData.client_email as string) || "");
+      // Payment is recorded on the custom side — remove any phantom shop_orders twin.
+      await deletePhantomShopOrder(paymentIntentId, "final_invoice");
       notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     } else {
       // Bank ACH: initiated — wait for async_payment_succeeded
@@ -762,6 +788,8 @@ async function handleAsyncPaymentSucceeded(session: CheckoutSession, baseUrl: st
     });
     // Auto-send the final receipt AFTER the money write. Never throws.
     await autoSendReceipt(getSupabaseAdmin(), financeId, baseUrl, (asyncFinData.client_email as string) || "");
+    // Payment is recorded on the custom side — remove any phantom shop_orders twin.
+    await deletePhantomShopOrder(paymentIntentId, "final_invoice");
     notifyFinalInvoicePaid(financeId, meta.base_amount).catch(err => console.error("[webhook] final invoice notification failed:", err));
     notifyAchPayment("cleared", "finances", financeId, meta.base_amount).catch(err => console.error("[webhook] ACH cleared notification failed:", err));
     return;
