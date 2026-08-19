@@ -23,6 +23,7 @@ export type NotificationType =
   | 'calendar_event_cancelled'
   | 'inventory_stock_alert'
   | 'shop_order_refunded'
+  | 'ops_alert'
 
 export interface NotificationPayload {
   type: NotificationType
