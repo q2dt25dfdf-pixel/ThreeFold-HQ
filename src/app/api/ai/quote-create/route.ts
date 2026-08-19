@@ -345,6 +345,9 @@ export async function POST(request: Request): Promise<Response> {
       sales_tax_amount:       salesTaxAmount,
       grand_total:            Math.round(grandTotal * 100) / 100,
       total_amount:           Math.round(grandTotal * 100) / 100,
+      // Delivery address snapshot — conversion copies this onto the order, so it must
+      // not depend on the lead row still being intact (or ever having had the text).
+      delivery_address_text:  leadAddressText.trim() || null,
       tax_rate_percent:       taxRate,
       tax_rate_source:        taxLookup.source,
       tax_zip_used:           taxLookup.zipUsed ?? null,

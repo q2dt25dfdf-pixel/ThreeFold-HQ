@@ -166,6 +166,9 @@ export async function POST(request: NextRequest) {
       sales_tax_amount: salesTaxAmount,
       grand_total: grandTotal,
       total_amount: grandTotal,
+      // Delivery address snapshot — conversion copies this onto the order, so it must
+      // not depend on the lead row still being intact (or ever having had the text).
+      delivery_address_text: (clientAddressText ?? "").trim() || null,
       // Tax rate metadata — stored for audit/display; does not affect downstream math
       tax_rate_percent: taxRate,
       tax_rate_source: taxLookup.source,

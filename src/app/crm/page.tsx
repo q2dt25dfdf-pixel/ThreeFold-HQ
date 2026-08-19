@@ -18,6 +18,7 @@ import { pipelineStages, type Lead, type PipelineStage, type DuplicateMatch, typ
 import { useSupabaseTable } from "@/lib/useSupabaseTable";
 import { supabase } from "@/lib/supabase";
 import { deriveItemsAndQuantity } from "@/lib/orderItems";
+import { deriveOrderDeliveryFields } from "@/lib/orderDelivery";
 import { nextSequenceNumber } from "@/lib/sequenceNumber";
 import { markQuoteSuperseded } from "@/lib/supersede";
 import { addDaysToISODate, businessTodayISO } from "@/lib/businessDate";
@@ -109,6 +110,8 @@ type Order = {
   questionnaire_id?: string;
   quote_id?: string;
   deposit_request_id?: string;
+  delivery_address?: string;
+  delivery_zip?: string;
   intake_snapshot?: IntakeSnapshot;
   created_at?: string;
   status_changed_at?: string;
@@ -580,6 +583,8 @@ function CRMContent() {
       client_payment_method_intent?: string;
       quote_approved_at?: string;
       line_items?: unknown[];
+      delivery_address_text?: string | null;
+      tax_zip_used?: string | null;
     };
     const leadDepositRequestId = lead.deposit_request_id;
     const { data: depositRows } = leadDepositRequestId
@@ -666,6 +671,17 @@ function CRMContent() {
     const { items: derivedItems, quantity: derivedQuantity } = deriveItemsAndQuantity(orderLineItems);
     const nowIso = new Date().toISOString();
     const existingOrder = orders.find((o) => o.id === orderId);
+    // Delivery address: copy the quote's snapshot (falling back to the lead's stored
+    // address) so the order page shows it without manual re-entry. Uses quoteData, not
+    // moneySource — deposit rows never carry address fields. Resolves to {} when neither
+    // source has anything, so a no-address quote still converts cleanly. Like vendor
+    // above, an address already on the order (manual edit, prior run) is never clobbered.
+    const derivedDelivery = deriveOrderDeliveryFields(quoteData ?? null, lead.companyProfile?.address);
+    const deliveryFields = {
+      ...derivedDelivery,
+      ...(existingOrder?.delivery_address ? { delivery_address: existingOrder.delivery_address } : {}),
+      ...(existingOrder?.delivery_zip ? { delivery_zip: existingOrder.delivery_zip } : {}),
+    };
     // Smart est. delivery: deposit is paid at this point, so suggest anchor + 21 days.
     // Preserve a hand-set (manual) date on a re-run; otherwise (re)apply the suggestion.
     const keepManualDelivery = existingOrder?.estDeliverySource === "manual" && !!existingOrder?.estDelivery;
@@ -701,6 +717,7 @@ function CRMContent() {
       questionnaire_id: lead.questionnaire_id ?? "",
       quote_id: lead.quote_id ?? "",
       deposit_request_id: lead.deposit_request_id ?? "",
+      ...deliveryFields,
       intake_snapshot: {
         contact_title: lead.contact_title ?? "",
         contact_method: lead.contact_method ?? "",

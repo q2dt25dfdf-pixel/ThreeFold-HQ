@@ -9,6 +9,7 @@ import { appendInvoiceActivityRpc } from "@/lib/invoiceActivity";
 import { autoSendReceipt } from "@/lib/autoSendReceipt";
 import { getInvoiceBaseUrl } from "@/lib/publicUrl";
 import { computeSuggestedDelivery, estDeliverySuggestionUpdate } from "@/lib/estDelivery";
+import { deriveOrderDeliveryFields, type QuoteDeliverySource } from "@/lib/orderDelivery";
 
 // Disable body parsing — Stripe signature verification requires the raw body
 export const config = { api: { bodyParser: false } };
@@ -455,6 +456,25 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
     const bootLineItems = Array.isArray(depData.line_items) ? (depData.line_items as unknown[]) : [];
     const { items: bootItems, quantity: bootQuantity } = deriveItemsAndQuantity(bootLineItems);
 
+    // Delivery address: copy the quote's snapshot (falling back to the lead's stored
+    // address) so the order page shows it without manual re-entry. Resolves to {} when
+    // neither source has anything — the order is still created, fields simply absent.
+    const quoteIdForAddress = (leadData.quote_id ?? depData.quote_id ?? "") as string;
+    let quoteForAddress: QuoteDeliverySource | null = null;
+    if (quoteIdForAddress) {
+      const { data: quoteRows } = await db
+        .from("quotes")
+        .select("data")
+        .eq("id", quoteIdForAddress)
+        .limit(1);
+      quoteForAddress = (quoteRows?.[0]?.data as QuoteDeliverySource | undefined) ?? null;
+    }
+    const leadCompanyProfile = (leadData.companyProfile ?? {}) as Record<string, unknown>;
+    const deliveryFields = deriveOrderDeliveryFields(
+      quoteForAddress,
+      leadCompanyProfile.address as string | undefined,
+    );
+
     await db.from("orders").upsert({
       id: orderId,
       data: {
@@ -477,8 +497,9 @@ async function bootstrapOrderAndFinance(opts: BootstrapOpts): Promise<void> {
         notes: "",
         lead_id: leadId,
         deposit_request_id: depositRequestId,
-        quote_id: (leadData.quote_id ?? depData.quote_id ?? "") as string,
+        quote_id: quoteIdForAddress,
         questionnaire_id: (leadData.questionnaire_id ?? "") as string,
+        ...deliveryFields,
         total_amount: totalAmount,
         amount: totalAmount,
         status: "Production",
