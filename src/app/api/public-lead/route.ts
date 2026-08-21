@@ -10,13 +10,98 @@ function normalizeForMatch(s: string): string {
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   }
 }
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() })
+}
+
+// Optional design details added on the website's post-submit screen. Patches the row the
+// POST just created — never creates a new one. Public endpoint, so scope is tight: only
+// these fields, only website-sourced rows, only within 24h of creation.
+const PATCHABLE_FIELDS = ['budget', 'style', 'colors', 'notes'] as const
+
+export async function PATCH(request: Request) {
+  const headers = corsHeaders()
+  const db = getSupabaseAdmin()
+
+  try {
+    const body = await request.json()
+
+    if (body['bot-field']) {
+      return NextResponse.json({ success: true }, { headers })
+    }
+
+    const id = typeof body.id === 'string' ? body.id : ''
+    const isLead = id.startsWith('lead-')
+    const isRepeatOrder = id.startsWith('order-repeat-')
+    if (!isLead && !isRepeatOrder) {
+      return NextResponse.json({ error: 'Invalid id' }, { status: 400, headers })
+    }
+
+    const updates: Record<string, string> = {}
+    for (const f of PATCHABLE_FIELDS) {
+      if (typeof body[f] === 'string' && body[f].trim()) updates[f] = body[f].trim()
+    }
+    const newFiles = Array.isArray(body.questionnaire_files) ? body.questionnaire_files : []
+    if (Object.keys(updates).length === 0 && newFiles.length === 0) {
+      return NextResponse.json({ success: true }, { headers })
+    }
+
+    const table = isLead ? 'crm_leads' : 'orders'
+    const { data: row } = await db.from(table).select('id, data').eq('id', id).maybeSingle()
+    if (!row) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404, headers })
+    }
+
+    const data = (typeof row.data === 'object' && row.data !== null ? row.data : {}) as Record<string, unknown>
+    const expectedSource = isLead ? 'Website' : 'Repeat Client — Website'
+    const createdAt = Date.parse(String(data.created_at ?? ''))
+    const fresh = Number.isFinite(createdAt) && Date.now() - createdAt < 24 * 60 * 60 * 1000
+    if (data.source !== expectedSource || !fresh) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404, headers })
+    }
+
+    const now = new Date().toISOString()
+    let newData: Record<string, unknown>
+
+    if (isLead) {
+      const existingFiles = Array.isArray(data.questionnaire_files) ? data.questionnaire_files : []
+      newData = {
+        ...data,
+        ...updates,
+        questionnaire_files: existingFiles.concat(newFiles),
+        last_activity_at: now,
+        updated_at: now,
+      }
+    } else {
+      const snap = (typeof data.intake_snapshot === 'object' && data.intake_snapshot !== null
+        ? data.intake_snapshot
+        : {}) as Record<string, unknown>
+      const existingFiles = Array.isArray(snap.files) ? snap.files : []
+      newData = {
+        ...data,
+        intake_snapshot: { ...snap, ...updates, files: existingFiles.concat(newFiles) },
+        updated_at: now,
+      }
+    }
+
+    const updatePayload = isLead ? { data: newData, updated_at: now } : { data: newData }
+    const { error } = await db.from(table).update(updatePayload).eq('id', id)
+
+    if (error) {
+      console.error('Supabase patch error:', error)
+      return NextResponse.json({ error: 'Failed to save details' }, { status: 500, headers })
+    }
+
+    return NextResponse.json({ success: true, id }, { headers })
+  } catch (err) {
+    console.error('public-lead PATCH error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500, headers })
+  }
 }
 
 export async function POST(request: Request) {
